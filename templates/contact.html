@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block title %}Axismundi - Contact{% endblock %}
+
+{% block content %}
+<h1>Contact Us</h1>
+<p>Get in touch with the Axismundi team.</p>
+<div class="user-form">
+    <h3>Contact Form</h3>
+    <form>
+        <input type="text" placeholder="Your Name" required>
+        <input type="email" placeholder="Your Email" required>
+        <textarea placeholder="Your Message" style="width: 200px; height: 100px; padding: 8px; margin: 10px 0; display: block;" required></textarea>
+        <button type="submit">Send Message</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/contact.js"></script>
+{% endblock %}

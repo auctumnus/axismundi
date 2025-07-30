@@ -1,0 +1,119 @@
+/* CSS Custom Properties */
+:root {
+  --primary-color: #0066cc;
+  --secondary-color: #f8f9fa;
+  --border-color: #ddd;
+  --border-radius: 4px;
+  --spacing-sm: 10px;
+  --spacing-md: 20px;
+  --font-family: system-ui, sans-serif;
+}
+
+/* Modern CSS Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  line-height: 1.6;
+  color: #333;
+  background-color: var(--secondary-color);
+  padding: var(--spacing-md);
+}
+
+/* Navigation */
+nav {
+  margin-bottom: var(--spacing-md);
+  
+  & a {
+    margin-right: var(--spacing-sm);
+    text-decoration: none;
+    color: var(--primary-color);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      text-decoration: underline;
+      color: color-mix(in srgb, var(--primary-color) 80%, black);
+    }
+  }
+}
+
+/* User List Styles */
+.user-list {
+  margin-top: var(--spacing-md);
+}
+
+.user-item {
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  margin: 5px 0;
+  border-radius: var(--border-radius);
+  background: white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgb(0 0 0 / 0.1);
+  }
+}
+
+/* Form Styles */
+.user-form {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: white;
+  
+  & input {
+    display: block;
+    margin: var(--spacing-sm) 0;
+    padding: 8px 12px;
+    width: min(300px, 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    
+    &:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
+    }
+  }
+  
+  & button {
+    padding: 8px 16px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    
+    &:hover {
+      background: color-mix(in srgb, var(--primary-color) 90%, black);
+    }
+    
+    &:active {
+      transform: translateY(1px);
+    }
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  body {
+    padding: var(--spacing-sm);
+  }
+  
+  .user-form input {
+    width: 100%;
+  }
+}
