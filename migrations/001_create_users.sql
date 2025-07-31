@@ -1,11 +1,21 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+create table users (
+    id serial primary key,
+    username text not null unique,
+    email text not null unique,
+    password_hash text not null,
 
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR NOT NULL,
-    email VARCHAR UNIQUE NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    display_name text,
+    description text,
+    pronouns text,
+    gender text,
+
+    profile_picture_object_id text,
+
+    created_at timestamp with time zone not null default current_timestamp,
+    updated_at timestamp with time zone not null default current_timestamp,
+    
+    verified_at timestamp with time zone
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_created_at ON users(created_at);
+create index idx_users_email ON users(email);
+create index idx_users_username ON users(username);

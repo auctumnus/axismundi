@@ -16,3 +16,10 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
 askama = "0.14.0"
+minio = "0.3.0"
+resend-rs = "0.15.0"
+error_set = "0.8.5"
+thiserror = "2.0.12"
+regex = "1.11.1"
+argon2 = "0.5.3"
+validator = { version = "0.20", features = ["derive"] }
