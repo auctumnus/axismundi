@@ -30,13 +30,13 @@ run:
 
 # Watch frontend for changes during development
 watch-frontend:
-    cd frontend && npm run dev
+    cd frontend && bun run dev
 
 # Full development setup (database + backend + frontend watching)
 dev-full:
     just db &
     sleep 3
-    cd frontend && npm run dev &
+    cd frontend && bun run dev &
     just run
 
 # Build the application
@@ -45,7 +45,7 @@ build:
 
 # Build frontend assets
 build-frontend:
-    cd frontend && npm run build
+    cd frontend && bun run build
 
 # Build everything (backend + frontend)
 build-all:
