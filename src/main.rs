@@ -8,23 +8,16 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use util::AppState;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use anyhow::Result;
 mod model;
-
-mod re {
-    macro_rules! re {
-        ($r:expr) => {
-            std::sync::LazyLock::new(|| regex::Regex::new($r).unwrap())
-        };
-    }
-
-    pub(crate) use re;
-}
-
-pub(crate) use re::re;
+mod util;
+mod email;
+mod controller;
 
 #[derive(Template)]
 #[template(path = "about.html")]
@@ -36,6 +29,7 @@ struct ContactTemplate;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    dotenvy::dotenv()?;
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -64,16 +58,17 @@ async fn main() -> Result<(), anyhow::Error> {
 
 fn create_router(pool: PgPool) -> Router {
     Router::new()
+        .nest("/api", controller::api::create_api_controller(pool.clone()))
         .route("/", get(home))
         .route("/about", get(about))
         .route("/contact", get(contact))
         .nest_service("/static", ServeDir::new("frontend/dist"))
         .nest_service("/assets", ServeDir::new("frontend/dist/assets"))
         .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
-        .with_state(pool)
+        .with_state(AppState { pool })
 }
 
-async fn home(State(pool): State<PgPool>) -> Result<Html<String>, StatusCode> {
+async fn home(State(_): State<AppState>) -> Result<Html<String>, StatusCode> {
     let html = "meow".to_string();
     Ok(Html(html))
 }

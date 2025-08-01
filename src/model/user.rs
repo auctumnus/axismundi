@@ -1,31 +1,38 @@
-use std::{cell::LazyCell, sync::LazyLock};
+use std::{sync::LazyLock};
 
 use anyhow::{Result, anyhow, bail};
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
-};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
-use thiserror::Error;
-use validator::{Validate, ValidationError};
+use validator::{Validate};
+use zxcvbn::Score;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
+    #[serde(skip_serializing)]
     pub id: i32,
-    pub username: String,
+    #[serde(skip_serializing)]
     pub email: String,
+    #[serde(skip_serializing)]
     pub password_hash: String,
+    #[serde(skip_serializing)]
+    pub verified_at: Option<DateTime<Utc>>,
+
+    pub username: String,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub pronouns: Option<String>,
     pub gender: Option<String>,
     pub profile_picture_object_id: Option<String>,
-    pub verified_at: Option<DateTime<Utc>>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl User {
+    pub fn is_verified(&self) -> bool {
+        self.verified_at.is_some()
+    }
 }
 
 static USERNAME_REGEX: LazyLock<Regex> = re!("^([a-z0-9](-|_)?)+[a-z0-9]");
@@ -39,6 +46,7 @@ pub struct CreateUser {
     #[validate(email)]
     pub email: String,
 
+    #[validate(length(min = 8, max = 100))]
     pub password: String,
 
     #[validate(length(min = 2, max = 30))]
@@ -72,22 +80,9 @@ pub struct UserRepository {
     pool: PgPool,
 }
 
-use crate::re;
+use crate::util::re;
 
-fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;
-    Ok(password_hash.to_string())
-}
-
-pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
-    let parsed_hash = PasswordHash::new(hash)?;
-    let argon2 = Argon2::default();
-    Ok(argon2
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok())
-}
+use super::email_verification_token::EmailVerificationTokenRepository;
 
 impl UserRepository {
     pub fn new(pool: PgPool) -> Self {
@@ -95,12 +90,33 @@ impl UserRepository {
     }
 
     pub async fn create(&self, user: CreateUser) -> Result<User> {
+        user.validate().map_err(|e| {
+            anyhow!("Validation failed: {}", e)
+        })?;
+
         if self.username_exists(&user.username).await? {
             bail!("Username is in use");
         }
 
+        if self.email_exists(&user.email).await? {
+            bail!("Email is in use");
+        }
+
+        // TODO: we should also check against haveibeenpwned
+
+        // https://thecopenhagenbook.com/password-authentication#input-validation
+        // > Use libraries like zxcvbn to check for weak passwords.
+        let password_strength = zxcvbn::zxcvbn(&user.password, &[]);
+        if password_strength.score() < Score::Three {
+            if let Some(reason) = password_strength.feedback() {
+                bail!("Password is too weak: {}", reason);
+            } else {
+                bail!("Password is too weak");
+            }
+        }
+
         let password_hash =
-            hash_password(&user.password).map_err(|_| anyhow!("Password hash failed"))?;
+            crate::util::hash(&user.password).map_err(|_| anyhow!("Password hash failed"))?;
 
         let result = sqlx::query_as!(
             User,
@@ -113,7 +129,7 @@ impl UserRepository {
                 returning *
                 "#,
             user.username,
-            user.email,
+            user.email.to_lowercase(),
             password_hash,
             user.display_name,
             user.description,
@@ -243,28 +259,35 @@ impl UserRepository {
         Ok(result.is_some())
     }
 
-    pub async fn verify_user(&self, id: i32) -> Result<Option<User>, sqlx::Error> {
-        let result = sqlx::query_as!(
-            User,
-            r#"
-            UPDATE users 
-            SET verified_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-            RETURNING id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
-            "#,
-            id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(result)
-    }
-    pub async fn is_verified(&self, id: i32) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query!("SELECT verified_at FROM users WHERE id = $1", id)
-            .fetch_optional(&self.pool)
+    pub async fn verify(&self, user_id: i32, email: &str, email_verification_token: &str) -> Result<Option<User>> {
+        let token_repo = EmailVerificationTokenRepository::new(self.pool.clone());
+        let token = token_repo.find(user_id, email, email_verification_token).await?;
+        if let Some(token) = token {
+            let mut tx = self.pool.begin().await?;
+            // verify user, invalidate token
+            let result = sqlx::query_as!(
+                User,
+                r#"
+                UPDATE users
+                SET verified_at = NOW()
+                WHERE id = $1 AND verified_at IS NULL
+                RETURNING *
+                "#,
+                user_id
+            )
+            .fetch_optional(&mut *tx)
             .await?;
-
-        Ok(result.map(|row| row.verified_at.is_some()).unwrap_or(false))
+            
+            if let Some(user) = result {
+                token_repo.invalidate(token.id).await?;
+                tx.commit().await?;
+                Ok(Some(user))
+            } else {
+                tx.rollback().await?;
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 }

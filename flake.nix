@@ -33,6 +33,7 @@
           rustToolchain
           pkg-config
           bun
+          sqlx-cli
         ];
 
         buildInputs =
