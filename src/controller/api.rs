@@ -1,8 +1,9 @@
 use axum::{extract::{Path, State}, http::StatusCode, routing::{get, post}, Json, Router};
+use axum_extra::extract::{cookie::Cookie, CookieJar};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use crate::{model::{session::{Session, SessionRepository}, user::{CreateUser, User, UserRepository}}, util::{AppState, ExtractSession}};
+use crate::{model::{session::{Session, SessionRepository}, user::{CreateUser, User, UserRepository}}, util::{extract_session::SESSION_COOKIE_NAME, AppState, ExtractSession}};
 
 pub fn create_api_controller(pool: PgPool) -> Router<AppState> {
     Router::new()
@@ -39,14 +40,23 @@ struct LoginResponse {
 
 async fn login(
     State(AppState { pool }): State<AppState>,
+    jar: CookieJar,
     Json(credentials): Json<LoginCredentials>,
-) -> Result<Json<LoginResponse>, (StatusCode, String)> {
+) -> Result<(CookieJar, Json<LoginResponse>), (StatusCode, String)> {
     let session_repo = SessionRepository::new(pool.clone());
     match session_repo.login(&credentials.email, &credentials.password).await {
-        Ok(Some((token, session))) => Ok(Json(LoginResponse {
-            token,
-            expires_at: session.expires_at,
-        })),
+            Ok(Some((token, session))) => {
+                let jar = jar.add(Cookie::build((SESSION_COOKIE_NAME, token.clone()))
+                    .path("/")
+                    .http_only(true)
+                    .secure(true)
+                    );
+                let response = Json(LoginResponse {
+                    token,
+                    expires_at: session.expires_at,
+                });
+                Ok((jar, response))
+        },
         Ok(None) => Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string())),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     }
@@ -77,7 +87,6 @@ async fn verify_user(
     }
 }
 
-#[axum::debug_handler]
 async fn get_sessions(
     State(AppState { pool }): State<AppState>,
     ExtractSession(session): ExtractSession,

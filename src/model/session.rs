@@ -33,7 +33,7 @@ impl SessionRepository {
         if let Some(user) = user_repo.find_by_email(email).await? {
             if crate::util::verify(password, &user.password_hash)? {
                 let token = nanoid::nanoid!();
-                let hashed_token = crate::util::hash(&token)?;
+                let hashed_token = crate::util::stable_hash(&token);
                 let expires_at = Utc::now() + SESSION_LENGTH;
 
                 let session = sqlx::query_as!(
@@ -60,7 +60,7 @@ impl SessionRepository {
     }
 
     pub async fn find(&self, token: &str) -> Result<Option<Session>> {
-        let hashed_token = crate::util::hash(token)?;
+        let hashed_token = crate::util::stable_hash(token);
         
         let result = sqlx::query_as!(
             Session,

@@ -16,6 +16,8 @@ use super::AppState;
 
 pub struct ExtractSession(pub Session);
 
+pub const SESSION_COOKIE_NAME: &'static str = "session_token";
+
 impl FromRequestParts<AppState> for ExtractSession
 {
     type Rejection = (StatusCode, &'static str);
@@ -34,7 +36,7 @@ impl FromRequestParts<AppState> for ExtractSession
         } else if let Some(session_cookie) = CookieJar::from_request_parts(parts, state)
             .await
             .ok()
-            .and_then(|jar| jar.get("session_token").map(|c| c.value().to_string())) {
+            .and_then(|jar| jar.get(SESSION_COOKIE_NAME).map(|c| c.value().to_string())) {
             session_repo.find(&session_cookie).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to find session"))?
         } else {
             return Err((StatusCode::UNAUTHORIZED, "No session token provided"));

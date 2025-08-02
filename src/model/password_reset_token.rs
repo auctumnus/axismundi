@@ -6,6 +6,8 @@ use anyhow::{bail, Result};
 use sha2::{Digest};
 use base64::prelude::*;
 
+use crate::util::stable_hash;
+
 pub struct PasswordResetToken {
     pub id: i32,
     pub user_id: i32,
@@ -30,8 +32,7 @@ impl PasswordResetTokenRepository {
         // Tokens that require an extra level of security, **such as password reset tokens**,
         // should be hashed with SHA-256. 
         // https://thecopenhagenbook.com/server-side-tokens#storing-tokens
-        let hashed_token = Sha256::digest(token.clone());
-        let hashed_token = BASE64_STANDARD.encode(hashed_token);
+        let hashed_token = crate::util::stable_hash(&token);
 
         sqlx::query!(
             r#"
@@ -49,8 +50,7 @@ impl PasswordResetTokenRepository {
     }
 
     pub async fn find_by_token(&self, token: &str) -> Result<Option<PasswordResetToken>> {
-        let hashed_token = Sha256::digest(token);
-        let hashed_token = BASE64_STANDARD.encode(hashed_token);
+        let hashed_token = stable_hash(token);
         let result = sqlx::query_as!(
             PasswordResetToken,
             r#"

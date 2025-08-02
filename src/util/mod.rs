@@ -1,6 +1,7 @@
 use argon2::{password_hash::{rand_core::OsRng, SaltString}, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use anyhow::{Result, anyhow};
 pub mod extract_session;
+use base64::Engine;
 pub use extract_session::ExtractSession;
 
 mod re {
@@ -30,6 +31,14 @@ pub fn verify(password: &str, hash: &str) -> Result<bool> {
     Ok(argon2
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
+}
+
+pub fn stable_hash(plaintext: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(plaintext.as_bytes());
+    let result = hasher.finalize();
+    base64::prelude::BASE64_STANDARD.encode(result)
 }
 
 #[derive(Debug, Clone)]
