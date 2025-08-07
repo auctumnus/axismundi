@@ -16,7 +16,6 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
 askama = "0.14.0"
-minio = "0.3.0"
 resend-rs = "0.15.0"
 error_set = "0.8.5"
 thiserror = "2.0.12"
@@ -27,5 +26,6 @@ nanoid = "0.4.0"
 sha2 = "0.10.9"
 base64 = "0.22.1"
 zxcvbn = "3.1.0"
-axum-extra = { version = "0.10.1", features = ["cookie"] }
+axum-extra = { version = "0.10.1", features = ["cookie", "multipart"] }
 dotenvy = "0.15.7"
+rust-s3 = "0.35.1"

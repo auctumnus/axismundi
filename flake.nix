@@ -34,6 +34,7 @@
           pkg-config
           bun
           sqlx-cli
+          minio-client
         ];
 
         buildInputs =

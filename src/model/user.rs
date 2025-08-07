@@ -290,4 +290,23 @@ impl UserRepository {
             Ok(None)
         }
     }
+
+    pub async fn update_profile_picture(&self, user_id: i32, object_key: &str) -> Result<Option<User>> {
+        let result = sqlx::query_as!(
+            User,
+            r#"
+            UPDATE users 
+            SET profile_picture_object_id = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            RETURNING id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+            "#,
+            user_id,
+            Some(object_key)
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
 }

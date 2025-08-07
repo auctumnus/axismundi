@@ -1,6 +1,7 @@
 use argon2::{password_hash::{rand_core::OsRng, SaltString}, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use anyhow::{Result, anyhow};
 pub mod extract_session;
+pub mod s3;
 use base64::Engine;
 pub use extract_session::ExtractSession;
 
@@ -44,4 +45,5 @@ pub fn stable_hash(plaintext: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub pool: sqlx::PgPool,
+    pub s3: s3::S3Config,
 }

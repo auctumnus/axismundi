@@ -74,3 +74,24 @@ clean:
 db-reset:
     docker compose -f docker-compose.db.yml down -v
     just db
+
+# Start Minio S3 storage
+minio:
+    @echo "Starting Minio S3 storage..."
+    docker compose -f docker-compose.minio.yml up -d
+    @echo "Waiting for Minio to be ready..."
+    @until curl -f http://localhost:9000/minio/health/live >/dev/null 2>&1; do \
+        echo "Minio is unavailable - sleeping"; \
+        sleep 1; \
+    done
+    @echo "Minio is ready!"
+    @echo "Web UI: http://localhost:9001 (minioadmin/minioadmin123)"
+    @echo "S3 API: http://localhost:9000"
+
+# Stop Minio
+minio-stop:
+    docker compose -f docker-compose.minio.yml down
+
+# View Minio logs
+minio-logs:
+    docker compose -f docker-compose.minio.yml logs -f

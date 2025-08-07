@@ -45,7 +45,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let app = create_router(pool);
+    let s3_config = util::s3::S3Config::new()
+        .map_err(|e| anyhow::anyhow!("Failed to initialize S3 config: {}", e))?;
+
+    let app = create_router(pool, s3_config);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
@@ -56,19 +59,19 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn create_router(pool: PgPool) -> Router {
+fn create_router(pool: PgPool, s3: util::s3::S3Config) -> Router {
     Router::new()
-        .nest("/api", controller::api::create_api_controller(pool.clone()))
+        .nest("/api", controller::api::create_api_controller(pool.clone(), s3.clone()))
         .route("/", get(home))
         .route("/about", get(about))
         .route("/contact", get(contact))
         .nest_service("/static", ServeDir::new("frontend/dist"))
         .nest_service("/assets", ServeDir::new("frontend/dist/assets"))
         .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
-        .with_state(AppState { pool })
+        .with_state(AppState { pool, s3 })
 }
 
-async fn home(State(_): State<AppState>) -> Result<Html<String>, StatusCode> {
+async fn home(State(AppState { .. }): State<AppState>) -> Result<Html<String>, StatusCode> {
     let html = "meow".to_string();
     Ok(Html(html))
 }
