@@ -1,6 +1,10 @@
-use std::env;
-use anyhow::{Result, anyhow};
+use crate::{
+    config::CONFIG,
+    err::{AppResult, internal_error},
+};
+use image::{ImageReader, codecs::webp::WebPEncoder};
 use s3::{Bucket, Region, creds::Credentials};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 pub struct S3Config {
@@ -8,57 +12,94 @@ pub struct S3Config {
     pub public_url_base: Option<String>,
 }
 
-impl S3Config {
-    pub fn new() -> Result<Self> {
-        let bucket_name = env::var("S3_BUCKET_NAME")
-            .map_err(|_| anyhow!("S3_BUCKET_NAME environment variable is required"))?;
-        
-        let region_name = env::var("S3_REGION")
-            .unwrap_or_else(|_| "us-east-1".to_string());
-        
-        let endpoint = env::var("S3_ENDPOINT")
-            .map_err(|_| anyhow!("S3_ENDPOINT environment variable is required"))?;
-        
-        let public_url_base = env::var("S3_PUBLIC_URL_BASE").ok();
-        
-        let region = Region::Custom {
-            region: region_name,
-            endpoint,
-        };
+const PFP_SIZE: u32 = 256;
 
-        let credentials = Credentials::from_env()
-            .map_err(|e| anyhow!("Failed to load S3 credentials from environment: {}", e))?;
+pub static S3: LazyLock<S3Config> = LazyLock::new(|| {
+    let config = &CONFIG.s3;
 
-        let bucket = Bucket::new(&bucket_name, region, credentials)
-            .map_err(|e| anyhow!("Failed to create S3 bucket: {}", e))?;
+    let region = Region::Custom {
+        region: config.region.clone(),
+        endpoint: config.endpoint.clone(),
+    };
 
-        Ok(Self { bucket, public_url_base })
+    let credentials = match Credentials::new(
+        Some(&config.access_key),
+        Some(&config.secret_key),
+        None,
+        None,
+        None,
+    ) {
+        Ok(creds) => creds,
+        Err(e) => panic!("Failed to create S3 credentials: {e}"),
+    };
+
+    let bucket = match Bucket::new(&config.bucket, region, credentials) {
+        Ok(bucket) => bucket.with_path_style(),
+        Err(e) => panic!("Failed to initialize S3 bucket: {e}"),
+    };
+
+    S3Config {
+        bucket,
+        public_url_base: config.public_url_base.clone(),
     }
+});
 
-    pub async fn upload_profile_picture(&self, user_id: i32, file_data: &[u8], content_type: &str) -> Result<String> {
-        let object_key = format!("profiles/{}/avatar", user_id);
-        
-        let response = self.bucket
-            .put_object_with_content_type(&object_key, file_data, content_type)
+impl S3Config {
+    pub async fn upload_profile_picture(
+        &self,
+        user_id: i32,
+        file_data: &[u8],
+    ) -> AppResult<String> {
+        // TODO: like half of this should probably be done in a different function,
+        // if not moved to a different thread w/ resource limits
+        let reader = ImageReader::new(std::io::Cursor::new(file_data))
+            .with_guessed_format()?
+            .decode()?;
+
+        let image =
+            reader.resize_to_fill(PFP_SIZE, PFP_SIZE, image::imageops::FilterType::Lanczos3);
+
+        // we convert all images to webp; it's well-supported and efficient
+        let mut image_data = Vec::new();
+
+        let encoder = WebPEncoder::new_lossless(&mut image_data);
+
+        encoder.encode(
+            &image.into_rgba8(),
+            PFP_SIZE,
+            PFP_SIZE,
+            image::ExtendedColorType::Rgba8,
+        )?;
+
+        let object_key = format!("profiles/{user_id}/avatar");
+
+        let response = self
+            .bucket
+            .put_object_with_content_type(&object_key, &image_data, "image/webp")
             .await
-            .map_err(|e| anyhow!("Failed to upload to S3: {}", e))?;
+            .map_err(|e| internal_error(format!("Failed to upload to S3: {e}")))?;
 
         if response.status_code() == 200 {
             Ok(object_key)
         } else {
-            Err(anyhow!("S3 upload failed with status: {}", response.status_code()))
+            Err(internal_error(format!(
+                "S3 upload failed with status: {}",
+                response.status_code()
+            )))
         }
     }
 
-    pub fn get_profile_picture_url(&self, object_key: &str) -> String {
+    pub fn get_object_url(&self, object_key: &str) -> String {
         if let Some(base_url) = &self.public_url_base {
             format!("{}/{}", base_url.trim_end_matches('/'), object_key)
         } else {
             // Default to bucket endpoint URL construction
-            format!("{}/{}/{}", 
-                    self.bucket.url(), 
-                    self.bucket.name(),
-                    object_key)
+            format!(
+                "{}/{}/{}",
+                self.bucket.url(),
+                self.bucket.name(),
+                object_key
+            )
         }
     }
 }

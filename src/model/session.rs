@@ -1,10 +1,11 @@
-use anyhow::{bail, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use sqlx::{FromRow, PgPool};
 
+use crate::err::{AppError, AppResult, bad_request};
+
 #[derive(Debug, Clone, FromRow, Serialize)]
-pub struct Session {
+pub struct SessionObj {
     #[serde(skip_serializing)]
     pub user_id: i32,
     #[serde(skip_serializing)]
@@ -27,17 +28,33 @@ impl SessionRepository {
         Self { pool }
     }
 
-    pub async fn login(&self, email: &str, password: &str) -> Result<Option<(String, Session)>> {
+    pub async fn login(&self, email: &str, password: &str) -> AppResult<(String, SessionObj)> {
+        // this is written kind of backwards, but it avoids a timing attack
+        // we always check the password, no matter whether the user exists or not,
+        // so you can't tell if the email has been used / password is correct
         let user_repo = super::user::UserRepository::new(self.pool.clone());
-        
-        if let Some(user) = user_repo.find_by_email(email).await? {
-            if crate::util::verify(password, &user.password_hash)? {
+
+        let result = user_repo.find_by_email(email).await;
+
+        let password_hash = match result {
+            Ok(ref user) => user.password_hash.clone(),
+            Err(
+                e @ AppError {
+                    status_code: axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    ..
+                },
+            ) => return Err(e),
+            _ => "".to_string(),
+        };
+
+        if crate::util::verify(password, &password_hash)? {
+            if let Ok(user) = result {
                 let token = nanoid::nanoid!();
                 let hashed_token = crate::util::stable_hash(&token);
                 let expires_at = Utc::now() + SESSION_LENGTH;
 
                 let session = sqlx::query_as!(
-                    Session,
+                    SessionObj,
                     r#"
                         INSERT INTO user_sessions (user_id, session_token, expires_at)
                         VALUES ($1, $2, $3)
@@ -50,20 +67,24 @@ impl SessionRepository {
                 .fetch_one(&self.pool)
                 .await?;
 
-                Ok(Some((token, session)))
+                Ok((token, session))
             } else {
-                Ok(None)
+                debug_assert!(
+                    false,
+                    "User not found after successful password verification"
+                );
+                Err(bad_request("Invalid email or password"))
             }
         } else {
-            Ok(None)
+            Err(bad_request("Invalid email or password"))
         }
     }
 
-    pub async fn find(&self, token: &str) -> Result<Option<Session>> {
+    pub async fn find(&self, token: &str) -> AppResult<Option<SessionObj>> {
         let hashed_token = crate::util::stable_hash(token);
-        
+
         let result = sqlx::query_as!(
-            Session,
+            SessionObj,
             r#"
                 SELECT * FROM user_sessions
                 WHERE session_token = $1 AND invalidated_at IS NULL AND expires_at > NOW()
@@ -94,9 +115,9 @@ impl SessionRepository {
         }
     }
 
-    pub async fn find_by_user_id(&self, user_id: i32) -> Result<Vec<Session>> {
+    pub async fn find_by_user_id(&self, user_id: i32) -> AppResult<Vec<SessionObj>> {
         let result = sqlx::query_as!(
-            Session,
+            SessionObj,
             r#"
                 SELECT * FROM user_sessions
                 WHERE user_id = $1 AND invalidated_at IS NULL AND expires_at > NOW()
@@ -109,7 +130,7 @@ impl SessionRepository {
         Ok(result)
     }
 
-    pub async fn invalidate(&self, session: Session) -> Result<()> {
+    pub async fn invalidate(&self, session: SessionObj) -> AppResult<()> {
         sqlx::query!(
             r#"
                 UPDATE user_sessions
@@ -124,7 +145,7 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn invalidate_all(&self, user_id: i32) -> Result<()> {
+    pub async fn invalidate_all(&self, user_id: i32) -> AppResult<()> {
         sqlx::query!(
             r#"
                 UPDATE user_sessions
@@ -139,7 +160,7 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn cleanup_expired(&self) -> Result<()> {
+    pub async fn cleanup_expired(&self) -> AppResult<()> {
         sqlx::query!(
             r#"
                 DELETE FROM user_sessions
@@ -152,3 +173,5 @@ impl SessionRepository {
         Ok(())
     }
 }
+
+crate::util::repo_from_parts!(SessionRepository);

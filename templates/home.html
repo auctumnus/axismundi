@@ -3,33 +3,5 @@
 {% block title %}Axismundi - Home{% endblock %}
 
 {% block content %}
-<h1>Welcome to Axismundi</h1>
-<p>This is the home page with user management.</p>
 
-<div class="user-form">
-    <h3>Add New User</h3>
-    <form method="post" action="/api/users-form">
-        <input type="text" name="name" placeholder="Name" required>
-        <input type="email" name="email" placeholder="Email" required>
-        <button type="submit">Add User</button>
-    </form>
-</div>
-
-<div class="user-list">
-    <h3>Users</h3>
-    {% if users.is_empty() %}
-        <p>No users found</p>
-    {% else %}
-        {% for user in users %}
-        <div class="user-item">
-            <strong>{{ user.name }}</strong> ({{ user.email }})
-            <br><small>Created: {{ user.created_at.format("%B %d, %Y") }}</small>
-        </div>
-        {% endfor %}
-    {% endif %}
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script src="/static/home.js"></script>
 {% endblock %}

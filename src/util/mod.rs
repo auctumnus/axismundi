@@ -1,9 +1,12 @@
-use argon2::{password_hash::{rand_core::OsRng, SaltString}, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use anyhow::{Result, anyhow};
+use crate::err::{AppResult, internal_error};
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 pub mod extract_session;
+mod images;
 pub mod s3;
 use base64::Engine;
-pub use extract_session::ExtractSession;
 
 mod re {
     macro_rules! re {
@@ -17,17 +20,40 @@ mod re {
 
 pub(crate) use re::re;
 
+mod repo {
+    macro_rules! repo_from_parts {
+        ($repo:ident) => {
+            impl axum::extract::FromRequestParts<crate::util::AppState> for $repo {
+                type Rejection = (axum::http::StatusCode, &'static str);
+
+                async fn from_request_parts(
+                    _: &mut axum::http::request::Parts,
+                    state: &crate::util::AppState,
+                ) -> Result<Self, Self::Rejection> {
+                    Ok($repo::new(state.pool.clone()))
+                }
+            }
+        };
+    }
+
+    pub(crate) use repo_from_parts;
+}
+
+pub(crate) use repo::repo_from_parts;
+
 /// Hash plaintext using Argon2 and return the hash as a string.
-pub fn hash(plaintext: &str) -> Result<String> {
+pub fn hash(plaintext: &str) -> AppResult<String> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    let hashed = argon2.hash_password(plaintext.as_bytes(), &salt).map_err(|_| anyhow!("Failed to hash passowrd"))?;
+    let hashed = argon2
+        .hash_password(plaintext.as_bytes(), &salt)
+        .map_err(|_| internal_error("Failed to hash passowrd"))?;
     Ok(hashed.to_string())
 }
 
 /// Verify plaintext against a hash.
-pub fn verify(password: &str, hash: &str) -> Result<bool> {
-    let parsed_hash = PasswordHash::new(hash).map_err(|_| anyhow!("Could not read hash"))?;
+pub fn verify(password: &str, hash: &str) -> AppResult<bool> {
+    let parsed_hash = PasswordHash::new(hash).map_err(|_| internal_error("Could not read hash"))?;
     let argon2 = Argon2::default();
     Ok(argon2
         .verify_password(password.as_bytes(), &parsed_hash)
@@ -45,5 +71,4 @@ pub fn stable_hash(plaintext: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub pool: sqlx::PgPool,
-    pub s3: s3::S3Config,
 }

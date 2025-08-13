@@ -1,35 +1,30 @@
+// ignore unused warnings
+#![allow(dead_code)]
 use askama::Template;
 use axum::{
-    Form, Json, Router,
-    extract::{Path, State},
-    http::StatusCode,
-    response::{Html, Redirect},
-    routing::{get, post},
+    Router,
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::Html,
+    routing::get,
 };
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use util::AppState;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use anyhow::Result;
+use util::AppState;
+
+use crate::config::CONFIG;
+mod config;
+mod controller;
+mod email;
+mod err;
 mod model;
 mod util;
-mod email;
-mod controller;
-
-#[derive(Template)]
-#[template(path = "about.html")]
-struct AboutTemplate;
-
-#[derive(Template)]
-#[template(path = "contact.html")]
-struct ContactTemplate;
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    dotenvy::dotenv()?;
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -38,56 +33,76 @@ async fn main() -> Result<(), anyhow::Error> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://user:password@localhost/axismundi".to_string());
-
-    let pool = PgPool::connect(&database_url).await?;
+    // this can't be static like the S3 config, because it has special behavior
+    // on Drop
+    let pool = PgPool::connect(&CONFIG.database_url).await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let s3_config = util::s3::S3Config::new()
-        .map_err(|e| anyhow::anyhow!("Failed to initialize S3 config: {}", e))?;
+    let app = create_router(pool);
 
-    let app = create_router(pool, s3_config);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], CONFIG.port));
     tracing::debug!("listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
 
-fn create_router(pool: PgPool, s3: util::s3::S3Config) -> Router {
+fn create_router(pool: PgPool) -> Router {
     Router::new()
-        .nest("/api", controller::api::create_api_controller(pool.clone(), s3.clone()))
-        .route("/", get(home))
-        .route("/about", get(about))
-        .route("/contact", get(contact))
-        .nest_service("/static", ServeDir::new("frontend/dist"))
-        .nest_service("/assets", ServeDir::new("frontend/dist/assets"))
+        .nest("/api", controller::api::create_api_controller())
+        .merge(controller::html::create_html_controller())
+        .fallback(fallback)
         .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
-        .with_state(AppState { pool, s3 })
+        .with_state(AppState { pool })
 }
 
-async fn home(State(AppState { .. }): State<AppState>) -> Result<Html<String>, StatusCode> {
-    let html = "meow".to_string();
-    Ok(Html(html))
+#[derive(Template)]
+#[template(path = "error.html")]
+struct ErrorTemplate {
+    error: err::AppError,
 }
 
-async fn about() -> Result<Html<String>, StatusCode> {
-    let template = AboutTemplate;
-    let html = template
-        .render()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Html(html))
-}
+async fn fallback(headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
+    let content_type = headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
 
-async fn contact() -> Result<Html<String>, StatusCode> {
-    let template = ContactTemplate;
-    let html = template
-        .render()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Html(html))
+    // this is so ugly but if i just do `impl IntoResponse` rust will infer
+    // the type to always be `text/html` and i want to avoid that
+    match content_type {
+        s if s.contains("text/html") => {
+            let template = ErrorTemplate {
+                error: err::AppError::new("Not Found".to_string(), StatusCode::NOT_FOUND),
+            };
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                "text/html".parse().unwrap(),
+            );
+            (
+                StatusCode::NOT_FOUND,
+                headers,
+                template.render().unwrap_or_else(|e| {
+                    tracing::error!("Template rendering error: {}", e);
+                    "500 Internal Server Error".to_string()
+                }),
+            )
+        }
+        _ => {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                "text/plain".parse().unwrap(),
+            );
+            (StatusCode::NOT_FOUND, headers, "not found".to_string())
+        }
+    }
 }

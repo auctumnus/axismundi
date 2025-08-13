@@ -1,29 +1,87 @@
-use axum::{extract::{Path, State}, http::StatusCode, routing::{get, post, put}, Json, Router};
-use axum_extra::extract::{cookie::Cookie, CookieJar, Multipart};
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use crate::{model::{session::{Session, SessionRepository}, user::{CreateUser, User, UserRepository}}, util::{extract_session::SESSION_COOKIE_NAME, AppState, ExtractSession}};
+use std::sync::Arc;
 
-pub fn create_api_controller(pool: PgPool, s3: crate::util::s3::S3Config) -> Router<AppState> {
-    Router::new()
+use crate::{
+    err::{AppError, AppResult, bad_request, not_found, unauthorized_no_session},
+    model::{
+        session::{SessionObj, SessionRepository},
+        user::{CreateUser, User, UserRepository},
+    },
+    util::{
+        AppState,
+        extract_session::{SESSION_COOKIE_NAME, Session},
+        s3::S3,
+    },
+};
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    http::StatusCode,
+    routing::{get, post, put},
+};
+use axum_extra::extract::{CookieJar, Multipart, cookie::Cookie};
+use chrono::{DateTime, Utc};
+use governor::middleware::NoOpMiddleware;
+use serde::{Deserialize, Serialize};
+use tower_governor::governor::GovernorConfig;
+
+type ApiResponse<T> = AppResult<T>;
+
+pub fn create_api_controller() -> Router<AppState> {
+    let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
+    let normal_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::default());
+
+    let secure_limiter = secure_governor.limiter().clone();
+    let normal_limiter = normal_governor.limiter().clone();
+    let interval = std::time::Duration::from_secs(60);
+
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(interval);
+            secure_limiter.retain_recent();
+            normal_limiter.retain_recent();
+        }
+    });
+
+    let secure_routes = Router::<AppState>::new()
         .route("/users", post(create_user))
-        .route("/users/{id}/verify", post(verify_user))
-        .route("/users/{id}/profile-picture", put(upload_profile_picture))
         .route("/sessions", post(login))
         .route("/sessions", get(get_sessions))
-        .with_state(AppState { pool, s3 })
+        .route("/users/{id}/verify", post(verify_user))
+        .route(
+            "/users/{username}/profile-picture",
+            put(upload_profile_picture),
+        )
+        .layer(tower_governor::GovernorLayer {
+            config: secure_governor,
+        });
+
+    let normal_routes = Router::<AppState>::new()
+        .route("/users/{username}", get(get_user))
+        .layer(tower_governor::GovernorLayer {
+            config: normal_governor,
+        });
+
+    Router::<AppState>::new()
+        .merge(secure_routes)
+        .merge(normal_routes)
+}
+
+async fn get_user(
+    State(AppState { pool, .. }): State<AppState>,
+    Path(username): Path<String>,
+) -> ApiResponse<Json<User>> {
+    UserRepository::new(pool)
+        .find_by_username(&username)
+        .await
+        .map(Json)
 }
 
 async fn create_user(
     State(AppState { pool, .. }): State<AppState>,
     Json(user): Json<CreateUser>,
-) -> Result<Json<User>, (StatusCode, String)> {
+) -> ApiResponse<Json<User>> {
     let user_repo = UserRepository::new(pool.clone());
-    match user_repo.create(user).await {
-        Ok(created_user) => Ok(Json(created_user)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
-    }
+    user_repo.create(user).await.map(Json)
 }
 
 #[derive(Deserialize)]
@@ -32,7 +90,6 @@ struct LoginCredentials {
     password: String,
 }
 
-
 #[derive(Serialize)]
 struct LoginResponse {
     token: String,
@@ -40,27 +97,27 @@ struct LoginResponse {
 }
 
 async fn login(
-    State(AppState { pool, .. }): State<AppState>,
     jar: CookieJar,
+    sessions: SessionRepository,
     Json(credentials): Json<LoginCredentials>,
-) -> Result<(CookieJar, Json<LoginResponse>), (StatusCode, String)> {
-    let session_repo = SessionRepository::new(pool.clone());
-    match session_repo.login(&credentials.email, &credentials.password).await {
-            Ok(Some((token, session))) => {
-                let jar = jar.add(Cookie::build((SESSION_COOKIE_NAME, token.clone()))
+) -> ApiResponse<(CookieJar, Json<LoginResponse>)> {
+    sessions
+        .login(&credentials.email, &credentials.password)
+        .await
+        .map(|(token, session)| {
+            let jar = jar.add(
+                Cookie::build((SESSION_COOKIE_NAME, token.clone()))
                     .path("/")
                     .http_only(true)
-                    .secure(true)
-                    );
-                let response = Json(LoginResponse {
-                    token,
-                    expires_at: session.expires_at,
-                });
-                Ok((jar, response))
-        },
-        Ok(None) => Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string())),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
-    }
+                    .secure(true),
+            );
+            let response = Json(LoginResponse {
+                token,
+                expires_at: session.expires_at,
+            });
+
+            (jar, response)
+        })
 }
 
 #[derive(Deserialize)]
@@ -70,130 +127,85 @@ struct VerifyEmail {
 }
 
 async fn verify_user(
-    State(AppState { pool, .. }): State<AppState>,
+    users: UserRepository,
     Path(id): Path<i32>,
     Json(VerifyEmail { token, email }): Json<VerifyEmail>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    let user_repo = UserRepository::new(pool.clone());
-    let user = user_repo.find_by_id(id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    if let Some(user) = user {
-        let id = user.id;
-        user_repo.verify(id, &email, &token).await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-            .map_or(Err((StatusCode::NOT_FOUND, "Verification failed".to_string())), |_| {
-                Ok(StatusCode::OK)
-            })
-    } else {
-        return Err((StatusCode::NOT_FOUND, "User not found".to_string()));
-    }
+) -> ApiResponse<StatusCode> {
+    users
+        .verify(id, &email, &token)
+        .await
+        .map(|_| StatusCode::OK)
 }
 
 async fn get_sessions(
-    State(AppState { pool, .. }): State<AppState>,
-    ExtractSession(session): ExtractSession,
-) -> Result<Json<Vec<Session>>, (StatusCode, String)> {
-    let session_repo = SessionRepository::new(pool);
-    let sessions = session_repo.find_by_user_id(session.user_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    
-    Ok(Json(sessions))
+    s: Session,
+    sessions: SessionRepository,
+) -> ApiResponse<Json<Vec<SessionObj>>> {
+    let Some(session) = s.session() else {
+        return Err(unauthorized_no_session());
+    };
+
+    sessions.find_by_user_id(session.user_id).await.map(Json)
 }
 
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
-const ALLOWED_CONTENT_TYPES: &[&str] = &["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
-
-fn validate_image(content_type: &str, data: &[u8]) -> Result<(), String> {
-    if !ALLOWED_CONTENT_TYPES.contains(&content_type) {
-        return Err("Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.".to_string());
-    }
-
-    if data.len() > MAX_FILE_SIZE {
-        return Err("File too large. Maximum size is 5MB.".to_string());
-    }
-
-    // Basic magic number validation
-    match content_type {
-        "image/jpeg" | "image/jpg" => {
-            if !data.starts_with(&[0xFF, 0xD8, 0xFF]) {
-                return Err("Invalid JPEG file format.".to_string());
-            }
-        }
-        "image/png" => {
-            if !data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-                return Err("Invalid PNG file format.".to_string());
-            }
-        }
-        "image/gif" => {
-            if !(data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a")) {
-                return Err("Invalid GIF file format.".to_string());
-            }
-        }
-        "image/webp" => {
-            if !(data.starts_with(b"RIFF") && data.len() >= 12 && &data[8..12] == b"WEBP") {
-                return Err("Invalid WebP file format.".to_string());
-            }
-        }
-        _ => return Err("Unsupported file type.".to_string()),
-    }
-
-    Ok(())
-}
 
 #[derive(Serialize)]
 struct ProfilePictureUploadResponse {
-    message: String,
     profile_picture_url: String,
-    object_key: String,
 }
-
 async fn upload_profile_picture(
-    State(AppState { pool, s3 }): State<AppState>,
-    Path(user_id): Path<i32>,
-    ExtractSession(session): ExtractSession,
+    s: Session,
+    users: UserRepository,
+    Path(username): Path<String>,
     mut multipart: Multipart,
-) -> Result<Json<ProfilePictureUploadResponse>, (StatusCode, String)> {
+) -> ApiResponse<Json<ProfilePictureUploadResponse>> {
+    let Some(session) = s.session() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let user = users.find_by_username(&username).await?;
+
     // Check if user is uploading their own profile picture
-    if session.user_id != user_id {
-        return Err((StatusCode::FORBIDDEN, "You can only upload your own profile picture".to_string()));
+    if session.user_id != user.id {
+        return Err(AppError::new(
+            "You can only upload your own profile picture".to_string(),
+            StatusCode::FORBIDDEN,
+        ));
     }
 
     let mut file_data: Option<Vec<u8>> = None;
-    let mut content_type: Option<String> = None;
 
-    while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| bad_request(format!("Multipart error: {e}")))?
+    {
         let field_name = field.name().unwrap_or("");
-        
+
         if field_name == "image" {
-            content_type = field.content_type().map(|ct| ct.to_string());
-            let data = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| bad_request(format!("Field bytes error: {e}")))?;
             file_data = Some(data.to_vec());
             break;
         }
     }
 
-    let file_data = file_data.ok_or((StatusCode::BAD_REQUEST, "No image file provided".to_string()))?;
-    let content_type = content_type.ok_or((StatusCode::BAD_REQUEST, "No content type provided".to_string()))?;
-
-    // Validate the image
-    validate_image(&content_type, &file_data).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let file_data = file_data.ok_or_else(|| bad_request("No image file provided"))?;
 
     // Upload to S3
-    let object_key = s3.upload_profile_picture(user_id, &file_data, &content_type)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Upload failed: {}", e)))?;
+    let object_key = S3.upload_profile_picture(user.id, &file_data).await?;
 
     // Update user record with new profile picture object key
-    let user_repo = UserRepository::new(pool);
-    match user_repo.update_profile_picture(user_id, &object_key).await {
-        Ok(Some(user)) => {
-            let profile_picture_url = s3.get_profile_picture_url(&object_key);
+    match users.update_profile_picture(user.id, &object_key).await? {
+        Some(_user) => {
+            let profile_picture_url = S3.get_object_url(&object_key);
             Ok(Json(ProfilePictureUploadResponse {
-                message: "Profile picture uploaded successfully".to_string(),
                 profile_picture_url,
-                object_key,
             }))
         }
-        Ok(None) => Err((StatusCode::NOT_FOUND, "User not found".to_string())),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        None => Err(not_found("User not found")),
     }
 }

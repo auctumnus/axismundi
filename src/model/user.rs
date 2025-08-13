@@ -1,12 +1,28 @@
-use std::{sync::LazyLock};
+use std::sync::LazyLock;
 
-use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Utc};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use sqlx::{FromRow, PgPool};
-use validator::{Validate};
+use validator::Validate;
 use zxcvbn::Score;
+
+use crate::{
+    err::{AppResult, bad_request, internal_error, not_found},
+    util::{re, s3::S3},
+};
+
+use super::email_verification_token::EmailVerificationTokenRepository;
+
+fn serialize_object_key<S>(object_id: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match object_id {
+        Some(id) => serializer.serialize_str(&S3.get_object_url(id)),
+        None => serializer.serialize_none(),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -24,6 +40,11 @@ pub struct User {
     pub description: Option<String>,
     pub pronouns: Option<String>,
     pub gender: Option<String>,
+
+    #[serde(
+        rename(serialize = "profile_picture_url"),
+        serialize_with = "serialize_object_key"
+    )]
     pub profile_picture_object_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -80,26 +101,20 @@ pub struct UserRepository {
     pool: PgPool,
 }
 
-use crate::util::re;
-
-use super::email_verification_token::EmailVerificationTokenRepository;
-
 impl UserRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
-    pub async fn create(&self, user: CreateUser) -> Result<User> {
-        user.validate().map_err(|e| {
-            anyhow!("Validation failed: {}", e)
-        })?;
+    pub async fn create(&self, user: CreateUser) -> AppResult<User> {
+        user.validate()?;
 
         if self.username_exists(&user.username).await? {
-            bail!("Username is in use");
+            return Err(bad_request("username is in use"));
         }
 
         if self.email_exists(&user.email).await? {
-            bail!("Email is in use");
+            return Err(bad_request("email is in use"));
         }
 
         // TODO: we should also check against haveibeenpwned
@@ -109,14 +124,14 @@ impl UserRepository {
         let password_strength = zxcvbn::zxcvbn(&user.password, &[]);
         if password_strength.score() < Score::Three {
             if let Some(reason) = password_strength.feedback() {
-                bail!("Password is too weak: {}", reason);
+                return Err(bad_request(format!("password is too weak: {reason}")));
             } else {
-                bail!("Password is too weak");
+                return Err(bad_request("password is too weak"));
             }
         }
 
-        let password_hash =
-            crate::util::hash(&user.password).map_err(|_| anyhow!("Password hash failed"))?;
+        let password_hash = crate::util::hash(&user.password)
+            .map_err(|_| internal_error("password hash failed"))?;
 
         let result = sqlx::query_as!(
             User,
@@ -142,7 +157,7 @@ impl UserRepository {
         Ok(result)
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<Option<User>, sqlx::Error> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
             "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE id = $1",
@@ -151,10 +166,14 @@ impl UserRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(result)
+        if let Some(user) = result {
+            Ok(user)
+        } else {
+            Err(not_found(format!("user '{id}'")))
+        }
     }
 
-    pub async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
+    pub async fn find_by_username(&self, username: &str) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
             "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE username = $1",
@@ -163,10 +182,14 @@ impl UserRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(result)
+        if let Some(user) = result {
+            Ok(user)
+        } else {
+            Err(not_found(format!("user '{username}'")))
+        }
     }
 
-    pub async fn find_by_email(&self, email: &str) -> Result<Option<User>, sqlx::Error> {
+    pub async fn find_by_email(&self, email: &str) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
             "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE email = $1",
@@ -175,13 +198,17 @@ impl UserRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(result)
+        if let Some(user) = result {
+            Ok(user)
+        } else {
+            Err(not_found(format!("user '{email}'")))
+        }
     }
 
-    pub async fn update(&self, id: i32, updates: UpdateUser) -> Result<Option<User>> {
+    pub async fn update(&self, id: i32, updates: UpdateUser) -> AppResult<User> {
         if let Some(username) = &updates.username {
             if self.username_exists(username).await? {
-                bail!("Username is in use");
+                return Err(bad_request("Username is in use"));
             }
         }
 
@@ -208,10 +235,14 @@ impl UserRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(result)
+        if let Some(user) = result {
+            Ok(user)
+        } else {
+            Err(not_found(format!("user '{id}'")))
+        }
     }
 
-    pub async fn delete(&self, id: i32) -> Result<bool, sqlx::Error> {
+    pub async fn delete(&self, id: i32) -> AppResult<bool> {
         let result = sqlx::query!("DELETE FROM users WHERE id = $1", id)
             .execute(&self.pool)
             .await?;
@@ -219,7 +250,7 @@ impl UserRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn list(&self, limit: i64, offset: i64) -> Result<Vec<User>, sqlx::Error> {
+    pub async fn list(&self, limit: i64, offset: i64) -> AppResult<Vec<User>> {
         let result = sqlx::query_as!(
             User,
             "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2",
@@ -232,7 +263,7 @@ impl UserRepository {
         Ok(result)
     }
 
-    pub async fn count(&self) -> Result<i64, sqlx::Error> {
+    pub async fn count(&self) -> AppResult<i64> {
         let result = sqlx::query!("SELECT COUNT(*) as count FROM users")
             .fetch_one(&self.pool)
             .await?;
@@ -240,7 +271,7 @@ impl UserRepository {
         Ok(result.count.unwrap_or(0))
     }
 
-    pub async fn username_exists(&self, username: &str) -> Result<bool, sqlx::Error> {
+    pub async fn username_exists(&self, username: &str) -> AppResult<bool> {
         let result = sqlx::query!(
             "SELECT 1 as exists FROM users WHERE username = $1",
             username
@@ -251,7 +282,7 @@ impl UserRepository {
         Ok(result.is_some())
     }
 
-    pub async fn email_exists(&self, email: &str) -> Result<bool, sqlx::Error> {
+    pub async fn email_exists(&self, email: &str) -> AppResult<bool> {
         let result = sqlx::query!("SELECT 1 as exists FROM users WHERE email = $1", email)
             .fetch_optional(&self.pool)
             .await?;
@@ -259,9 +290,16 @@ impl UserRepository {
         Ok(result.is_some())
     }
 
-    pub async fn verify(&self, user_id: i32, email: &str, email_verification_token: &str) -> Result<Option<User>> {
+    pub async fn verify(
+        &self,
+        user_id: i32,
+        email: &str,
+        email_verification_token: &str,
+    ) -> AppResult<User> {
         let token_repo = EmailVerificationTokenRepository::new(self.pool.clone());
-        let token = token_repo.find(user_id, email, email_verification_token).await?;
+        let token = token_repo
+            .find(user_id, email, email_verification_token)
+            .await?;
         if let Some(token) = token {
             let mut tx = self.pool.begin().await?;
             // verify user, invalidate token
@@ -277,21 +315,25 @@ impl UserRepository {
             )
             .fetch_optional(&mut *tx)
             .await?;
-            
+
             if let Some(user) = result {
                 token_repo.invalidate(token.id).await?;
                 tx.commit().await?;
-                Ok(Some(user))
+                Ok(user)
             } else {
                 tx.rollback().await?;
-                Ok(None)
+                Err(not_found(format!("user '{user_id}'")))
             }
         } else {
-            Ok(None)
+            Err(not_found("verification token".to_string()))
         }
     }
 
-    pub async fn update_profile_picture(&self, user_id: i32, object_key: &str) -> Result<Option<User>> {
+    pub async fn update_profile_picture(
+        &self,
+        user_id: i32,
+        object_key: &str,
+    ) -> AppResult<Option<User>> {
         let result = sqlx::query_as!(
             User,
             r#"
@@ -310,3 +352,5 @@ impl UserRepository {
         Ok(result)
     }
 }
+
+crate::util::repo_from_parts!(UserRepository);

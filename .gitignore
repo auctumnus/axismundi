@@ -38,3 +38,6 @@ Thumbs.db
 
 .sqlx
 .direnv
+
+config.json
+session.json

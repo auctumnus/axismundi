@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ error.status_code }} | Axismundi{% endblock %}
+
+{% block content %}
+<h1>Error {{ error.status_code }}</h1>
+<p>{{ error.message }}</p>
+<a href="/">Go back to home</a>
+{% endblock %}

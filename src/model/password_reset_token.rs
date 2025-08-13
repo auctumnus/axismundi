@@ -1,10 +1,6 @@
-use base64::prelude::BASE64_STANDARD;
+use crate::err::{AppResult, not_found};
 use chrono::{DateTime, Utc};
-use sha2::Sha256;
 use sqlx::PgPool;
-use anyhow::{bail, Result};
-use sha2::{Digest};
-use base64::prelude::*;
 
 use crate::util::stable_hash;
 
@@ -26,11 +22,11 @@ impl PasswordResetTokenRepository {
         PasswordResetTokenRepository { pool }
     }
 
-    pub async fn create(&self, user_id: i32) -> Result<String> {
+    pub async fn create(&self, user_id: i32) -> AppResult<String> {
         let token = nanoid::nanoid!(20);
         let expires_at = Utc::now() + chrono::Duration::days(1);
         // Tokens that require an extra level of security, **such as password reset tokens**,
-        // should be hashed with SHA-256. 
+        // should be hashed with SHA-256.
         // https://thecopenhagenbook.com/server-side-tokens#storing-tokens
         let hashed_token = crate::util::stable_hash(&token);
 
@@ -49,7 +45,7 @@ impl PasswordResetTokenRepository {
         Ok(token)
     }
 
-    pub async fn find_by_token(&self, token: &str) -> Result<Option<PasswordResetToken>> {
+    pub async fn find_by_token(&self, token: &str) -> AppResult<Option<PasswordResetToken>> {
         let hashed_token = stable_hash(token);
         let result = sqlx::query_as!(
             PasswordResetToken,
@@ -65,7 +61,7 @@ impl PasswordResetTokenRepository {
         Ok(result)
     }
 
-    pub async fn invalidate(&self, token: PasswordResetToken) -> Result<PasswordResetToken> {
+    pub async fn invalidate(&self, token: PasswordResetToken) -> AppResult<PasswordResetToken> {
         let result = sqlx::query_as!(
             PasswordResetToken,
             r#"
@@ -82,11 +78,11 @@ impl PasswordResetTokenRepository {
         if let Some(token) = result {
             Ok(token)
         } else {
-            bail!("Token not found or already invalidated")
+            Err(not_found("Token not found or already invalidated"))
         }
     }
 
-    pub async fn cleanup_expired(&self) -> Result<()> {
+    pub async fn cleanup_expired(&self) -> AppResult<()> {
         sqlx::query!(
             r#"
                 DELETE FROM password_reset_tokens
@@ -99,3 +95,5 @@ impl PasswordResetTokenRepository {
         Ok(())
     }
 }
+
+crate::util::repo_from_parts!(PasswordResetTokenRepository);
