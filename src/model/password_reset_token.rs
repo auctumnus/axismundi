@@ -18,8 +18,8 @@ pub struct PasswordResetTokenRepository {
 }
 
 impl PasswordResetTokenRepository {
-    pub fn new(pool: PgPool) -> Self {
-        PasswordResetTokenRepository { pool }
+    pub const fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 
     pub async fn create(&self, user_id: i32) -> AppResult<String> {

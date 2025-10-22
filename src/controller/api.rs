@@ -200,7 +200,7 @@ async fn upload_profile_picture(
 
     // Update user record with new profile picture object key
     match users.update_profile_picture(user.id, &object_key).await? {
-        Some(_user) => {
+        Some(_) => {
             let profile_picture_url = S3.get_object_url(&object_key);
             Ok(Json(ProfilePictureUploadResponse {
                 profile_picture_url,

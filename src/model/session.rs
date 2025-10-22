@@ -24,7 +24,7 @@ pub struct SessionRepository {
 const SESSION_LENGTH: Duration = Duration::days(30);
 
 impl SessionRepository {
-    pub fn new(pool: PgPool) -> Self {
+    pub const fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -44,7 +44,7 @@ impl SessionRepository {
                     ..
                 },
             ) => return Err(e),
-            _ => "".to_string(),
+            _ => String::new(),
         };
 
         if crate::util::verify(password, &password_hash)? {

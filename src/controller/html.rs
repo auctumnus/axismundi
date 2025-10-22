@@ -2,39 +2,54 @@ use std::sync::Arc;
 
 use crate::{
     ErrorTemplate,
-    err::{AppError, AppResult, bad_request, not_found},
-    model::{
-        session::{SessionObj, SessionRepository},
-        user::{CreateUser, User, UserRepository},
-    },
+    err::AppError,
+    model::
+        user::User,
     util::{
         AppState,
-        extract_session::{SESSION_COOKIE_NAME, Session},
-        s3::S3,
+        extract_session::Session,
     },
 };
 use askama::Template;
 use axum::{
-    Json, Router,
-    extract::{Path, State},
+    Router,
     http::StatusCode,
     response::Html,
-    routing::{get, post, put},
+    routing::get,
 };
-use axum_extra::extract::{CookieJar, Multipart, cookie::Cookie};
-use chrono::{DateTime, Utc};
 use governor::middleware::NoOpMiddleware;
-use serde::{Deserialize, Serialize};
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
 
 pub fn create_html_controller() -> Router<AppState> {
-    Router::new()
+    let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
+    let normal_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::default());
+
+    let secure_limiter = secure_governor.limiter().clone();
+    let normal_limiter = normal_governor.limiter().clone();
+    let interval = std::time::Duration::from_secs(60);
+
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(interval);
+            secure_limiter.retain_recent();
+            normal_limiter.retain_recent();
+        }
+    });
+
+    let secure_routes = Router::<AppState>::new();
+
+    let normal_routes = 
+    Router::<AppState>::new()
         .route("/", get(home))
         .route("/about", get(about))
         .route("/contact", get(contact))
         .nest_service("/static", ServeDir::new("frontend/dist"))
-        .nest_service("/assets", ServeDir::new("frontend/dist/assets"))
+        .nest_service("/assets", ServeDir::new("frontend/dist/assets"));
+
+    Router::<AppState>::new()
+        .merge(secure_routes)
+        .merge(normal_routes)
 }
 
 #[derive(Template)]
@@ -50,6 +65,12 @@ struct AboutTemplate;
 #[derive(Template)]
 #[template(path = "contact.html")]
 struct ContactTemplate;
+
+#[derive(Template)]
+#[template(path = "login/form.html")]
+struct LoginFormTemplate {
+    error: Option<AppError>
+}
 
 fn render_template<T: Template>(template: T) -> Html<String> {
     template.render().map_or_else(
@@ -85,4 +106,10 @@ async fn about() -> Html<String> {
 
 async fn contact() -> Html<String> {
     render_template(ContactTemplate)
+}
+
+async fn login_form() -> Html<String> {
+    render_template(LoginFormTemplate {
+        error: None
+    })
 }

@@ -17,21 +17,21 @@ pub struct S3Config {
     pub public_url_base: Option<String>,
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub enum Environment {
     Dev,
     Prod,
 }
 
-fn default_port() -> u16 {
+const fn default_port() -> u16 {
     3000
 }
 
-fn default_file_upload_limit() -> usize {
+const fn default_file_upload_limit() -> usize {
     5 * 1024 * 1024 // 5 MB
 }
 
-fn default_environment() -> Environment {
+const fn default_environment() -> Environment {
     Environment::Dev
 }
 

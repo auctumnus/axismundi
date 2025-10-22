@@ -14,6 +14,7 @@ use crate::{
 
 use super::email_verification_token::EmailVerificationTokenRepository;
 
+#[allow(clippy::ref_option)] // due to serde
 fn serialize_object_key<S>(object_id: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -51,7 +52,7 @@ pub struct User {
 }
 
 impl User {
-    pub fn is_verified(&self) -> bool {
+    pub const fn is_verified(&self) -> bool {
         self.verified_at.is_some()
     }
 }
@@ -102,7 +103,7 @@ pub struct UserRepository {
 }
 
 impl UserRepository {
-    pub fn new(pool: PgPool) -> Self {
+    pub const fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -123,11 +124,10 @@ impl UserRepository {
         // > Use libraries like zxcvbn to check for weak passwords.
         let password_strength = zxcvbn::zxcvbn(&user.password, &[]);
         if password_strength.score() < Score::Three {
-            if let Some(reason) = password_strength.feedback() {
-                return Err(bad_request(format!("password is too weak: {reason}")));
-            } else {
-                return Err(bad_request("password is too weak"));
-            }
+            let message = 
+                password_strength.feedback().map_or("password is too weak".to_string(), |reason| format!("password is too weak: {reason}"));
+
+            return Err(bad_request(message));
         }
 
         let password_hash = crate::util::hash(&user.password)

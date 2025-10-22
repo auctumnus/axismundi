@@ -1,17 +1,15 @@
 // ignore unused warnings
 #![allow(dead_code)]
+#![warn(clippy::pedantic, clippy::style)]
 use askama::Template;
 use axum::{
     Router,
-    extract::State,
     http::{HeaderMap, StatusCode},
-    response::Html,
-    routing::get,
 };
 use sqlx::PgPool;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util::AppState;
 
@@ -69,8 +67,8 @@ struct ErrorTemplate {
     error: err::AppError,
 }
 
-async fn fallback(headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
-    let content_type = headers
+async fn fallback(req_headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
+    let content_type = req_headers
         .get(axum::http::header::ACCEPT)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
@@ -80,7 +78,7 @@ async fn fallback(headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
     match content_type {
         s if s.contains("text/html") => {
             let template = ErrorTemplate {
-                error: err::AppError::new("Not Found".to_string(), StatusCode::NOT_FOUND),
+                error: err::AppError::new("Not Found".to_owned(), StatusCode::NOT_FOUND),
             };
             let mut headers = HeaderMap::new();
             headers.insert(
@@ -92,7 +90,7 @@ async fn fallback(headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
                 headers,
                 template.render().unwrap_or_else(|e| {
                     tracing::error!("Template rendering error: {}", e);
-                    "500 Internal Server Error".to_string()
+                    "500 Internal Server Error".to_owned()
                 }),
             )
         }
@@ -102,7 +100,7 @@ async fn fallback(headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
                 axum::http::header::CONTENT_TYPE,
                 "text/plain".parse().unwrap(),
             );
-            (StatusCode::NOT_FOUND, headers, "not found".to_string())
+            (StatusCode::NOT_FOUND, headers, "not found".to_owned())
         }
     }
 }

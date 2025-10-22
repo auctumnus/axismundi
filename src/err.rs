@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{config, err};
+use crate::config;
 
 #[derive(Debug, Clone)]
 pub struct AppError {
@@ -16,7 +16,7 @@ pub struct AppError {
 pub type AppResult<T> = Result<T, AppError>;
 
 impl AppError {
-    pub fn new(message: String, status_code: StatusCode) -> Self {
+    pub const fn new(message: String, status_code: StatusCode) -> Self {
         Self {
             message,
             status_code,
@@ -64,7 +64,7 @@ impl core::error::Error for AppError {}
 
 impl From<anyhow::Error> for AppError {
     fn from(err: anyhow::Error) -> Self {
-        AppError {
+        Self {
             message: err.to_string(),
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -73,7 +73,7 @@ impl From<anyhow::Error> for AppError {
 
 impl From<validator::ValidationErrors> for AppError {
     fn from(errors: validator::ValidationErrors) -> Self {
-        AppError {
+        Self {
             message: errors.to_string(),
             status_code: StatusCode::BAD_REQUEST,
         }
@@ -83,7 +83,7 @@ impl From<validator::ValidationErrors> for AppError {
 impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
         match err {
-            sqlx::Error::RowNotFound => AppError {
+            sqlx::Error::RowNotFound => Self {
                 message: "Resource not found".to_string(),
                 status_code: StatusCode::NOT_FOUND,
             },
@@ -101,16 +101,6 @@ impl From<std::io::Error> for AppError {
 impl From<image::ImageError> for AppError {
     fn from(err: image::ImageError) -> Self {
         internal_error(err)
-    }
-}
-
-pub fn from_anyhow(err: anyhow::Error) -> AppError {
-    match err.downcast_ref::<err::AppError>() {
-        Some(app_err) => app_err.clone(),
-        None => AppError {
-            message: "internal server error".to_string(),
-            status_code: StatusCode::INTERNAL_SERVER_ERROR,
-        },
     }
 }
 

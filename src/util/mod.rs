@@ -30,7 +30,7 @@ mod repo {
                     _: &mut axum::http::request::Parts,
                     state: &crate::util::AppState,
                 ) -> Result<Self, Self::Rejection> {
-                    Ok($repo::new(state.pool.clone()))
+                    Ok(Self::new(state.pool.clone()))
                 }
             }
         };

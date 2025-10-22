@@ -22,8 +22,8 @@ const NON_CONFUSABLES: &[char] = &[
 ];
 
 impl EmailVerificationTokenRepository {
-    pub fn new(pool: PgPool) -> Self {
-        EmailVerificationTokenRepository { pool }
+    pub const fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 
     pub async fn create(&self, user_id: i32, email: String) -> AppResult<String> {
