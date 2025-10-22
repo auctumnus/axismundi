@@ -4,12 +4,12 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::{FromRow, PgPool};
+use uuid::Uuid;
 use validator::Validate;
 use zxcvbn::Score;
 
 use crate::{
-    err::{AppResult, bad_request, internal_error, not_found},
-    util::{re, s3::S3},
+    err::{bad_request, internal_error, not_found, AppResult}, pagination::{PaginatedRequest, PaginatedResponse}, util::{re, s3::S3}
 };
 
 use super::email_verification_token::EmailVerificationTokenRepository;
@@ -28,7 +28,7 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
     #[serde(skip_serializing)]
-    pub id: i32,
+    pub id: Uuid,
     #[serde(skip_serializing)]
     pub email: String,
     #[serde(skip_serializing)]
@@ -69,6 +69,7 @@ pub struct CreateUser {
     pub email: String,
 
     #[validate(length(min = 8, max = 100))]
+    #[serde(skip_serializing)]
     pub password: String,
 
     #[validate(length(min = 2, max = 30))]
@@ -97,6 +98,15 @@ pub struct UpdateUser {
     #[validate(regex(path = GENDER_REGEX))]
     pub gender: Option<String>,
 }
+
+pub struct UserSearch {
+    pub pagination: PaginatedRequest,
+    pub text_query: Option<String>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub created_after: Option<DateTime<Utc>>,
+    pub verified: Option<bool>,
+}
+
 
 pub struct UserRepository {
     pool: PgPool,
@@ -157,7 +167,7 @@ impl UserRepository {
         Ok(result)
     }
 
-    pub async fn find_by_id(&self, id: i32) -> AppResult<User> {
+    pub async fn find_by_id(&self, id: Uuid) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
             "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE id = $1",
@@ -205,7 +215,7 @@ impl UserRepository {
         }
     }
 
-    pub async fn update(&self, id: i32, updates: UpdateUser) -> AppResult<User> {
+    pub async fn update(&self, id: Uuid, updates: UpdateUser) -> AppResult<User> {
         if let Some(username) = &updates.username {
             if self.username_exists(username).await? {
                 return Err(bad_request("Username is in use"));
@@ -242,12 +252,103 @@ impl UserRepository {
         }
     }
 
-    pub async fn delete(&self, id: i32) -> AppResult<bool> {
+    pub async fn delete(&self, id: Uuid) -> AppResult<bool> {
         let result = sqlx::query!("DELETE FROM users WHERE id = $1", id)
             .execute(&self.pool)
             .await?;
 
         Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn search(&self, search: UserSearch) -> AppResult<PaginatedResponse<User>> {
+        let limit = search.pagination.limit as i64 + 1; // fetch one extra to check if there's more
+
+        let query = if let Some(text) = &search.text_query {
+            sqlx::query_as!(
+                User,
+                r#"
+                SELECT id, username, email, password_hash, display_name, description,
+                       pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+                FROM users
+                WHERE (similarity(username, $1) > 0.2 OR similarity(COALESCE(description, ''), $1) > 0.2)
+                  AND ($2::timestamptz IS NULL OR created_at <= $2)
+                  AND ($3::timestamptz IS NULL OR created_at >= $3)
+                  AND ($4::bool IS NULL OR (verified_at IS NOT NULL) = $4)
+                  AND ($5::uuid IS NULL OR (
+                    CASE WHEN $6 = 'Forward' THEN id > $5
+                         WHEN $6 = 'Backward' THEN id < $5
+                    END
+                  ))
+                ORDER BY
+                  GREATEST(similarity(username, $1), similarity(COALESCE(description, ''), $1)) DESC,
+                  id DESC
+                LIMIT $7
+                "#,
+                text,
+                search.created_before,
+                search.created_after,
+                search.verified,
+                search.pagination.cursor,
+                format!("{:?}", search.pagination.direction),
+                limit
+            )
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as!(
+                User,
+                r#"
+                SELECT id, username, email, password_hash, display_name, description,
+                       pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+                FROM users
+                WHERE ($1::timestamptz IS NULL OR created_at <= $1)
+                  AND ($2::timestamptz IS NULL OR created_at >= $2)
+                  AND ($3::bool IS NULL OR (verified_at IS NOT NULL) = $3)
+                  AND ($4::uuid IS NULL OR (
+                    CASE WHEN $5 = 'Forward' THEN id > $4
+                         WHEN $5 = 'Backward' THEN id < $4
+                    END
+                  ))
+                ORDER BY created_at DESC, id DESC
+                LIMIT $6
+                "#,
+                search.created_before,
+                search.created_after,
+                search.verified,
+                search.pagination.cursor,
+                format!("{:?}", search.pagination.direction),
+                limit
+            )
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        let mut items = query;
+        // TODO: uhhh lol is that right?
+        let has_more = items.len() > search.pagination.limit.try_into().unwrap_or(0);
+
+        if has_more {
+            items.pop();
+        }
+
+        let next_cursor = if has_more {
+            items.last().map(|u| u.id)
+        } else {
+            None
+        };
+
+        let previous_cursor = if search.pagination.cursor.is_some() {
+            items.first().map(|u| u.id)
+        } else {
+            None
+        };
+
+        Ok(PaginatedResponse {
+            items,
+            pages_left: if has_more { 1 } else { 0 },
+            next_cursor,
+            previous_cursor,
+        })
     }
 
     pub async fn list(&self, limit: i64, offset: i64) -> AppResult<Vec<User>> {
@@ -292,7 +393,7 @@ impl UserRepository {
 
     pub async fn verify(
         &self,
-        user_id: i32,
+        user_id: Uuid,
         email: &str,
         email_verification_token: &str,
     ) -> AppResult<User> {
@@ -331,7 +432,7 @@ impl UserRepository {
 
     pub async fn update_profile_picture(
         &self,
-        user_id: i32,
+        user_id: Uuid,
         object_key: &str,
     ) -> AppResult<Option<User>> {
         let result = sqlx::query_as!(

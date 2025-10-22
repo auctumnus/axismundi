@@ -35,6 +35,7 @@
           bun
           sqlx-cli
           minio-client
+          just
         ];
 
         buildInputs =

@@ -33,3 +33,5 @@ image = { version = "0.25.6", features = ["jpeg", "png", "gif", "avif", "webp", 
 tower_governor = "0.7.0"
 governor = "0.8.1"
 serde_json = "1.0.141"
+async-trait = "0.1.89"
+serde_urlencoded = "0.7.1"

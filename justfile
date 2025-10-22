@@ -11,6 +11,9 @@ db:
     @echo "Connection: postgres://user:password@localhost:5432/axismundi"
     @echo "To run the app locally: just run"
 
+db-migrate:
+    sqlx migrate run
+
 # Stop the database
 db-stop:
     docker compose -f docker-compose.db.yml down
@@ -29,7 +32,7 @@ run:
     cargo run
 
 # Watch frontend for changes during development
-watch-frontend:
+watch-frontend
     cd frontend && bun run dev
 
 # Full development setup (database + backend + frontend watching)

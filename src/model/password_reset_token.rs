@@ -1,12 +1,13 @@
 use crate::err::{AppResult, not_found};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::util::stable_hash;
 
 pub struct PasswordResetToken {
-    pub id: i32,
-    pub user_id: i32,
+    pub id: Uuid,
+    pub user_id: Uuid,
     pub token: String,
     pub invalidated_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -22,7 +23,7 @@ impl PasswordResetTokenRepository {
         Self { pool }
     }
 
-    pub async fn create(&self, user_id: i32) -> AppResult<String> {
+    pub async fn create(&self, user_id: Uuid) -> AppResult<String> {
         let token = nanoid::nanoid!(20);
         let expires_at = Utc::now() + chrono::Duration::days(1);
         // Tokens that require an extra level of security, **such as password reset tokens**,

@@ -1,5 +1,5 @@
 create table users (
-    id serial primary key,
+    id uuid primary key default uuidv7(),
     username text not null unique,
     email text not null unique,
     password_hash text not null,
@@ -21,8 +21,8 @@ create index idx_users_email ON users(email);
 create index idx_users_username ON users(username);
 
 create table password_reset_tokens (
-    id serial primary key,
-    user_id integer not null references users(id) on delete cascade,
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
     token text not null unique,
     invalidated_at timestamp with time zone,
     created_at timestamp with time zone not null default current_timestamp,
@@ -30,8 +30,8 @@ create table password_reset_tokens (
 );
 
 create table email_verification_tokens (
-    id serial primary key,
-    user_id integer not null references users(id) on delete cascade,
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
     email text not null,
     token text not null unique,
     invalidated_at timestamp with time zone,
@@ -40,8 +40,8 @@ create table email_verification_tokens (
 );
 
 create table user_sessions (
-    id serial primary key,
-    user_id integer not null references users(id) on delete cascade,
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
     session_token text not null unique,
     invalidated_at timestamp with time zone,
     created_at timestamp with time zone not null default current_timestamp,

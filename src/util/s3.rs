@@ -5,6 +5,7 @@ use crate::{
 use image::{ImageReader, codecs::webp::WebPEncoder};
 use s3::{Bucket, Region, creds::Credentials};
 use std::sync::LazyLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct S3Config {
@@ -47,7 +48,7 @@ pub static S3: LazyLock<S3Config> = LazyLock::new(|| {
 impl S3Config {
     pub async fn upload_profile_picture(
         &self,
-        user_id: i32,
+        user_id: Uuid,
         file_data: &[u8],
     ) -> AppResult<String> {
         // TODO: like half of this should probably be done in a different function,

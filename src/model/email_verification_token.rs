@@ -1,10 +1,11 @@
 use crate::err::{AppResult, not_found};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 pub struct EmailVerificationToken {
-    pub id: i32,
-    pub user_id: i32,
+    pub id: Uuid,
+    pub user_id: Uuid,
     pub email: String,
     pub token: String,
     pub invalidated_at: Option<DateTime<Utc>>,
@@ -26,7 +27,7 @@ impl EmailVerificationTokenRepository {
         Self { pool }
     }
 
-    pub async fn create(&self, user_id: i32, email: String) -> AppResult<String> {
+    pub async fn create(&self, user_id: Uuid, email: String) -> AppResult<String> {
         let token = nanoid::nanoid!(6, NON_CONFUSABLES);
         let expires_at = Utc::now() + chrono::Duration::days(1);
         // Tokens that require an extra level of security, **such as password reset tokens**,
@@ -53,7 +54,7 @@ impl EmailVerificationTokenRepository {
 
     pub async fn find(
         &self,
-        user_id: i32,
+        user_id: Uuid,
         email: &str,
         token: &str,
     ) -> AppResult<Option<EmailVerificationToken>> {
@@ -75,7 +76,7 @@ impl EmailVerificationTokenRepository {
         Ok(result)
     }
 
-    pub async fn invalidate(&self, id: i32) -> AppResult<EmailVerificationToken> {
+    pub async fn invalidate(&self, id: Uuid) -> AppResult<EmailVerificationToken> {
         let result = sqlx::query_as!(
             EmailVerificationToken,
             r#"

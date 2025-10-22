@@ -1,17 +1,18 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use sqlx::{FromRow, PgPool};
+use uuid::Uuid;
 
 use crate::err::{AppError, AppResult, bad_request};
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct SessionObj {
     #[serde(skip_serializing)]
-    pub user_id: i32,
+    pub user_id: Uuid,
     #[serde(skip_serializing)]
     pub session_token: String,
 
-    pub id: i32,
+    pub id: Uuid,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub invalidated_at: Option<DateTime<Utc>>,
@@ -115,7 +116,7 @@ impl SessionRepository {
         }
     }
 
-    pub async fn find_by_user_id(&self, user_id: i32) -> AppResult<Vec<SessionObj>> {
+    pub async fn find_by_user_id(&self, user_id: Uuid) -> AppResult<Vec<SessionObj>> {
         let result = sqlx::query_as!(
             SessionObj,
             r#"
@@ -145,7 +146,7 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn invalidate_all(&self, user_id: i32) -> AppResult<()> {
+    pub async fn invalidate_all(&self, user_id: Uuid) -> AppResult<()> {
         sqlx::query!(
             r#"
                 UPDATE user_sessions
