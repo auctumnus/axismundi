@@ -1,51 +1,30 @@
 use crate::{
-    err::{bad_request, forbidden, unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
         language::{CreateLanguage, Language, LanguageRepository, LanguageSearch, UpdateLanguage},
-        language_invite::PermissionLevel,
-        language_permission::{CreateLanguagePermission, LanguagePermission, LanguagePermissionRepository},
-        user::UserRepository,
+        language_permission::LanguagePermissionRepository,
+        user::{User, UserRepository},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
 };
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    Json,
-};
+use axum::{Json, extract::Path, http::StatusCode};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 type ApiResponse<T> = AppResult<T>;
-type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
+type PaginatedApiResponse<T> = AppResult<Json<PaginatedResponse<T>>>;
 
 pub async fn create_language(
     s: Session,
     languages: LanguageRepository,
-    permissions: LanguagePermissionRepository,
     Json(create): Json<CreateLanguage>,
 ) -> ApiResponse<Json<Language>> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
-    if create.code == "search" {
-        return Err(bad_request("cannot use 'search' as language code"));
-    }
-
-    let language = languages.create(create, session.user_id).await?;
-
-    // grant owner permissions
-    permissions.create(
-        CreateLanguagePermission {
-            language: language.id,
-            user: session.user_id,
-            permission: PermissionLevel::Owner,
-            via: None,
-        },
-        session.user_id,
-    ).await?;
+    let language = languages.create(requestor, create).await?;
 
     Ok(Json(language))
 }
@@ -73,7 +52,9 @@ pub async fn list_languages(
     pagination: PaginatedRequest,
     axum::extract::Query(query): axum::extract::Query<LanguageSearchQuery>,
 ) -> PaginatedApiResponse<Language> {
-    let edited_by = query.edited_by.map(|s| s.split(',').map(String::from).collect());
+    let edited_by = query
+        .edited_by
+        .map(|s| s.split(',').map(String::from).collect());
 
     let search = LanguageSearch {
         pagination,
@@ -84,56 +65,39 @@ pub async fn list_languages(
         created_after: query.created_after,
     };
 
-    languages.search(search).await
+    languages.search(search).await.map(Json)
 }
 
 pub async fn edit_language(
     s: Session,
     languages: LanguageRepository,
-    permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
     Json(updates): Json<UpdateLanguage>,
 ) -> ApiResponse<Json<Language>> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let user_perm = permissions.find_by_user_and_language(session.user_id, language.id).await?;
 
-    let Some(perm) = user_perm else {
-        return Err(forbidden("you don't have permission to edit this language"));
-    };
-
-    if perm.permission == PermissionLevel::Viewer {
-        return Err(forbidden("viewers cannot edit language"));
-    }
-
-    languages.update(language.id, updates, session.user_id).await.map(Json)
+    languages
+        .update(requestor, language.id, updates)
+        .await
+        .map(Json)
 }
 
 pub async fn delete_language(
     s: Session,
     languages: LanguageRepository,
-    permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
 ) -> ApiResponse<StatusCode> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let user_perm = permissions.find_by_user_and_language(session.user_id, language.id).await?;
 
-    let Some(perm) = user_perm else {
-        return Err(forbidden("you don't have permission to delete this language"));
-    };
-
-    if perm.permission != PermissionLevel::Owner {
-        return Err(forbidden("only the owner can delete a language"));
-    }
-
-    languages.delete(language.id).await?;
+    languages.delete(requestor, language.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -144,21 +108,457 @@ pub async fn get_language_owner(
 ) -> ApiResponse<axum::response::Redirect> {
     let language = languages.find_by_code(&code).await?;
     let owner = users.find_by_id(language.created_by).await?;
-    Ok(axum::response::Redirect::to(&format!("/users/{}", owner.username)))
+    Ok(axum::response::Redirect::to(&format!(
+        "/users/{}",
+        owner.username
+    )))
 }
 
 pub async fn get_language_editors(
     languages: LanguageRepository,
-    _permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
-    _pagination: PaginatedRequest,
-) -> PaginatedApiResponse<LanguagePermission> {
-    let _language = languages.find_by_code(&code).await?;
-    // TODO: implement pagination
-    Ok(PaginatedResponse {
-        items: vec![],
-        pages_left: 0,
-        next_cursor: None,
-        previous_cursor: None,
-    })
+    pagination: PaginatedRequest,
+) -> PaginatedApiResponse<User> {
+    let language = languages.find_by_code(&code).await?;
+    languages
+        .editors_of_language(language.id, pagination)
+        .await
+        .map(Json)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tower::Service;
+
+    use crate::controller::api::tests::{
+        delete_without_auth, get, make_authed_user, post, put_without_auth,
+    };
+    use crate::email::tests::MockEmailService;
+
+    #[tokio::test]
+    async fn test_create_language() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["code"], code);
+        assert_eq!(body["name"], "Test Language");
+    }
+
+    #[tokio::test]
+    async fn test_create_language_unauthorized() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let body = json!({
+            "code": "test",
+            "name": "Test Language",
+        });
+
+        let request = crate::controller::api::tests::post_without_auth("languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_get_language() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = get(&format!("languages/{code}")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["code"], code);
+        assert_eq!(body["name"], "Test Language");
+    }
+
+    #[tokio::test]
+    async fn test_get_language_not_found() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let request = get("languages/nonexistent").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_list_languages() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        // create a few languages
+        for i in 0..3 {
+            let code = format!("{}_{}", crate::tests::random_code(), i);
+            let body = json!({
+                "code": code,
+                "name": format!("Test Language {}", i),
+            });
+
+            let request = post(&token, "languages", body).await;
+            let response = app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        let request = get("languages").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body["items"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_list_languages_with_search() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Unique Language Name",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = get("languages?q=Unique").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body["items"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_edit_language() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let update_body = json!({
+            "name": "Updated Language Name",
+        });
+
+        let request =
+            crate::controller::api::tests::put(&token, &format!("languages/{code}"), &update_body);
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["name"], "Updated Language Name");
+    }
+
+    #[tokio::test]
+    async fn test_edit_language_unauthorized() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let update_body = json!({
+            "name": "Updated Language Name",
+        });
+
+        let request = put_without_auth(&format!("languages/{code}"), &update_body);
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_delete_language() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = crate::controller::api::tests::delete(&token, &format!("languages/{code}"));
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // verify it's deleted
+        let request = get(&format!("languages/{code}")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_language_unauthorized() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = delete_without_auth(&format!("languages/{code}"));
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_delete_language_not_editor() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let owner_username = crate::tests::random_name();
+        let owner_token = make_authed_user(&owner_username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&owner_token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let other_username = crate::tests::random_name();
+        let other_token = make_authed_user(&other_username, &app, email_service.clone()).await;
+
+        let request =
+            crate::controller::api::tests::delete(&other_token, &format!("languages/{code}"));
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_delete_language_as_editor() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let owner_username = crate::tests::random_name();
+        let owner_token = make_authed_user(&owner_username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&owner_token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let other_username = crate::tests::random_name();
+        let other_token = make_authed_user(&other_username, &app, email_service.clone()).await;
+
+        // Add other user as editor
+        let invite_body = json!({
+            "permission_level": "editor",
+        });
+        let request = post(
+            &owner_token,
+            &format!("languages/{code}/invites/{other_username}"),
+            invite_body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // accept invite
+        let request = crate::controller::api::tests::post(
+            &other_token,
+            &format!("languages/{code}/accept-invite"),
+            json!({}),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request =
+            crate::controller::api::tests::delete(&other_token, &format!("languages/{code}"));
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_delete_language_as_admin() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let owner_username = crate::tests::random_name();
+        let owner_token = make_authed_user(&owner_username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&owner_token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let other_username = crate::tests::random_name();
+        let other_token = make_authed_user(&other_username, &app, email_service.clone()).await;
+
+        // Add other user as admin
+        let invite_body = json!({
+            "permission_level": "admin",
+        });
+        let request = post(
+            &owner_token,
+            &format!("languages/{code}/invites/{other_username}"),
+            invite_body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // accept invite
+        let request = crate::controller::api::tests::post(
+            &other_token,
+            &format!("languages/{code}/accept-invite"),
+            json!({}),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request =
+            crate::controller::api::tests::delete(&other_token, &format!("languages/{code}"));
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_get_language_owner() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = get(&format!("languages/{code}/owner")).await;
+        let response = app.call(request).await.unwrap();
+        // Should redirect
+        assert!(response.status().is_redirection());
+    }
 }

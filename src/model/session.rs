@@ -1,9 +1,10 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
-use sqlx::{FromRow, PgPool};
+use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::err::{AppError, AppResult, bad_request};
+use crate::err::{AppError, AppResult};
+use crate::util::{ensure_verified, AppState};
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct SessionObj {
@@ -19,21 +20,21 @@ pub struct SessionObj {
 }
 
 pub struct SessionRepository {
-    pool: PgPool,
+    state: AppState,
 }
 
 const SESSION_LENGTH: Duration = Duration::days(30);
 
 impl SessionRepository {
-    pub const fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(state: AppState) -> Self {
+        Self { state }
     }
 
     pub async fn login(&self, email: &str, password: &str) -> AppResult<(String, SessionObj)> {
         // this is written kind of backwards, but it avoids a timing attack
         // we always check the password, no matter whether the user exists or not,
         // so you can't tell if the email has been used / password is correct
-        let user_repo = super::user::UserRepository::new(self.pool.clone());
+        let user_repo = super::user::UserRepository::new(self.state.clone());
 
         let result = user_repo.find_by_email(email).await;
 
@@ -48,8 +49,11 @@ impl SessionRepository {
             _ => String::new(),
         };
 
-        if crate::util::verify(password, &password_hash)? {
+        if !password_hash.is_empty() && crate::util::verify(password, &password_hash)? {
             if let Ok(user) = result {
+                // TODO: should we actually be checking this?
+                ensure_verified(&user)?;
+
                 let token = nanoid::nanoid!();
                 let hashed_token = crate::util::stable_hash(&token);
                 let expires_at = Utc::now() + SESSION_LENGTH;
@@ -65,7 +69,7 @@ impl SessionRepository {
                     hashed_token,
                     expires_at
                 )
-                .fetch_one(&self.pool)
+                .fetch_one(&self.state.pool)
                 .await?;
 
                 Ok((token, session))
@@ -74,10 +78,16 @@ impl SessionRepository {
                     false,
                     "User not found after successful password verification"
                 );
-                Err(bad_request("Invalid email or password"))
+                Err(AppError::new(
+                    "Invalid email or password".to_string(),
+                    axum::http::StatusCode::UNAUTHORIZED,
+                ))
             }
         } else {
-            Err(bad_request("Invalid email or password"))
+            Err(AppError::new(
+                "Invalid email or password".to_string(),
+                axum::http::StatusCode::UNAUTHORIZED,
+            ))
         }
     }
 
@@ -92,7 +102,7 @@ impl SessionRepository {
             "#,
             hashed_token
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         if let Some(session) = result {
@@ -107,7 +117,7 @@ impl SessionRepository {
                 new_expires_at,
                 session.id
             )
-            .execute(&self.pool)
+            .execute(&self.state.pool)
             .await?;
 
             Ok(Some(session))
@@ -125,7 +135,7 @@ impl SessionRepository {
             "#,
             user_id
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -140,7 +150,7 @@ impl SessionRepository {
             "#,
             session.id
         )
-        .execute(&self.pool)
+        .execute(&self.state.pool)
         .await?;
 
         Ok(())
@@ -155,7 +165,7 @@ impl SessionRepository {
             "#,
             user_id
         )
-        .execute(&self.pool)
+        .execute(&self.state.pool)
         .await?;
 
         Ok(())
@@ -168,7 +178,7 @@ impl SessionRepository {
                 WHERE expires_at < NOW() OR invalidated_at IS NOT NULL
             "#
         )
-        .execute(&self.pool)
+        .execute(&self.state.pool)
         .await?;
 
         Ok(())

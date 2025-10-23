@@ -6,9 +6,9 @@ use axum::{
 use crate::util::AppState;
 
 #[cfg(not(test))]
-use std::sync::Arc;
-#[cfg(not(test))]
 use governor::middleware::NoOpMiddleware;
+#[cfg(not(test))]
+use std::sync::Arc;
 #[cfg(not(test))]
 use tower_governor::governor::GovernorConfig;
 
@@ -20,12 +20,17 @@ mod users;
 mod word_classes;
 mod words;
 
+// pretty sure i need that there, actually...
+#[allow(clippy::needless_return)]
 pub fn create_api_controller() -> Router<AppState> {
     let secure_routes = Router::<AppState>::new()
         // users
         .route("/users", post(users::create_user))
         .route("/users/{id}/verify", post(users::verify_user))
-        .route("/users/{username}/profile-picture", put(users::upload_profile_picture))
+        .route(
+            "/users/{username}/profile-picture",
+            put(users::upload_profile_picture),
+        )
         // sessions
         .route("/sessions", post(sessions::login))
         .route("/sessions", get(sessions::get_sessions))
@@ -34,16 +39,40 @@ pub fn create_api_controller() -> Router<AppState> {
         .route("/languages/{code}", put(languages::edit_language))
         .route("/languages/{code}", delete(languages::delete_language))
         // language permissions
-        .route("/languages/{code}/permissions/{username}", put(language_permissions::edit_user_permissions))
-        .route("/languages/{code}/permissions/{username}", delete(language_permissions::delete_user_permissions))
+        .route(
+            "/languages/{code}/permissions/{username}",
+            put(language_permissions::edit_user_permissions),
+        )
+        .route(
+            "/languages/{code}/permissions/{username}",
+            delete(language_permissions::delete_user_permissions),
+        )
         // language invites
-        .route("/languages/{code}/invites/{username}", post(language_invites::invite_user_to_language))
-        .route("/languages/{code}/invites/{username}", delete(language_invites::delete_language_invite))
-        .route("/languages/{code}/accept-invite", post(language_invites::accept_language_invite))
+        .route(
+            "/languages/{code}/invites/{username}",
+            post(language_invites::invite_user_to_language),
+        )
+        .route(
+            "/languages/{code}/invites/{username}",
+            delete(language_invites::delete_language_invite),
+        )
+        .route(
+            "/languages/{code}/accept-invite",
+            post(language_invites::accept_language_invite),
+        )
         // word classes
-        .route("/languages/{code}/word-classes", post(word_classes::create_word_class))
-        .route("/languages/{code}/word-classes/{abbreviation}", put(word_classes::edit_word_class))
-        .route("/languages/{code}/word-classes/{abbreviation}", delete(word_classes::delete_word_class))
+        .route(
+            "/languages/{code}/word-classes",
+            post(word_classes::create_word_class),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}",
+            put(word_classes::edit_word_class),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}",
+            delete(word_classes::delete_word_class),
+        )
         // words
         .route("/languages/{code}/words", post(words::create_word))
         .route("/languages/{code}/words/{slug}", put(words::edit_word))
@@ -56,13 +85,31 @@ pub fn create_api_controller() -> Router<AppState> {
         // languages
         .route("/languages/{code}", get(languages::get_language))
         .route("/languages", get(languages::list_languages))
-        .route("/languages/{code}/owner", get(languages::get_language_owner))
-        .route("/languages/{code}/editors", get(languages::get_language_editors))
-        .route("/languages/{code}/permissions", get(language_permissions::get_language_permissions))
-        .route("/languages/{code}/permissions/{username}", get(language_permissions::get_user_language_permissions))
+        .route(
+            "/languages/{code}/owner",
+            get(languages::get_language_owner),
+        )
+        .route(
+            "/languages/{code}/editors",
+            get(languages::get_language_editors),
+        )
+        .route(
+            "/languages/{code}/permissions",
+            get(language_permissions::get_language_permissions),
+        )
+        .route(
+            "/languages/{code}/permissions/{username}",
+            get(language_permissions::get_user_language_permissions),
+        )
         // word classes
-        .route("/languages/{code}/word-classes", get(word_classes::list_word_classes))
-        .route("/languages/{code}/word-classes/{abbreviation}", get(word_classes::get_word_class))
+        .route(
+            "/languages/{code}/word-classes",
+            get(word_classes::list_word_classes),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}",
+            get(word_classes::get_word_class),
+        )
         // words
         .route("/languages/{code}/words", get(words::list_words));
 
@@ -99,10 +146,10 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(normal_routes)
 }
 
-
 #[cfg(test)]
 mod tests {
     use axum::{body::Body, http::Request, routing::RouterIntoService};
+    use std::sync::Arc;
 
     use crate::email::tests::MockEmailService;
 
@@ -132,7 +179,6 @@ mod tests {
             .header("content-type", "application/json")
             .body(Body::empty())
             .unwrap()
-
     }
 
     pub(crate) async fn get_with_auth(token: &str, uri: &str) -> Request<Body> {
@@ -145,39 +191,79 @@ mod tests {
             .unwrap()
     }
 
-    pub(crate) async fn post_multipart(
-        token: &str,
-        uri: &str,
-        body: Vec<u8>
-    ) -> Request<Body> {
+    pub(crate) fn post_multipart(token: &str, uri: &str, body: Vec<u8>) -> Request<Body> {
         Request::builder()
             .uri(format!("/api/{uri}"))
             .method("POST")
-            .header("content-type", "multipart/form-data; boundary=----ThisWillNotAppearInAnActualBody")
+            .header(
+                "content-type",
+                "multipart/form-data; boundary=----ThisWillNotAppearInAnActualBody",
+            )
             .header("authorization", format!("Bearer {token}"))
             .body(Body::from(body))
             .unwrap()
     }
 
-    pub(crate) async fn put_multipart(
-        token: &str,
-        uri: &str,
-        body: Vec<u8>
-    ) -> Request<Body> {
+    pub(crate) fn put_multipart(token: &str, uri: &str, body: Vec<u8>) -> Request<Body> {
         Request::builder()
             .uri(format!("/api/{uri}"))
             .method("PUT")
-            .header("content-type", "multipart/form-data; boundary=----ThisWillNotAppearInAnActualBody")
+            .header(
+                "content-type",
+                "multipart/form-data; boundary=----ThisWillNotAppearInAnActualBody",
+            )
             .header("authorization", format!("Bearer {token}"))
             .body(Body::from(body))
+            .unwrap()
+    }
+
+    pub(crate) fn put(token: &str, uri: &str, body: &serde_json::Value) -> Request<Body> {
+        Request::builder()
+            .uri(format!("/api/{uri}"))
+            .method("PUT")
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {token}"))
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap()
+    }
+
+    pub(crate) fn put_without_auth(uri: &str, body: &serde_json::Value) -> Request<Body> {
+        Request::builder()
+            .uri(format!("/api/{uri}"))
+            .method("PUT")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap()
+    }
+
+    pub(crate) fn delete(token: &str, uri: &str) -> Request<Body> {
+        Request::builder()
+            .uri(format!("/api/{uri}"))
+            .method("DELETE")
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    pub(crate) fn delete_without_auth(uri: &str) -> Request<Body> {
+        Request::builder()
+            .uri(format!("/api/{uri}"))
+            .method("DELETE")
+            .header("content-type", "application/json")
+            .body(Body::empty())
             .unwrap()
     }
 
     /// create user and log in
-    pub(crate) async fn make_authed_user(username: &str, app: &RouterIntoService<Body>, email_service: MockEmailService) -> String {
+    pub(crate) async fn make_authed_user(
+        username: &str,
+        app: &RouterIntoService<Body>,
+        email_service: Arc<MockEmailService>,
+    ) -> String {
         use tower::ServiceExt;
         let password = "23rjklBFKNBdskjlfbsekf s23";
-        let email = format!("{}@example.com", username);
+        let email = format!("{username}@example.com");
         let user_body = serde_json::json!({
             "username": username,
             "email": email,
@@ -190,24 +276,30 @@ mod tests {
             .oneshot(post_without_auth("users", user_body).await)
             .await
             .unwrap();
-        assert_eq!(resp.status(), 201);
+        assert_eq!(resp.status(), 200);
 
         // verify email
         let sent_emails = email_service.get_sent_emails();
-        let verification_email = sent_emails.iter().find(|e| e.to == email && e.email_type == crate::email::EmailType::Verification).unwrap();
+        let email_lowercase = email.to_lowercase();
+        let verification_email = sent_emails.iter().find(|e| e.to == email_lowercase && e.email_type == crate::email::tests::EmailType::Verification)
+            .unwrap_or_else(|| panic!("No verification email found for {email_lowercase}. Sent emails: {sent_emails:?}"));
+
+        let user_id = verification_email.user_id;
         let verify_body = serde_json::json!({
             "token": verification_email.token,
+            "email": email_lowercase,
         });
+        let path = format!("users/{user_id}/verify");
         let resp = app
             .clone()
-            .oneshot(post_without_auth(&format!("users/{}/verify", username), verify_body).await)
+            .oneshot(post_without_auth(&path, verify_body).await)
             .await
             .unwrap();
         assert_eq!(resp.status(), 200);
 
         // log in
         let login_body = serde_json::json!({
-            "email": format!("{}@example.com", username),
+            "email": format!("{username}@example.com"),
             "password": password,
         });
 

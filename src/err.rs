@@ -55,6 +55,13 @@ pub fn forbidden(message: impl Display) -> AppError {
     AppError::new(message.to_string(), StatusCode::FORBIDDEN)
 }
 
+pub fn needs_verification() -> AppError {
+    AppError::new(
+        "email verification required".to_string(),
+        StatusCode::FORBIDDEN,
+    )
+}
+
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.status_code, self.message)

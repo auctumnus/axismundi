@@ -1,5 +1,5 @@
 use crate::{
-    err::{bad_request, forbidden, not_found, unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
         language::LanguageRepository,
         language_invite::PermissionLevel,
@@ -8,11 +8,7 @@ use crate::{
     },
     util::extract_session::Session,
 };
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    Json,
-};
+use axum::{Json, extract::Path, http::StatusCode};
 use serde::Deserialize;
 
 type ApiResponse<T> = AppResult<T>;
@@ -23,22 +19,16 @@ pub async fn get_language_permissions(
     permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
 ) -> ApiResponse<Json<Vec<LanguagePermission>>> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let user_perm = permissions.find_by_user_and_language(session.user_id, language.id).await?;
 
-    let Some(perm) = user_perm else {
-        return Err(forbidden("you don't have permission to view permissions"));
-    };
-
-    if perm.permission != PermissionLevel::Owner && perm.permission != PermissionLevel::Admin {
-        return Err(forbidden("only owners and admins can view all permissions"));
-    }
-
-    permissions.list_by_language(language.id).await.map(Json)
+    permissions
+        .list_by_language_checked(requestor, language.id)
+        .await
+        .map(Json)
 }
 
 pub async fn get_user_language_permissions(
@@ -48,21 +38,16 @@ pub async fn get_user_language_permissions(
     users: UserRepository,
     Path((code, username)): Path<(String, String)>,
 ) -> ApiResponse<Json<LanguagePermission>> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let user_perm = permissions.find_by_user_and_language(session.user_id, language.id).await?;
-
-    let Some(_) = user_perm else {
-        return Err(forbidden("you don't have permission to view permissions"));
-    };
-
     let target_user = users.find_by_username(&username).await?;
-    let target_perm = permissions.find_by_user_and_language(target_user.id, language.id).await?;
 
-    target_perm.ok_or_else(|| not_found(format!("permission for user '{username}' on language '{code}'")))
+    permissions
+        .find_by_user_and_language_checked(requestor, language.id, target_user.id)
+        .await
         .map(Json)
 }
 
@@ -79,37 +64,26 @@ pub async fn edit_user_permissions(
     Path((code, username)): Path<(String, String)>,
     Json(req): Json<EditPermissionRequest>,
 ) -> ApiResponse<Json<LanguagePermission>> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let requester_perm = permissions.find_by_user_and_language(session.user_id, language.id).await?;
-
-    let Some(requester) = requester_perm else {
-        return Err(forbidden("you don't have permission to edit permissions"));
-    };
-
     let target_user = users.find_by_username(&username).await?;
-    let target_perm = permissions.find_by_user_and_language(target_user.id, language.id).await?;
+    let target_perm = permissions
+        .find_by_user_and_language(target_user.id, language.id)
+        .await?;
 
     let Some(target) = target_perm else {
-        return Err(bad_request("user doesn't have permissions for this language"));
+        return Err(crate::err::bad_request(
+            "user doesn't have permissions for this language",
+        ));
     };
 
-    // check permission table from api.md
-    let can_edit = match (requester.permission, target.permission) {
-        (PermissionLevel::Owner, PermissionLevel::Owner) => false,
-        (PermissionLevel::Owner, _) => true,
-        (PermissionLevel::Admin, PermissionLevel::Editor) => true,
-        _ => false,
-    };
-
-    if !can_edit {
-        return Err(forbidden("you don't have permission to edit this user's permissions"));
-    }
-
-    permissions.update_permission(target.id, req.permission_level).await.map(Json)
+    permissions
+        .update_permission_checked(requestor, target.id, req.permission_level)
+        .await
+        .map(Json)
 }
 
 pub async fn delete_user_permissions(
@@ -119,45 +93,228 @@ pub async fn delete_user_permissions(
     users: UserRepository,
     Path((code, username)): Path<(String, String)>,
 ) -> ApiResponse<StatusCode> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let requester_perm = permissions.find_by_user_and_language(session.user_id, language.id).await?;
-
-    let Some(requester) = requester_perm else {
-        return Err(forbidden("you don't have permission to delete permissions"));
-    };
-
     let target_user = users.find_by_username(&username).await?;
-    let target_perm = permissions.find_by_user_and_language(target_user.id, language.id).await?;
+    let target_perm = permissions
+        .find_by_user_and_language(target_user.id, language.id)
+        .await?;
 
     let Some(target) = target_perm else {
-        return Err(not_found("user doesn't have permissions for this language"));
+        return Err(crate::err::not_found(
+            "user doesn't have permissions for this language",
+        ));
     };
 
-    // check if removing own permissions (always allowed except owner)
-    if session.user_id == target_user.id {
-        if requester.permission == PermissionLevel::Owner {
-            return Err(forbidden("owner cannot remove their own permissions"));
-        }
-        permissions.delete(target.id).await?;
-        return Ok(StatusCode::NO_CONTENT);
-    }
-
-    // check permission table from api.md
-    let can_delete = match (requester.permission, target.permission) {
-        (PermissionLevel::Owner, PermissionLevel::Owner) => false,
-        (PermissionLevel::Owner, _) => true,
-        (PermissionLevel::Admin, PermissionLevel::Editor) => true,
-        _ => false,
-    };
-
-    if !can_delete {
-        return Err(forbidden("you don't have permission to delete this user's permissions"));
-    }
-
-    permissions.delete(target.id).await?;
+    permissions.delete_checked(requestor, target.id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tower::Service;
+
+    use crate::controller::api::tests::{
+        delete_without_auth, get_with_auth, make_authed_user, post, put_without_auth,
+    };
+    use crate::email::tests::MockEmailService;
+
+    #[tokio::test]
+    async fn test_get_language_permissions() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let lang_code = crate::tests::random_code();
+        let body = json!({
+            "code": lang_code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = get_with_auth(&token, &format!("languages/{lang_code}/permissions")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body.is_array());
+    }
+
+    #[tokio::test]
+    async fn test_get_language_permissions_unauthorized() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let request = crate::controller::api::tests::get("languages/test/permissions").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_get_user_language_permissions() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let lang_code = crate::tests::random_code();
+        let body = json!({
+            "code": lang_code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = get_with_auth(
+            &token,
+            &format!("languages/{lang_code}/permissions/{username}"),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["permission"], "owner");
+    }
+
+    #[tokio::test]
+    async fn test_get_user_language_permissions_unauthorized() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let request = crate::controller::api::tests::get("languages/test/permissions/user").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_edit_user_permissions() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let owner_username = crate::tests::random_name();
+        let owner_token = make_authed_user(&owner_username, &app, email_service.clone()).await;
+
+        let editor_username = crate::tests::random_name();
+        let _editor_token = make_authed_user(&editor_username, &app, email_service.clone()).await;
+
+        let lang_code = crate::tests::random_code();
+        let body = json!({
+            "code": lang_code,
+            "name": "Test Language",
+        });
+
+        let request = post(&owner_token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // invite editor
+        let invite_body = json!({
+            "permission_level": "editor",
+        });
+        let request = post(
+            &owner_token,
+            &format!("languages/{lang_code}/invites/{editor_username}"),
+            invite_body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // accept invite (need to do this manually via the endpoint logic)
+        // for now, skip the full invite flow and just test permission editing with owner
+
+        let update_body = json!({
+            "permission_level": "admin",
+        });
+
+        let request = crate::controller::api::tests::put(
+            &owner_token,
+            &format!("languages/{lang_code}/permissions/{owner_username}"),
+            &update_body,
+        );
+        let response = app.call(request).await.unwrap();
+        // owner can't change their own permission
+        assert!(response.status().is_client_error());
+    }
+
+    #[tokio::test]
+    async fn test_edit_user_permissions_unauthorized() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let lang_code = crate::tests::random_code();
+        let body = json!({
+            "code": lang_code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let update_body = json!({
+            "permission_level": "admin",
+        });
+
+        let request = put_without_auth(
+            &format!("languages/{lang_code}/permissions/{username}"),
+            &update_body,
+        );
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_delete_user_permissions_unauthorized() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let lang_code = crate::tests::random_code();
+        let body = json!({
+            "code": lang_code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = delete_without_auth(&format!("languages/{lang_code}/permissions/{username}"));
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 }

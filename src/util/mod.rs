@@ -1,4 +1,7 @@
-use crate::err::{AppResult, internal_error};
+use crate::{
+    err::{AppResult, internal_error},
+    model::user::User,
+};
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
     password_hash::{SaltString, rand_core::OsRng},
@@ -30,7 +33,7 @@ mod repo {
                     _: &mut axum::http::request::Parts,
                     state: &crate::util::AppState,
                 ) -> Result<Self, Self::Rejection> {
-                    Ok(Self::new(state.pool.clone()))
+                    Ok(Self::new(state.clone()))
                 }
             }
         };
@@ -66,6 +69,13 @@ pub fn stable_hash(plaintext: &str) -> String {
     hasher.update(plaintext.as_bytes());
     let result = hasher.finalize();
     base64::prelude::BASE64_STANDARD.encode(result)
+}
+
+pub fn ensure_verified(user: &User) -> AppResult<()> {
+    if !user.is_verified() {
+        return Err(crate::err::needs_verification());
+    }
+    Ok(())
 }
 
 #[derive(Debug)]

@@ -3,8 +3,8 @@ create table word_classes (
 
     language uuid not null references languages(id) on delete cascade,
 
-    name text not null unique,
-    abbreviation text not null unique,
+    name text not null,
+    abbreviation text not null,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

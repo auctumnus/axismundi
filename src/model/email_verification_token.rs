@@ -1,6 +1,6 @@
 use crate::err::{AppResult, not_found};
+use crate::util::AppState;
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
 use uuid::Uuid;
 
 pub struct EmailVerificationToken {
@@ -14,7 +14,7 @@ pub struct EmailVerificationToken {
 }
 
 pub struct EmailVerificationTokenRepository {
-    pool: PgPool,
+    state: AppState,
 }
 
 const NON_CONFUSABLES: &[char] = &[
@@ -23,18 +23,23 @@ const NON_CONFUSABLES: &[char] = &[
 ];
 
 impl EmailVerificationTokenRepository {
-    pub const fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(state: AppState) -> Self {
+        Self { state }
     }
 
-    pub async fn create(&self, user_id: Uuid, email: String) -> AppResult<String> {
+    /// Creates a verification token within a transaction and returns the unhashed token
+    pub async fn create(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        user_id: Uuid,
+        email: String,
+    ) -> AppResult<String> {
         let token = nanoid::nanoid!(6, NON_CONFUSABLES);
         let expires_at = Utc::now() + chrono::Duration::days(1);
         // Tokens that require an extra level of security, **such as password reset tokens**,
         // should be hashed with SHA-256.
         // https://thecopenhagenbook.com/server-side-tokens#storing-tokens
-        let hashed_token = crate::util::hash(&token)
-            .map_err(|_| crate::err::internal_error("token hash failed"))?;
+        let hashed_token = crate::util::stable_hash(&token);
 
         sqlx::query!(
             r#"
@@ -46,10 +51,19 @@ impl EmailVerificationTokenRepository {
             expires_at,
             email
         )
-        .fetch_one(&self.pool)
+        .execute(&mut **tx)
         .await?;
 
         Ok(token)
+    }
+
+    /// Sends a verification email with the given token
+    pub async fn send(&self, user_id: uuid::Uuid, email: &str, token: &str) -> AppResult<()> {
+        self.state
+            .email_service
+            .send_verification_email(user_id, email, token)
+            .await?;
+        Ok(())
     }
 
     pub async fn find(
@@ -58,8 +72,7 @@ impl EmailVerificationTokenRepository {
         email: &str,
         token: &str,
     ) -> AppResult<Option<EmailVerificationToken>> {
-        let hashed_token = crate::util::hash(token)
-            .map_err(|_| crate::err::internal_error("token hash failed"))?;
+        let hashed_token = crate::util::stable_hash(token);
         let result = sqlx::query_as!(
             EmailVerificationToken,
             r#"
@@ -70,7 +83,7 @@ impl EmailVerificationTokenRepository {
             user_id,
             email
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -87,7 +100,7 @@ impl EmailVerificationTokenRepository {
             "#,
             id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         if let Some(token) = result {
@@ -104,7 +117,7 @@ impl EmailVerificationTokenRepository {
                 WHERE expires_at < NOW()
             "#
         )
-        .execute(&self.pool)
+        .execute(&self.state.pool)
         .await?;
 
         Ok(())

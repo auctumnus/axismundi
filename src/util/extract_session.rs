@@ -32,7 +32,7 @@ pub const SESSION_COOKIE_NAME: &str = "session_token";
 fn token_from_header(parts: &Parts) -> Option<String> {
     parts
         .headers
-        .get("Authorization")
+        .get(axum::http::header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(str::to_string)
@@ -44,7 +44,7 @@ async fn token_from_jar(parts: &mut Parts) -> Option<String> {
         .ok()
         .and_then(|jar| {
             jar.get(SESSION_COOKIE_NAME)
-            .map(|cookie| cookie.value().to_string())
+                .map(|cookie| cookie.value().to_string())
         })
 }
 
@@ -55,7 +55,7 @@ impl FromRequestParts<AppState> for Session {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let session_repo = SessionRepository::new(state.pool.clone());
+        let session_repo = SessionRepository::new(state.clone());
 
         // async_flatmap save me
 
@@ -63,20 +63,18 @@ impl FromRequestParts<AppState> for Session {
             Some(token) => Some(token),
             None => token_from_jar(parts).await,
         };
-        
+
         let session = match session_token {
-            Some(token) => {
-                session_repo
-                    .find(&token)
-                    .await
-                    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to find session"))?
-            }
+            Some(token) => session_repo
+                .find(&token)
+                .await
+                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to find session"))?,
             None => None,
         };
 
         match session {
             Some(session) => {
-                let user_repo = crate::model::user::UserRepository::new(state.pool.clone());
+                let user_repo = crate::model::user::UserRepository::new(state.clone());
                 let user = user_repo
                     .find_by_id(session.user_id)
                     .await

@@ -1,9 +1,7 @@
 use crate::err::{AppResult, not_found};
+use crate::util::{AppState, stable_hash};
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
 use uuid::Uuid;
-
-use crate::util::stable_hash;
 
 pub struct PasswordResetToken {
     pub id: Uuid,
@@ -15,12 +13,12 @@ pub struct PasswordResetToken {
 }
 
 pub struct PasswordResetTokenRepository {
-    pool: PgPool,
+    state: AppState,
 }
 
 impl PasswordResetTokenRepository {
-    pub const fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(state: AppState) -> Self {
+        Self { state }
     }
 
     pub async fn create(&self, user_id: Uuid) -> AppResult<String> {
@@ -40,7 +38,7 @@ impl PasswordResetTokenRepository {
             hashed_token,
             expires_at
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&self.state.pool)
         .await?;
 
         Ok(token)
@@ -56,7 +54,7 @@ impl PasswordResetTokenRepository {
             "#,
             hashed_token
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -73,7 +71,7 @@ impl PasswordResetTokenRepository {
             "#,
             token.id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         if let Some(token) = result {
@@ -90,7 +88,7 @@ impl PasswordResetTokenRepository {
                 WHERE expires_at < NOW()
             "#
         )
-        .execute(&self.pool)
+        .execute(&self.state.pool)
         .await?;
 
         Ok(())

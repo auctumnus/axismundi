@@ -1,6 +1,6 @@
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Json},
 };
 use serde::{Deserialize, Serialize};
@@ -35,16 +35,11 @@ fn default_limit() -> PaginationSize {
     10
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Default, Debug, Clone, PartialEq, Eq)]
 pub enum PaginationDirection {
+    #[default]
     Forward,
     Backward,
-}
-
-impl Default for PaginationDirection {
-    fn default() -> Self {
-        PaginationDirection::Forward
-    }
 }
 
 impl FromRequestParts<AppState> for PaginatedRequest {

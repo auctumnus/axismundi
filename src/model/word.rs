@@ -1,13 +1,19 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use sqlx::{FromRow, PgPool};
+use sqlx::FromRow;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{err::{AppResult, not_found}, pagination::{PaginatedRequest, PaginatedResponse}};
+use crate::{
+    err::{AppResult, bad_request, not_found},
+    model::{language_invite::PermissionLevel, user::User},
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, ensure_verified},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[allow(clippy::struct_field_names)]
 pub struct Word {
     pub id: Uuid,
     pub language: Uuid,
@@ -72,16 +78,33 @@ pub struct UpdateWord {
 }
 
 pub struct WordRepository {
-    pool: PgPool,
+    state: AppState,
 }
 
 impl WordRepository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(state: AppState) -> Self {
+        Self { state }
     }
 
-    pub async fn create(&self, word: CreateWord, user_id: Uuid) -> AppResult<Word> {
+    pub async fn create(&self, requestor: &User, word: CreateWord) -> AppResult<Word> {
         word.validate()?;
+
+        ensure_verified(requestor)?;
+
+        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, word.language)
+            .await?;
+
+        let Some(perm) = user_perm else {
+            return Err(bad_request("you don't have permission to create words"));
+        };
+
+        if perm.permission == PermissionLevel::Viewer {
+            return Err(bad_request("viewers cannot create words"));
+        }
 
         let result = sqlx::query_as!(
             Word,
@@ -98,22 +121,18 @@ impl WordRepository {
             word.ipa,
             word.notes,
             word.extra,
-            user_id
+            requestor.id
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&self.state.pool)
         .await?;
 
         Ok(result)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Word> {
-        let result = sqlx::query_as!(
-            Word,
-            "SELECT * FROM words WHERE id = $1",
-            id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let result = sqlx::query_as!(Word, "SELECT * FROM words WHERE id = $1", id)
+            .fetch_optional(&self.state.pool)
+            .await?;
 
         result.ok_or_else(|| not_found(format!("word with id '{id}'")))
     }
@@ -125,13 +144,18 @@ impl WordRepository {
             language,
             slug
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         result.ok_or_else(|| not_found(format!("word with slug '{slug}'")))
     }
 
-    pub async fn list_by_language(&self, language: Uuid, limit: i64, offset: i64) -> AppResult<Vec<Word>> {
+    pub async fn list_by_language(
+        &self,
+        language: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<Vec<Word>> {
         let result = sqlx::query_as!(
             Word,
             "SELECT * FROM words WHERE language = $1 ORDER BY word LIMIT $2 OFFSET $3",
@@ -139,13 +163,18 @@ impl WordRepository {
             limit,
             offset
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
     }
 
-    pub async fn search_by_word(&self, language: Uuid, query: &str, limit: i64) -> AppResult<Vec<Word>> {
+    pub async fn search_by_word(
+        &self,
+        language: Uuid,
+        query: &str,
+        limit: i64,
+    ) -> AppResult<Vec<Word>> {
         let search_pattern = format!("%{query}%");
         let result = sqlx::query_as!(
             Word,
@@ -154,13 +183,18 @@ impl WordRepository {
             search_pattern,
             limit
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
     }
 
-    pub async fn search_by_definition(&self, language: Uuid, query: &str, limit: i64) -> AppResult<Vec<Word>> {
+    pub async fn search_by_definition(
+        &self,
+        language: Uuid,
+        query: &str,
+        limit: i64,
+    ) -> AppResult<Vec<Word>> {
         let search_pattern = format!("%{query}%");
         let result = sqlx::query_as!(
             Word,
@@ -169,13 +203,18 @@ impl WordRepository {
             search_pattern,
             limit
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
     }
 
-    pub async fn list_by_word_class(&self, word_class: Uuid, limit: i64, offset: i64) -> AppResult<Vec<Word>> {
+    pub async fn list_by_word_class(
+        &self,
+        word_class: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<Vec<Word>> {
         let result = sqlx::query_as!(
             Word,
             "SELECT * FROM words WHERE word_class = $1 ORDER BY word LIMIT $2 OFFSET $3",
@@ -183,14 +222,34 @@ impl WordRepository {
             limit,
             offset
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
     }
 
-    pub async fn update(&self, id: Uuid, updates: UpdateWord, user_id: Uuid) -> AppResult<Word> {
+    pub async fn update(&self, requestor: &User, id: Uuid, updates: UpdateWord) -> AppResult<Word> {
         updates.validate()?;
+
+        ensure_verified(requestor)?;
+
+        // get the word to find its language
+        let word = self.find_by_id(id).await?;
+
+        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, word.language)
+            .await?;
+
+        let Some(perm) = user_perm else {
+            return Err(bad_request("you don't have permission to edit words"));
+        };
+
+        if perm.permission == PermissionLevel::Viewer {
+            return Err(bad_request("viewers cannot edit words"));
+        }
 
         let result = sqlx::query_as!(
             Word,
@@ -216,17 +275,37 @@ impl WordRepository {
             updates.ipa,
             updates.notes,
             updates.extra,
-            user_id
+            requestor.id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         result.ok_or_else(|| not_found(format!("word with id '{id}'")))
     }
 
-    pub async fn delete(&self, id: Uuid) -> AppResult<bool> {
+    pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
+        ensure_verified(requestor)?;
+
+        // get the word to find its language
+        let word = self.find_by_id(id).await?;
+
+        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, word.language)
+            .await?;
+
+        let Some(perm) = user_perm else {
+            return Err(bad_request("you don't have permission to delete words"));
+        };
+
+        if perm.permission == PermissionLevel::Viewer {
+            return Err(bad_request("viewers cannot delete words"));
+        }
+
         let result = sqlx::query!("DELETE FROM words WHERE id = $1", id)
-            .execute(&self.pool)
+            .execute(&self.state.pool)
             .await?;
 
         Ok(result.rows_affected() > 0)
@@ -237,17 +316,22 @@ impl WordRepository {
             "SELECT COUNT(*) as count FROM words WHERE language = $1",
             language
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&self.state.pool)
         .await?;
 
         Ok(result.count.unwrap_or(0))
     }
 
-    pub async fn search(&self, language: Uuid, search: WordSearch) -> AppResult<PaginatedResponse<Word>> {
+    pub async fn search(
+        &self,
+        language: Uuid,
+        search: WordSearch,
+    ) -> AppResult<PaginatedResponse<Word>> {
         use sqlx::QueryBuilder;
 
         let limit = search.pagination.limit + 1;
-        let mut query_builder: QueryBuilder<sqlx::Postgres> = QueryBuilder::new("SELECT * FROM words WHERE language = ");
+        let mut query_builder: QueryBuilder<sqlx::Postgres> =
+            QueryBuilder::new("SELECT * FROM words WHERE language = ");
         query_builder.push_bind(language);
 
         if let Some(ref q) = search.text_query {
@@ -273,10 +357,10 @@ impl WordRepository {
 
         let mut items = query_builder
             .build_query_as::<Word>()
-            .fetch_all(&self.pool)
+            .fetch_all(&self.state.pool)
             .await?;
 
-        let has_more = items.len() > search.pagination.limit as usize;
+        let has_more = items.len() > usize::try_from(search.pagination.limit).unwrap_or(0);
         if has_more {
             items.pop();
         }
@@ -288,7 +372,7 @@ impl WordRepository {
         };
 
         let previous_cursor = search.pagination.cursor;
-        let pages_left = if has_more { 1 } else { 0 };
+        let pages_left = i32::from(has_more);
 
         Ok(PaginatedResponse {
             items,

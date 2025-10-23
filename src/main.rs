@@ -19,8 +19,8 @@ mod controller;
 mod email;
 mod err;
 mod model;
-mod util;
 mod pagination;
+mod util;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -120,7 +120,10 @@ pub(crate) mod tests {
     pub(crate) async fn test_app() -> Result<RouterIntoService<axum::body::Body>, sqlx::Error> {
         let pool = PgPool::connect(&CONFIG.database_url).await?;
         let email_service = std::sync::Arc::new(email::tests::MockEmailService::new());
-        let app_state = AppState { pool, email_service };
+        let app_state = AppState {
+            pool,
+            email_service,
+        };
         let app = create_router(app_state).into_service();
 
         Ok(app)
@@ -131,7 +134,10 @@ pub(crate) mod tests {
     ) -> Result<RouterIntoService<axum::body::Body>, sqlx::Error> {
         let pool = PgPool::connect(&CONFIG.database_url).await?;
         let email_service = email_service.clone();
-        let app_state = AppState { pool, email_service };
+        let app_state = AppState {
+            pool,
+            email_service,
+        };
         let app = create_router(app_state).into_service();
 
         Ok(app)
@@ -143,6 +149,14 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn random_name() -> String {
-        format!("{}_{}", random_word::get(random_word::Lang::En), nanoid::nanoid!(4))
+        format!(
+            "{}_{}",
+            random_word::get(random_word::Lang::En),
+            nanoid::nanoid!(4)
+        )
+    }
+
+    pub(crate) fn random_code() -> String {
+        nanoid::nanoid!(8)
     }
 }

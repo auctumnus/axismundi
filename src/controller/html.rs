@@ -3,20 +3,11 @@ use std::sync::Arc;
 use crate::{
     ErrorTemplate,
     err::AppError,
-    model::
-        user::User,
-    util::{
-        AppState,
-        extract_session::Session,
-    },
+    model::user::User,
+    util::{AppState, extract_session::Session},
 };
 use askama::Template;
-use axum::{
-    Router,
-    http::StatusCode,
-    response::Html,
-    routing::get,
-};
+use axum::{Router, http::StatusCode, response::Html, routing::get};
 use governor::middleware::NoOpMiddleware;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
@@ -39,8 +30,7 @@ pub fn create_html_controller() -> Router<AppState> {
 
     let secure_routes = Router::<AppState>::new();
 
-    let normal_routes = 
-    Router::<AppState>::new()
+    let normal_routes = Router::<AppState>::new()
         .route("/", get(home))
         .route("/about", get(about))
         .route("/contact", get(contact))
@@ -69,7 +59,7 @@ struct ContactTemplate;
 #[derive(Template)]
 #[template(path = "login/form.html")]
 struct LoginFormTemplate {
-    error: Option<AppError>
+    error: Option<AppError>,
 }
 
 fn render_template<T: Template>(template: T) -> Html<String> {
@@ -109,7 +99,5 @@ async fn contact() -> Html<String> {
 }
 
 async fn login_form() -> Html<String> {
-    render_template(LoginFormTemplate {
-        error: None
-    })
+    render_template(LoginFormTemplate { error: None })
 }

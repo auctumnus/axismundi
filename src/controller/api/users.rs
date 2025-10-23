@@ -1,15 +1,13 @@
 use crate::{
-    err::{bad_request, AppError, AppResult},
-    model::{
-        user::{CreateUser, User, UserRepository, UserSearch},
-    },
+    err::{AppError, AppResult, bad_request},
+    model::user::{CreateUser, User, UserRepository, UserSearch},
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{extract_session::Session, s3::S3, AppState},
+    util::{AppState, extract_session::Session, s3::S3},
 };
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use axum_extra::extract::Multipart;
 use chrono::{DateTime, Utc};
@@ -20,20 +18,20 @@ type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
 
 pub async fn get_user(
-    State(AppState { pool, .. }): State<AppState>,
+    State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> ApiResponse<Json<User>> {
-    UserRepository::new(pool)
+    UserRepository::new(state)
         .find_by_username(&username)
         .await
         .map(Json)
 }
 
 pub async fn create_user(
-    State(AppState { pool, .. }): State<AppState>,
+    State(state): State<AppState>,
     Json(user): Json<CreateUser>,
 ) -> ApiResponse<Json<User>> {
-    let user_repo = UserRepository::new(pool.clone());
+    let user_repo = UserRepository::new(state);
     user_repo.create(user).await.map(Json)
 }
 
@@ -67,14 +65,14 @@ pub async fn upload_profile_picture(
     Path(username): Path<String>,
     mut multipart: Multipart,
 ) -> ApiResponse<Json<ProfilePictureUploadResponse>> {
-    let Some(session) = s.session() else {
+    let Some(requestor) = s.user() else {
         return Err(crate::err::unauthorized_no_session());
     };
 
     let user = users.find_by_username(&username).await?;
 
     // Check if user is uploading their own profile picture
-    if session.user_id != user.id {
+    if requestor.id != user.id {
         return Err(AppError::new(
             "You can only upload your own profile picture".to_string(),
             StatusCode::FORBIDDEN,
@@ -110,7 +108,10 @@ pub async fn upload_profile_picture(
     let object_key = S3.upload_profile_picture(user.id, &file_data).await?;
 
     // Update user record with new profile picture object key
-    match users.update_profile_picture(user.id, &object_key).await? {
+    match users
+        .update_profile_picture(requestor, user.id, &object_key)
+        .await?
+    {
         Some(_) => {
             let profile_picture_url = S3.get_object_url(&object_key);
             Ok(Json(ProfilePictureUploadResponse {
@@ -152,7 +153,10 @@ mod tests {
     use serde_json::json;
     use tower::Service;
 
-    use crate::{controller::api::tests::{get, make_authed_user, post_without_auth}, email::tests::MockEmailService};
+    use crate::{
+        controller::api::tests::{get, make_authed_user, post_without_auth},
+        email::tests::MockEmailService,
+    };
 
     #[tokio::test]
     async fn test_create_user() {
@@ -287,7 +291,7 @@ mod tests {
     async fn test_create_user_invalid_username() {
         let mut app = crate::tests::test_app().await.unwrap();
 
-        let email = format!("test@example.com");
+        let email = "test@example.com";
 
         // Username with uppercase letters (invalid)
         let body = json!({
@@ -365,7 +369,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // Get user
-        let request = get(&format!("users/{}", name)).await;
+        let request = get(&format!("users/{name}")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -392,7 +396,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // Get user and check sensitive fields are not exposed
-        let request = get(&format!("users/{}", name)).await;
+        let request = get(&format!("users/{name}")).await;
         let response = app.call(request).await.unwrap();
 
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -433,7 +437,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // Search for user
-        let request = get(&format!("users?q={}", name)).await;
+        let request = get(&format!("users?q={name}")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -474,34 +478,38 @@ mod tests {
     #[tokio::test]
     async fn test_upload_profile_picture() {
         let email_service = Arc::new(MockEmailService::new());
-        let mut app = crate::tests::test_app_with_email_service(&email_service).await.unwrap();
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
 
         let name = crate::tests::random_name();
 
-        let token = make_authed_user(&name, &app, &email_service).await;
+        let token = make_authed_user(&name, &app, email_service.clone()).await;
 
         let image_bytes = include_bytes!("../../../resources/profile-picture.png");
 
         // Create proper multipart form data
         let boundary = "----ThisWillNotAppearInAnActualBody";
         let mut body = Vec::new();
-        body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
-        body.extend_from_slice(b"Content-Disposition: form-data; name=\"image\"; filename=\"profile-picture.png\"\r\n");
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            b"Content-Disposition: form-data; name=\"image\"; filename=\"profile-picture.png\"\r\n",
+        );
         body.extend_from_slice(b"Content-Type: image/png\r\n\r\n");
         body.extend_from_slice(image_bytes);
-        body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
 
         let request = crate::controller::api::tests::put_multipart(
             &token,
-            &format!("users/{}/profile-picture", name),
+            &format!("users/{name}/profile-picture"),
             body,
-        )
-        .await;
+        );
 
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let get_user_request = get(&format!("users/{}", name)).await;
+        let get_user_request = get(&format!("users/{name}")).await;
         let get_user_response = app.call(get_user_request).await.unwrap();
         assert_eq!(get_user_response.status(), StatusCode::OK);
 

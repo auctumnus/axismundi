@@ -1,19 +1,22 @@
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
+
+use crate::err::AppResult;
 
 #[async_trait]
 pub trait EmailService: Send + Sync + std::fmt::Debug {
     async fn send_verification_email(
         &self,
+        user_id: uuid::Uuid,
         to: &str,
         token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    ) -> AppResult<()>;
 
     async fn send_password_reset_email(
         &self,
+        user_id: uuid::Uuid,
         to: &str,
         token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    ) -> AppResult<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -31,21 +34,23 @@ impl ResendEmailService {
 impl EmailService for ResendEmailService {
     async fn send_verification_email(
         &self,
+        user_id: uuid::Uuid,
         to: &str,
         token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> AppResult<()> {
         // TODO: implement actual email sending
-        println!("would send verification email to {} with token {}", to, token);
+        println!("would send verification email to {to} (user {user_id}) with token {token}");
         Ok(())
     }
 
     async fn send_password_reset_email(
         &self,
+        user_id: uuid::Uuid,
         to: &str,
         token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> AppResult<()> {
         // TODO: implement actual email sending
-        println!("would send password reset email to {} with token {}", to, token);
+        println!("would send password reset email to {to} (user {user_id}) with token {token}");
         Ok(())
     }
 }
@@ -54,67 +59,74 @@ impl EmailService for ResendEmailService {
 pub(crate) mod tests {
     use super::*;
 
+    use std::sync::{Arc, Mutex};
+
     // mock email service for testing
-#[derive(Clone, Debug)]
-pub struct SentEmail {
-    pub to: String,
-    pub email_type: EmailType,
-    pub token: String,
-}
+    #[derive(Clone, Debug)]
+    pub struct SentEmail {
+        pub to: String,
+        pub email_type: EmailType,
+        pub token: String,
+        pub user_id: uuid::Uuid,
+    }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum EmailType {
-    Verification,
-    PasswordReset,
-}
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum EmailType {
+        Verification,
+        PasswordReset,
+    }
 
-#[derive(Debug, Clone)]
-pub struct MockEmailService {
-    pub sent_emails: Arc<Mutex<Vec<SentEmail>>>,
-}
+    #[derive(Debug, Clone)]
+    pub struct MockEmailService {
+        pub sent_emails: Arc<Mutex<Vec<SentEmail>>>,
+    }
 
-impl MockEmailService {
-    pub fn new() -> Self {
-        Self {
-            sent_emails: Arc::new(Mutex::new(Vec::new())),
+    impl MockEmailService {
+        pub fn new() -> Self {
+            Self {
+                sent_emails: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        pub fn get_sent_emails(&self) -> Vec<SentEmail> {
+            self.sent_emails.lock().unwrap().clone()
+        }
+
+        pub fn clear(&self) {
+            self.sent_emails.lock().unwrap().clear();
         }
     }
 
-    pub fn get_sent_emails(&self) -> Vec<SentEmail> {
-        self.sent_emails.lock().unwrap().clone()
-    }
+    #[async_trait]
+    impl EmailService for MockEmailService {
+        async fn send_verification_email(
+            &self,
+            user_id: uuid::Uuid,
+            to: &str,
+            token: &str,
+        ) -> AppResult<()> {
+            self.sent_emails.lock().unwrap().push(SentEmail {
+                to: to.to_string(),
+                email_type: EmailType::Verification,
+                token: token.to_string(),
+                user_id,
+            });
+            Ok(())
+        }
 
-    pub fn clear(&self) {
-        self.sent_emails.lock().unwrap().clear();
+        async fn send_password_reset_email(
+            &self,
+            user_id: uuid::Uuid,
+            to: &str,
+            token: &str,
+        ) -> AppResult<()> {
+            self.sent_emails.lock().unwrap().push(SentEmail {
+                to: to.to_string(),
+                email_type: EmailType::PasswordReset,
+                token: token.to_string(),
+                user_id,
+            });
+            Ok(())
+        }
     }
-}
-
-#[async_trait]
-impl EmailService for MockEmailService {
-    async fn send_verification_email(
-        &self,
-        to: &str,
-        token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.sent_emails.lock().unwrap().push(SentEmail {
-            to: to.to_string(),
-            email_type: EmailType::Verification,
-            token: token.to_string(),
-        });
-        Ok(())
-    }
-
-    async fn send_password_reset_email(
-        &self,
-        to: &str,
-        token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.sent_emails.lock().unwrap().push(SentEmail {
-            to: to.to_string(),
-            email_type: EmailType::PasswordReset,
-            token: token.to_string(),
-        });
-        Ok(())
-    }
-}
 }

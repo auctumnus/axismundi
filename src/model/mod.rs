@@ -1,9 +1,9 @@
-pub mod user;
-pub mod password_reset_token;
 pub mod email_verification_token;
-pub mod session;
 pub mod language;
 pub mod language_invite;
 pub mod language_permission;
-pub mod word_class;
+pub mod password_reset_token;
+pub mod session;
+pub mod user;
 pub mod word;
+pub mod word_class;

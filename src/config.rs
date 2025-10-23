@@ -54,8 +54,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
         // docker-compose.minio.test.yml,
         // and the justfile
         return AppConfig {
-            database_url: "postgres://user_test:password@localhost:2435/axismundi_test"
-                .to_string(),
+            database_url: "postgres://user_test:password@localhost:2435/axismundi_test".to_string(),
             s3: S3Config {
                 bucket: "axismundi-test".to_string(),
                 region: "us-east-1".to_string(),

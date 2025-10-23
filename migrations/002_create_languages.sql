@@ -5,6 +5,8 @@ create table languages (
 
     description text not null,
 
+    private boolean not null default false,
+
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
 

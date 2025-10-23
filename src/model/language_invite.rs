@@ -1,13 +1,15 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool, Type};
+use sqlx::{FromRow, Type};
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::err::{AppResult, not_found};
+use crate::util::AppState;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[sqlx(type_name = "permission_level", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum PermissionLevel {
     Viewer,
     Editor,
@@ -34,15 +36,19 @@ pub struct CreateLanguageInvite {
 }
 
 pub struct LanguageInviteRepository {
-    pool: PgPool,
+    state: AppState,
 }
 
 impl LanguageInviteRepository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(state: AppState) -> Self {
+        Self { state }
     }
 
-    pub async fn create(&self, invite: CreateLanguageInvite, sender: Uuid) -> AppResult<LanguageInvite> {
+    pub async fn create(
+        &self,
+        invite: CreateLanguageInvite,
+        sender: Uuid,
+    ) -> AppResult<LanguageInvite> {
         invite.validate()?;
 
         let result = sqlx::query_as!(
@@ -57,7 +63,7 @@ impl LanguageInviteRepository {
             invite.recipient,
             invite.permissions as PermissionLevel
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -69,7 +75,7 @@ impl LanguageInviteRepository {
             r#"SELECT id, language, sender, recipient, permissions as "permissions: PermissionLevel", sent_at, accepted_at FROM language_invites WHERE id = $1"#,
             id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         result.ok_or_else(|| not_found(format!("language invite with id '{id}'")))
@@ -81,7 +87,7 @@ impl LanguageInviteRepository {
             r#"SELECT id, language, sender, recipient, permissions as "permissions: PermissionLevel", sent_at, accepted_at FROM language_invites WHERE recipient = $1 AND accepted_at IS NULL ORDER BY sent_at DESC"#,
             recipient
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -93,7 +99,7 @@ impl LanguageInviteRepository {
             r#"SELECT id, language, sender, recipient, permissions as "permissions: PermissionLevel", sent_at, accepted_at FROM language_invites WHERE language = $1 ORDER BY sent_at DESC"#,
             language
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -110,7 +116,7 @@ impl LanguageInviteRepository {
             "#,
             id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
         result.ok_or_else(|| not_found(format!("pending language invite with id '{id}'")))
@@ -118,7 +124,7 @@ impl LanguageInviteRepository {
 
     pub async fn delete(&self, id: Uuid) -> AppResult<bool> {
         let result = sqlx::query!("DELETE FROM language_invites WHERE id = $1", id)
-            .execute(&self.pool)
+            .execute(&self.state.pool)
             .await?;
 
         Ok(result.rows_affected() > 0)
