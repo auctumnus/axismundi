@@ -49,7 +49,8 @@ pub struct AppConfig {
 }
 
 pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
-    if cfg!(test) {
+    #[cfg(test)]
+    {
         // should match docker-compose.db.test.yml,
         // docker-compose.minio.test.yml,
         // and the justfile
@@ -68,14 +69,17 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
             // TODO: seems bad!
             environment: Environment::Dev,
         };
-    }
-    let path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "config.json".to_string());
-    let config_str = std::fs::read_to_string(path)
-        .expect("No config file found; please either create a config.json or pass a path to an existing one as the first argument.");
-    match serde_json::from_str(&config_str) {
-        Ok(config) => config,
-        Err(e) => panic!("Failed to parse config file: {e}"),
+    };
+    #[cfg(not(test))]
+    {
+        let path = std::env::args()
+            .nth(1)
+            .unwrap_or_else(|| "config.json".to_string());
+        let config_str = std::fs::read_to_string(path)
+            .expect("No config file found; please either create a config.json or pass a path to an existing one as the first argument.");
+        match serde_json::from_str(&config_str) {
+            Ok(config) => config,
+            Err(e) => panic!("Failed to parse config file: {e}"),
+        }
     }
 });

@@ -62,10 +62,10 @@ cov flags="":
     just test "{{flags}}" cov="1"
 
 test-json:
-    just test covflags="--json --output-path cov.json"
+    just test "--json --output-path cov.json" cov="1"
 
 test-lcov:
-    just test covflags="--lcov --output-path lcov.info"
+    just test "--lcov --output-path lcov.info" cov="1"
 
 db-migrate:
     sqlx migrate run

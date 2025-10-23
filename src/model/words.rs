@@ -7,7 +7,7 @@ use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, not_found},
-    model::{language_invite::PermissionLevel, user::User},
+    model::{language_invites::PermissionLevel, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -32,11 +32,11 @@ pub struct Word {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateWord {
-    pub language: Uuid,
-    pub word_class: Option<Uuid>,
-
     #[validate(length(min = 1, max = 200))]
     pub word: String,
+
+    #[validate(length(min = 1, max = 10))]
+    pub word_class: String,
 
     // TODO: implement slug generation
     #[validate(length(min = 1, max = 200))]
@@ -56,10 +56,11 @@ pub struct CreateWord {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateWord {
-    pub word_class: Option<Uuid>,
-
     #[validate(length(min = 1, max = 200))]
     pub word: Option<String>,
+
+    #[validate(length(min = 1, max = 10))]
+    pub word_class: Option<String>,
 
     // TODO: implement slug generation on word update
     #[validate(length(min = 1, max = 200))]
@@ -86,16 +87,16 @@ impl WordRepository {
         Self { state }
     }
 
-    pub async fn create(&self, requestor: &User, word: CreateWord) -> AppResult<Word> {
+    pub async fn create(&self, requestor: &User, language: Uuid, word: CreateWord) -> AppResult<Word> {
         word.validate()?;
 
         ensure_verified(requestor)?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
+            .find_by_user_and_language(requestor.id, language)
             .await?;
 
         let Some(perm) = user_perm else {
@@ -106,6 +107,11 @@ impl WordRepository {
             return Err(bad_request("viewers cannot create words"));
         }
 
+        let word_classes = crate::model::word_classes::WordClassRepository::new(self.state.clone());
+        let word_class = word_classes
+            .find_by_abbreviation(language, &word.word_class)
+            .await?;
+
         let result = sqlx::query_as!(
             Word,
             r#"
@@ -113,8 +119,8 @@ impl WordRepository {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
                 RETURNING *
             "#,
-            word.language,
-            word.word_class,
+            language,
+            word_class.id,
             word.word,
             word.slug,
             word.definition,
@@ -236,7 +242,7 @@ impl WordRepository {
         // get the word to find its language
         let word = self.find_by_id(id).await?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
@@ -250,6 +256,19 @@ impl WordRepository {
         if perm.permission == PermissionLevel::Viewer {
             return Err(bad_request("viewers cannot edit words"));
         }
+
+        let word_classes = crate::model::word_classes::WordClassRepository::new(self.state.clone());
+
+        let word_class = if let Some(ref abbreviation) = updates.word_class {
+            Some(
+                word_classes
+                    .find_by_abbreviation(word.language, abbreviation)
+                    .await?
+                    .id
+            )
+        } else {
+            None
+        };
 
         let result = sqlx::query_as!(
             Word,
@@ -268,7 +287,7 @@ impl WordRepository {
                 RETURNING *
             "#,
             id,
-            updates.word_class,
+            word_class,
             updates.word,
             updates.slug,
             updates.definition,
@@ -289,7 +308,7 @@ impl WordRepository {
         // get the word to find its language
         let word = self.find_by_id(id).await?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
@@ -329,56 +348,65 @@ impl WordRepository {
     ) -> AppResult<PaginatedResponse<Word>> {
         use sqlx::QueryBuilder;
 
-        let limit = search.pagination.limit + 1;
-        let mut query_builder: QueryBuilder<sqlx::Postgres> =
+        // Build items query
+        let mut items_query: QueryBuilder<sqlx::Postgres> =
             QueryBuilder::new("SELECT * FROM words WHERE language = ");
-        query_builder.push_bind(language);
+        items_query.push_bind(language);
 
         if let Some(ref q) = search.text_query {
-            query_builder.push(" AND (word % ");
-            query_builder.push_bind(q);
-            query_builder.push(" OR definition % ");
-            query_builder.push_bind(q);
-            query_builder.push(")");
+            items_query.push(" AND (word % ");
+            items_query.push_bind(q);
+            items_query.push(" OR definition % ");
+            items_query.push_bind(q);
+            items_query.push(")");
         }
 
         if let Some(word_class) = search.word_class {
-            query_builder.push(" AND word_class = ");
-            query_builder.push_bind(word_class);
+            items_query.push(" AND word_class = ");
+            items_query.push_bind(word_class);
         }
 
-        if let Some(cursor) = search.pagination.cursor {
-            query_builder.push(" AND id > ");
-            query_builder.push_bind(cursor);
+        items_query.push(" ORDER BY word, id LIMIT ");
+        items_query.push_bind(search.pagination.limit);
+        items_query.push(" OFFSET ");
+        items_query.push_bind(search.pagination.offset);
+
+        // Build count query
+        let mut count_query: QueryBuilder<sqlx::Postgres> =
+            QueryBuilder::new("SELECT COUNT(*) FROM words WHERE language = ");
+        count_query.push_bind(language);
+
+        if let Some(ref q) = search.text_query {
+            count_query.push(" AND (word % ");
+            count_query.push_bind(q);
+            count_query.push(" OR definition % ");
+            count_query.push_bind(q);
+            count_query.push(")");
         }
 
-        query_builder.push(" ORDER BY word LIMIT ");
-        query_builder.push_bind(limit);
+        if let Some(word_class) = search.word_class {
+            count_query.push(" AND word_class = ");
+            count_query.push_bind(word_class);
+        }
 
-        let mut items = query_builder
+        let items_future = items_query
             .build_query_as::<Word>()
-            .fetch_all(&self.state.pool)
-            .await?;
+            .fetch_all(&self.state.pool);
 
-        let has_more = items.len() > usize::try_from(search.pagination.limit).unwrap_or(0);
-        if has_more {
-            items.pop();
-        }
+        let count_future = count_query
+            .build_query_scalar::<i64>()
+            .fetch_one(&self.state.pool);
 
-        let next_cursor = if has_more {
-            items.last().map(|w| w.id)
-        } else {
-            None
-        };
+        let (items, total) = tokio::try_join!(items_future, count_future)?;
 
-        let previous_cursor = search.pagination.cursor;
-        let pages_left = i32::from(has_more);
+        let has_more = (search.pagination.offset as i64 + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
-            pages_left,
-            next_cursor,
-            previous_cursor,
+            total,
+            offset: search.pagination.offset,
+            limit: search.pagination.limit,
+            has_more,
         })
     }
 }

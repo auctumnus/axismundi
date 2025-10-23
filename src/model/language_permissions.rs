@@ -5,10 +5,11 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::err::{AppResult, bad_request, not_found};
-use crate::model::user::User;
+use crate::model::language_invites::LanguageInvite;
+use crate::model::users::User;
 use crate::util::{AppState, ensure_verified};
 
-use super::language_invite::PermissionLevel;
+use super::language_invites::PermissionLevel;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct LanguagePermission {
@@ -39,18 +40,6 @@ impl LanguagePermissionRepository {
         Self { state }
     }
 
-    pub async fn create(
-        &self,
-        permission: CreateLanguagePermission,
-        invited_by: Uuid,
-    ) -> AppResult<LanguagePermission> {
-        permission.validate()?;
-
-        let tx = &mut self.state.pool.begin().await?;
-
-        self.create_by_tx(tx, permission, invited_by).await
-    }
-
     pub async fn create_by_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -78,7 +67,7 @@ impl LanguagePermissionRepository {
         Ok(result)
     }
 
-    pub async fn find_by_id(&self, id: Uuid) -> AppResult<LanguagePermission> {
+    async fn _find_by_id(&self, id: Uuid) -> AppResult<LanguagePermission> {
         let result = sqlx::query_as!(
             LanguagePermission,
             r#"SELECT id, language, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at FROM language_permissions WHERE id = $1"#,
@@ -105,6 +94,19 @@ impl LanguagePermissionRepository {
         .await?;
 
         Ok(result)
+    }
+
+    pub async fn find_owner(&self, language: Uuid) -> AppResult<LanguagePermission> {
+        let result = sqlx::query_as!(
+            LanguagePermission,
+            r#"SELECT id, language, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at FROM language_permissions WHERE language = $1 AND permission = $2"#,
+            language,
+            PermissionLevel::Owner as PermissionLevel
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("owner permission for language '{language}'")))
     }
 
     pub async fn list_by_user(&self, user: Uuid) -> AppResult<Vec<LanguagePermission>> {
@@ -153,21 +155,46 @@ impl LanguagePermissionRepository {
         result.ok_or_else(|| not_found(format!("language permission with id '{id}'")))
     }
 
-    pub async fn accept(&self, id: Uuid) -> AppResult<LanguagePermission> {
+    pub async fn create_from_invite(
+        &self,
+        invite: &LanguageInvite,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>
+    ) -> AppResult<LanguagePermission> {
+        if invite.permissions == PermissionLevel::Owner {
+            // transfer ownership
+            sqlx::query!(
+                r#"
+                    UPDATE language_permissions
+                    SET permission = $2
+                    WHERE language = $1 AND permission = $3
+                "#,
+                invite.language,
+                PermissionLevel::Admin as PermissionLevel,
+                PermissionLevel::Owner as PermissionLevel
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+
         let result = sqlx::query_as!(
             LanguagePermission,
             r#"
-                UPDATE language_permissions
-                SET accepted_at = CURRENT_TIMESTAMP
-                WHERE id = $1 AND accepted_at IS NULL
+                INSERT INTO language_permissions (language, "user", permission, via, invited_by, invited_at, accepted_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, language, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at
             "#,
-            id
+            invite.language,
+            invite.recipient,
+            invite.permissions as PermissionLevel,
+            invite.id,
+            invite.sender,
+            invite.sent_at,
+            invite.accepted_at
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_one(&mut **tx)
         .await?;
 
-        result.ok_or_else(|| not_found(format!("pending language permission with id '{id}'")))
+        Ok(result)
     }
 
     pub async fn delete(&self, id: Uuid) -> AppResult<bool> {
@@ -236,7 +263,7 @@ impl LanguagePermissionRepository {
     ) -> AppResult<LanguagePermission> {
         ensure_verified(requestor)?;
 
-        let target = self.find_by_id(target_perm_id).await?;
+        let target = self._find_by_id(target_perm_id).await?;
         let requestor_perm = self
             .find_by_user_and_language(requestor.id, target.language)
             .await?;
@@ -266,7 +293,7 @@ impl LanguagePermissionRepository {
     pub async fn delete_checked(&self, requestor: &User, target_perm_id: Uuid) -> AppResult<bool> {
         ensure_verified(requestor)?;
 
-        let target = self.find_by_id(target_perm_id).await?;
+        let target = self._find_by_id(target_perm_id).await?;
         let requestor_perm = self
             .find_by_user_and_language(requestor.id, target.language)
             .await?;

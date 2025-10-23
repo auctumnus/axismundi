@@ -4,7 +4,6 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::util::AppState;
 
@@ -15,31 +14,22 @@ const MAX_PAGE_SIZE: PaginationSize = 100;
 #[derive(Serialize, Debug, Clone)]
 pub struct PaginatedResponse<T> {
     pub items: Vec<T>,
-    pub pages_left: PaginationSize,
-    // null if no next page
-    pub next_cursor: Option<Uuid>,
-    // null if no previous page
-    pub previous_cursor: Option<Uuid>,
+    pub total: i64,
+    pub offset: PaginationSize,
+    pub limit: PaginationSize,
+    pub has_more: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PaginatedRequest {
     #[serde(default = "default_limit")]
     pub limit: PaginationSize,
-    pub cursor: Option<Uuid>,
     #[serde(default)]
-    pub direction: PaginationDirection,
+    pub offset: PaginationSize,
 }
 
 fn default_limit() -> PaginationSize {
     10
-}
-
-#[derive(Deserialize, Default, Debug, Clone, PartialEq, Eq)]
-pub enum PaginationDirection {
-    #[default]
-    Forward,
-    Backward,
 }
 
 impl FromRequestParts<AppState> for PaginatedRequest {
@@ -53,8 +43,12 @@ impl FromRequestParts<AppState> for PaginatedRequest {
         let paginated_request: PaginatedRequest = serde_urlencoded::from_str(query)
             .map_err(|_| (StatusCode::BAD_REQUEST, "invalid pagination parameters"))?;
 
-        if paginated_request.limit == 0 || paginated_request.limit > MAX_PAGE_SIZE {
+        if paginated_request.limit <= 0 || paginated_request.limit > MAX_PAGE_SIZE {
             return Err((StatusCode::BAD_REQUEST, "invalid limit parameter"));
+        }
+
+        if paginated_request.offset < 0 {
+            return Err((StatusCode::BAD_REQUEST, "invalid offset parameter"));
         }
 
         Ok(paginated_request)

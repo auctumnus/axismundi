@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, QueryBuilder};
+use sqlx::FromRow;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, forbidden, not_found},
-    model::{language_invite::PermissionLevel, user::User},
+    model::{language_invites::PermissionLevel, users::{User, UserSearch}},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -95,10 +95,10 @@ impl LanguageRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        crate::model::language_permission::LanguagePermissionRepository::new(self.state.clone())
+        crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone())
             .create_by_tx(
                 &mut tx,
-                crate::model::language_permission::CreateLanguagePermission {
+                crate::model::language_permissions::CreateLanguagePermission {
                     language: result.id,
                     user: requestor.id,
                     permission: PermissionLevel::Owner,
@@ -111,14 +111,6 @@ impl LanguageRepository {
         tx.commit().await?;
 
         Ok(result)
-    }
-
-    pub async fn find_by_id(&self, id: Uuid) -> AppResult<Language> {
-        let result = sqlx::query_as!(Language, "SELECT * FROM languages WHERE id = $1", id)
-            .fetch_optional(&self.state.pool)
-            .await?;
-
-        result.ok_or_else(|| not_found(format!("language with id '{id}'")))
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<Language> {
@@ -139,7 +131,7 @@ impl LanguageRepository {
 
         ensure_verified(requestor)?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
@@ -194,16 +186,17 @@ impl LanguageRepository {
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
+        tracing::debug!("Deleting language {id}");
         ensure_verified(requestor)?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
             .find_by_user_and_language(requestor.id, id)
             .await?;
         let Some(perm) = user_perm else {
-            return Err(bad_request(
+            return Err(forbidden(
                 "you don't have permission to delete this language",
             ));
         };
@@ -218,27 +211,6 @@ impl LanguageRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn list(&self, limit: i64, offset: i64) -> AppResult<Vec<Language>> {
-        let result = sqlx::query_as!(
-            Language,
-            "SELECT * FROM languages ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            limit,
-            offset
-        )
-        .fetch_all(&self.state.pool)
-        .await?;
-
-        Ok(result)
-    }
-
-    pub async fn count(&self) -> AppResult<i64> {
-        let result = sqlx::query!("SELECT COUNT(*) as count FROM languages")
-            .fetch_one(&self.state.pool)
-            .await?;
-
-        Ok(result.count.unwrap_or(0))
-    }
-
     pub async fn code_exists(&self, code: &str) -> AppResult<bool> {
         let result = sqlx::query!("SELECT 1 as exists FROM languages WHERE code = $1", code)
             .fetch_optional(&self.state.pool)
@@ -247,154 +219,166 @@ impl LanguageRepository {
         Ok(result.is_some())
     }
 
-    pub async fn list_by_user(
-        &self,
-        user_id: Uuid,
-        limit: i64,
-        offset: i64,
-    ) -> AppResult<Vec<Language>> {
-        let result = sqlx::query_as!(
+    pub async fn search(&self, pagination: PaginatedRequest, search: LanguageSearch) -> AppResult<PaginatedResponse<Language>> {
+        // search strategy:
+        // - exact matches in name, code, owner are weighted highly
+        // - otherwise, we use similarity on code, name, description
+        // - TODO: deal with private languages and edited_by filter
+
+        let items_future = sqlx::query_as!(
             Language,
-            "SELECT * FROM languages WHERE created_by = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-            user_id,
-            limit,
-            offset
+            r#"
+                SELECT languages.*
+                FROM languages
+                JOIN users ON users.id = languages.created_by
+                WHERE
+                ($1::TEXT IS NULL OR users.username = $1)
+                AND ($2::TIMESTAMPTZ IS NULL OR languages.created_at < $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR languages.created_at > $3)
+                ORDER BY (
+                    CASE
+                        WHEN $4::TEXT IS NOT NULL AND languages.name ILIKE '%' || $4 || '%' THEN 100.0
+                        WHEN $4::TEXT IS NOT NULL AND languages.code ILIKE '%' || $4 || '%' THEN 90.0
+                        WHEN $4::TEXT IS NOT NULL AND languages.description ILIKE '%' || $4 || '%' THEN 80.0
+                        WHEN $4::TEXT IS NOT NULL AND users.username ILIKE '%' || $4 || '%' THEN 70.0
+                        ELSE 0.0
+                    END +
+                    CASE WHEN $4::TEXT IS NOT NULL THEN
+                        similarity(languages.name, $4) * 3.0 +
+                        similarity(languages.code, $4) * 2.0 +
+                        similarity(languages.description, $4) * 1.0
+                    ELSE 0.0
+                    END
+                ) DESC, languages.id
+                LIMIT $5
+                OFFSET $6
+            "#,
+            search.owned_by,
+            search.created_before,
+            search.created_after,
+            search.text_query,
+            pagination.limit as i64,
+            pagination.offset as i64
         )
-        .fetch_all(&self.state.pool)
-        .await?;
+        .fetch_all(&self.state.pool);
 
-        Ok(result)
-    }
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
+                FROM languages
+                JOIN users ON users.id = languages.created_by
+                WHERE
+                ($1::TEXT IS NULL OR users.username = $1)
+                AND ($2::TIMESTAMPTZ IS NULL OR languages.created_at < $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR languages.created_at > $3)
+            "#,
+            search.owned_by,
+            search.created_before,
+            search.created_after
+        )
+        .fetch_one(&self.state.pool);
 
-    pub async fn search(&self, search: LanguageSearch) -> AppResult<PaginatedResponse<Language>> {
-        use sqlx::QueryBuilder;
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
-        let limit = search.pagination.limit + 1;
-        let mut query_builder: QueryBuilder<sqlx::Postgres> =
-            QueryBuilder::new("SELECT * FROM languages WHERE 1=1");
-
-        if let Some(ref q) = search.text_query {
-            query_builder.push(" AND (name % ");
-            query_builder.push_bind(q);
-            query_builder.push(" OR description % ");
-            query_builder.push_bind(q);
-            query_builder.push(")");
-        }
-
-        if let Some(ref owner_username) = search.owned_by {
-            query_builder.push(" AND created_by = (SELECT id FROM users WHERE username = ");
-            query_builder.push_bind(owner_username);
-            query_builder.push(")");
-        }
-
-        if let Some(ref edited_by_users) = search.edited_by {
-            if !edited_by_users.is_empty() {
-                query_builder.push(" AND id IN (SELECT language FROM language_permissions WHERE \"user\" IN (SELECT id FROM users WHERE username IN (");
-                let mut separated = query_builder.separated(", ");
-                for username in edited_by_users {
-                    separated.push_bind(username);
-                }
-                separated.push_unseparated(")))");
-            }
-        }
-
-        if let Some(created_before) = search.created_before {
-            query_builder.push(" AND created_at < ");
-            query_builder.push_bind(created_before);
-        }
-
-        if let Some(created_after) = search.created_after {
-            query_builder.push(" AND created_at > ");
-            query_builder.push_bind(created_after);
-        }
-
-        if let Some(cursor) = search.pagination.cursor {
-            query_builder.push(" AND id > ");
-            query_builder.push_bind(cursor);
-        }
-
-        query_builder.push(" ORDER BY created_at DESC LIMIT ");
-        query_builder.push_bind(limit);
-
-        let mut items = query_builder
-            .build_query_as::<Language>()
-            .fetch_all(&self.state.pool)
-            .await?;
-
-        let has_more = items.len() > usize::try_from(search.pagination.limit).unwrap_or(0);
-        if has_more {
-            items.pop();
-        }
-
-        let next_cursor = if has_more {
-            items.last().map(|l| l.id)
-        } else {
-            None
-        };
-
-        let previous_cursor = search.pagination.cursor;
-        let pages_left = i32::from(has_more);
+        let total = total_count.unwrap_or(0);
+        let has_more = (pagination.offset as i64 + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
-            pages_left,
-            next_cursor,
-            previous_cursor,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
         })
     }
 
-    pub async fn editors_of_language(
+    pub async fn search_editors_of_language(
         &self,
         language_id: Uuid,
         pagination: PaginatedRequest,
+        search: UserSearch,
     ) -> AppResult<PaginatedResponse<User>> {
-        let limit = pagination.limit + 1;
-        let mut query_builder: QueryBuilder<sqlx::Postgres> = QueryBuilder::new(
-            "SELECT u.* FROM users u \
-            JOIN language_permissions lp ON u.id = lp.\"user\" \
-            WHERE lp.language = ",
-        );
-        query_builder.push_bind(language_id);
+        // search strategy:
+        // - exact matches in username, display_name are weighted highly
+        // - otherwise, we use similarity on username, display_name, description
+        // - filter by verified status if specified
+        // - must have at least editor permissions (not viewer)
 
-        if let Some(cursor) = pagination.cursor {
-            query_builder.push(" AND u.id > ");
-            query_builder.push_bind(cursor);
-        }
+        let items_future = sqlx::query_as!(
+            User,
+            r#"
+                SELECT users.*
+                FROM users
+                JOIN language_permissions ON language_permissions.user = users.id
+                WHERE
+                language_permissions.language = $1
+                AND language_permissions.permission IN ('editor', 'admin', 'owner')
+                AND ($2::BOOL IS NULL OR (users.verified_at IS NOT NULL) = $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR users.created_at < $3)
+                AND ($4::TIMESTAMPTZ IS NULL OR users.created_at > $4)
+                ORDER BY (
+                    CASE
+                        WHEN $5::TEXT IS NOT NULL AND users.username ILIKE '%' || $5 || '%' THEN 100.0
+                        WHEN $5::TEXT IS NOT NULL AND users.display_name ILIKE '%' || $5 || '%' THEN 90.0
+                        WHEN $5::TEXT IS NOT NULL AND users.description ILIKE '%' || $5 || '%' THEN 80.0
+                        ELSE 0.0
+                    END +
+                    CASE WHEN $5::TEXT IS NOT NULL THEN
+                        similarity(users.username, $5) * 3.0 +
+                        COALESCE(similarity(users.display_name, $5), 0.0) * 2.0 +
+                        COALESCE(similarity(users.description, $5), 0.0) * 1.0
+                    ELSE 0.0
+                    END
+                ) DESC, users.id
+                LIMIT $6
+                OFFSET $7
+            "#,
+            language_id,
+            search.verified,
+            search.created_before,
+            search.created_after,
+            search.text_query,
+            pagination.limit as i64,
+            pagination.offset as i64
+        )
+        .fetch_all(&self.state.pool);
 
-        query_builder.push(" ORDER BY u.created_at DESC LIMIT ");
-        query_builder.push_bind(limit);
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
+                FROM users
+                JOIN language_permissions ON language_permissions.user = users.id
+                WHERE
+                language_permissions.language = $1
+                AND language_permissions.permission IN ('editor', 'owner')
+                AND ($2::BOOL IS NULL OR (users.verified_at IS NOT NULL) = $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR users.created_at < $3)
+                AND ($4::TIMESTAMPTZ IS NULL OR users.created_at > $4)
+            "#,
+            language_id,
+            search.verified,
+            search.created_before,
+            search.created_after
+        )
+        .fetch_one(&self.state.pool);
 
-        let mut items = query_builder
-            .build_query_as::<User>()
-            .fetch_all(&self.state.pool)
-            .await?;
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
-        let has_more = items.len() > usize::try_from(pagination.limit).unwrap_or(0);
-        if has_more {
-            items.pop();
-        }
-
-        let next_cursor = if has_more {
-            items.last().map(|u| u.id)
-        } else {
-            None
-        };
-
-        let previous_cursor = pagination.cursor;
-        let pages_left = i32::from(has_more);
+        let total = total_count.unwrap_or(0);
+        let has_more = (pagination.offset as i64 + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
-            pages_left,
-            next_cursor,
-            previous_cursor,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
         })
     }
 }
 
 #[derive(Debug)]
 pub struct LanguageSearch {
-    pub pagination: PaginatedRequest,
     pub text_query: Option<String>,
     pub owned_by: Option<String>,
     pub edited_by: Option<Vec<String>>,

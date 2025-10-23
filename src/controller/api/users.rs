@@ -1,13 +1,11 @@
 use crate::{
     err::{AppError, AppResult, bad_request},
-    model::user::{CreateUser, User, UserRepository, UserSearch},
+    model::users::{CreateUser, User, UserRepository, UserSearch},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session, s3::S3},
 };
 use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{Path, Query, State}, http::StatusCode, Json
 };
 use axum_extra::extract::Multipart;
 use chrono::{DateTime, Utc};
@@ -122,27 +120,14 @@ pub async fn upload_profile_picture(
     }
 }
 
-#[derive(Deserialize)]
-pub(crate) struct UserSearchQuery {
-    q: Option<String>,
-    created_before: Option<DateTime<Utc>>,
-    created_after: Option<DateTime<Utc>>,
-}
 
+#[axum::debug_handler(state = AppState)]
 pub async fn search_users(
     users: UserRepository,
     pagination: PaginatedRequest,
-    axum::extract::Query(query): axum::extract::Query<UserSearchQuery>,
+    Query(query): Query<UserSearch>,
 ) -> PaginatedApiResponse<User> {
-    let search = UserSearch {
-        pagination,
-        text_query: query.q,
-        created_before: query.created_before,
-        created_after: query.created_after,
-        verified: None,
-    };
-
-    users.search(search).await
+    users.search(pagination, query).await
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
-    model::session::{SessionObj, SessionRepository},
+    model::sessions::{SessionObj, SessionRepository},
     util::extract_session::{SESSION_COOKIE_NAME, Session},
 };
 use axum::Json;
@@ -174,7 +174,7 @@ mod tests {
         let request =
             crate::controller::api::tests::post_without_auth("sessions", login_body).await;
         let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

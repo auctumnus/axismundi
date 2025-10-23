@@ -34,7 +34,7 @@ impl SessionRepository {
         // this is written kind of backwards, but it avoids a timing attack
         // we always check the password, no matter whether the user exists or not,
         // so you can't tell if the email has been used / password is correct
-        let user_repo = super::user::UserRepository::new(self.state.clone());
+        let user_repo = super::users::UserRepository::new(self.state.clone());
 
         let result = user_repo.find_by_email(email).await;
 

@@ -53,6 +53,14 @@ pub fn create_api_controller() -> Router<AppState> {
             post(language_invites::invite_user_to_language),
         )
         .route(
+            "/languages/{code}/invites/search",
+            get(language_invites::search_language_invites),
+        )
+        .route(
+            "/languages/{code}/invites/{username}",
+            get(language_invites::view_language_invite),
+        )
+        .route(
             "/languages/{code}/invites/{username}",
             delete(language_invites::delete_language_invite),
         )
@@ -278,6 +286,8 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), 200);
 
+        println!("made user {username}");
+
         // verify email
         let sent_emails = email_service.get_sent_emails();
         let email_lowercase = email.to_lowercase();
@@ -312,5 +322,11 @@ mod tests {
         let body = crate::tests::response_to_value(resp.into_body()).await;
 
         body.get("token").unwrap().as_str().unwrap().to_string()
+    }
+
+    pub(crate) async fn print_response_body(response: axum::response::Response<Body>) {
+        let body_bytes = axum::body::to_bytes(response.into_body(), 10_000).await.unwrap();
+        let body_string = String::from_utf8_lossy(&body_bytes);
+        println!("{}", body_string);
     }
 }

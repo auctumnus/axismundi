@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     ErrorTemplate,
     err::AppError,
-    model::user::User,
+    model::users::User,
     util::{AppState, extract_session::Session},
 };
 use askama::Template;

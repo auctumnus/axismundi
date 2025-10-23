@@ -1,5 +1,4 @@
 // ignore unused warnings
-#![allow(dead_code)]
 #![warn(clippy::pedantic, clippy::style)]
 use askama::Template;
 use axum::{
@@ -153,7 +152,7 @@ pub(crate) mod tests {
             "{}_{}",
             random_word::get(random_word::Lang::En),
             nanoid::nanoid!(4)
-        )
+        ).to_lowercase()
     }
 
     pub(crate) fn random_code() -> String {

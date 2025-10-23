@@ -1,14 +1,12 @@
 use crate::{
-    err::{AppResult, unauthorized_no_session},
+    err::{unauthorized_no_session, AppResult},
     model::{
-        language::{CreateLanguage, Language, LanguageRepository, LanguageSearch, UpdateLanguage},
-        language_permission::LanguagePermissionRepository,
-        user::{User, UserRepository},
+        language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch, UpdateLanguage}, users::{User, UserRepository, UserSearch}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
 };
-use axum::{Json, extract::Path, http::StatusCode};
+use axum::{extract::{Path, Query}, http::StatusCode, Json};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -57,7 +55,6 @@ pub async fn list_languages(
         .map(|s| s.split(',').map(String::from).collect());
 
     let search = LanguageSearch {
-        pagination,
         text_query: query.q,
         owned_by: query.owned_by,
         edited_by,
@@ -65,7 +62,7 @@ pub async fn list_languages(
         created_after: query.created_after,
     };
 
-    languages.search(search).await.map(Json)
+    languages.search(pagination, search).await.map(Json)
 }
 
 pub async fn edit_language(
@@ -114,14 +111,16 @@ pub async fn get_language_owner(
     )))
 }
 
+#[axum::debug_handler(state = crate::util::AppState)]
 pub async fn get_language_editors(
     languages: LanguageRepository,
     Path(code): Path<String>,
     pagination: PaginatedRequest,
+    Query(search): Query<UserSearch>
 ) -> PaginatedApiResponse<User> {
     let language = languages.find_by_code(&code).await?;
     languages
-        .editors_of_language(language.id, pagination)
+        .search_editors_of_language(language.id, pagination, search)
         .await
         .map(Json)
 }
@@ -134,7 +133,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete_without_auth, get, make_authed_user, post, put_without_auth,
+        delete_without_auth, get, make_authed_user, post, print_response_body, put_without_auth
     };
     use crate::email::tests::MockEmailService;
 
@@ -464,7 +463,9 @@ mod tests {
         )
         .await;
         let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let status = response.status();
+        print_response_body(response).await;
+        assert_eq!(status, StatusCode::OK);
 
         // accept invite
         let request = crate::controller::api::tests::post(
@@ -560,5 +561,93 @@ mod tests {
         let response = app.call(request).await.unwrap();
         // Should redirect
         assert!(response.status().is_redirection());
+    }
+
+    #[tokio::test]
+    async fn test_code_cannot_be_search() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let body = json!({
+            "code": "search",
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_cannot_update_code_to_be_search() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let update_body = json!({
+            "code": "search",
+        });
+
+        let request =
+            crate::controller::api::tests::put(&token, &format!("languages/{code}"), &update_body);
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_can_update_code() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let new_code = crate::tests::random_code();
+
+        let update_body = json!({
+            "code": new_code,
+        });
+
+        let request =
+            crate::controller::api::tests::put(&token, &format!("languages/{code}"), &update_body);
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = get(&format!("languages/{new_code}")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

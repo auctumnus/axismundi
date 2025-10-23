@@ -5,8 +5,8 @@ use axum::{
 use axum_extra::extract::CookieJar;
 
 use crate::model::{
-    session::{SessionObj, SessionRepository},
-    user::User,
+    sessions::{SessionObj, SessionRepository},
+    users::User,
 };
 
 use super::AppState;
@@ -74,7 +74,7 @@ impl FromRequestParts<AppState> for Session {
 
         match session {
             Some(session) => {
-                let user_repo = crate::model::user::UserRepository::new(state.clone());
+                let user_repo = crate::model::users::UserRepository::new(state.clone());
                 let user = user_repo
                     .find_by_id(session.user_id)
                     .await

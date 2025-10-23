@@ -1,8 +1,8 @@
 use crate::{
     err::{AppResult, not_found, unauthorized_no_session},
     model::{
-        language::LanguageRepository,
-        word_class::{
+        languages::LanguageRepository,
+        word_classes::{
             CreateWordClass, UpdateWordClass, WordClass, WordClassRepository, WordClassSearch,
         },
     },
@@ -29,7 +29,6 @@ pub async fn create_word_class(
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
-    println!("Creating word class in language");
 
     word_classes
         .create(requestor, &code, create)
@@ -60,13 +59,9 @@ pub async fn get_word_class(
     Path((code, abbreviation)): Path<(String, String)>,
 ) -> ApiResponse<Json<WordClass>> {
     let language = languages.find_by_code(&code).await?;
-    let classes = word_classes.list_by_language(language.id).await?;
-
-    classes
-        .iter()
-        .find(|c| c.abbreviation == abbreviation)
-        .cloned()
-        .ok_or_else(|| not_found(format!("word class '{abbreviation}'")))
+    word_classes
+        .find_by_abbreviation(language.id, &abbreviation)
+        .await
         .map(Json)
 }
 
@@ -82,14 +77,13 @@ pub async fn edit_word_class(
     };
 
     let language = languages.find_by_code(&code).await?;
-    let classes = word_classes.list_by_language(language.id).await?;
-    let class = classes
-        .iter()
-        .find(|c| c.abbreviation == abbreviation)
-        .ok_or_else(|| not_found(format!("word class '{abbreviation}'")))?;
+    let word_class = word_classes
+        .find_by_abbreviation(language.id, &abbreviation)
+        .await
+        .map_err(|_| not_found(format!("word class '{abbreviation}'")))?;
 
     word_classes
-        .update(requestor, class.id, updates)
+        .update(requestor, word_class.id, updates)
         .await
         .map(Json)
 }
@@ -105,13 +99,12 @@ pub async fn delete_word_class(
     };
 
     let language = languages.find_by_code(&code).await?;
-    let classes = word_classes.list_by_language(language.id).await?;
-    let class = classes
-        .iter()
-        .find(|c| c.abbreviation == abbreviation)
-        .ok_or_else(|| not_found(format!("word class '{abbreviation}'")))?;
+    let word_class = word_classes
+        .find_by_abbreviation(language.id, &abbreviation)
+        .await
+        .map_err(|_| not_found(format!("word class '{abbreviation}'")))?;
 
-    word_classes.delete(requestor, class.id).await?;
+    word_classes.delete(requestor, word_class.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

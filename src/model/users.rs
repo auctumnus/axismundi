@@ -14,7 +14,7 @@ use crate::{
     util::{AppState, ensure_verified, re, s3::S3},
 };
 
-use super::email_verification_token::EmailVerificationTokenRepository;
+use super::email_verification_tokens::EmailVerificationTokenRepository;
 
 #[allow(clippy::ref_option)] // due to serde
 fn serialize_object_key<S>(object_id: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
@@ -101,14 +101,15 @@ pub struct UpdateUser {
     pub gender: Option<String>,
 }
 
+#[derive(Deserialize)]
 pub struct UserSearch {
-    pub pagination: PaginatedRequest,
     pub text_query: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
     pub verified: Option<bool>,
 }
 
+#[derive(Clone)]
 pub struct UserRepository {
     state: AppState,
 }
@@ -304,94 +305,73 @@ impl UserRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn search(&self, search: UserSearch) -> AppResult<PaginatedResponse<User>> {
-        let limit = i64::from(search.pagination.limit) + 1; // fetch one extra to check if there's more
+    pub async fn search(&self, pagination: PaginatedRequest, search: UserSearch) -> AppResult<PaginatedResponse<User>> {
+        // search strategy:
+        // - exact matches in username, display_name are weighted highly
+        // - otherwise, we use similarity on username, display_name, description
+        // - filter by verified status if specified
 
-        let query = if let Some(text) = &search.text_query {
-            sqlx::query_as!(
-                User,
-                r#"
-                SELECT id, username, email, password_hash, display_name, description,
-                       pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+        let items_future = sqlx::query_as!(
+            User,
+            r#"
+                SELECT *
                 FROM users
-                WHERE (similarity(username, $1) > 0.2 OR similarity(COALESCE(description, ''), $1) > 0.2)
-                  AND ($2::timestamptz IS NULL OR created_at <= $2)
-                  AND ($3::timestamptz IS NULL OR created_at >= $3)
-                  AND ($4::bool IS NULL OR (verified_at IS NOT NULL) = $4)
-                  AND ($5::uuid IS NULL OR (
-                    CASE WHEN $6 = 'Forward' THEN id > $5
-                         WHEN $6 = 'Backward' THEN id < $5
+                WHERE
+                ($1::BOOL IS NULL OR (verified_at IS NOT NULL) = $1)
+                AND ($2::TIMESTAMPTZ IS NULL OR created_at < $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR created_at > $3)
+                ORDER BY (
+                    CASE
+                        WHEN $4::TEXT IS NOT NULL AND username ILIKE '%' || $4 || '%' THEN 100.0
+                        WHEN $4::TEXT IS NOT NULL AND display_name ILIKE '%' || $4 || '%' THEN 90.0
+                        WHEN $4::TEXT IS NOT NULL AND description ILIKE '%' || $4 || '%' THEN 80.0
+                        ELSE 0.0
+                    END +
+                    CASE WHEN $4::TEXT IS NOT NULL THEN
+                        similarity(username, $4) * 3.0 +
+                        COALESCE(similarity(display_name, $4), 0.0) * 2.0 +
+                        COALESCE(similarity(description, $4), 0.0) * 1.0
+                    ELSE 0.0
                     END
-                  ))
-                ORDER BY
-                  GREATEST(similarity(username, $1), similarity(COALESCE(description, ''), $1)) DESC,
-                  id DESC
-                LIMIT $7
-                "#,
-                text,
-                search.created_before,
-                search.created_after,
-                search.verified,
-                search.pagination.cursor,
-                format!("{:?}", search.pagination.direction),
-                limit
-            )
-            .fetch_all(&self.state.pool)
-            .await?
-        } else {
-            sqlx::query_as!(
-                User,
-                r#"
-                SELECT id, username, email, password_hash, display_name, description,
-                       pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+                ) DESC, id
+                LIMIT $5
+                OFFSET $6
+            "#,
+            search.verified,
+            search.created_before,
+            search.created_after,
+            search.text_query,
+            pagination.limit as i64,
+            pagination.offset as i64
+        )
+        .fetch_all(&self.state.pool);
+
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
                 FROM users
-                WHERE ($1::timestamptz IS NULL OR created_at <= $1)
-                  AND ($2::timestamptz IS NULL OR created_at >= $2)
-                  AND ($3::bool IS NULL OR (verified_at IS NOT NULL) = $3)
-                  AND ($4::uuid IS NULL OR (
-                    CASE WHEN $5 = 'Forward' THEN id > $4
-                         WHEN $5 = 'Backward' THEN id < $4
-                    END
-                  ))
-                ORDER BY created_at DESC, id DESC
-                LIMIT $6
-                "#,
-                search.created_before,
-                search.created_after,
-                search.verified,
-                search.pagination.cursor,
-                format!("{:?}", search.pagination.direction),
-                limit
-            )
-            .fetch_all(&self.state.pool)
-            .await?
-        };
+                WHERE
+                ($1::BOOL IS NULL OR (verified_at IS NOT NULL) = $1)
+                AND ($2::TIMESTAMPTZ IS NULL OR created_at < $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR created_at > $3)
+            "#,
+            search.verified,
+            search.created_before,
+            search.created_after
+        )
+        .fetch_one(&self.state.pool);
 
-        let mut items = query;
-        // TODO: uhhh lol is that right?
-        let has_more = items.len() > search.pagination.limit.try_into().unwrap_or(0);
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
-        if has_more {
-            items.pop();
-        }
-
-        let next_cursor = if has_more {
-            items.last().map(|u| u.id)
-        } else {
-            None
-        };
-
-        let previous_cursor = if search.pagination.cursor.is_some() {
-            items.first().map(|u| u.id)
-        } else {
-            None
-        };
+        let total = total_count.unwrap_or(0);
+        let has_more = (pagination.offset as i64 + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
-            pages_left: i32::from(has_more),
-            next_cursor,
-            previous_cursor,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
         })
     }
 
@@ -469,7 +449,7 @@ impl UserRepository {
 
                 // log out all sessions
                 let session_repo =
-                    crate::model::session::SessionRepository::new(self.state.clone());
+                    crate::model::sessions::SessionRepository::new(self.state.clone());
                 session_repo.invalidate_all(user_id).await?;
 
                 tx.commit().await?;

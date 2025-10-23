@@ -1,6 +1,6 @@
 use crate::{
     err::{AppResult, internal_error},
-    model::user::User,
+    model::users::User,
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -50,7 +50,7 @@ pub fn hash(plaintext: &str) -> AppResult<String> {
     let argon2 = Argon2::default();
     let hashed = argon2
         .hash_password(plaintext.as_bytes(), &salt)
-        .map_err(|_| internal_error("Failed to hash passowrd"))?;
+        .map_err(|_| internal_error("Failed to hash password"))?;
     Ok(hashed.to_string())
 }
 

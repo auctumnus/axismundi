@@ -1,10 +1,10 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
-        language::LanguageRepository,
-        language_invite::PermissionLevel,
-        language_permission::{LanguagePermission, LanguagePermissionRepository},
-        user::UserRepository,
+        languages::LanguageRepository,
+        language_invites::PermissionLevel,
+        language_permissions::{LanguagePermission, LanguagePermissionRepository},
+        users::UserRepository,
     },
     util::extract_session::Session,
 };

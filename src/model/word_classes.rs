@@ -6,7 +6,7 @@ use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, not_found},
-    model::{language_invite::PermissionLevel, user::User},
+    model::{language_invites::PermissionLevel, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -60,10 +60,10 @@ impl WordClassRepository {
 
         ensure_verified(requestor)?;
 
-        let languages = crate::model::language::LanguageRepository::new(self.state.clone());
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
         let language = languages.find_by_code(lang_code).await?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
@@ -128,16 +128,26 @@ impl WordClassRepository {
         result.ok_or_else(|| not_found(format!("word class with id '{id}'")))
     }
 
-    pub async fn list_by_language(&self, language: Uuid) -> AppResult<Vec<WordClass>> {
+    pub async fn find_by_abbreviation(
+        &self,
+        language: Uuid,
+        abbreviation: &str,
+    ) -> AppResult<WordClass> {
         let result = sqlx::query_as!(
             WordClass,
-            "SELECT * FROM word_classes WHERE language = $1 ORDER BY name",
-            language
+            "SELECT * FROM word_classes WHERE language = $1 AND abbreviation = $2",
+            language,
+            abbreviation
         )
-        .fetch_all(&self.state.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
-        Ok(result)
+        result.ok_or_else(|| {
+            not_found(format!(
+                "word class with abbreviation '{}' in language '{}'",
+                abbreviation, language
+            ))
+        })
     }
 
     pub async fn update(
@@ -153,7 +163,7 @@ impl WordClassRepository {
         // Get the current word class to check the language
         let current = self.find_by_id(id).await?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
@@ -217,7 +227,7 @@ impl WordClassRepository {
         // Get the current word class to check the language
         let current = self.find_by_id(id).await?;
 
-        let permissions = crate::model::language_permission::LanguagePermissionRepository::new(
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
         let user_perm = permissions
@@ -276,48 +286,49 @@ impl WordClassRepository {
     ) -> AppResult<PaginatedResponse<WordClass>> {
         use sqlx::QueryBuilder;
 
-        let limit = search.pagination.limit + 1;
-        let mut query_builder: QueryBuilder<sqlx::Postgres> =
+        // Build items query
+        let mut items_query: QueryBuilder<sqlx::Postgres> =
             QueryBuilder::new("SELECT * FROM word_classes WHERE language = ");
-        query_builder.push_bind(language);
+        items_query.push_bind(language);
 
         if let Some(ref q) = search.text_query {
-            query_builder.push(" AND name % ");
-            query_builder.push_bind(q);
+            items_query.push(" AND name % ");
+            items_query.push_bind(q);
         }
 
-        if let Some(cursor) = search.pagination.cursor {
-            query_builder.push(" AND id > ");
-            query_builder.push_bind(cursor);
+        items_query.push(" ORDER BY name, id LIMIT ");
+        items_query.push_bind(search.pagination.limit);
+        items_query.push(" OFFSET ");
+        items_query.push_bind(search.pagination.offset);
+
+        // Build count query
+        let mut count_query: QueryBuilder<sqlx::Postgres> =
+            QueryBuilder::new("SELECT COUNT(*) FROM word_classes WHERE language = ");
+        count_query.push_bind(language);
+
+        if let Some(ref q) = search.text_query {
+            count_query.push(" AND name % ");
+            count_query.push_bind(q);
         }
 
-        query_builder.push(" ORDER BY name LIMIT ");
-        query_builder.push_bind(limit);
-
-        let mut items = query_builder
+        let items_future = items_query
             .build_query_as::<WordClass>()
-            .fetch_all(&self.state.pool)
-            .await?;
+            .fetch_all(&self.state.pool);
 
-        let has_more = items.len() > usize::try_from(search.pagination.limit).unwrap_or(0);
-        if has_more {
-            items.pop();
-        }
+        let count_future = count_query
+            .build_query_scalar::<i64>()
+            .fetch_one(&self.state.pool);
 
-        let next_cursor = if has_more {
-            items.last().map(|w| w.id)
-        } else {
-            None
-        };
+        let (items, total) = tokio::try_join!(items_future, count_future)?;
 
-        let previous_cursor = search.pagination.cursor;
-        let pages_left = i32::from(has_more);
+        let has_more = (search.pagination.offset as i64 + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
-            pages_left,
-            next_cursor,
-            previous_cursor,
+            total,
+            offset: search.pagination.offset,
+            limit: search.pagination.limit,
+            has_more,
         })
     }
 }

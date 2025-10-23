@@ -1,9 +1,9 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
-        language::LanguageRepository,
-        word::{CreateWord, UpdateWord, Word, WordRepository, WordSearch},
-        word_class::WordClassRepository,
+        languages::LanguageRepository,
+        words::{CreateWord, UpdateWord, Word, WordRepository, WordSearch},
+        word_classes::WordClassRepository,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
@@ -46,11 +46,10 @@ pub struct CreateWordRequest {
 
 pub async fn create_word(
     s: Session,
+    Path(code): Path<String>,
     languages: LanguageRepository,
     words: WordRepository,
-    word_classes: WordClassRepository,
-    Path(code): Path<String>,
-    Json(req): Json<CreateWordRequest>,
+    Json(req): Json<CreateWord>,
 ) -> ApiResponse<Json<Word>> {
     req.validate()?;
 
@@ -60,28 +59,7 @@ pub async fn create_word(
 
     let language = languages.find_by_code(&code).await?;
 
-    let word_class_uuid = if let Some(ref abbr) = req.word_class {
-        let classes = word_classes.list_by_language(language.id).await?;
-        classes
-            .iter()
-            .find(|c| c.abbreviation == *abbr)
-            .map(|c| c.id)
-    } else {
-        None
-    };
-
-    let create = CreateWord {
-        language: language.id,
-        word_class: word_class_uuid,
-        word: req.word,
-        slug: req.slug,
-        definition: req.definition,
-        ipa: req.ipa,
-        notes: req.notes,
-        extra: req.extra,
-    };
-
-    words.create(requestor, create).await.map(Json)
+    words.create(requestor, language.id, req).await.map(Json)
 }
 
 pub async fn list_words(
@@ -95,11 +73,12 @@ pub async fn list_words(
     let language = languages.find_by_code(&code).await?;
 
     let word_class_uuid = if let Some(ref abbr) = query.word_class {
-        let classes = word_classes.list_by_language(language.id).await?;
-        classes
-            .iter()
-            .find(|c| c.abbreviation == *abbr)
-            .map(|c| c.id)
+        Some(
+            word_classes
+                .find_by_abbreviation(language.id, abbr)
+                .await?
+                .id,
+        )
     } else {
         None
     };
