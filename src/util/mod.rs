@@ -68,7 +68,17 @@ pub fn stable_hash(plaintext: &str) -> String {
     base64::prelude::BASE64_STANDARD.encode(result)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AppState {
     pub pool: sqlx::PgPool,
+    pub email_service: std::sync::Arc<dyn crate::email::EmailService>,
+}
+
+impl Clone for AppState {
+    fn clone(&self) -> Self {
+        Self {
+            pool: self.pool.clone(),
+            email_service: self.email_service.clone(),
+        }
+    }
 }

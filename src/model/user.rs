@@ -164,6 +164,8 @@ impl UserRepository {
         .fetch_one(&self.pool)
         .await?;
 
+        // send email verification
+
         Ok(result)
     }
 
@@ -203,7 +205,7 @@ impl UserRepository {
         let result = sqlx::query_as!(
             User,
             "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE email = $1",
-            email
+            email.to_lowercase()
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -384,7 +386,7 @@ impl UserRepository {
     }
 
     pub async fn email_exists(&self, email: &str) -> AppResult<bool> {
-        let result = sqlx::query!("SELECT 1 as exists FROM users WHERE email = $1", email)
+        let result = sqlx::query!("SELECT 1 as exists FROM users WHERE email = $1", email.to_lowercase())
             .fetch_optional(&self.pool)
             .await?;
 
@@ -419,6 +421,11 @@ impl UserRepository {
 
             if let Some(user) = result {
                 token_repo.invalidate(token.id).await?;
+
+                // log out all sessions
+                let session_repo = crate::model::session::SessionRepository::new(self.pool.clone());
+                session_repo.invalidate_all(user_id).await?;
+
                 tx.commit().await?;
                 Ok(user)
             } else {

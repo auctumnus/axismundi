@@ -11,6 +11,62 @@ db:
     @echo "Connection: postgres://user:password@localhost:5432/axismundi"
     @echo "To run the app locally: just run"
 
+export postgres_test_url := "postgres://user_test:password@localhost:2435/axismundi_test"
+
+test_teardown:
+    @echo "Tearing down test services..."
+    docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml down -v --timeout 0 2>/dev/null >/dev/null
+
+test flags="" cov="" $RUST_BACKTRACE="1":
+    #!/usr/bin/env sh
+    set -uo pipefail
+    echo "Bringing up test services..."
+    docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml up -d 2>/dev/null >/dev/null
+    if [ $? -ne 0 ]; then \
+        echo "Failed to start test services"; \
+        exit 1; \
+    fi
+    echo "Waiting for database to be ready..."
+    while ! docker exec axismundi-db-test pg_isready -U user_test -d axismundi_test >/dev/null 2>&1; do \
+        echo "Database is unavailable - sleeping"; \
+        sleep .5; \
+    done
+    echo "Database is ready!"
+    echo "Creating database..."
+    sqlx database create --database-url {{postgres_test_url}}
+    if [ $? -ne 0 ]; then \
+        echo "Failed to create database"; \
+        just test_teardown; \
+        exit 1; \
+    fi
+    echo "Running migrations..."
+    sqlx migrate run --database-url {{postgres_test_url}}
+    if [ $? -ne 0 ]; then \
+        echo "Failed to run migrations"; \
+        just test_teardown; \
+        exit 1; \
+    fi
+    echo "Running tests..."
+
+    if [ -z "{{cov}}" ]; then
+        DATABASE_URL={{postgres_test_url}} cargo test {{flags}}
+        return_code=$?
+    else
+        DATABASE_URL={{postgres_test_url}} cargo llvm-cov --ignore-filename-regex "nix/store" {{flags}}
+        return_code=$?
+    fi
+    just test_teardown
+    exit $return_code
+
+cov flags="":
+    just test "{{flags}}" cov="1"
+
+test-json:
+    just test covflags="--json --output-path cov.json"
+
+test-lcov:
+    just test covflags="--lcov --output-path lcov.info"
+
 db-migrate:
     sqlx migrate run
 
@@ -32,7 +88,7 @@ run:
     cargo run
 
 # Watch frontend for changes during development
-watch-frontend
+watch-frontend:
     cd frontend && bun run dev
 
 # Full development setup (database + backend + frontend watching)

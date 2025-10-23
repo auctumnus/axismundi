@@ -38,7 +38,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let app = create_router(pool);
+    let app_state = AppState {
+        pool: pool.clone(),
+        email_service: std::sync::Arc::new(email::ResendEmailService::new()),
+    };
+
+    let app = create_router(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], CONFIG.port));
     tracing::debug!("listening on {}", addr);
@@ -53,13 +58,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn create_router(pool: PgPool) -> Router {
+fn create_router(app_state: AppState) -> Router {
     Router::new()
         .nest("/api", controller::api::create_api_controller())
         .merge(controller::html::create_html_controller())
         .fallback(fallback)
         .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
-        .with_state(AppState { pool })
+        .with_state(app_state)
 }
 
 #[derive(Template)]
@@ -103,5 +108,41 @@ async fn fallback(req_headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
             );
             (StatusCode::NOT_FOUND, headers, "not found".to_owned())
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use axum::routing::RouterIntoService;
+
+    use super::*;
+
+    pub(crate) async fn test_app() -> Result<RouterIntoService<axum::body::Body>, sqlx::Error> {
+        let pool = PgPool::connect(&CONFIG.database_url).await?;
+        let email_service = std::sync::Arc::new(email::tests::MockEmailService::new());
+        let app_state = AppState { pool, email_service };
+        let app = create_router(app_state).into_service();
+
+        Ok(app)
+    }
+
+    pub(crate) async fn test_app_with_email_service(
+        email_service: &std::sync::Arc<dyn crate::email::EmailService>,
+    ) -> Result<RouterIntoService<axum::body::Body>, sqlx::Error> {
+        let pool = PgPool::connect(&CONFIG.database_url).await?;
+        let email_service = email_service.clone();
+        let app_state = AppState { pool, email_service };
+        let app = create_router(app_state).into_service();
+
+        Ok(app)
+    }
+
+    pub(crate) async fn response_to_value(body: axum::body::Body) -> serde_json::Value {
+        let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()
+    }
+
+    pub(crate) fn random_name() -> String {
+        format!("{}_{}", random_word::get(random_word::Lang::En), nanoid::nanoid!(4))
     }
 }

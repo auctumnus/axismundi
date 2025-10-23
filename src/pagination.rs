@@ -1,4 +1,8 @@
-use axum::{extract::FromRequestParts, http::{request::Parts, StatusCode}};
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+    response::{IntoResponse, Json},
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -20,10 +24,15 @@ pub struct PaginatedResponse<T> {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PaginatedRequest {
+    #[serde(default = "default_limit")]
     pub limit: PaginationSize,
     pub cursor: Option<Uuid>,
     #[serde(default)]
     pub direction: PaginationDirection,
+}
+
+fn default_limit() -> PaginationSize {
+    10
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -54,5 +63,11 @@ impl FromRequestParts<AppState> for PaginatedRequest {
         }
 
         Ok(paginated_request)
+    }
+}
+
+impl<T: Serialize> IntoResponse for PaginatedResponse<T> {
+    fn into_response(self) -> axum::response::Response {
+        Json(self).into_response()
     }
 }

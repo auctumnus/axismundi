@@ -49,6 +49,27 @@ pub struct AppConfig {
 }
 
 pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
+    if cfg!(test) {
+        // should match docker-compose.db.test.yml,
+        // docker-compose.minio.test.yml,
+        // and the justfile
+        return AppConfig {
+            database_url: "postgres://user_test:password@localhost:2435/axismundi_test"
+                .to_string(),
+            s3: S3Config {
+                bucket: "axismundi-test".to_string(),
+                region: "us-east-1".to_string(),
+                access_key: "minioadmin_test".to_string(),
+                secret_key: "minioadmin123_test".to_string(),
+                endpoint: "http://localhost:7000".to_string(),
+                public_url_base: Some("http://localhost:6060/axismundi-test".to_string()),
+            },
+            file_upload_limit_bytes: default_file_upload_limit(),
+            port: 3001,
+            // TODO: seems bad!
+            environment: Environment::Dev,
+        };
+    }
     let path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "config.json".to_string());

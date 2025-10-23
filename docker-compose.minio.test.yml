@@ -1,0 +1,48 @@
+# edits made here should be reflected in the justfile and src/config.rs
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: axismundi-minio-test
+    environment:
+      MINIO_ROOT_USER: minioadmin_test
+      MINIO_ROOT_PASSWORD: minioadmin123_test
+    ports:
+      - "7000:9000"
+      - "7001:9001"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: axismundi-nginx-test
+    ports:
+      - "6060:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - minio
+    restart: unless-stopped
+  
+  createbuckets:
+    image: minio/mc:latest
+    container_name: axismundi-createbuckets-test
+    environment:
+      MINIO_ROOT_USER: minioadmin_test
+      MINIO_ROOT_PASSWORD: minioadmin123_test
+      S3_BUCKET_NAME: axismundi-test
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      mc mb local/$$S3_BUCKET_NAME;
+      mc anonymous set download local/$$S3_BUCKET_NAME;
+      "
+    restart: on-failure

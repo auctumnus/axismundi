@@ -28,3 +28,8 @@ These abstract over the internal model handling, either through HTML or JSON.
 
 The frontend should be built with `just build`, which uses SWC to compile the Typescript files,
 and processes the CSS files with LightningCSS.
+
+### Testing
+
+We use integration testing with real Postgres and real MinIO, and a mocked email module. The justfile
+will just set this up for you so long as you have Docker (or some compatible runtime).

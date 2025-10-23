@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
 #[async_trait]
-pub trait EmailService: Send + Sync {
+pub trait EmailService: Send + Sync + std::fmt::Debug {
     async fn send_verification_email(
         &self,
         to: &str,
@@ -16,19 +16,19 @@ pub trait EmailService: Send + Sync {
     ) -> Result<(), Box<dyn std::error::Error>>;
 }
 
-// real email service (placeholder for now - add smtp/ses/sendgrid later)
-pub struct SmtpEmailService {
+#[derive(Debug, Clone)]
+pub struct ResendEmailService {
     // TODO: add smtp config
 }
 
-impl SmtpEmailService {
+impl ResendEmailService {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 #[async_trait]
-impl EmailService for SmtpEmailService {
+impl EmailService for ResendEmailService {
     async fn send_verification_email(
         &self,
         to: &str,
@@ -50,7 +50,11 @@ impl EmailService for SmtpEmailService {
     }
 }
 
-// mock email service for testing
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    // mock email service for testing
 #[derive(Clone, Debug)]
 pub struct SentEmail {
     pub to: String,
@@ -64,6 +68,7 @@ pub enum EmailType {
     PasswordReset,
 }
 
+#[derive(Debug, Clone)]
 pub struct MockEmailService {
     pub sent_emails: Arc<Mutex<Vec<SentEmail>>>,
 }
@@ -111,4 +116,5 @@ impl EmailService for MockEmailService {
         });
         Ok(())
     }
+}
 }

@@ -26,6 +26,7 @@
           extensions = [
             "rust-src"
             "rust-analyzer"
+            "llvm-tools-preview"
           ];
         };
 
@@ -36,6 +37,7 @@
           sqlx-cli
           minio-client
           just
+          cargo-llvm-cov
         ];
 
         buildInputs =
