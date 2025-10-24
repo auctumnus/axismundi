@@ -91,6 +91,8 @@ pub struct CreateUser {
 pub struct UpdateUser {
     #[validate(length(min = 2, max = 30), regex(path = USERNAME_REGEX))]
     pub username: Option<String>,
+    #[validate(email)]
+    pub email: Option<String>,
     #[validate(length(min = 2, max = 30))]
     pub display_name: Option<String>,
     #[validate(length(max = 1000))]
@@ -99,6 +101,14 @@ pub struct UpdateUser {
     pub pronouns: Option<String>,
     #[validate(regex(path = GENDER_REGEX))]
     pub gender: Option<String>,
+
+    #[validate(length(min = 8, max = 100))]
+    #[serde(skip_serializing)]
+    pub current_password: String,
+
+    #[validate(length(min = 8, max = 100))]
+    #[serde(skip_serializing)]
+    pub new_password: String,
 }
 
 #[derive(Deserialize)]
@@ -259,6 +269,22 @@ impl UserRepository {
             }
         }
 
+        let tokens = EmailVerificationTokenRepository::new(self.state.clone());
+        let tx = &mut self.state.pool.begin().await?;
+
+        // we have to handle sending the email outside of the tx
+        // otherwise the tx could be held open too long
+        let token = if let Some(email) = &updates.email {
+            if self.email_exists(email).await? {
+                return Err(bad_request("Email is in use"));
+            }
+
+            // changing email requires re-verification
+            Some(tokens.create(tx, id, email.to_lowercase()).await?)
+        } else {
+            None
+        };
+
         let result = sqlx::query_as!(
             User,
             r#"
@@ -279,8 +305,34 @@ impl UserRepository {
             updates.pronouns,
             updates.gender
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut **tx)
         .await?;
+
+        tx.commit().await?;
+
+        if let Some(token) = token {
+            let email = updates.email.unwrap();
+            if let Err(e) = tokens.send(id, &email, &token).await {
+                // Log the error but don't fail the update
+                // User exists with token, can implement resend endpoint later
+                tracing::error!(
+                    "Failed to send verification email to {}: {}",
+                    email,
+                    e
+                );
+            }
+            if let Err(e) = self.state.email_service.send_email_change_notification(
+                id,
+                &requestor.email,
+                &email,
+            ).await {
+                tracing::error!(
+                    "Failed to send email change notification to {}: {}",
+                    &requestor.email,
+                    e
+                );
+            }
+        }
 
         if let Some(user) = result {
             Ok(user)
@@ -435,15 +487,18 @@ impl UserRepository {
         if let Some(token) = token {
             let mut tx = self.state.pool.begin().await?;
             // verify user, invalidate token
+            // we set the email as well; this way, we can use email verification for
+            // email change
             let result = sqlx::query_as!(
                 User,
                 r#"
                 UPDATE users
-                SET verified_at = NOW()
+                SET verified_at = NOW(), email = $2
                 WHERE id = $1 AND verified_at IS NULL
                 RETURNING *
                 "#,
-                user_id
+                user_id,
+                email
             )
             .fetch_optional(&mut *tx)
             .await?;

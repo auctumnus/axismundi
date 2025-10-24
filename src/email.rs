@@ -17,6 +17,13 @@ pub trait EmailService: Send + Sync + std::fmt::Debug {
         to: &str,
         token: &str,
     ) -> AppResult<()>;
+
+    async fn send_email_change_notification(
+        &self,
+        user_id: uuid::Uuid,
+        old_email: &str,
+        new_email: &str,
+    ) -> AppResult<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +60,19 @@ impl EmailService for ResendEmailService {
         println!("would send password reset email to {to} (user {user_id}) with token {token}");
         Ok(())
     }
+
+    async fn send_email_change_notification(
+        &self,
+        user_id: uuid::Uuid,
+        old_email: &str,
+        new_email: &str,
+    ) -> AppResult<()> {
+        // TODO: implement actual email sending
+        println!(
+            "would send email change notification to {old_email} and {new_email} (user {user_id})"
+        );
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -74,6 +94,7 @@ pub(crate) mod tests {
     pub enum EmailType {
         Verification,
         PasswordReset,
+        EmailChangeNotification,
     }
 
     #[derive(Debug, Clone)]
@@ -124,6 +145,27 @@ pub(crate) mod tests {
                 to: to.to_string(),
                 email_type: EmailType::PasswordReset,
                 token: token.to_string(),
+                user_id,
+            });
+            Ok(())
+        }
+
+        async fn send_email_change_notification(
+            &self,
+            user_id: uuid::Uuid,
+            old_email: &str,
+            new_email: &str,
+        ) -> AppResult<()> {
+            self.sent_emails.lock().unwrap().push(SentEmail {
+                to: old_email.to_string(),
+                email_type: EmailType::EmailChangeNotification,
+                token: "".to_string(),
+                user_id,
+            });
+            self.sent_emails.lock().unwrap().push(SentEmail {
+                to: new_email.to_string(),
+                email_type: EmailType::EmailChangeNotification,
+                token: "".to_string(),
                 user_id,
             });
             Ok(())

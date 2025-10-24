@@ -575,12 +575,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_profile_picture_other_user() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
 
         let name1 = crate::tests::random_name();
         let name2 = crate::tests::random_name();
 
-        let token = make_authed_user(&name1, &app, Arc::new(MockEmailService::new())).await;
+        let token = make_authed_user(&name1, &app, email_service.clone()).await;
+
+        make_authed_user(&name2, &app, email_service).await;
 
         let image_bytes = include_bytes!("../../../resources/profile-picture.png");
 
@@ -607,12 +613,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_user_username() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
 
         let name = crate::tests::random_name();
         let email = format!("{}@example.com", name.clone());
 
-        let token = make_authed_user(&name, &app, Arc::new(MockEmailService::new())).await;
+        let token = make_authed_user(&name, &app, email_service.clone()).await;
 
         let new_display_name = "Updated Display Name";
 
@@ -644,12 +654,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_user_other_user() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
 
         let name1 = crate::tests::random_name();
         let name2 = crate::tests::random_name();
 
-        let token = make_authed_user(&name1, &app, Arc::new(MockEmailService::new())).await;
+        let token = make_authed_user(&name1, &app, email_service.clone()).await;
+
+        make_authed_user(&name2, &app, email_service).await;
 
         let body = json!({
             "display_name": "Should Not Work"
