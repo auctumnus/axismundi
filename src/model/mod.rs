@@ -1,9 +1,9 @@
 pub mod email_verification_tokens;
-pub mod languages;
 pub mod language_invites;
 pub mod language_permissions;
+pub mod languages;
 pub mod password_reset_tokens;
 pub mod sessions;
 pub mod users;
-pub mod words;
 pub mod word_classes;
+pub mod words;

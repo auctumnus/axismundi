@@ -6,7 +6,10 @@ use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, forbidden, not_found},
-    model::{language_invites::PermissionLevel, users::{User, UserSearch}},
+    model::{
+        language_invites::PermissionLevel,
+        users::{User, UserSearch},
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -219,7 +222,11 @@ impl LanguageRepository {
         Ok(result.is_some())
     }
 
-    pub async fn search(&self, pagination: PaginatedRequest, search: LanguageSearch) -> AppResult<PaginatedResponse<Language>> {
+    pub async fn search(
+        &self,
+        pagination: PaginatedRequest,
+        search: LanguageSearch,
+    ) -> AppResult<PaginatedResponse<Language>> {
         // search strategy:
         // - exact matches in name, code, owner are weighted highly
         // - otherwise, we use similarity on code, name, description
@@ -257,8 +264,8 @@ impl LanguageRepository {
             search.created_before,
             search.created_after,
             search.text_query,
-            pagination.limit as i64,
-            pagination.offset as i64
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
         )
         .fetch_all(&self.state.pool);
 
@@ -281,7 +288,7 @@ impl LanguageRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (pagination.offset as i64 + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -338,8 +345,8 @@ impl LanguageRepository {
             search.created_before,
             search.created_after,
             search.text_query,
-            pagination.limit as i64,
-            pagination.offset as i64
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
         )
         .fetch_all(&self.state.pool);
 
@@ -365,7 +372,7 @@ impl LanguageRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (pagination.offset as i64 + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,

@@ -152,7 +152,8 @@ pub(crate) mod tests {
             "{}_{}",
             random_word::get(random_word::Lang::En),
             nanoid::nanoid!(4)
-        ).to_lowercase()
+        )
+        .to_lowercase()
     }
 
     pub(crate) fn random_code() -> String {

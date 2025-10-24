@@ -3,46 +3,28 @@ use crate::{
     model::{
         languages::LanguageRepository,
         words::{CreateWord, UpdateWord, Word, WordRepository, WordSearch},
-        word_classes::WordClassRepository,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
 };
-use axum::{Json, extract::Path, http::StatusCode};
-use serde::Deserialize;
-use serde_json::Value as JsonValue;
+use axum::{
+    Json,
+    extract::Path,
+    http::StatusCode,
+    routing::{delete, get, post, put},
+};
 use validator::Validate;
+
+pub fn create_router() -> axum::Router<crate::util::AppState> {
+    axum::Router::new()
+        .route("/languages/{code}/words", post(create_word))
+        .route("/languages/{code}/words", get(search_words))
+        .route("/languages/{code}/words/{slug}", put(edit_word))
+        .route("/languages/{code}/words/{slug}", delete(delete_word))
+}
 
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
-
-#[derive(Deserialize)]
-pub struct WordSearchQuery {
-    pub q: Option<String>,
-    pub word_class: Option<String>,
-}
-
-#[derive(Deserialize, Validate)]
-pub struct CreateWordRequest {
-    pub word_class: Option<String>,
-
-    #[validate(length(min = 1, max = 200))]
-    pub word: String,
-
-    #[validate(length(min = 1, max = 200))]
-    pub slug: String,
-
-    #[validate(length(min = 1, max = 5000))]
-    pub definition: String,
-
-    #[validate(length(max = 200))]
-    pub ipa: Option<String>,
-
-    #[validate(length(max = 10000))]
-    pub notes: Option<String>,
-
-    pub extra: Option<JsonValue>,
-}
 
 pub async fn create_word(
     s: Session,
@@ -62,34 +44,16 @@ pub async fn create_word(
     words.create(requestor, language.id, req).await.map(Json)
 }
 
-pub async fn list_words(
+pub async fn search_words(
     languages: LanguageRepository,
     words: WordRepository,
-    word_classes: WordClassRepository,
     Path(code): Path<String>,
     pagination: PaginatedRequest,
-    axum::extract::Query(query): axum::extract::Query<WordSearchQuery>,
+    axum::extract::Query(query): axum::extract::Query<WordSearch>,
 ) -> PaginatedApiResponse<Word> {
     let language = languages.find_by_code(&code).await?;
 
-    let word_class_uuid = if let Some(ref abbr) = query.word_class {
-        Some(
-            word_classes
-                .find_by_abbreviation(language.id, abbr)
-                .await?
-                .id,
-        )
-    } else {
-        None
-    };
-
-    let search = WordSearch {
-        pagination,
-        text_query: query.q,
-        word_class: word_class_uuid,
-    };
-
-    words.search(language.id, search).await
+    words.search(language.id, pagination, query).await
 }
 
 pub async fn edit_word(

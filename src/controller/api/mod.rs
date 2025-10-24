@@ -1,12 +1,12 @@
 use axum::{
     Router,
-    routing::{delete, get, post, put},
 };
-
-use crate::util::AppState;
-
 #[cfg(not(test))]
 use governor::middleware::NoOpMiddleware;
+#[cfg(not(test))]
+use tower_governor::{governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor};
+
+use crate::util::AppState;
 #[cfg(not(test))]
 use std::sync::Arc;
 #[cfg(not(test))]
@@ -23,110 +23,25 @@ mod words;
 // pretty sure i need that there, actually...
 #[allow(clippy::needless_return)]
 pub fn create_api_controller() -> Router<AppState> {
+    let (secure_user_routes, normal_user_routes) = users::create_users_router();
+
     let secure_routes = Router::<AppState>::new()
-        // users
-        .route("/users", post(users::create_user))
-        .route("/users/{id}/verify", post(users::verify_user))
-        .route(
-            "/users/{username}/profile-picture",
-            put(users::upload_profile_picture),
-        )
-        // sessions
-        .route("/sessions", post(sessions::login))
-        .route("/sessions", get(sessions::get_sessions))
-        // languages
-        .route("/languages", post(languages::create_language))
-        .route("/languages/{code}", put(languages::edit_language))
-        .route("/languages/{code}", delete(languages::delete_language))
-        // language permissions
-        .route(
-            "/languages/{code}/permissions/{username}",
-            put(language_permissions::edit_user_permissions),
-        )
-        .route(
-            "/languages/{code}/permissions/{username}",
-            delete(language_permissions::delete_user_permissions),
-        )
-        // language invites
-        .route(
-            "/languages/{code}/invites/{username}",
-            post(language_invites::invite_user_to_language),
-        )
-        .route(
-            "/languages/{code}/invites/search",
-            get(language_invites::search_language_invites),
-        )
-        .route(
-            "/languages/{code}/invites/{username}",
-            get(language_invites::view_language_invite),
-        )
-        .route(
-            "/languages/{code}/invites/{username}",
-            delete(language_invites::delete_language_invite),
-        )
-        .route(
-            "/languages/{code}/accept-invite",
-            post(language_invites::accept_language_invite),
-        )
-        // word classes
-        .route(
-            "/languages/{code}/word-classes",
-            post(word_classes::create_word_class),
-        )
-        .route(
-            "/languages/{code}/word-classes/{abbreviation}",
-            put(word_classes::edit_word_class),
-        )
-        .route(
-            "/languages/{code}/word-classes/{abbreviation}",
-            delete(word_classes::delete_word_class),
-        )
-        // words
-        .route("/languages/{code}/words", post(words::create_word))
-        .route("/languages/{code}/words/{slug}", put(words::edit_word))
-        .route("/languages/{code}/words/{slug}", delete(words::delete_word));
+        .merge(sessions::create_router())
+        .merge(secure_user_routes);
 
     let normal_routes = Router::<AppState>::new()
-        // users
-        .route("/users/{username}", get(users::get_user))
-        .route("/users", get(users::search_users))
-        // languages
-        .route("/languages/{code}", get(languages::get_language))
-        .route("/languages", get(languages::list_languages))
-        .route(
-            "/languages/{code}/owner",
-            get(languages::get_language_owner),
-        )
-        .route(
-            "/languages/{code}/editors",
-            get(languages::get_language_editors),
-        )
-        .route(
-            "/languages/{code}/permissions",
-            get(language_permissions::get_language_permissions),
-        )
-        .route(
-            "/languages/{code}/permissions/{username}",
-            get(language_permissions::get_user_language_permissions),
-        )
-        // word classes
-        .route(
-            "/languages/{code}/word-classes",
-            get(word_classes::list_word_classes),
-        )
-        .route(
-            "/languages/{code}/word-classes/{abbreviation}",
-            get(word_classes::get_word_class),
-        )
-        // words
-        .route("/languages/{code}/words", get(words::list_words));
+        .merge(normal_user_routes)
+        .merge(languages::create_router())
+        .merge(language_permissions::create_router())
+        .merge(language_invites::create_router())
+        .merge(word_classes::create_router())
+        .merge(words::create_router());
 
     // Only apply rate limiting in non-test builds
     #[cfg(not(test))]
     {
         let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
         let normal_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::default());
-
         let secure_limiter = secure_governor.limiter().clone();
         let normal_limiter = normal_governor.limiter().clone();
         let interval = std::time::Duration::from_secs(60);
@@ -221,6 +136,18 @@ mod tests {
                 "multipart/form-data; boundary=----ThisWillNotAppearInAnActualBody",
             )
             .header("authorization", format!("Bearer {token}"))
+            .body(Body::from(body))
+            .unwrap()
+    }
+
+    pub(crate) fn put_multipart_no_auth(uri: &str, body: Vec<u8>) -> Request<Body> {
+        Request::builder()
+            .uri(format!("/api/{uri}"))
+            .method("PUT")
+            .header(
+                "content-type",
+                "multipart/form-data; boundary=----ThisWillNotAppearInAnActualBody",
+            )
             .body(Body::from(body))
             .unwrap()
     }
@@ -325,8 +252,10 @@ mod tests {
     }
 
     pub(crate) async fn print_response_body(response: axum::response::Response<Body>) {
-        let body_bytes = axum::body::to_bytes(response.into_body(), 10_000).await.unwrap();
+        let body_bytes = axum::body::to_bytes(response.into_body(), 10_000)
+            .await
+            .unwrap();
         let body_string = String::from_utf8_lossy(&body_bytes);
-        println!("{}", body_string);
+        println!("{body_string}");
     }
 }

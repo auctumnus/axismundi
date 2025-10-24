@@ -1,15 +1,29 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
-        languages::LanguageRepository,
         language_invites::PermissionLevel,
         language_permissions::{LanguagePermission, LanguagePermissionRepository},
+        languages::LanguageRepository,
         users::UserRepository,
     },
     util::extract_session::Session,
 };
 use axum::{Json, extract::Path, http::StatusCode};
 use serde::Deserialize;
+
+pub fn create_router() -> axum::Router<crate::util::AppState> {
+    axum::Router::new()
+        .route(
+            "/languages/{code}/permissions",
+            axum::routing::get(get_language_permissions),
+        )
+        .route(
+            "/languages/{code}/permissions/{username}",
+            axum::routing::get(get_user_language_permissions)
+                .put(edit_user_permissions)
+                .delete(delete_user_permissions),
+        )
+}
 
 type ApiResponse<T> = AppResult<T>;
 

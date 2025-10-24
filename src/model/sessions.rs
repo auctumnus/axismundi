@@ -4,7 +4,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::err::{AppError, AppResult};
-use crate::util::{ensure_verified, AppState};
+use crate::util::{AppState, ensure_verified};
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct SessionObj {

@@ -87,7 +87,12 @@ impl WordRepository {
         Self { state }
     }
 
-    pub async fn create(&self, requestor: &User, language: Uuid, word: CreateWord) -> AppResult<Word> {
+    pub async fn create(
+        &self,
+        requestor: &User,
+        language: Uuid,
+        word: CreateWord,
+    ) -> AppResult<Word> {
         word.validate()?;
 
         ensure_verified(requestor)?;
@@ -264,7 +269,7 @@ impl WordRepository {
                 word_classes
                     .find_by_abbreviation(word.language, abbreviation)
                     .await?
-                    .id
+                    .id,
             )
         } else {
             None
@@ -344,78 +349,99 @@ impl WordRepository {
     pub async fn search(
         &self,
         language: Uuid,
+        pagination: PaginatedRequest,
         search: WordSearch,
     ) -> AppResult<PaginatedResponse<Word>> {
-        use sqlx::QueryBuilder;
+        // search strategy:
+        // - exact matches in word, then definition, then notes
+        // - trigram similarity
 
-        // Build items query
-        let mut items_query: QueryBuilder<sqlx::Postgres> =
-            QueryBuilder::new("SELECT * FROM words WHERE language = ");
-        items_query.push_bind(language);
+        let word_class = if let Some(ref abbreviation) = search.word_class {
+            Some(
+                crate::model::word_classes::WordClassRepository::new(self.state.clone())
+                    .find_by_abbreviation(language, abbreviation)
+                    .await?
+                    .id,
+            )
+        } else {
+            None
+        };
 
-        if let Some(ref q) = search.text_query {
-            items_query.push(" AND (word % ");
-            items_query.push_bind(q);
-            items_query.push(" OR definition % ");
-            items_query.push_bind(q);
-            items_query.push(")");
-        }
+        let items_future = sqlx::query_as!(
+            Word,
+            r#"
+                SELECT *
+                FROM words
+                WHERE
+                language = $1
+                AND ($2::UUID IS NULL OR word_class = $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR created_at < $3)
+                AND ($4::TIMESTAMPTZ IS NULL OR created_at > $4)
+                ORDER BY (
+                    CASE
+                        WHEN $5::TEXT IS NOT NULL AND word ILIKE '%' || $5 || '%' THEN 100.0
+                        WHEN $5::TEXT IS NOT NULL AND definition ILIKE '%' || $5 || '%' THEN 90.0
+                        WHEN $5::TEXT IS NOT NULL AND notes ILIKE '%' || $5 || '%' THEN 80.0
+                        ELSE 0.0
+                    END +
+                    CASE WHEN $4::TEXT IS NOT NULL THEN
+                        similarity(word, $5) * 3.0 +
+                        COALESCE(similarity(definition, $5), 0.0) * 2.0 +
+                        COALESCE(similarity(notes, $5), 0.0) * 1.0
+                    ELSE 0.0
+                    END
+                ) DESC, id
+                LIMIT $6
+                OFFSET $7
+            "#,
+            language,
+            word_class,
+            search.created_before,
+            search.created_after,
+            search.text_query,
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
+        )
+        .fetch_all(&self.state.pool);
 
-        if let Some(word_class) = search.word_class {
-            items_query.push(" AND word_class = ");
-            items_query.push_bind(word_class);
-        }
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
+                FROM words
+                WHERE
+                language = $1
+                AND ($2::UUID IS NULL OR word_class = $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR created_at < $3)
+                AND ($4::TIMESTAMPTZ IS NULL OR created_at > $4)
+            "#,
+            language,
+            word_class,
+            search.created_before,
+            search.created_after
+        )
+        .fetch_one(&self.state.pool);
 
-        items_query.push(" ORDER BY word, id LIMIT ");
-        items_query.push_bind(search.pagination.limit);
-        items_query.push(" OFFSET ");
-        items_query.push_bind(search.pagination.offset);
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
-        // Build count query
-        let mut count_query: QueryBuilder<sqlx::Postgres> =
-            QueryBuilder::new("SELECT COUNT(*) FROM words WHERE language = ");
-        count_query.push_bind(language);
-
-        if let Some(ref q) = search.text_query {
-            count_query.push(" AND (word % ");
-            count_query.push_bind(q);
-            count_query.push(" OR definition % ");
-            count_query.push_bind(q);
-            count_query.push(")");
-        }
-
-        if let Some(word_class) = search.word_class {
-            count_query.push(" AND word_class = ");
-            count_query.push_bind(word_class);
-        }
-
-        let items_future = items_query
-            .build_query_as::<Word>()
-            .fetch_all(&self.state.pool);
-
-        let count_future = count_query
-            .build_query_scalar::<i64>()
-            .fetch_one(&self.state.pool);
-
-        let (items, total) = tokio::try_join!(items_future, count_future)?;
-
-        let has_more = (search.pagination.offset as i64 + items.len() as i64) < total;
+        let total = total_count.unwrap_or(0);
+        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
             total,
-            offset: search.pagination.offset,
-            limit: search.pagination.limit,
+            offset: pagination.offset,
+            limit: pagination.limit,
             has_more,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct WordSearch {
-    pub pagination: PaginatedRequest,
     pub text_query: Option<String>,
-    pub word_class: Option<Uuid>,
+    pub word_class: Option<String>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub created_after: Option<DateTime<Utc>>,
 }
 
 crate::util::repo_from_parts!(WordRepository);

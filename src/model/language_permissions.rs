@@ -158,7 +158,7 @@ impl LanguagePermissionRepository {
     pub async fn create_from_invite(
         &self,
         invite: &LanguageInvite,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> AppResult<LanguagePermission> {
         if invite.permissions == PermissionLevel::Owner {
             // transfer ownership

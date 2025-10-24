@@ -8,6 +8,12 @@ use axum_extra::extract::{CookieJar, cookie::Cookie};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub fn create_router() -> axum::Router<crate::util::AppState> {
+    axum::Router::new()
+        .route("/sessions", axum::routing::post(login))
+        .route("/sessions", axum::routing::get(get_sessions))
+}
+
 type ApiResponse<T> = AppResult<T>;
 
 #[derive(Deserialize)]

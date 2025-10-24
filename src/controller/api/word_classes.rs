@@ -10,7 +10,22 @@ use crate::{
     util::extract_session::Session,
 };
 use axum::{Json, extract::Path, http::StatusCode};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
+
+pub fn create_router() -> axum::Router<crate::util::AppState> {
+    axum::Router::new()
+        .route(
+            "/languages/{code}/word-classes",
+            axum::routing::post(create_word_class).get(list_word_classes),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}",
+            axum::routing::get(get_word_class)
+                .put(edit_word_class)
+                .delete(delete_word_class),
+        )
+}
 
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
@@ -18,6 +33,8 @@ type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
 #[derive(Deserialize)]
 pub struct SearchQuery {
     pub q: Option<String>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub created_after: Option<DateTime<Utc>>,
 }
 
 pub async fn create_word_class(
@@ -48,6 +65,8 @@ pub async fn list_word_classes(
     let search = WordClassSearch {
         pagination,
         text_query: query.q,
+        created_before: query.created_before,
+        created_after: query.created_after,
     };
 
     word_classes.search(language.id, search).await

@@ -305,7 +305,11 @@ impl UserRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn search(&self, pagination: PaginatedRequest, search: UserSearch) -> AppResult<PaginatedResponse<User>> {
+    pub async fn search(
+        &self,
+        pagination: PaginatedRequest,
+        search: UserSearch,
+    ) -> AppResult<PaginatedResponse<User>> {
         // search strategy:
         // - exact matches in username, display_name are weighted highly
         // - otherwise, we use similarity on username, display_name, description
@@ -341,8 +345,8 @@ impl UserRepository {
             search.created_before,
             search.created_after,
             search.text_query,
-            pagination.limit as i64,
-            pagination.offset as i64
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
         )
         .fetch_all(&self.state.pool);
 
@@ -364,7 +368,7 @@ impl UserRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (pagination.offset as i64 + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,

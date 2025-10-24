@@ -296,6 +296,16 @@ impl WordClassRepository {
             items_query.push_bind(q);
         }
 
+        if let Some(created_before) = search.created_before {
+            items_query.push(" AND created_at < ");
+            items_query.push_bind(created_before);
+        }
+
+        if let Some(created_after) = search.created_after {
+            items_query.push(" AND created_at > ");
+            items_query.push_bind(created_after);
+        }
+
         items_query.push(" ORDER BY name, id LIMIT ");
         items_query.push_bind(search.pagination.limit);
         items_query.push(" OFFSET ");
@@ -309,6 +319,16 @@ impl WordClassRepository {
         if let Some(ref q) = search.text_query {
             count_query.push(" AND name % ");
             count_query.push_bind(q);
+        }
+
+        if let Some(created_before) = search.created_before {
+            count_query.push(" AND created_at < ");
+            count_query.push_bind(created_before);
+        }
+
+        if let Some(created_after) = search.created_after {
+            count_query.push(" AND created_at > ");
+            count_query.push_bind(created_after);
         }
 
         let items_future = items_query
@@ -337,6 +357,8 @@ impl WordClassRepository {
 pub struct WordClassSearch {
     pub pagination: PaginatedRequest,
     pub text_query: Option<String>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub created_after: Option<DateTime<Utc>>,
 }
 
 crate::util::repo_from_parts!(WordClassRepository);

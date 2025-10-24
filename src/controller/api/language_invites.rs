@@ -1,13 +1,47 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult}, model::{
+    err::{AppResult, unauthorized_no_session},
+    model::{
         language_invites::{
-            CreateLanguageInvite, InviteSearch, LanguageInvite, LanguageInviteRepository, PermissionLevel
-        }, languages::LanguageRepository, users::UserRepository
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::extract_session::Session
+            CreateLanguageInvite, InviteSearch, LanguageInvite, LanguageInviteRepository,
+            PermissionLevel,
+        },
+        languages::LanguageRepository,
+        users::UserRepository,
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::extract_session::Session,
 };
-use axum::{extract::{Path, Query}, http::StatusCode, Json};
+use axum::{
+    Json,
+    extract::{Path, Query},
+    http::StatusCode,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+pub fn create_router() -> axum::Router<crate::util::AppState> {
+    axum::Router::new()
+        .route(
+            "/languages/{code}/invites/{username}",
+            axum::routing::post(invite_user_to_language),
+        )
+        .route(
+            "/languages/{code}/invites",
+            axum::routing::get(search_language_invites),
+        )
+        .route(
+            "/languages/{code}/invites/{username}",
+            axum::routing::get(view_language_invite),
+        )
+        .route(
+            "/languages/{code}/invites/{username}",
+            axum::routing::delete(delete_language_invite),
+        )
+        .route(
+            "/languages/{code}/accept-invite",
+            axum::routing::post(accept_language_invite),
+        )
+}
 
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
@@ -26,7 +60,10 @@ pub struct InviteResponse {
     pub accepted_at: Option<DateTime<Utc>>,
 }
 
-async fn map_invite_to_response(invite: LanguageInvite, users: UserRepository) -> ApiResponse<InviteResponse> {
+async fn map_invite_to_response(
+    invite: LanguageInvite,
+    users: UserRepository,
+) -> ApiResponse<InviteResponse> {
     let recipient = users.find_by_id(invite.recipient).await?;
     let sender = users.find_by_id(invite.sender).await?;
 
@@ -52,7 +89,11 @@ pub async fn invite_user_to_language(
 
     let invite = invites
         .create(
-            CreateLanguageInvite { language: code, recipient: username, permissions: req.permission_level },
+            CreateLanguageInvite {
+                language: code,
+                recipient: username,
+                permissions: req.permission_level,
+            },
             session.user_id,
         )
         .await?;
@@ -161,7 +202,9 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{delete_without_auth, make_authed_user, post, print_response_body};
+    use crate::controller::api::tests::{
+        delete_without_auth, make_authed_user, post, print_response_body,
+    };
     use crate::email::tests::MockEmailService;
 
     #[tokio::test]
@@ -277,8 +320,6 @@ mod tests {
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
-
-
 
     #[tokio::test]
     async fn test_accept_language_invite() {
@@ -663,10 +704,12 @@ mod tests {
         let owner_token = make_authed_user(&owner_username, &app, email_service.clone()).await;
 
         let invitee1_username = crate::tests::random_name();
-        let _invitee1_token = make_authed_user(&invitee1_username, &app, email_service.clone()).await;
+        let _invitee1_token =
+            make_authed_user(&invitee1_username, &app, email_service.clone()).await;
 
         let invitee2_username = crate::tests::random_name();
-        let _invitee2_token = make_authed_user(&invitee2_username, &app, email_service.clone()).await;
+        let _invitee2_token =
+            make_authed_user(&invitee2_username, &app, email_service.clone()).await;
 
         let lang_code = crate::tests::random_code();
         let body = json!({
@@ -709,7 +752,7 @@ mod tests {
         // search all invites
         let request = crate::controller::api::tests::get_with_auth(
             &owner_token,
-            &format!("languages/{lang_code}/invites/search"),
+            &format!("languages/{lang_code}/invites"),
         )
         .await;
         let response = app.call(request).await.unwrap();
@@ -722,7 +765,7 @@ mod tests {
         // search by recipient
         let request = crate::controller::api::tests::get_with_auth(
             &owner_token,
-            &format!("languages/{lang_code}/invites/search?recipient={invitee1_username}"),
+            &format!("languages/{lang_code}/invites?recipient={invitee1_username}"),
         )
         .await;
         let response = app.call(request).await.unwrap();
@@ -736,7 +779,7 @@ mod tests {
         // search by sender
         let request = crate::controller::api::tests::get_with_auth(
             &owner_token,
-            &format!("languages/{lang_code}/invites/search?sender={owner_username}"),
+            &format!("languages/{lang_code}/invites?sender={owner_username}"),
         )
         .await;
         let response = app.call(request).await.unwrap();

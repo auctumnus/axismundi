@@ -1,19 +1,38 @@
 use crate::{
-    err::{AppError, AppResult, bad_request},
-    model::users::{CreateUser, User, UserRepository, UserSearch},
+    err::{bad_request, AppError, AppResult},
+    model::users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session, s3::S3},
+    util::{extract_session::Session, s3::S3, AppState},
 };
 use axum::{
-    extract::{Path, Query, State}, http::StatusCode, Json
+    Json, Router,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    routing::{get, post, put},
 };
 use axum_extra::extract::Multipart;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
+
+pub fn create_users_router() -> (Router<AppState>, Router<AppState>) {
+    let secure_routes = Router::new()
+        .route("/users", post(create_user))
+        .route("/users/{id}/verify", post(verify_user))
+        .route("/users/{username}", put(update_user));
+
+    let default_routes = Router::new()
+        .route("/users/{username}", get(get_user))
+        .route("/users", get(search_users))
+        .route(
+            "/users/{username}/profile-picture",
+            put(upload_profile_picture),
+        );
+
+    (secure_routes, default_routes)
+}
 
 pub async fn get_user(
     State(state): State<AppState>,
@@ -31,6 +50,21 @@ pub async fn create_user(
 ) -> ApiResponse<Json<User>> {
     let user_repo = UserRepository::new(state);
     user_repo.create(user).await.map(Json)
+}
+
+pub async fn update_user(
+    s: Session,
+    users: UserRepository,
+    Path(username): Path<String>,
+    Json(update): Json<UpdateUser>,
+) -> ApiResponse<Json<User>> {
+    let Some(requestor) = s.user() else {
+        return Err(crate::err::unauthorized_no_session());
+    };
+
+    let user = users.find_by_username(&username).await?;
+
+    users.update(requestor, user.id, update).await.map(Json)
 }
 
 #[derive(Deserialize)]
@@ -119,7 +153,6 @@ pub async fn upload_profile_picture(
         None => Err(crate::err::not_found("User not found")),
     }
 }
-
 
 #[axum::debug_handler(state = AppState)]
 pub async fn search_users(
@@ -511,4 +544,121 @@ mod tests {
         let profile_picture_response = reqwest::get(profile_picture_url).await.unwrap();
         assert_eq!(profile_picture_response.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn test_upload_profile_picture_unauthorized() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let name = crate::tests::random_name();
+
+        let image_bytes = include_bytes!("../../../resources/profile-picture.png");
+
+        // Create proper multipart form data
+        let boundary = "----ThisWillNotAppearInAnActualBody";
+        let mut body = Vec::new();
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            b"Content-Disposition: form-data; name=\"image\"; filename=\"profile-picture.png\"\r\n",
+        );
+        body.extend_from_slice(b"Content-Type: image/png\r\n\r\n");
+        body.extend_from_slice(image_bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+        let request = crate::controller::api::tests::put_multipart_no_auth(
+            &format!("users/{name}/profile-picture"),
+            body,
+        );
+
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_upload_profile_picture_other_user() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let name1 = crate::tests::random_name();
+        let name2 = crate::tests::random_name();
+
+        let token = make_authed_user(&name1, &app, Arc::new(MockEmailService::new())).await;
+
+        let image_bytes = include_bytes!("../../../resources/profile-picture.png");
+
+        // Create proper multipart form data
+        let boundary = "----ThisWillNotAppearInAnActualBody";
+        let mut body = Vec::new();
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            b"Content-Disposition: form-data; name=\"image\"; filename=\"profile-picture.png\"\r\n",
+        );
+        body.extend_from_slice(b"Content-Type: image/png\r\n\r\n");
+        body.extend_from_slice(image_bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+        let request = crate::controller::api::tests::put_multipart(
+            &token,
+            &format!("users/{name2}/profile-picture"),
+            body,
+        );
+
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_update_user_username() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let name = crate::tests::random_name();
+        let email = format!("{}@example.com", name.clone());
+
+        let token = make_authed_user(&name, &app, Arc::new(MockEmailService::new())).await;
+
+        let new_display_name = "Updated Display Name";
+
+        let body = json!({
+            "display_name": new_display_name
+        });
+
+        let request = crate::controller::api::tests::put(&token, &format!("users/{name}"), &body);
+
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["display_name"], new_display_name);
+    }
+
+    #[tokio::test]
+    async fn test_update_user_unauthorized() {
+        let mut app = crate::tests::test_app().await.unwrap();
+        let name = crate::tests::random_name();
+        let body = json!({
+            "display_name": "Should Not Work"
+        });
+        let request =
+            crate::controller::api::tests::put_without_auth(&format!("users/{name}"), &body);
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_update_user_other_user() {
+        let mut app = crate::tests::test_app().await.unwrap();
+
+        let name1 = crate::tests::random_name();
+        let name2 = crate::tests::random_name();
+
+        let token = make_authed_user(&name1, &app, Arc::new(MockEmailService::new())).await;
+
+        let body = json!({
+            "display_name": "Should Not Work"
+        });
+
+        let request = crate::controller::api::tests::put(&token, &format!("users/{name2}"), &body);
+
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
 }

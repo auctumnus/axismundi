@@ -1,14 +1,37 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
-        language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch, UpdateLanguage}, users::{User, UserRepository, UserSearch}
+        language_permissions::LanguagePermissionRepository,
+        languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch, UpdateLanguage},
+        users::{User, UserRepository, UserSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::extract_session::Session,
+    util::{AppState, extract_session::Session},
 };
-use axum::{extract::{Path, Query}, http::StatusCode, Json};
+use axum::{
+    Json,
+    extract::{Path, Query},
+    http::StatusCode,
+};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
+
+pub fn create_router() -> axum::Router<AppState> {
+    axum::Router::new()
+        .route("/languages", axum::routing::post(create_language))
+        .route("/languages", axum::routing::get(list_languages))
+        .route("/languages/{code}", axum::routing::get(get_language))
+        .route("/languages/{code}", axum::routing::put(edit_language))
+        .route("/languages/{code}", axum::routing::delete(delete_language))
+        .route(
+            "/languages/{code}/owner",
+            axum::routing::get(get_language_owner),
+        )
+        .route(
+            "/languages/{code}/editors",
+            axum::routing::get(get_language_editors),
+        )
+}
 
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<Json<PaginatedResponse<T>>>;
@@ -116,7 +139,7 @@ pub async fn get_language_editors(
     languages: LanguageRepository,
     Path(code): Path<String>,
     pagination: PaginatedRequest,
-    Query(search): Query<UserSearch>
+    Query(search): Query<UserSearch>,
 ) -> PaginatedApiResponse<User> {
     let language = languages.find_by_code(&code).await?;
     languages
@@ -133,7 +156,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete_without_auth, get, make_authed_user, post, print_response_body, put_without_auth
+        delete_without_auth, get, make_authed_user, post, print_response_body, put_without_auth,
     };
     use crate::email::tests::MockEmailService;
 

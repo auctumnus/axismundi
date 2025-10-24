@@ -66,7 +66,9 @@ impl LanguageInviteRepository {
         let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
         let language = languages.find_by_code(&invite.language).await?;
 
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone());
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
         let sender_permission = permissions
             .find_by_user_and_language(sender, language.id)
             .await?;
@@ -90,13 +92,18 @@ impl LanguageInviteRepository {
             ));
         }
 
-        if !matches!(sender_permission.permission, PermissionLevel::Owner | PermissionLevel::Admin) {
+        if !matches!(
+            sender_permission.permission,
+            PermissionLevel::Owner | PermissionLevel::Admin
+        ) {
             return Err(crate::err::bad_request(
                 "only owners and admins can create language invites",
             ));
         }
 
-        if invite.permissions == PermissionLevel::Owner && sender_permission.permission != PermissionLevel::Owner {
+        if invite.permissions == PermissionLevel::Owner
+            && sender_permission.permission != PermissionLevel::Owner
+        {
             return Err(crate::err::bad_request(
                 "only owners can invite with owner permissions",
             ));
@@ -120,7 +127,11 @@ impl LanguageInviteRepository {
         Ok(result)
     }
 
-    async fn _find_by_language_and_recipient(&self, language: Uuid, recipient: Uuid) -> AppResult<Option<LanguageInvite>> {
+    async fn _find_by_language_and_recipient(
+        &self,
+        language: Uuid,
+        recipient: Uuid,
+    ) -> AppResult<Option<LanguageInvite>> {
         let result = sqlx::query_as!(
             LanguageInvite,
             r#"SELECT id, language, sender, recipient, permissions as "permissions: PermissionLevel", sent_at, accepted_at FROM language_invites WHERE language = $1 AND recipient = $2"#,
@@ -133,13 +144,26 @@ impl LanguageInviteRepository {
         Ok(result)
     }
 
-    pub async fn find_by_language_and_recipient(&self, requestor: &User, language: Uuid, recipient: Uuid) -> AppResult<LanguageInvite> {
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone());
+    pub async fn find_by_language_and_recipient(
+        &self,
+        requestor: &User,
+        language: Uuid,
+        recipient: Uuid,
+    ) -> AppResult<LanguageInvite> {
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
         let requestor_permission = permissions
-            .find_by_user_and_language(requestor.id, language).await?;
+            .find_by_user_and_language(requestor.id, language)
+            .await?;
 
         if let Some(requestor_permission) = &requestor_permission {
-            if requestor.id != recipient && !matches!(requestor_permission.permission, PermissionLevel::Owner | PermissionLevel::Admin) {
+            if requestor.id != recipient
+                && !matches!(
+                    requestor_permission.permission,
+                    PermissionLevel::Owner | PermissionLevel::Admin
+                )
+            {
                 return Err(crate::err::forbidden(
                     "only owners and admins can view language invites",
                 ));
@@ -152,7 +176,9 @@ impl LanguageInviteRepository {
             }
         }
 
-        let invite = self._find_by_language_and_recipient(language, recipient).await?;
+        let invite = self
+            ._find_by_language_and_recipient(language, recipient)
+            .await?;
 
         let Some(invite) = invite else {
             return Err(not_found("language invite"));
@@ -173,14 +199,26 @@ impl LanguageInviteRepository {
         result.ok_or_else(|| not_found(format!("language invite with id '{id}'")))
     }
 
-    pub async fn search(&self, requestor: &User, language: Uuid, pagination: PaginatedRequest, search: InviteSearch) -> AppResult<PaginatedResponse<LanguageInvite>> {
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone());
+    pub async fn search(
+        &self,
+        requestor: &User,
+        language: Uuid,
+        pagination: PaginatedRequest,
+        search: InviteSearch,
+    ) -> AppResult<PaginatedResponse<LanguageInvite>> {
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
         let requestor_permission = permissions
-            .find_by_user_and_language(requestor.id, language).await?;
+            .find_by_user_and_language(requestor.id, language)
+            .await?;
         let Some(requestor_permission) = requestor_permission else {
             return Err(not_found("requestor's language permission"));
         };
-        if !matches!(requestor_permission.permission, PermissionLevel::Owner | PermissionLevel::Admin) {
+        if !matches!(
+            requestor_permission.permission,
+            PermissionLevel::Owner | PermissionLevel::Admin
+        ) {
             return Err(crate::err::bad_request(
                 "only owners and admins can search language invites",
             ));
@@ -233,9 +271,10 @@ impl LanguageInviteRepository {
             search.created_after,
             search.accepted_before,
             search.accepted_after,
-            pagination.limit as i64,
-            pagination.offset as i64
-        ).fetch_all(&self.state.pool);
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
+        )
+        .fetch_all(&self.state.pool);
 
         let total_count = sqlx::query_scalar!(
             r#"
@@ -257,12 +296,13 @@ impl LanguageInviteRepository {
             search.created_after,
             search.accepted_before,
             search.accepted_after
-        ).fetch_one(&self.state.pool);
+        )
+        .fetch_one(&self.state.pool);
 
         let (invites, total_count) = tokio::try_join!(invites, total_count)?;
 
         let total_count = total_count.unwrap_or(0);
-        let has_more = (pagination.offset as i64 + invites.len() as i64) < total_count;
+        let has_more = (i64::from(pagination.offset) + invites.len() as i64) < total_count;
 
         Ok(PaginatedResponse {
             items: invites,
@@ -272,7 +312,7 @@ impl LanguageInviteRepository {
             has_more,
         })
     }
-    
+
     pub async fn accept(&self, requestor: &User, language: Uuid) -> AppResult<LanguageInvite> {
         let mut tx = self.state.pool.begin().await?;
 
@@ -291,25 +331,31 @@ impl LanguageInviteRepository {
         .await?;
 
         let Some(invite) = result else {
-            return Err(not_found("language invite does not exist or has already been accepted"));
+            return Err(not_found(
+                "language invite does not exist or has already been accepted",
+            ));
         };
 
         // apply permissions
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone());
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
 
-        permissions
-            .create_from_invite(&invite, &mut tx)
-            .await?;
+        permissions.create_from_invite(&invite, &mut tx).await?;
 
         tx.commit().await?;
         Ok(invite)
     }
 
     pub async fn delete(&self, requestor: &User, language: Uuid, recipient: Uuid) -> AppResult<()> {
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone());
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
 
         // fetch the invite first
-        let invite = self._find_by_language_and_recipient(language, recipient).await?;
+        let invite = self
+            ._find_by_language_and_recipient(language, recipient)
+            .await?;
 
         let Some(invite) = invite else {
             return Err(not_found("language invite"));
@@ -329,11 +375,12 @@ impl LanguageInviteRepository {
             .await?;
 
         if let Some(sender_permission) = sender_permission {
-            if !matches!(sender_permission.permission, PermissionLevel::Owner | PermissionLevel::Admin) {
+            if !matches!(
+                sender_permission.permission,
+                PermissionLevel::Owner | PermissionLevel::Admin
+            ) {
                 // kind of a lie, but we don't want to reveal the existence of the invite
-                return Err(crate::err::not_found(
-                    "language invite",
-                ));
+                return Err(crate::err::not_found("language invite"));
             }
 
             match sender_permission.permission {
