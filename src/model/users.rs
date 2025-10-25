@@ -104,11 +104,11 @@ pub struct UpdateUser {
 
     #[validate(length(min = 8, max = 100))]
     #[serde(skip_serializing)]
-    pub current_password: String,
+    pub current_password: Option<String>,
 
     #[validate(length(min = 8, max = 100))]
     #[serde(skip_serializing)]
-    pub new_password: String,
+    pub new_password: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -270,7 +270,7 @@ impl UserRepository {
         }
 
         let tokens = EmailVerificationTokenRepository::new(self.state.clone());
-        let tx = &mut self.state.pool.begin().await?;
+        let mut tx = self.state.pool.begin().await?;
 
         // we have to handle sending the email outside of the tx
         // otherwise the tx could be held open too long
@@ -280,7 +280,7 @@ impl UserRepository {
             }
 
             // changing email requires re-verification
-            Some(tokens.create(tx, id, email.to_lowercase()).await?)
+            Some(tokens.create(&mut tx, id, email.to_lowercase()).await?)
         } else {
             None
         };
@@ -305,7 +305,7 @@ impl UserRepository {
             updates.pronouns,
             updates.gender
         )
-        .fetch_optional(&mut **tx)
+        .fetch_optional(&mut *tx)
         .await?;
 
         tx.commit().await?;
