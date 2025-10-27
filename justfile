@@ -1,6 +1,10 @@
+default:
+  just --list
+
 # Start only the database
 db:
     @echo "Starting PostgreSQL database..."
+    pstree
     docker compose -f docker-compose.db.yml up -d
     @echo "Waiting for database to be ready..."
     @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
@@ -19,7 +23,6 @@ test_teardown:
 
 test flags="" cov="" $RUST_BACKTRACE="1":
     #!/usr/bin/env sh
-    set -uo pipefail
     echo "Bringing up test services..."
     docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml up -d 2>/dev/null >/dev/null
     if [ $? -ne 0 ]; then \
