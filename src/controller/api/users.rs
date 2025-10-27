@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use crate::{
     err::{bad_request, AppError, AppResult},
-    model::users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
+    model::{password_reset_tokens::PasswordResetTokenRepository, users::{CreateUser, UpdateUser, User, UserRepository, UserSearch}},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{extract_session::Session, s3::S3, AppState},
 };
@@ -12,6 +14,7 @@ use axum::{
 };
 use axum_extra::extract::Multipart;
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 type ApiResponse<T> = AppResult<T>;
@@ -21,7 +24,10 @@ pub fn create_users_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::new()
         .route("/users", post(create_user))
         .route("/users/{id}/verify", post(verify_user))
-        .route("/users/{username}", put(update_user));
+        .route("/users/{username}", put(update_user))
+        .route("/reset-password/start", post(reset_password_start))
+        .route("/reset-password/complete", post(reset_password_complete));
+
 
     let default_routes = Router::new()
         .route("/users/{username}", get(get_user))
@@ -154,7 +160,6 @@ pub async fn upload_profile_picture(
     }
 }
 
-#[axum::debug_handler(state = AppState)]
 pub async fn search_users(
     users: UserRepository,
     pagination: PaginatedRequest,
@@ -163,17 +168,67 @@ pub async fn search_users(
     users.search(pagination, query).await
 }
 
+#[derive(Deserialize)]
+struct ResetPasswordRequest {
+    email: String,
+}
+
+pub async fn reset_password_start(
+    users: UserRepository,
+    tokens: PasswordResetTokenRepository,
+    Json(ResetPasswordRequest { email }): Json<ResetPasswordRequest>,
+) -> ApiResponse<StatusCode> {
+    println!("started password reset");
+    let Ok(user) = users.find_by_email(&email).await else {
+        // Do not reveal whether the email exists
+        // TODO: consider adding a small delay here to mitigate timing attacks
+        return Ok(StatusCode::OK);
+    };
+    let token = tokens.create(user.id).await?;
+
+    println!("sending password reset email to {}", user.email);
+
+    if let Err(e) = tokens.send(user.id, &user.email, &token).await {
+        eprintln!("Failed to send password reset email: {e}");
+    }
+
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize)]
+struct PasswordResetComplete {
+    uuid: Uuid,
+    token: String,
+    new_password: String
+}
+
+pub async fn reset_password_complete(
+    users: UserRepository,
+    tokens: PasswordResetTokenRepository,
+    Json(PasswordResetComplete { uuid, token, new_password }): Json<PasswordResetComplete>,
+) -> ApiResponse<StatusCode> {
+    let Ok(user) = users.find_by_id(uuid).await else {
+        return Err(bad_request("Invalid or expired password reset token"));
+    };
+    let Some(token) = tokens.find_by_token(uuid, &token).await? else {
+        return Err(bad_request("Invalid or expired password reset token"));
+    };
+    users.reset_password(user.id, token, &new_password).await?;
+
+    Ok(StatusCode::OK)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use axum::http::StatusCode;
     use serde_json::json;
+    use sqlx::PgPool;
     use tower::Service;
 
     use crate::{
-        controller::api::tests::{get, make_authed_user, post_without_auth},
-        email::tests::MockEmailService,
+        config::CONFIG, controller::api::tests::{get, make_authed_user, post_without_auth}, create_router, email::{self, tests::MockEmailService}, util::AppState
     };
 
     #[tokio::test]
@@ -682,6 +737,236 @@ mod tests {
 
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_password_reset() {
+        // 1. setup app
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        // 2. create user and get session token
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        // verify we're logged in
+        let request = crate::controller::api::tests::get_with_auth(&token, "sessions").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 3. initiate password reset
+        email_service.clear(); // clear verification emails
+        let request = post_without_auth(
+            &format!("reset-password/start"),
+            json!({ "email": format!("{username}@example.com") }),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 4. find token and uuid in mock email service
+        let sent_emails = email_service.get_sent_emails();
+        let password_reset_email = sent_emails
+            .iter()
+            .find(|e| e.email_type == crate::email::tests::EmailType::PasswordReset)
+            .expect("password reset email should be sent");
+
+        let reset_token = password_reset_email.token.clone();
+        let user_id = password_reset_email.user_id;
+
+        // 5. complete password reset
+        let new_password = "NewSecurePassword123!";
+        let reset_body = json!({
+            "uuid": user_id,
+            "token": reset_token,
+            "new_password": new_password
+        });
+        let request = post_without_auth("reset-password/complete", reset_body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 6. verify old session is invalidated
+        let request = crate::controller::api::tests::get_with_auth(&token, "sessions").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // 7. login with new password
+        let login_body = json!({
+            "email": format!("{username}@example.com"),
+            "password": new_password
+        });
+        let request = post_without_auth("sessions", login_body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        let new_token = body.get("token").unwrap().as_str().unwrap();
+
+        // 8. verify we are the correct user by getting sessions
+        let request = crate::controller::api::tests::get_with_auth(new_token, "sessions").await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body.is_array());
+        assert!(!body.as_array().unwrap().is_empty());
+
+        // verify we can access our user profile
+        let request = get(&format!("users/{username}")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["username"], username);
+    }
+
+    #[tokio::test]
+    async fn test_password_reset_expired_token() {
+        // 1. setup app
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::tests::MockEmailService::new());
+        let app_state = AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let mut app = create_router(app_state).into_service();
+
+        // 2. create user
+        let username = crate::tests::random_name();
+        make_authed_user(&username, &app, email_service.clone()).await;
+
+        // 3. start password reset
+        email_service.clear();
+        let request = post_without_auth(
+            "reset-password/start",
+            json!({ "email": format!("{username}@example.com") }),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 4. get token from email
+        let sent_emails = email_service.get_sent_emails();
+        let password_reset_email = sent_emails
+            .iter()
+            .find(|e| e.email_type == crate::email::tests::EmailType::PasswordReset)
+            .expect("password reset email should be sent");
+
+        let reset_token = password_reset_email.token.clone();
+        let user_id = password_reset_email.user_id;
+
+        // 5. manually expire token in database
+        sqlx::query!(
+            "UPDATE password_reset_tokens SET expires_at = NOW() - INTERVAL '1 day' WHERE user_id = $1",
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // 6. attempt to complete password reset and expect failure
+        let reset_body = json!({
+            "uuid": user_id,
+            "token": reset_token,
+            "new_password": "NewSecurePassword123!"
+        });
+        let request = post_without_auth("reset-password/complete", reset_body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_password_reset_invalid_token() {
+        // 1. setup app
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::tests::MockEmailService::new());
+        let app_state = AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let mut app = create_router(app_state).into_service();
+
+        // 2. create user
+        let username = crate::tests::random_name();
+        make_authed_user(&username, &app, email_service.clone()).await;
+
+        // 3. start password reset
+        email_service.clear();
+        let request = post_without_auth(
+            "reset-password/start",
+            json!({ "email": format!("{username}@example.com") }),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 4. get token from email
+        let sent_emails = email_service.get_sent_emails();
+        let password_reset_email = sent_emails
+            .iter()
+            .find(|e| e.email_type == crate::email::tests::EmailType::PasswordReset)
+            .expect("password reset email should be sent");
+
+        let user_id = password_reset_email.user_id;
+
+        // 5. attempt to complete password reset with wrong token
+        let reset_body = json!({
+            "uuid": user_id,
+            "token": "totally_wrong_token_12345",
+            "new_password": "NewSecurePassword123!"
+        });
+        let request = post_without_auth("reset-password/complete", reset_body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_password_reset_wrong_uuid() {
+        // 1. setup app
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::tests::MockEmailService::new());
+        let app_state = AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let mut app = create_router(app_state).into_service();
+
+        // 2. create user
+        let username = crate::tests::random_name();
+        make_authed_user(&username, &app, email_service.clone()).await;
+
+        // 3. start password reset
+        email_service.clear();
+        let request = post_without_auth(
+            "reset-password/start",
+            json!({ "email": format!("{username}@example.com") }),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 4. get token from email
+        let sent_emails = email_service.get_sent_emails();
+        let password_reset_email = sent_emails
+            .iter()
+            .find(|e| e.email_type == crate::email::tests::EmailType::PasswordReset)
+            .expect("password reset email should be sent");
+
+        let reset_token = password_reset_email.token.clone();
+
+        // 5. attempt to complete password reset with wrong uuid
+        let wrong_uuid = uuid::Uuid::new_v4();
+        let reset_body = json!({
+            "uuid": wrong_uuid,
+            "token": reset_token,
+            "new_password": "NewSecurePassword123!"
+        });
+        let request = post_without_auth("reset-password/complete", reset_body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
 }

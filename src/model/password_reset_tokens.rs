@@ -29,10 +29,12 @@ impl PasswordResetTokenRepository {
         // https://thecopenhagenbook.com/server-side-tokens#storing-tokens
         let hashed_token = crate::util::stable_hash(&token);
 
-        sqlx::query!(
+        sqlx::query_as!(
+            PasswordResetToken,
             r#"
                 INSERT INTO password_reset_tokens (user_id, token, expires_at)
                 VALUES ($1, $2, $3)
+                RETURNING *
             "#,
             user_id,
             hashed_token,
@@ -44,15 +46,24 @@ impl PasswordResetTokenRepository {
         Ok(token)
     }
 
-    pub async fn find_by_token(&self, token: &str) -> AppResult<Option<PasswordResetToken>> {
+    pub async fn send(&self, user_id: Uuid, email: &str, token: &str) -> AppResult<()> {
+        self.state
+            .email_service
+            .send_password_reset_email(user_id, email, token)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn find_by_token(&self, user: Uuid, token: &str) -> AppResult<Option<PasswordResetToken>> {
         let hashed_token = stable_hash(token);
         let result = sqlx::query_as!(
             PasswordResetToken,
             r#"
                 SELECT * FROM password_reset_tokens
-                WHERE token = $1 AND invalidated_at IS NULL AND expires_at > NOW()
+                WHERE token = $1 AND user_id = $2 AND invalidated_at IS NULL AND expires_at > NOW()
             "#,
-            hashed_token
+            hashed_token,
+            user
         )
         .fetch_optional(&self.state.pool)
         .await?;
@@ -72,6 +83,31 @@ impl PasswordResetTokenRepository {
             token.id
         )
         .fetch_optional(&self.state.pool)
+        .await?;
+
+        if let Some(token) = result {
+            Ok(token)
+        } else {
+            Err(not_found("Token not found or already invalidated"))
+        }
+    }
+
+    pub async fn invalidate_with_tx(
+        &self,
+        token: PasswordResetToken,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<PasswordResetToken> {
+        let result = sqlx::query_as!(
+            PasswordResetToken,
+            r#"
+                UPDATE password_reset_tokens
+                SET invalidated_at = NOW()
+                WHERE id = $1 AND invalidated_at IS NULL
+                RETURNING *
+            "#,
+            token.id
+        )
+        .fetch_optional(&mut **tx)
         .await?;
 
         if let Some(token) = result {

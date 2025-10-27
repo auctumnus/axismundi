@@ -9,9 +9,7 @@ use validator::Validate;
 use zxcvbn::Score;
 
 use crate::{
-    err::{AppResult, bad_request, internal_error, not_found},
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, ensure_verified, re, s3::S3},
+    err::{bad_request, internal_error, not_found, AppResult}, model::password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}, pagination::{PaginatedRequest, PaginatedResponse}, util::{ensure_verified, re, s3::S3, AppState}
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -130,6 +128,25 @@ impl UserRepository {
         Self { state }
     }
 
+    async fn check_password_strength(&self, password: &str) -> AppResult<bool> {
+        // TODO: we should also check against haveibeenpwned
+        // TODO: use user_inputs from zxcvbn to improve strength checking
+
+        // https://thecopenhagenbook.com/password-authentication#input-validation
+        // > Use libraries like zxcvbn to check for weak passwords.
+        let password_strength = zxcvbn::zxcvbn(&password, &[]);
+        if password_strength.score() < Score::Three {
+            let message = password_strength
+                .feedback()
+                .map_or("password is too weak".to_string(), |reason| {
+                    format!("password is too weak: {reason}")
+                });
+
+            return Err(bad_request(message));
+        }
+        Ok(true)
+    }
+
     pub async fn create(&self, user: CreateUser) -> AppResult<User> {
         user.validate()?;
 
@@ -141,20 +158,7 @@ impl UserRepository {
             return Err(bad_request("email is in use"));
         }
 
-        // TODO: we should also check against haveibeenpwned
-
-        // https://thecopenhagenbook.com/password-authentication#input-validation
-        // > Use libraries like zxcvbn to check for weak passwords.
-        let password_strength = zxcvbn::zxcvbn(&user.password, &[]);
-        if password_strength.score() < Score::Three {
-            let message = password_strength
-                .feedback()
-                .map_or("password is too weak".to_string(), |reason| {
-                    format!("password is too weak: {reason}")
-                });
-
-            return Err(bad_request(message));
-        }
+        self.check_password_strength(&user.password).await?;
 
         let password_hash = crate::util::hash(&user.password)
             .map_err(|_| internal_error("password hash failed"))?;
@@ -666,6 +670,41 @@ impl UserRepository {
         .await?;
 
         Ok(result)
+    }
+
+    pub async fn reset_password(&self, user_id: Uuid, token: PasswordResetToken, new_password: &str) -> AppResult<()> {
+        self.check_password_strength(new_password).await?;
+        
+        let password_hash = crate::util::hash(new_password)
+            .map_err(|_| internal_error("password hash failed"))?;
+
+        let mut tx = self.state.pool.begin().await?;
+
+        // https://thecopenhagenbook.com/password-reset
+        // You should even mark a user's email address as verified if they reset their password.
+        let result = sqlx::query!(
+            r#"
+            UPDATE users
+            SET password_hash = $2, verified_at = NOW()
+            WHERE id = $1
+            "#,
+            user_id,
+            password_hash
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        // invalidate token
+        let tokens = PasswordResetTokenRepository::new(self.state.clone());
+        tokens.invalidate_with_tx(token, &mut tx).await?;
+
+        // Invalidate all existing sessions linked to the user when the user resets their password.
+        let sessions = crate::model::sessions::SessionRepository::new(self.state.clone());
+        sessions.invalidate_all_with_tx(user_id, &mut tx).await?;
+
+        tx.commit().await?;
+
+        Ok(())
     }
 }
 

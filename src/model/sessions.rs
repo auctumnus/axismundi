@@ -171,6 +171,21 @@ impl SessionRepository {
         Ok(())
     }
 
+    pub async fn invalidate_all_with_tx(&self, user_id: Uuid, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AppResult<()> {
+        sqlx::query!(
+            r#"
+                UPDATE user_sessions
+                SET invalidated_at = NOW()
+                WHERE user_id = $1 AND invalidated_at IS NULL
+            "#,
+            user_id
+        )
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn cleanup_expired(&self) -> AppResult<()> {
         sqlx::query!(
             r#"
