@@ -36,8 +36,11 @@
           bun
           sqlx-cli
           minio-client
-          just
+          just  
           cargo-llvm-cov
+          pstree
+          docker
+          docker-compose
         ];
 
         buildInputs =
@@ -56,27 +59,6 @@
         devShells.default = pkgs.mkShell {
           inherit nativeBuildInputs buildInputs;
         };
-
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "axismundi";
-          version = "0.1.0";
-
-          src = ./.;
-
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-
-          inherit nativeBuildInputs buildInputs;
-
-          meta = with pkgs.lib; {
-            description = "Axismundi web application";
-            license = licenses.mit;
-            maintainers = [ ];
-          };
-        };
-
-        packages.axismundi = self.packages.${system}.default;
       }
     );
 }
