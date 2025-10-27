@@ -320,6 +320,9 @@ mod tests {
         let request = post(&token, "languages", body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body["bookmark"].is_string());
+        let bookmark = body["bookmark"].as_str().unwrap();
 
         let update_body = json!({
             "name": "Updated Language Name",
@@ -332,6 +335,7 @@ mod tests {
 
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["name"], "Updated Language Name");
+        assert_eq!(body["bookmark"], bookmark);
     }
 
     #[tokio::test]

@@ -43,6 +43,7 @@ pub struct User {
     pub description: Option<String>,
     pub pronouns: Option<String>,
     pub gender: Option<String>,
+    pub bookmark: String,
 
     #[serde(
         rename(serialize = "profile_picture_url"),
@@ -158,18 +159,17 @@ impl UserRepository {
         let password_hash = crate::util::hash(&user.password)
             .map_err(|_| internal_error("password hash failed"))?;
 
-        // Begin transaction: create user + verification token atomically
+        // Begin transaction: create user + verification token + bookmark atomically
         let mut tx = self.state.pool.begin().await?;
 
-        let result = sqlx::query_as!(
-            User,
+        let user_result = sqlx::query!(
             r#"
                 insert into users
                     (username, email, password_hash, display_name, description,
                      pronouns, gender)
                 values
                     ($1, $2, $3, $4, $5, $6, $7)
-                returning *
+                returning id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
                 "#,
             user.username,
             user.email.to_lowercase(),
@@ -182,12 +182,38 @@ impl UserRepository {
         .fetch_one(&mut *tx)
         .await?;
 
+        // Generate and insert bookmark
+        let slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
+        sqlx::query!(
+            "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'user')",
+            slug,
+            user_result.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let result = User {
+            id: user_result.id,
+            username: user_result.username,
+            email: user_result.email,
+            password_hash: user_result.password_hash,
+            display_name: user_result.display_name,
+            description: user_result.description,
+            pronouns: user_result.pronouns,
+            gender: user_result.gender,
+            profile_picture_object_id: user_result.profile_picture_object_id,
+            verified_at: user_result.verified_at,
+            created_at: user_result.created_at,
+            updated_at: user_result.updated_at,
+            bookmark: slug,
+        };
+
         let token_repo = EmailVerificationTokenRepository::new(self.state.clone());
         let token = token_repo
             .create(&mut tx, result.id, result.email.clone())
             .await?;
 
-        // Commit transaction - both user and token are now persisted
+        // Commit transaction - user, bookmark, and token are now persisted
         tx.commit().await?;
 
         // Send email outside transaction - if this fails, token exists for retry/resend
@@ -207,7 +233,25 @@ impl UserRepository {
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
-            "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE id = $1",
+            r#"
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                WHERE users.id = $1
+            "#,
             id
         )
         .fetch_optional(&self.state.pool)
@@ -223,7 +267,25 @@ impl UserRepository {
     pub async fn find_by_username(&self, username: &str) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
-            "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE username = $1",
+            r#"
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                WHERE users.username = $1
+            "#,
             username
         )
         .fetch_optional(&self.state.pool)
@@ -239,7 +301,25 @@ impl UserRepository {
     pub async fn find_by_email(&self, email: &str) -> AppResult<User> {
         let result = sqlx::query_as!(
             User,
-            "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users WHERE email = $1",
+            r#"
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                WHERE users.email = $1
+            "#,
             email.to_lowercase()
         )
         .fetch_optional(&self.state.pool)
@@ -296,7 +376,7 @@ impl UserRepository {
                 gender = COALESCE($6, gender),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $1
-            RETURNING id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+            RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
             "#,
             id,
             updates.username,
@@ -370,26 +450,40 @@ impl UserRepository {
         let items_future = sqlx::query_as!(
             User,
             r#"
-                SELECT *
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
                 WHERE
-                ($1::BOOL IS NULL OR (verified_at IS NOT NULL) = $1)
-                AND ($2::TIMESTAMPTZ IS NULL OR created_at < $2)
-                AND ($3::TIMESTAMPTZ IS NULL OR created_at > $3)
+                ($1::BOOL IS NULL OR (users.verified_at IS NOT NULL) = $1)
+                AND ($2::TIMESTAMPTZ IS NULL OR users.created_at < $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR users.created_at > $3)
                 ORDER BY (
                     CASE
-                        WHEN $4::TEXT IS NOT NULL AND username ILIKE '%' || $4 || '%' THEN 100.0
-                        WHEN $4::TEXT IS NOT NULL AND display_name ILIKE '%' || $4 || '%' THEN 90.0
-                        WHEN $4::TEXT IS NOT NULL AND description ILIKE '%' || $4 || '%' THEN 80.0
+                        WHEN $4::TEXT IS NOT NULL AND users.username ILIKE '%' || $4 || '%' THEN 100.0
+                        WHEN $4::TEXT IS NOT NULL AND users.display_name ILIKE '%' || $4 || '%' THEN 90.0
+                        WHEN $4::TEXT IS NOT NULL AND users.description ILIKE '%' || $4 || '%' THEN 80.0
                         ELSE 0.0
                     END +
                     CASE WHEN $4::TEXT IS NOT NULL THEN
-                        similarity(username, $4) * 3.0 +
-                        COALESCE(similarity(display_name, $4), 0.0) * 2.0 +
-                        COALESCE(similarity(description, $4), 0.0) * 1.0
+                        similarity(users.username, $4) * 3.0 +
+                        COALESCE(similarity(users.display_name, $4), 0.0) * 2.0 +
+                        COALESCE(similarity(users.description, $4), 0.0) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, id
+                ) DESC, users.id
                 LIMIT $5
                 OFFSET $6
             "#,
@@ -434,7 +528,27 @@ impl UserRepository {
     pub async fn list(&self, limit: i64, offset: i64) -> AppResult<Vec<User>> {
         let result = sqlx::query_as!(
             User,
-            "SELECT id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+            r#"
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                ORDER BY users.created_at DESC
+                LIMIT $1
+                OFFSET $2
+            "#,
             limit,
             offset
         )
@@ -495,7 +609,7 @@ impl UserRepository {
                 UPDATE users
                 SET verified_at = NOW(), email = $2
                 WHERE id = $1 AND verified_at IS NULL
-                RETURNING *
+                RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
                 "#,
                 user_id,
                 email
@@ -543,7 +657,7 @@ impl UserRepository {
             SET profile_picture_object_id = $2,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $1
-            RETURNING id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
+            RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
             "#,
             user_id,
             Some(object_key)
@@ -556,3 +670,19 @@ impl UserRepository {
 }
 
 crate::util::repo_from_parts!(UserRepository);
+
+#[async_trait::async_trait]
+impl crate::model::bookmarks::ResolveBookmark for UserRepository {
+    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+        // api: /api/users/{username}
+        // web: /users/{username}
+        let user = self.find_by_id(item).await?;
+
+        let slug = match link_type {
+            crate::model::bookmarks::LinkType::Web => format!("/users/{}", user.username),
+            crate::model::bookmarks::LinkType::Api => format!("/api/users/{}", user.username),
+        };
+
+        Ok(slug)
+    }
+}

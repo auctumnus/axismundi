@@ -19,8 +19,9 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
         .route("/languages/{code}/words", post(create_word))
         .route("/languages/{code}/words", get(search_words))
-        .route("/languages/{code}/words/{slug}", put(edit_word))
-        .route("/languages/{code}/words/{slug}", delete(delete_word))
+        .route("/languages/{code}/words/{slug}/{lemma}", get(get_word))
+        .route("/languages/{code}/words/{slug}/{lemma}", put(edit_word))
+        .route("/languages/{code}/words/{slug}/{lemma}", delete(delete_word))
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -44,6 +45,18 @@ pub async fn create_word(
     words.create(requestor, language.id, req).await.map(Json)
 }
 
+pub async fn get_word(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
+) -> ApiResponse<Json<Word>> {
+    let language = languages.find_by_code(&code).await?;
+    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+
+    Ok(Json(word))
+}
+
 pub async fn search_words(
     languages: LanguageRepository,
     words: WordRepository,
@@ -60,7 +73,7 @@ pub async fn edit_word(
     s: Session,
     languages: LanguageRepository,
     words: WordRepository,
-    Path((code, slug)): Path<(String, String)>,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
     Json(updates): Json<UpdateWord>,
 ) -> ApiResponse<Json<Word>> {
     let Some(requestor) = s.user() else {
@@ -68,25 +81,24 @@ pub async fn edit_word(
     };
 
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug(language.id, &slug).await?;
 
-    words.update(requestor, word.id, updates).await.map(Json)
+    words.update_by_lemma(requestor, language.id, &slug, lemma, updates).await.map(Json)
 }
 
 pub async fn delete_word(
     s: Session,
     languages: LanguageRepository,
     words: WordRepository,
-    Path((code, slug)): Path<(String, String)>,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
 ) -> ApiResponse<StatusCode> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug(language.id, &slug).await?;
 
-    words.delete(requestor, word.id).await?;
+    words.delete_by_lemma(requestor, language.id, &slug, lemma).await?;
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -380,6 +392,9 @@ mod tests {
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body["bookmark"].is_string());
+        let bookmark = body["bookmark"].as_str().unwrap().to_string();
 
         let update_body = json!({
             "definition": "updated definition",
@@ -387,7 +402,7 @@ mod tests {
 
         let request = crate::controller::api::tests::put(
             &token,
-            &format!("languages/{lang_code}/words/test"),
+            &format!("languages/{lang_code}/words/test/1"),
             &update_body,
         );
         let response = app.call(request).await.unwrap();
@@ -395,6 +410,7 @@ mod tests {
 
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["definition"], "updated definition");
+        assert_eq!(body["bookmark"], bookmark);
     }
 
     #[tokio::test]
@@ -441,7 +457,7 @@ mod tests {
             "definition": "updated definition",
         });
 
-        let request = put_without_auth(&format!("languages/{lang_code}/words/test"), &update_body);
+        let request = put_without_auth(&format!("languages/{lang_code}/words/test/1"), &update_body);
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -489,7 +505,7 @@ mod tests {
 
         let request = crate::controller::api::tests::delete(
             &token,
-            &format!("languages/{lang_code}/words/test"),
+            &format!("languages/{lang_code}/words/test/1"),
         );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
@@ -536,7 +552,7 @@ mod tests {
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let request = delete_without_auth(&format!("languages/{lang_code}/words/test"));
+        let request = delete_without_auth(&format!("languages/{lang_code}/words/test/1"));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }

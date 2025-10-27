@@ -20,7 +20,7 @@ pub struct PaginatedResponse<T> {
     pub has_more: bool,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Default, Deserialize, Debug, Clone)]
 pub struct PaginatedRequest {
     #[serde(default = "default_limit")]
     pub limit: PaginationSize,

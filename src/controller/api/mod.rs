@@ -19,6 +19,7 @@ mod sessions;
 mod users;
 mod word_classes;
 mod words;
+mod bookmarks;
 
 // pretty sure i need that there, actually...
 #[allow(clippy::needless_return)]
@@ -31,6 +32,7 @@ pub fn create_api_controller() -> Router<AppState> {
 
     let normal_routes = Router::<AppState>::new()
         .merge(normal_user_routes)
+        .merge(bookmarks::create_router())
         .merge(languages::create_router())
         .merge(language_permissions::create_router())
         .merge(language_invites::create_router())

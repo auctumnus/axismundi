@@ -1,3 +1,4 @@
+use axum::http::request;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -20,6 +21,7 @@ pub struct Word {
     pub word_class: Option<Uuid>,
     pub word: String,
     pub slug: String,
+    pub lemma: i32,
     pub definition: String,
     pub ipa: Option<String>,
     pub notes: Option<String>,
@@ -28,6 +30,7 @@ pub struct Word {
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
     pub updated_by: Uuid,
+    pub bookmark: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -37,10 +40,6 @@ pub struct CreateWord {
 
     #[validate(length(min = 1, max = 10))]
     pub word_class: String,
-
-    // TODO: implement slug generation
-    #[validate(length(min = 1, max = 200))]
-    pub slug: String,
 
     #[validate(length(min = 1, max = 5000))]
     pub definition: String,
@@ -62,10 +61,6 @@ pub struct UpdateWord {
     #[validate(length(min = 1, max = 10))]
     pub word_class: Option<String>,
 
-    // TODO: implement slug generation on word update
-    #[validate(length(min = 1, max = 200))]
-    pub slug: Option<String>,
-
     #[validate(length(min = 1, max = 5000))]
     pub definition: Option<String>,
 
@@ -82,9 +77,35 @@ pub struct WordRepository {
     state: AppState,
 }
 
+fn nfkc(input: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    input.nfkc().collect()
+}
+
 impl WordRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
+    }
+
+    pub fn make_slug(&self, word: &str) -> String {
+        nfkc(word)
+    }
+
+    pub async fn make_slug_and_lemma(&self, language: Uuid, word: &str) -> AppResult<(String, i32)> {
+        let slug = nfkc(word);
+        let number_slugs = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*) FROM words
+                WHERE language = $1 AND slug = $2
+            "#,
+            language,
+            slug
+        )
+        .fetch_one(&self.state.pool)
+        .await?;
+
+        let lemma = (number_slugs.unwrap_or(1) as i32) + 1;
+        Ok((slug, lemma))
     }
 
     pub async fn create(
@@ -117,135 +138,142 @@ impl WordRepository {
             .find_by_abbreviation(language, &word.word_class)
             .await?;
 
-        let result = sqlx::query_as!(
-            Word,
+        let (slug, lemma) = self.make_slug_and_lemma(language, &word.word).await?;
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let word_result = sqlx::query!(
             r#"
-                INSERT INTO words (language, word_class, word, slug, definition, ipa, notes, extra, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
-                RETURNING *
+                INSERT INTO words (language, word_class, word, slug, lemma, definition, ipa, notes, extra, created_by, updated_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+                RETURNING id, language, word_class, word, slug, lemma, definition, ipa, notes, extra, created_by, updated_by, created_at, updated_at
             "#,
             language,
             word_class.id,
             word.word,
-            word.slug,
+            slug,
+            lemma,
             word.definition,
             word.ipa,
             word.notes,
             word.extra,
             requestor.id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
+
+        // Generate and insert bookmark
+        let bookmark_slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
+        sqlx::query!(
+            "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'lemma')",
+            bookmark_slug,
+            word_result.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        let result = Word {
+            id: word_result.id,
+            language: word_result.language,
+            word_class: word_result.word_class,
+            word: word_result.word,
+            slug: word_result.slug,
+            lemma: word_result.lemma,
+            definition: word_result.definition,
+            ipa: word_result.ipa,
+            notes: word_result.notes,
+            extra: word_result.extra,
+            created_at: word_result.created_at,
+            updated_at: word_result.updated_at,
+            created_by: word_result.created_by,
+            updated_by: word_result.updated_by,
+            bookmark: bookmark_slug,
+        };
 
         Ok(result)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Word> {
-        let result = sqlx::query_as!(Word, "SELECT * FROM words WHERE id = $1", id)
-            .fetch_optional(&self.state.pool)
-            .await?;
-
-        result.ok_or_else(|| not_found(format!("word with id '{id}'")))
-    }
-
-    pub async fn find_by_slug(&self, language: Uuid, slug: &str) -> AppResult<Word> {
         let result = sqlx::query_as!(
             Word,
-            "SELECT * FROM words WHERE language = $1 AND slug = $2",
-            language,
-            slug
+            r#"
+                SELECT
+                    words.id,
+                    words.language,
+                    words.word_class,
+                    words.word,
+                    words.slug,
+                    words.lemma,
+                    words.definition,
+                    words.ipa,
+                    words.notes,
+                    words.extra,
+                    words.created_at,
+                    words.updated_at,
+                    words.created_by,
+                    words.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM words
+                LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                WHERE words.id = $1
+            "#,
+            id
         )
         .fetch_optional(&self.state.pool)
         .await?;
 
-        result.ok_or_else(|| not_found(format!("word with slug '{slug}'")))
+        result.ok_or_else(|| not_found(format!("word with id '{id}'")))
     }
 
-    pub async fn list_by_language(
+    pub async fn find_by_slug_and_lemma(
         &self,
+        requestor: Option<&User>,
         language: Uuid,
-        limit: i64,
-        offset: i64,
-    ) -> AppResult<Vec<Word>> {
+        slug: &str,
+        lemma: i32,
+    ) -> AppResult<Word> {
         let result = sqlx::query_as!(
             Word,
-            "SELECT * FROM words WHERE language = $1 ORDER BY word LIMIT $2 OFFSET $3",
-            language,
-            limit,
-            offset
+            r#"
+                SELECT
+                    words.id,
+                    words.language,
+                    words.word_class,
+                    words.word,
+                    words.slug,
+                    words.lemma,
+                    words.definition,
+                    words.ipa,
+                    words.notes,
+                    words.extra,
+                    words.created_at,
+                    words.updated_at,
+                    words.created_by,
+                    words.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM words
+                LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                WHERE words.slug = $1 AND words.lemma = $2 AND words.language = $3
+            "#,
+            slug,
+            lemma,
+            language
         )
-        .fetch_all(&self.state.pool)
+        .fetch_optional(&self.state.pool)
         .await?;
 
-        Ok(result)
+        result.ok_or_else(|| not_found(format!("word with slug '{slug}' and lemma '{lemma}'")))
     }
 
-    pub async fn search_by_word(
-        &self,
-        language: Uuid,
-        query: &str,
-        limit: i64,
-    ) -> AppResult<Vec<Word>> {
-        let search_pattern = format!("%{query}%");
-        let result = sqlx::query_as!(
-            Word,
-            "SELECT * FROM words WHERE language = $1 AND word ILIKE $2 ORDER BY word LIMIT $3",
-            language,
-            search_pattern,
-            limit
-        )
-        .fetch_all(&self.state.pool)
-        .await?;
-
-        Ok(result)
-    }
-
-    pub async fn search_by_definition(
-        &self,
-        language: Uuid,
-        query: &str,
-        limit: i64,
-    ) -> AppResult<Vec<Word>> {
-        let search_pattern = format!("%{query}%");
-        let result = sqlx::query_as!(
-            Word,
-            "SELECT * FROM words WHERE language = $1 AND definition ILIKE $2 ORDER BY word LIMIT $3",
-            language,
-            search_pattern,
-            limit
-        )
-        .fetch_all(&self.state.pool)
-        .await?;
-
-        Ok(result)
-    }
-
-    pub async fn list_by_word_class(
-        &self,
-        word_class: Uuid,
-        limit: i64,
-        offset: i64,
-    ) -> AppResult<Vec<Word>> {
-        let result = sqlx::query_as!(
-            Word,
-            "SELECT * FROM words WHERE word_class = $1 ORDER BY word LIMIT $2 OFFSET $3",
-            word_class,
-            limit,
-            offset
-        )
-        .fetch_all(&self.state.pool)
-        .await?;
-
-        Ok(result)
-    }
-
-    pub async fn update(&self, requestor: &User, id: Uuid, updates: UpdateWord) -> AppResult<Word> {
+    pub async fn update_by_lemma(&self, requestor: &User, language: Uuid, slug: &str, lemma: i32, updates: UpdateWord) -> AppResult<Word> {
         updates.validate()?;
 
         ensure_verified(requestor)?;
 
         // get the word to find its language
-        let word = self.find_by_id(id).await?;
+        let word = self.find_by_slug_and_lemma(Some(requestor), language, slug, lemma).await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
@@ -275,6 +303,32 @@ impl WordRepository {
             None
         };
 
+        let mut tx = self.state.pool.begin().await?;
+
+        // if slug is the same, we don't need to update the lemma
+        // buuut if the slug is changing, we need to change the lemmata of all words with the same slug
+        let (slug, lemma) = if let Some(w) = updates.word.as_ref() {
+            let original_lemma = word.lemma;
+            let (new_slug, lemma) = self.make_slug_and_lemma(word.language, w).await?;
+            sqlx::query!(
+                r#"
+                    UPDATE words
+                    SET lemma = lemma - 1
+                    WHERE language = $1 AND slug = $2 AND lemma > $3
+                "#,
+                word.language,
+                word.slug,
+                original_lemma
+            )
+            .execute(&mut *tx)
+            .await?;
+
+            (Some(new_slug), Some(lemma))
+        } else {
+            (None, None)
+        };
+
+
         let result = sqlx::query_as!(
             Word,
             r#"
@@ -287,31 +341,35 @@ impl WordRepository {
                     notes = COALESCE($7, notes),
                     extra = COALESCE($8, extra),
                     updated_by = $9,
-                    updated_at = CURRENT_TIMESTAMP
+                    updated_at = CURRENT_TIMESTAMP,
+                    lemma = COALESCE($10, lemma)
                 WHERE id = $1
-                RETURNING *
+                RETURNING words.*, (SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma') as "bookmark!"
             "#,
-            id,
+            word.id,
             word_class,
             updates.word,
-            updates.slug,
+            slug,
             updates.definition,
             updates.ipa,
             updates.notes,
             updates.extra,
-            requestor.id
+            requestor.id,
+            lemma,
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut *tx)
         .await?;
 
-        result.ok_or_else(|| not_found(format!("word with id '{id}'")))
+        tx.commit().await?;
+
+        result.ok_or_else(|| not_found(format!("word with id '{}'", word.id)))
     }
 
-    pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
+    pub async fn delete_by_lemma(&self, requestor: &User, language: Uuid, slug: &str, lemma: i32) -> AppResult<bool> {
         ensure_verified(requestor)?;
 
         // get the word to find its language
-        let word = self.find_by_id(id).await?;
+        let word = self.find_by_slug_and_lemma(Some(requestor), language, slug, lemma).await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
@@ -328,24 +386,13 @@ impl WordRepository {
             return Err(bad_request("viewers cannot delete words"));
         }
 
-        let result = sqlx::query!("DELETE FROM words WHERE id = $1", id)
+        let result = sqlx::query!("DELETE FROM words WHERE id = $1", word.id)
             .execute(&self.state.pool)
             .await?;
 
         Ok(result.rows_affected() > 0)
     }
-
-    pub async fn count_by_language(&self, language: Uuid) -> AppResult<i64> {
-        let result = sqlx::query!(
-            "SELECT COUNT(*) as count FROM words WHERE language = $1",
-            language
-        )
-        .fetch_one(&self.state.pool)
-        .await?;
-
-        Ok(result.count.unwrap_or(0))
-    }
-
+    
     pub async fn search(
         &self,
         language: Uuid,
@@ -370,34 +417,39 @@ impl WordRepository {
         let items_future = sqlx::query_as!(
             Word,
             r#"
-                SELECT *
+                SELECT
+                    words.*,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM words
+                LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 WHERE
-                language = $1
-                AND ($2::UUID IS NULL OR word_class = $2)
-                AND ($3::TIMESTAMPTZ IS NULL OR created_at < $3)
-                AND ($4::TIMESTAMPTZ IS NULL OR created_at > $4)
+                words.language = $1
+                AND ($2::UUID IS NULL OR words.word_class = $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR words.created_at < $3)
+                AND ($4::TIMESTAMPTZ IS NULL OR words.created_at > $4)
+                AND ($5::TEXT IS NULL OR words.slug = $5)
                 ORDER BY (
                     CASE
-                        WHEN $5::TEXT IS NOT NULL AND word ILIKE '%' || $5 || '%' THEN 100.0
-                        WHEN $5::TEXT IS NOT NULL AND definition ILIKE '%' || $5 || '%' THEN 90.0
-                        WHEN $5::TEXT IS NOT NULL AND notes ILIKE '%' || $5 || '%' THEN 80.0
+                        WHEN $6::TEXT IS NOT NULL AND words.word ILIKE '%' || $6 || '%' THEN 100.0
+                        WHEN $6::TEXT IS NOT NULL AND words.definition ILIKE '%' || $6 || '%' THEN 90.0
+                        WHEN $6::TEXT IS NOT NULL AND words.notes ILIKE '%' || $6 || '%' THEN 80.0
                         ELSE 0.0
                     END +
-                    CASE WHEN $4::TEXT IS NOT NULL THEN
-                        similarity(word, $5) * 3.0 +
-                        COALESCE(similarity(definition, $5), 0.0) * 2.0 +
-                        COALESCE(similarity(notes, $5), 0.0) * 1.0
+                    CASE WHEN $6::TEXT IS NOT NULL THEN
+                        similarity(words.word, $6) * 3.0 +
+                        COALESCE(similarity(words.definition, $6), 0.0) * 2.0 +
+                        COALESCE(similarity(words.notes, $6), 0.0) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, id
-                LIMIT $6
-                OFFSET $7
+                ) DESC, words.id
+                LIMIT $7
+                OFFSET $8
             "#,
             language,
             word_class,
             search.created_before,
             search.created_after,
+            search.exact_slug,
             search.text_query,
             i64::from(pagination.limit),
             i64::from(pagination.offset)
@@ -413,11 +465,13 @@ impl WordRepository {
                 AND ($2::UUID IS NULL OR word_class = $2)
                 AND ($3::TIMESTAMPTZ IS NULL OR created_at < $3)
                 AND ($4::TIMESTAMPTZ IS NULL OR created_at > $4)
+                AND ($5::TEXT IS NULL OR slug = $5)
             "#,
             language,
             word_class,
             search.created_before,
-            search.created_after
+            search.created_after,
+            search.exact_slug,
         )
         .fetch_one(&self.state.pool);
 
@@ -436,12 +490,38 @@ impl WordRepository {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 pub struct WordSearch {
     pub text_query: Option<String>,
+    pub exact_slug: Option<String>,
     pub word_class: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
 }
 
 crate::util::repo_from_parts!(WordRepository);
+
+#[async_trait::async_trait]
+impl crate::model::bookmarks::ResolveBookmark for WordRepository {
+    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+        // api: /api/languages/{code}/words/{slug}
+        // web: /languages/{code}/words/{slug}
+        let word = self.find_by_id(item).await?;
+
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_id(word.language).await?;
+
+        let slug = match link_type {
+            crate::model::bookmarks::LinkType::Web => format!(
+                "/languages/{}/words/{}/{}",
+                language.code, word.slug, word.lemma
+            ),
+            crate::model::bookmarks::LinkType::Api => format!(
+                "/api/languages/{}/words/{}/{}",
+                language.code, word.slug, word.lemma
+            ),
+        };
+
+        Ok(slug)
+    }
+}

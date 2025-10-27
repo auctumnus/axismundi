@@ -20,6 +20,7 @@ create table words (
 
     word text not null,
     slug text not null,
+    lemma integer not null default 0,
     definition text not null,
     ipa text,
     notes text,

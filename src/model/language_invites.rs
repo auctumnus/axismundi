@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Type};
@@ -5,6 +6,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::err::{AppResult, not_found};
+use crate::model::bookmarks::{LinkType, ResolveBookmark};
 use crate::model::users::User;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::util::AppState;
@@ -413,6 +415,34 @@ impl LanguageInviteRepository {
             .await?;
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl ResolveBookmark for LanguageInviteRepository {
+    async fn resolve_bookmark(&self, item: Uuid, link_type: LinkType) -> AppResult<String> {
+        // api: /api/languages/{code}/invites/{username}
+        // web: /languages/{code}/invites/{username}
+        let invite = self.find_by_id(item).await?;
+
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_id(invite.language).await?;
+
+        let users = crate::model::users::UserRepository::new(self.state.clone());
+        let recipient = users.find_by_id(invite.recipient).await?;
+
+        let slug = match link_type {
+            LinkType::Web => format!(
+                "/languages/{}/invites/{}",
+                language.code, recipient.username
+            ),
+            LinkType::Api => format!(
+                "/api/languages/{}/invites/{}",
+                language.code, recipient.username
+            ),
+        };
+        
+        Ok(slug)
     }
 }
 

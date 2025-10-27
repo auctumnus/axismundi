@@ -21,6 +21,7 @@ pub struct WordClass {
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
     pub updated_by: Uuid,
+    pub bookmark: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -102,28 +103,71 @@ impl WordClassRepository {
             ));
         }
 
-        let result = sqlx::query_as!(
-            WordClass,
+        let mut tx = self.state.pool.begin().await?;
+
+        let wc_result = sqlx::query!(
             r#"
                 INSERT INTO word_classes (language, name, abbreviation, created_by, updated_by)
                 VALUES ($1, $2, $3, $4, $4)
-                RETURNING *
+                RETURNING id, language, name, abbreviation, created_by, updated_by, created_at, updated_at
             "#,
             language.id,
             word_class.name,
             word_class.abbreviation,
             requestor.id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
+
+        // Generate and insert bookmark
+        let slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
+        sqlx::query!(
+            "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'word_class')",
+            slug,
+            wc_result.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        let result = WordClass {
+            id: wc_result.id,
+            language: wc_result.language,
+            name: wc_result.name,
+            abbreviation: wc_result.abbreviation,
+            created_at: wc_result.created_at,
+            updated_at: wc_result.updated_at,
+            created_by: wc_result.created_by,
+            updated_by: wc_result.updated_by,
+            bookmark: slug,
+        };
 
         Ok(result)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<WordClass> {
-        let result = sqlx::query_as!(WordClass, "SELECT * FROM word_classes WHERE id = $1", id)
-            .fetch_optional(&self.state.pool)
-            .await?;
+        let result = sqlx::query_as!(
+            WordClass,
+            r#"
+                SELECT
+                    word_classes.id,
+                    word_classes.language,
+                    word_classes.name,
+                    word_classes.abbreviation,
+                    word_classes.created_at,
+                    word_classes.updated_at,
+                    word_classes.created_by,
+                    word_classes.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_classes
+                LEFT JOIN bookmarks ON bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class'
+                WHERE word_classes.id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
 
         result.ok_or_else(|| not_found(format!("word class with id '{id}'")))
     }
@@ -135,7 +179,21 @@ impl WordClassRepository {
     ) -> AppResult<WordClass> {
         let result = sqlx::query_as!(
             WordClass,
-            "SELECT * FROM word_classes WHERE language = $1 AND abbreviation = $2",
+            r#"
+                SELECT
+                    word_classes.id,
+                    word_classes.language,
+                    word_classes.name,
+                    word_classes.abbreviation,
+                    word_classes.created_at,
+                    word_classes.updated_at,
+                    word_classes.created_by,
+                    word_classes.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_classes
+                LEFT JOIN bookmarks ON bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class'
+                WHERE word_classes.language = $1 AND word_classes.abbreviation = $2
+            "#,
             language,
             abbreviation
         )
@@ -208,7 +266,7 @@ impl WordClassRepository {
                     updated_by = $4,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING *
+                RETURNING word_classes.*, (SELECT bookmarks.slug FROM bookmarks WHERE bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class') as "bookmark!"
             "#,
             id,
             updates.name,
@@ -282,83 +340,133 @@ impl WordClassRepository {
     pub async fn search(
         &self,
         language: Uuid,
+        pagination: PaginatedRequest,
         search: WordClassSearch,
     ) -> AppResult<PaginatedResponse<WordClass>> {
         use sqlx::QueryBuilder;
 
-        // Build items query
-        let mut items_query: QueryBuilder<sqlx::Postgres> =
-            QueryBuilder::new("SELECT * FROM word_classes WHERE language = ");
-        items_query.push_bind(language);
+        let users = crate::model::users::UserRepository::new(self.state.clone());
+        let created_by = match &search.created_by {
+            Some(username) => {
+                let user = users.find_by_username(username).await?;
+                Some(user.id)
+            }
+            None => None,
+        };
+        let updated_by = match &search.updated_by {
+            Some(username) => {
+                let user = users.find_by_username(username).await?;
+                Some(user.id)
+            }
+            None => None,
+        };
 
-        if let Some(ref q) = search.text_query {
-            items_query.push(" AND name % ");
-            items_query.push_bind(q);
-        }
+        let items_future = sqlx::query_as!(
+            WordClass,
+            r#"
+                SELECT
+                    word_classes.*,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_classes
+                LEFT JOIN bookmarks ON bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class'
+                WHERE
+                word_classes.language = $1
+                AND ($3::TIMESTAMPTZ IS NULL OR word_classes.created_at < $3)
+                AND ($4::TIMESTAMPTZ IS NULL OR word_classes.created_at > $4)
+                AND ($5::UUID IS NULL OR word_classes.created_by = $5)
+                AND ($6::UUID IS NULL OR word_classes.updated_by = $6)
+                ORDER BY (
+                    CASE
+                        WHEN $2::TEXT IS NOT NULL AND word_classes.name ILIKE '%' || $2 || '%' THEN 100.0
+                        WHEN $2::TEXT IS NOT NULL AND word_classes.abbreviation ILIKE '%' || $2 || '%' THEN 90.0
+                        ELSE 0.0
+                    END +
+                    CASE WHEN $2::TEXT IS NOT NULL THEN
+                        similarity(word_classes.name, $2) * 3.0 +
+                        COALESCE(similarity(word_classes.abbreviation, $2), 0.0) * 2.0
+                    ELSE 0.0
+                    END
+                ) DESC, word_classes.id
+                LIMIT $7
+                OFFSET $8
+            "#,
+            language,
+            search.text_query,
+            search.created_before,
+            search.created_after,
+            created_by,
+            updated_by,
+            pagination.limit as i64,
+            pagination.offset as i64,
+        )
+        .fetch_all(&self.state.pool);
 
-        if let Some(created_before) = search.created_before {
-            items_query.push(" AND created_at < ");
-            items_query.push_bind(created_before);
-        }
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
+                FROM word_classes
+                WHERE
+                language = $1
+                AND ($2::TIMESTAMPTZ IS NULL OR created_at < $2)
+                AND ($3::TIMESTAMPTZ IS NULL OR created_at > $3)
+                AND ($4::UUID IS NULL OR created_by = $4)
+                AND ($5::UUID IS NULL OR updated_by = $5)
+            "#,
+            language,
+            search.created_before,
+            search.created_after,
+            created_by,
+            updated_by
+        )
+        .fetch_one(&self.state.pool);
 
-        if let Some(created_after) = search.created_after {
-            items_query.push(" AND created_at > ");
-            items_query.push_bind(created_after);
-        }
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
-        items_query.push(" ORDER BY name, id LIMIT ");
-        items_query.push_bind(search.pagination.limit);
-        items_query.push(" OFFSET ");
-        items_query.push_bind(search.pagination.offset);
-
-        // Build count query
-        let mut count_query: QueryBuilder<sqlx::Postgres> =
-            QueryBuilder::new("SELECT COUNT(*) FROM word_classes WHERE language = ");
-        count_query.push_bind(language);
-
-        if let Some(ref q) = search.text_query {
-            count_query.push(" AND name % ");
-            count_query.push_bind(q);
-        }
-
-        if let Some(created_before) = search.created_before {
-            count_query.push(" AND created_at < ");
-            count_query.push_bind(created_before);
-        }
-
-        if let Some(created_after) = search.created_after {
-            count_query.push(" AND created_at > ");
-            count_query.push_bind(created_after);
-        }
-
-        let items_future = items_query
-            .build_query_as::<WordClass>()
-            .fetch_all(&self.state.pool);
-
-        let count_future = count_query
-            .build_query_scalar::<i64>()
-            .fetch_one(&self.state.pool);
-
-        let (items, total) = tokio::try_join!(items_future, count_future)?;
-
-        let has_more = (search.pagination.offset as i64 + items.len() as i64) < total;
+        let total = total_count.unwrap_or(0);
+        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
 
         Ok(PaginatedResponse {
             items,
             total,
-            offset: search.pagination.offset,
-            limit: search.pagination.limit,
+            offset: pagination.offset,
+            limit: pagination.limit,
             has_more,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct WordClassSearch {
-    pub pagination: PaginatedRequest,
     pub text_query: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
+    pub created_by: Option<String>,
+    pub updated_by: Option<String>,
 }
 
 crate::util::repo_from_parts!(WordClassRepository);
+
+#[async_trait::async_trait]
+impl crate::model::bookmarks::ResolveBookmark for WordClassRepository {
+    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+        // api: /api/languages/{code}/word-classes/{abbreviation}
+        // web: /languages/{code}/word-classes/{abbreviation}
+        let word_class = self.find_by_id(item).await?;
+
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_id(word_class.language).await?;
+
+        let slug = match link_type {
+            crate::model::bookmarks::LinkType::Web => format!(
+                "/languages/{}/word-classes/{}",
+                language.code, word_class.abbreviation
+            ),
+            crate::model::bookmarks::LinkType::Api => format!(
+                "/api/languages/{}/word-classes/{}",
+                language.code, word_class.abbreviation
+            ),
+        };
+
+        Ok(slug)
+    }
+}

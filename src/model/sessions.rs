@@ -186,3 +186,17 @@ impl SessionRepository {
 }
 
 crate::util::repo_from_parts!(SessionRepository);
+
+#[async_trait::async_trait]
+impl crate::model::bookmarks::ResolveBookmark for SessionRepository {
+    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+        // api: /api/sessions/{id}
+        // web: /sessions/{id}
+        let slug = match link_type {
+            crate::model::bookmarks::LinkType::Web => format!("/sessions/{}", item),
+            crate::model::bookmarks::LinkType::Api => format!("/api/sessions/{}", item),
+        };
+
+        Ok(slug)
+    }
+}

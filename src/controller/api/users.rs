@@ -624,6 +624,11 @@ mod tests {
 
         let token = make_authed_user(&name, &app, email_service.clone()).await;
 
+        let user = get(&format!("users/{name}")).await;
+        let user_response = app.call(user).await.unwrap();
+        let body = crate::tests::response_to_value(user_response.into_body()).await;
+        let bookmark = body["bookmark"].as_str().unwrap().to_string();
+
         let new_display_name = "Updated Display Name";
 
         let body = json!({
@@ -637,6 +642,8 @@ mod tests {
 
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["display_name"], new_display_name);
+        assert!(body["bookmark"].is_string());
+        assert_eq!(body["bookmark"], bookmark);
     }
 
     #[tokio::test]

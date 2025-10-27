@@ -30,13 +30,6 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
 
-#[derive(Deserialize)]
-pub struct SearchQuery {
-    pub q: Option<String>,
-    pub created_before: Option<DateTime<Utc>>,
-    pub created_after: Option<DateTime<Utc>>,
-}
-
 pub async fn create_word_class(
     s: Session,
     word_classes: WordClassRepository,
@@ -58,18 +51,11 @@ pub async fn list_word_classes(
     word_classes: WordClassRepository,
     Path(code): Path<String>,
     pagination: PaginatedRequest,
-    axum::extract::Query(query): axum::extract::Query<SearchQuery>,
+    axum::extract::Query(query): axum::extract::Query<WordClassSearch>,
 ) -> PaginatedApiResponse<WordClass> {
     let language = languages.find_by_code(&code).await?;
 
-    let search = WordClassSearch {
-        pagination,
-        text_query: query.q,
-        created_before: query.created_before,
-        created_after: query.created_after,
-    };
-
-    word_classes.search(language.id, search).await
+    word_classes.search(language.id, pagination, query).await
 }
 
 pub async fn get_word_class(
@@ -135,7 +121,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete_without_auth, get, make_authed_user, post, put_without_auth,
+        delete_without_auth, get, make_authed_user, post, print_response_body, put_without_auth
     };
     use crate::email::tests::MockEmailService;
 
@@ -246,9 +232,9 @@ mod tests {
 
         let request = get(&format!("languages/{lang_code}/word-classes")).await;
         let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
+        println!("List word classes body: {}", body);
         assert!(body["items"].is_array());
         assert_eq!(body["items"].as_array().unwrap().len(), 3);
     }
@@ -288,6 +274,7 @@ mod tests {
 
         let request = get(&format!("languages/{lang_code}/word-classes?q=nou")).await;
         let response = app.call(request).await.unwrap();
+
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -391,6 +378,9 @@ mod tests {
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(body["bookmark"].is_string());
+        let bookmark = body["bookmark"].as_str().unwrap().to_string();
 
         let update_body = json!({
             "name": "Noun",
@@ -406,6 +396,7 @@ mod tests {
 
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["name"], "Noun");
+        assert_eq!(body["bookmark"], bookmark);
     }
 
     #[tokio::test]

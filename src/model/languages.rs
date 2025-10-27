@@ -25,6 +25,7 @@ pub struct Language {
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
     pub updated_by: Uuid,
+    pub bookmark: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -67,6 +68,33 @@ impl LanguageRepository {
         Self { state }
     }
 
+    pub async fn find_by_id(&self, id: Uuid) -> AppResult<Language> {
+        let result = sqlx::query_as!(
+            Language,
+            r#"
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                WHERE languages.id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("language with id '{id}'")))
+    }
+
     pub async fn create(&self, requestor: &User, language: CreateLanguage) -> AppResult<Language> {
         language.validate()?;
 
@@ -82,12 +110,11 @@ impl LanguageRepository {
 
         let mut tx = self.state.pool.begin().await?;
 
-        let result = sqlx::query_as!(
-            Language,
+        let lang_result = sqlx::query!(
             r#"
                 INSERT INTO languages (code, name, private, description, created_by, updated_by)
                 VALUES ($1, $2, $3, $4, $5, $5)
-                RETURNING *
+                RETURNING id, code, name, private, description, created_by, updated_by, created_at, updated_at
             "#,
             language.code,
             language.name,
@@ -97,6 +124,29 @@ impl LanguageRepository {
         )
         .fetch_one(&mut *tx)
         .await?;
+
+        // Generate and insert bookmark
+        let slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
+        sqlx::query!(
+            "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'language')",
+            slug,
+            lang_result.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let result = Language {
+            id: lang_result.id,
+            code: lang_result.code,
+            name: lang_result.name,
+            description: lang_result.description,
+            private: lang_result.private,
+            created_at: lang_result.created_at,
+            updated_at: lang_result.updated_at,
+            created_by: lang_result.created_by,
+            updated_by: lang_result.updated_by,
+            bookmark: slug,
+        };
 
         crate::model::language_permissions::LanguagePermissionRepository::new(self.state.clone())
             .create_by_tx(
@@ -117,9 +167,28 @@ impl LanguageRepository {
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<Language> {
-        let result = sqlx::query_as!(Language, "SELECT * FROM languages WHERE code = $1", code)
-            .fetch_optional(&self.state.pool)
-            .await?;
+        let result = sqlx::query_as!(
+            Language,
+            r#"
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                WHERE languages.code = $1
+            "#,
+            code
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
 
         result.ok_or_else(|| not_found(format!("language with code '{code}'")))
     }
@@ -174,7 +243,7 @@ impl LanguageRepository {
                     updated_by = $5,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING *
+                RETURNING languages.*, (SELECT slug FROM bookmarks WHERE item = languages.id AND resource = 'language') as "bookmark!"
             "#,
             id,
             updates.code,
@@ -235,9 +304,20 @@ impl LanguageRepository {
         let items_future = sqlx::query_as!(
             Language,
             r#"
-                SELECT languages.*
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM languages
                 JOIN users ON users.id = languages.created_by
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
                 WHERE
                 ($1::TEXT IS NULL OR users.username = $1)
                 AND ($2::TIMESTAMPTZ IS NULL OR languages.created_at < $2)
@@ -314,8 +394,22 @@ impl LanguageRepository {
         let items_future = sqlx::query_as!(
             User,
             r#"
-                SELECT users.*
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
                 JOIN language_permissions ON language_permissions.user = users.id
                 WHERE
                 language_permissions.language = $1
@@ -394,3 +488,19 @@ pub struct LanguageSearch {
 }
 
 crate::util::repo_from_parts!(LanguageRepository);
+
+#[async_trait::async_trait]
+impl crate::model::bookmarks::ResolveBookmark for LanguageRepository {
+    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+        // api: /api/languages/{code}
+        // web: /languages/{code}
+        let language = self.find_by_id(item).await?;
+
+        let slug = match link_type {
+            crate::model::bookmarks::LinkType::Web => format!("/languages/{}", language.code),
+            crate::model::bookmarks::LinkType::Api => format!("/api/languages/{}", language.code),
+        };
+
+        Ok(slug)
+    }
+}
