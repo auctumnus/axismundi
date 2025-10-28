@@ -450,7 +450,7 @@ impl WordRepository {
             search.created_before,
             search.created_after,
             search.exact_slug,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset)
         )
@@ -492,7 +492,7 @@ impl WordRepository {
 
 #[derive(Default, Debug, Deserialize)]
 pub struct WordSearch {
-    pub text_query: Option<String>,
+    pub q: Option<String>,
     pub exact_slug: Option<String>,
     pub word_class: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
