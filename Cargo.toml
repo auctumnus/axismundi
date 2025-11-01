@@ -37,6 +37,8 @@ async-trait = "0.1.89"
 serde_urlencoded = "0.7.1"
 http-body-util = "0.1.3"
 unicode-normalization = "0.1.24"
+daggy = "0.9.0"
+strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
 random_word = { version = "0.5.2", features = ["en"] }

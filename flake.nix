@@ -39,8 +39,6 @@
           just  
           cargo-llvm-cov
           pstree
-          docker
-          docker-compose
         ];
 
         buildInputs =

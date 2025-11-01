@@ -8,3 +8,4 @@ pub mod users;
 pub mod word_classes;
 pub mod words;
 pub mod bookmarks;
+pub mod word_relations;

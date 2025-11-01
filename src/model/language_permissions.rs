@@ -328,6 +328,23 @@ impl LanguagePermissionRepository {
 
         self.delete(target_perm_id).await
     }
+
+    pub async fn has_permission(
+        &self,
+        user: Uuid,
+        language: Uuid,
+        required: PermissionLevel,
+    ) -> AppResult<bool> {
+
+        let perm = self
+            .find_by_user_and_language(user, language)
+            .await?;
+
+        Ok(match perm {
+            Some(p) => p.permission >= required,
+            None => false,
+        })
+    }
 }
 
 crate::util::repo_from_parts!(LanguagePermissionRepository);

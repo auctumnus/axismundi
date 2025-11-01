@@ -1,0 +1,61 @@
+{
+    "$defs": {
+        "relation_kind_v1": {
+            "type": "string",
+            "enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed"
+            ]
+        },
+        "edge_v1": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "source": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "target": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "relation_kind": {
+                    "$ref": "#/$defs/relation_kind_v1"
+                }
+            },
+            "required": [
+                "id",
+                "source",
+                "target",
+                "relation_kind"
+            ]
+        }
+    },
+    "oneOf": [
+        {
+            "type": "object",
+            "properties": {
+                "schema_version": {
+                    "type": "integer",
+                    "const": 1
+                },
+                "edges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/edge_v1"
+                    }
+                }
+            },
+            "required": [
+                "schema_version",
+                "edges"
+            ]
+        }
+    ]
+}

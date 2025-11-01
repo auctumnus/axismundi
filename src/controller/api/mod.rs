@@ -20,6 +20,7 @@ mod users;
 mod word_classes;
 mod words;
 mod bookmarks;
+mod word_relations;
 
 // pretty sure i need that there, actually...
 #[allow(clippy::needless_return)]
@@ -37,7 +38,8 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(language_permissions::create_router())
         .merge(language_invites::create_router())
         .merge(word_classes::create_router())
-        .merge(words::create_router());
+        .merge(words::create_router())
+        .merge(word_relations::create_router());
 
     // Only apply rate limiting in non-test builds
     #[cfg(not(test))]
@@ -74,6 +76,7 @@ pub fn create_api_controller() -> Router<AppState> {
 #[cfg(test)]
 mod tests {
     use axum::{body::Body, http::Request, routing::RouterIntoService};
+    use reqwest::StatusCode;
     use std::sync::Arc;
 
     use crate::email::tests::MockEmailService;
@@ -259,5 +262,18 @@ mod tests {
             .unwrap();
         let body_string = String::from_utf8_lossy(&body_bytes);
         println!("{body_string}");
+    }
+
+    pub(crate) async fn assert_response_status(
+        response: axum::response::Response<Body>,
+        expected_status: StatusCode,
+    ) -> axum::response::Response<Body> {
+        let status = response.status();
+        if status != expected_status {
+            
+            print_response_body(response).await;
+            panic!("Expected status {expected_status}, got {status}");
+        }
+        response
     }
 }

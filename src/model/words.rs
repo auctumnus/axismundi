@@ -19,6 +19,8 @@ pub struct Word {
     pub id: Uuid,
     pub language: Uuid,
     pub word_class: Option<Uuid>,
+    #[serde(skip_serializing)]
+    pub cognacy: Option<Uuid>,
     pub word: String,
     pub slug: String,
     pub lemma: i32,
@@ -48,7 +50,7 @@ pub struct CreateWord {
     pub ipa: Option<String>,
 
     #[validate(length(max = 10000))]
-    pub notes: Option<String>,
+    pub notes: Option<String>,    
 
     pub extra: Option<JsonValue>,
 }
@@ -146,7 +148,7 @@ impl WordRepository {
             r#"
                 INSERT INTO words (language, word_class, word, slug, lemma, definition, ipa, notes, extra, created_by, updated_by)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
-                RETURNING id, language, word_class, word, slug, lemma, definition, ipa, notes, extra, created_by, updated_by, created_at, updated_at
+                RETURNING words.*
             "#,
             language,
             word_class.id,
@@ -178,6 +180,7 @@ impl WordRepository {
             id: word_result.id,
             language: word_result.language,
             word_class: word_result.word_class,
+            cognacy: word_result.cognacy,
             word: word_result.word,
             slug: word_result.slug,
             lemma: word_result.lemma,
@@ -200,20 +203,7 @@ impl WordRepository {
             Word,
             r#"
                 SELECT
-                    words.id,
-                    words.language,
-                    words.word_class,
-                    words.word,
-                    words.slug,
-                    words.lemma,
-                    words.definition,
-                    words.ipa,
-                    words.notes,
-                    words.extra,
-                    words.created_at,
-                    words.updated_at,
-                    words.created_by,
-                    words.updated_by,
+                    words.*,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
@@ -238,20 +228,7 @@ impl WordRepository {
             Word,
             r#"
                 SELECT
-                    words.id,
-                    words.language,
-                    words.word_class,
-                    words.word,
-                    words.slug,
-                    words.lemma,
-                    words.definition,
-                    words.ipa,
-                    words.notes,
-                    words.extra,
-                    words.created_at,
-                    words.updated_at,
-                    words.created_by,
-                    words.updated_by,
+                    words.*,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
