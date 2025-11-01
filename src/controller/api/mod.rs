@@ -3,8 +3,6 @@ use axum::{
 };
 #[cfg(not(test))]
 use governor::middleware::NoOpMiddleware;
-#[cfg(not(test))]
-use tower_governor::{governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor};
 
 use crate::util::AppState;
 #[cfg(not(test))]
@@ -119,6 +117,7 @@ mod tests {
             .unwrap()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn post_multipart(token: &str, uri: &str, body: Vec<u8>) -> Request<Body> {
         Request::builder()
             .uri(format!("/api/{uri}"))

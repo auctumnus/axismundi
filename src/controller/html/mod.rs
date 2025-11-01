@@ -44,6 +44,7 @@ pub fn create_html_controller() -> Router<AppState> {
 
 #[derive(Template)]
 #[template(path = "home.html")]
+#[allow(dead_code)]
 struct HomeTemplate {
     current_user: Option<User>,
 }
@@ -58,6 +59,7 @@ struct ContactTemplate;
 
 #[derive(Template)]
 #[template(path = "login/form.html")]
+#[allow(dead_code)]
 struct LoginFormTemplate {
     error: Option<AppError>,
 }
@@ -72,6 +74,7 @@ fn render_template<T: Template>(template: T) -> Html<String> {
     )
 }
 
+#[allow(dead_code)]
 fn render_result<T: Template>(res: Result<T, AppError>) -> (Html<String>, StatusCode) {
     match res {
         Ok(t) => {
@@ -98,6 +101,7 @@ async fn contact() -> Html<String> {
     render_template(ContactTemplate)
 }
 
-async fn login_form() -> Html<String> {
+#[allow(dead_code)]
+fn login_form() -> Html<String> {
     render_template(LoginFormTemplate { error: None })
 }

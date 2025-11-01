@@ -1,14 +1,12 @@
 use std::{collections::HashMap, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use daggy::{petgraph::graph::IndexType, NodeIndex};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use sqlx::{query, query_as, FromRow, Postgres, Transaction};
-use tokio::try_join;
+use sqlx::{query, FromRow, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::{err::{bad_request, internal_error, AppError, AppResult}, model::{language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, users::User, words::{Word, WordRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{ensure_verified, repo_from_parts, AppState}};
+use crate::{err::{bad_request, AppError, AppResult}, model::{language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, users::User, words::Word}, pagination::{PaginatedRequest, PaginatedResponse}, util::{ensure_verified, repo_from_parts, AppState}};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "word_relation_type", rename_all = "snake_case")]
@@ -41,8 +39,8 @@ impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct WordRelation {
     pub id: Uuid,
-    pub antecedent: Option<Uuid>,
-    pub consequent: Option<Uuid>,
+    pub antecedent: Uuid,
+    pub consequent: Uuid,
     pub kind: WordRelationType,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -392,6 +390,7 @@ impl WordRelationRepository {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn delete(&self, requestor: &User, antecedent: &Word, consequent: &Word) -> AppResult<()> {
         ensure_verified(requestor)?;
 
@@ -407,12 +406,12 @@ impl WordRelationRepository {
 
         let mut tx = self.state.pool.begin().await?;
 
-        // find the relation between these two words
+        // find the relation between these two words (match exact direction)
         let relation = sqlx::query_as!(
             WordRelation,
             r#"
                 DELETE FROM word_relations
-                WHERE (antecedent = $1 AND consequent = $2) OR (antecedent = $2 AND consequent = $1)
+                WHERE antecedent = $1 AND consequent = $2
                 RETURNING id, antecedent, consequent, kind as "kind: WordRelationType", created_at, updated_at, created_by, updated_by
             "#,
             antecedent.id,
@@ -435,7 +434,7 @@ impl WordRelationRepository {
                 schema.edges.retain(|e| e.id != relation.id);
 
                 // check if the graph is still connected or if it split into components
-                let components = self.find_connected_components(&schema);
+                let components = Self::find_connected_components(&schema);
 
                 if components.len() == 1 {
                     // graph is still connected, just update the cognacy
@@ -531,7 +530,7 @@ impl WordRelationRepository {
         Ok(())
     }
 
-    fn find_connected_components(&self, schema: &CognacySchemaV1) -> Vec<Vec<CognacyEdgeV1>> {
+    fn find_connected_components(schema: &CognacySchemaV1) -> Vec<Vec<CognacyEdgeV1>> {
         use std::collections::{HashMap, HashSet};
 
         if schema.edges.is_empty() {
@@ -567,9 +566,9 @@ impl WordRelationRepository {
                     }
                 }
 
-                // collect all edges in this component
+                // collect all edges in this component (both endpoints must be in the component)
                 let component_edges: Vec<CognacyEdgeV1> = schema.edges.iter()
-                    .filter(|e| component_nodes.contains(&e.antecedent) || component_nodes.contains(&e.consequent))
+                    .filter(|e| component_nodes.contains(&e.antecedent) && component_nodes.contains(&e.consequent))
                     .copied()
                     .collect();
 
@@ -580,9 +579,8 @@ impl WordRelationRepository {
         components
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn search(&self, pagination: PaginatedRequest, search: SearchWordRelations, word: &Word) -> AppResult<PaginatedResponse<WordRelationSearchResult>> {
-        println!("searching word relations for word id: {:?}", word.id);
-        
         let items = query!(
             r#"
                 SELECT DISTINCT ON (words.id)
@@ -697,8 +695,8 @@ impl WordRelationRepository {
         }).collect();
 
 
-        let total = count.unwrap_or(0) as i64;
-        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
+        let total = count.unwrap_or(0);
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,

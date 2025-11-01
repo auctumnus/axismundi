@@ -3,6 +3,7 @@ use crate::util::AppState;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+#[allow(dead_code)]
 pub struct EmailVerificationToken {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -110,6 +111,7 @@ impl EmailVerificationTokenRepository {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup_expired(&self) -> AppResult<()> {
         sqlx::query!(
             r#"

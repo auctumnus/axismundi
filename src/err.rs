@@ -36,7 +36,7 @@ pub fn internal_error(message: impl Display) -> AppError {
     if config::CONFIG.environment == config::Environment::Dev {
         AppError::new(message.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
     } else {
-        eprintln!("Internal error: {}", message);
+        eprintln!("Internal error: {message}");
         generic_error()
     }
 }

@@ -58,14 +58,20 @@ create type word_relation_type as enum (
 create table word_relations (
     id uuid primary key default uuidv7(),
 
-    antecedent uuid references words(id) on delete cascade,
-    consequent uuid references words(id) on delete cascade,
+    antecedent uuid not null references words(id) on delete cascade,
+    consequent uuid not null references words(id) on delete cascade,
 
-    kind word_relation_type not null,    
+    kind word_relation_type not null,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
     created_by uuid not null references users(id) on delete set null,
-    updated_by uuid not null references users(id) on delete set null
+    updated_by uuid not null references users(id) on delete set null,
+
+    constraint word_relations_antecedent_consequent_unique unique (antecedent, consequent),
+    constraint word_relations_no_self_reference check (antecedent <> consequent)
 );
+
+create index idx_word_relations_antecedent on word_relations(antecedent);
+create index idx_word_relations_consequent on word_relations(consequent);
 

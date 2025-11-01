@@ -368,7 +368,7 @@ impl LanguageRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -466,7 +466,7 @@ impl LanguageRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -482,6 +482,7 @@ impl LanguageRepository {
 pub struct LanguageSearch {
     pub text_query: Option<String>,
     pub owned_by: Option<String>,
+    #[allow(dead_code)]
     pub edited_by: Option<Vec<String>>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,

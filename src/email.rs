@@ -159,13 +159,13 @@ pub(crate) mod tests {
             self.sent_emails.lock().unwrap().push(SentEmail {
                 to: old_email.to_string(),
                 email_type: EmailType::EmailChangeNotification,
-                token: "".to_string(),
+                token: String::new(),
                 user_id,
             });
             self.sent_emails.lock().unwrap().push(SentEmail {
                 to: new_email.to_string(),
                 email_type: EmailType::EmailChangeNotification,
-                token: "".to_string(),
+                token: String::new(),
                 user_id,
             });
             Ok(())

@@ -1,4 +1,3 @@
-use axum::http::request;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -7,7 +6,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    err::{AppResult, bad_request, not_found},
+    err::{AppResult, bad_request, internal_error, not_found},
     model::{language_invites::PermissionLevel, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -21,6 +20,7 @@ pub struct Word {
     #[serde(skip_serializing)]
     pub language: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub word_class: Option<Uuid>,
     #[serde(skip_serializing)]
     pub cognacy: Option<Uuid>,
@@ -99,7 +99,8 @@ impl WordRepository {
         Self { state }
     }
 
-    pub fn make_slug(&self, word: &str) -> String {
+    #[allow(dead_code)]
+    pub fn make_slug(word: &str) -> String {
         nfkc(word)
     }
 
@@ -116,7 +117,10 @@ impl WordRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
-        let lemma = (number_slugs.unwrap_or(1) as i32) + 1;
+        let lemma = i32::try_from(number_slugs.unwrap_or(0))
+            .map_err(|_| internal_error("lemma count overflow"))?
+            .checked_add(1)
+            .ok_or_else(|| internal_error("lemma count overflow"))?;
         Ok((slug, lemma))
     }
 
@@ -231,7 +235,7 @@ impl WordRepository {
 
     pub async fn find_by_slug_and_lemma(
         &self,
-        requestor: Option<&User>,
+        _requestor: Option<&User>,
         language: Uuid,
         slug: &str,
         lemma: i32,
@@ -420,7 +424,8 @@ impl WordRepository {
 
         Ok(result.rows_affected() > 0)
     }
-    
+
+    #[allow(clippy::too_many_lines)]
     pub async fn search(
         &self,
         language: Uuid,
@@ -526,7 +531,7 @@ impl WordRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,

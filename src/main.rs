@@ -1,5 +1,6 @@
 // ignore unused warnings
 #![warn(clippy::pedantic, clippy::style)]
+#![allow(clippy::uninlined_format_args)]
 use askama::Template;
 use axum::{
     Router,

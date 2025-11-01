@@ -1,7 +1,7 @@
 use crate::{
     err::{unauthorized_no_session, AppResult},
     model::{
-        languages::LanguageRepository, word_relations::{CreateWordRelation, SearchWordRelations, WordRelation, WordRelationRepository, WordRelationSearchResult, WordRelationType}, words::{CreateWord, UpdateWord, Word, WordRepository, WordSearch}
+        languages::LanguageRepository, words::{WordRepository, CreateWord, Word, WordSearch, UpdateWord}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
@@ -12,8 +12,6 @@ use axum::{
     http::StatusCode,
     routing::{delete, get, post, put},
 };
-use serde::Deserialize;
-use sqlx::query::Query;
 use validator::Validate;
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {

@@ -129,7 +129,7 @@ impl LanguageInviteRepository {
         Ok(result)
     }
 
-    async fn _find_by_language_and_recipient(
+    async fn find_by_language_and_recipient_unchecked(
         &self,
         language: Uuid,
         recipient: Uuid,
@@ -170,16 +170,14 @@ impl LanguageInviteRepository {
                     "only owners and admins can view language invites",
                 ));
             }
-        } else {
-            if requestor.id != recipient {
-                return Err(crate::err::forbidden(
-                    "only owners and admins can view language invites",
-                ));
-            }
+        } else if requestor.id != recipient {
+            return Err(crate::err::forbidden(
+                "only owners and admins can view language invites",
+            ));
         }
 
         let invite = self
-            ._find_by_language_and_recipient(language, recipient)
+            .find_by_language_and_recipient_unchecked(language, recipient)
             .await?;
 
         let Some(invite) = invite else {
@@ -304,7 +302,7 @@ impl LanguageInviteRepository {
         let (invites, total_count) = tokio::try_join!(invites, total_count)?;
 
         let total_count = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + invites.len() as i64) < total_count;
+        let has_more = (i64::from(pagination.offset) + i64::try_from(invites.len()).unwrap_or(i64::MAX)) < total_count;
 
         Ok(PaginatedResponse {
             items: invites,
@@ -356,7 +354,7 @@ impl LanguageInviteRepository {
 
         // fetch the invite first
         let invite = self
-            ._find_by_language_and_recipient(language, recipient)
+            .find_by_language_and_recipient_unchecked(language, recipient)
             .await?;
 
         let Some(invite) = invite else {
@@ -408,7 +406,7 @@ impl LanguageInviteRepository {
             }
         } else {
             return Err(not_found("requestor's language permission"));
-        };
+        }
 
         sqlx::query!("DELETE FROM language_invites WHERE id = $1", invite.id)
             .execute(&self.state.pool)

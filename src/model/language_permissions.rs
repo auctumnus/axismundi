@@ -109,6 +109,7 @@ impl LanguagePermissionRepository {
         result.ok_or_else(|| not_found(format!("owner permission for language '{language}'")))
     }
 
+    #[allow(dead_code)]
     pub async fn list_by_user(&self, user: Uuid) -> AppResult<Vec<LanguagePermission>> {
         let result = sqlx::query_as!(
             LanguagePermission,

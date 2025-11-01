@@ -10,8 +10,6 @@ use crate::{
     util::extract_session::Session,
 };
 use axum::{Json, extract::Path, http::StatusCode};
-use chrono::{DateTime, Utc};
-use serde::Deserialize;
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
@@ -121,7 +119,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete_without_auth, get, make_authed_user, post, print_response_body, put_without_auth
+        delete_without_auth, get, make_authed_user, post, put_without_auth
     };
     use crate::email::tests::MockEmailService;
 
@@ -234,7 +232,7 @@ mod tests {
         let response = app.call(request).await.unwrap();
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        println!("List word classes body: {}", body);
+        println!("List word classes body: {body}");
         assert!(body["items"].is_array());
         assert_eq!(body["items"].as_array().unwrap().len(), 3);
     }

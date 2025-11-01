@@ -1,7 +1,7 @@
 use crate::{
-    err::{bad_request, unauthorized_no_session, AppResult},
+    err::{not_found, unauthorized_no_session, AppResult},
     model::{
-        languages::LanguageRepository, word_relations::{CognacyFull, CreateWordRelation, SearchWordRelations, WordRelation, WordRelationRepository, WordRelationSearchResult, WordRelationType}, words::{CreateWord, UpdateWord, Word, WordRepository, WordSearch}
+        languages::LanguageRepository, word_relations::{CognacyFull, CreateWordRelation, SearchWordRelations, WordRelation, WordRelationRepository, WordRelationSearchResult, WordRelationType}, words::WordRepository
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
@@ -10,11 +10,9 @@ use axum::{
     Json,
     extract::Path,
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
 };
 use serde::Deserialize;
-use sqlx::query::Query;
-use validator::Validate;
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
@@ -111,7 +109,7 @@ pub async fn get_etymology(
 
     match cognacy {
         Some(cognacy) => Ok(Json(cognacy)),
-        None => Err(bad_request("word is not part of any cognacy graph")),
+        None => Err(not_found("cognacy graph")),
     }
 }
 
@@ -125,7 +123,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        assert_response_status, get, make_authed_user, post, post_without_auth, print_response_body
+        assert_response_status, get, make_authed_user, post, post_without_auth
     };
     use crate::email::tests::MockEmailService;
 
@@ -257,7 +255,7 @@ mod tests {
         )
         .await;
         let response = app.call(request).await.unwrap();
-        let response = assert_response_status(response, StatusCode::OK).await;
+        assert_response_status(response, StatusCode::OK).await;
 
         // Search for relations
         let request = get(&format!("languages/{lang_code}/words/{slug1}/1/relations")).await;
@@ -377,7 +375,7 @@ mod tests {
         // Try to get etymology for a word with no relations
         let request = get(&format!("languages/{lang_code}/words/{slug1}/1/etymology")).await;
         let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -502,7 +500,7 @@ mod tests {
         // Verify test3 no longer has etymology
         let request = get(&format!("languages/{lang_code}/words/test3/1/etymology")).await;
         let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST); // no cognacy graph
+        assert_eq!(response.status(), StatusCode::NOT_FOUND); // no cognacy graph
     }
 
     #[tokio::test]

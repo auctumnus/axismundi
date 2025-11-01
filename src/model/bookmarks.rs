@@ -9,6 +9,7 @@ use crate::util::AppState;
 use async_trait::async_trait;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 pub enum LinkType {
     Web,
     Api,
@@ -41,6 +42,7 @@ impl ResourceType {
     }
 }
 
+#[allow(dead_code)]
 pub struct Bookmark {
     pub id: Uuid,
     pub slug: String,
@@ -87,6 +89,7 @@ impl BookmarkRepository {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn get_by_resource(&self, item: Uuid, resource: ResourceType) -> AppResult<Bookmark> {
         let record = sqlx::query_as!(
             Bookmark,

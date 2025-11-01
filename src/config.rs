@@ -41,6 +41,7 @@ pub struct AppConfig {
     pub s3: S3Config,
 
     #[serde(default = "default_file_upload_limit")]
+    #[allow(dead_code)]
     pub file_upload_limit_bytes: usize,
     #[serde(default = "default_port")]
     pub port: u16,
@@ -54,7 +55,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
         // should match docker-compose.db.test.yml,
         // docker-compose.minio.test.yml,
         // and the justfile
-        return AppConfig {
+        AppConfig {
             database_url: "postgres://user_test:password@localhost:2435/axismundi_test".to_string(),
             s3: S3Config {
                 bucket: "axismundi-test".to_string(),
@@ -68,8 +69,8 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
             port: 3001,
             // TODO: seems bad!
             environment: Environment::Dev,
-        };
-    };
+        }
+    }
     #[cfg(not(test))]
     {
         let path = std::env::args()

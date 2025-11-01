@@ -136,6 +136,8 @@ clean:
 db-reset:
     docker compose -f docker-compose.db.yml down -v
     just db
+    sqlx database create
+    just db-migrate
 
 # Start Minio S3 storage
 minio:

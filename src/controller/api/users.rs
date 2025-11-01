@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
     err::{bad_request, AppError, AppResult},
     model::{password_reset_tokens::PasswordResetTokenRepository, users::{CreateUser, UpdateUser, User, UserRepository, UserSearch}},
@@ -14,7 +12,6 @@ use axum::{
 };
 use axum_extra::extract::Multipart;
 use serde::{Deserialize, Serialize};
-use tokio::time::sleep;
 use uuid::Uuid;
 
 type ApiResponse<T> = AppResult<T>;
@@ -169,7 +166,7 @@ pub async fn search_users(
 }
 
 #[derive(Deserialize)]
-struct ResetPasswordRequest {
+pub(crate) struct ResetPasswordRequest {
     email: String,
 }
 
@@ -196,7 +193,7 @@ pub async fn reset_password_start(
 }
 
 #[derive(Deserialize)]
-struct PasswordResetComplete {
+pub(crate) struct PasswordResetComplete {
     uuid: Uuid,
     token: String,
     new_password: String
@@ -675,7 +672,6 @@ mod tests {
             .unwrap();
 
         let name = crate::tests::random_name();
-        let email = format!("{}@example.com", name.clone());
 
         let token = make_authed_user(&name, &app, email_service.clone()).await;
 
@@ -760,7 +756,7 @@ mod tests {
         // 3. initiate password reset
         email_service.clear(); // clear verification emails
         let request = post_without_auth(
-            &format!("reset-password/start"),
+            "reset-password/start",
             json!({ "email": format!("{username}@example.com") }),
         )
         .await;

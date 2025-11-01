@@ -128,13 +128,13 @@ impl UserRepository {
         Self { state }
     }
 
-    async fn check_password_strength(&self, password: &str) -> AppResult<bool> {
+    fn check_password_strength(password: &str, _user_inputs: &[&str]) -> AppResult<bool> {
         // TODO: we should also check against haveibeenpwned
         // TODO: use user_inputs from zxcvbn to improve strength checking
 
         // https://thecopenhagenbook.com/password-authentication#input-validation
         // > Use libraries like zxcvbn to check for weak passwords.
-        let password_strength = zxcvbn::zxcvbn(&password, &[]);
+        let password_strength = zxcvbn::zxcvbn(password, &[]);
         if password_strength.score() < Score::Three {
             let message = password_strength
                 .feedback()
@@ -158,7 +158,11 @@ impl UserRepository {
             return Err(bad_request("email is in use"));
         }
 
-        self.check_password_strength(&user.password).await?;
+        Self::check_password_strength(&user.password, &[
+            &user.username,
+            &user.email,
+            user.display_name.as_deref().unwrap_or(""),
+        ])?;
 
         let password_hash = crate::util::hash(&user.password)
             .map_err(|_| internal_error("password hash failed"))?;
@@ -425,6 +429,7 @@ impl UserRepository {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         if requestor.id != id {
             return Err(crate::err::forbidden(
@@ -518,7 +523,7 @@ impl UserRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -529,6 +534,7 @@ impl UserRepository {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn list(&self, limit: i64, offset: i64) -> AppResult<Vec<User>> {
         let result = sqlx::query_as!(
             User,
@@ -562,6 +568,7 @@ impl UserRepository {
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub async fn count(&self) -> AppResult<i64> {
         let result = sqlx::query!("SELECT COUNT(*) as count FROM users")
             .fetch_one(&self.state.pool)
@@ -673,8 +680,12 @@ impl UserRepository {
     }
 
     pub async fn reset_password(&self, user_id: Uuid, token: PasswordResetToken, new_password: &str) -> AppResult<()> {
-        self.check_password_strength(new_password).await?;
-        
+        let user = self.find_by_id(user_id).await?;
+        Self::check_password_strength(new_password, &[
+            &user.username,
+            &user.email,
+            user.display_name.as_deref().unwrap_or(""),
+        ])?;
         let password_hash = crate::util::hash(new_password)
             .map_err(|_| internal_error("password hash failed"))?;
 
@@ -682,7 +693,7 @@ impl UserRepository {
 
         // https://thecopenhagenbook.com/password-reset
         // You should even mark a user's email address as verified if they reset their password.
-        let result = sqlx::query!(
+        let _result = sqlx::query!(
             r#"
             UPDATE users
             SET password_hash = $2, verified_at = NOW()

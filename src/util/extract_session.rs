@@ -14,6 +14,7 @@ use super::AppState;
 pub struct Session(pub Option<(SessionObj, User)>);
 
 impl Session {
+    #[allow(dead_code)]
     pub const fn is_authenticated(&self) -> bool {
         self.0.is_some()
     }

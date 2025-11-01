@@ -7,6 +7,7 @@ use crate::err::{AppError, AppResult};
 use crate::util::{AppState, ensure_verified};
 
 #[derive(Debug, Clone, FromRow, Serialize)]
+#[allow(dead_code)]
 pub struct SessionObj {
     #[serde(skip_serializing)]
     pub user_id: Uuid,
@@ -141,6 +142,7 @@ impl SessionRepository {
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub async fn invalidate(&self, session: SessionObj) -> AppResult<()> {
         sqlx::query!(
             r#"
@@ -186,6 +188,7 @@ impl SessionRepository {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup_expired(&self) -> AppResult<()> {
         sqlx::query!(
             r#"

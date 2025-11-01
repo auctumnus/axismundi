@@ -3,6 +3,7 @@ use crate::util::{AppState, stable_hash};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+#[allow(dead_code)]
 pub struct PasswordResetToken {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -71,6 +72,7 @@ impl PasswordResetTokenRepository {
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub async fn invalidate(&self, token: PasswordResetToken) -> AppResult<PasswordResetToken> {
         let result = sqlx::query_as!(
             PasswordResetToken,
@@ -117,6 +119,7 @@ impl PasswordResetTokenRepository {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup_expired(&self) -> AppResult<()> {
         sqlx::query!(
             r#"

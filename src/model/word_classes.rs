@@ -343,7 +343,6 @@ impl WordClassRepository {
         pagination: PaginatedRequest,
         search: WordClassSearch,
     ) -> AppResult<PaginatedResponse<WordClass>> {
-        use sqlx::QueryBuilder;
 
         let users = crate::model::users::UserRepository::new(self.state.clone());
         let created_by = match &search.created_by {
@@ -396,8 +395,8 @@ impl WordClassRepository {
             search.created_after,
             created_by,
             updated_by,
-            pagination.limit as i64,
-            pagination.offset as i64,
+            i64::from(pagination.limit),
+            i64::from(pagination.offset),
         )
         .fetch_all(&self.state.pool);
 
@@ -423,7 +422,7 @@ impl WordClassRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + items.len() as i64) < total;
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
