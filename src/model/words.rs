@@ -16,8 +16,11 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 #[allow(clippy::struct_field_names)]
 pub struct Word {
+    #[serde(skip_serializing)]
     pub id: Uuid,
+    #[serde(skip_serializing)]
     pub language: Uuid,
+    #[serde(skip_serializing)]
     pub word_class: Option<Uuid>,
     #[serde(skip_serializing)]
     pub cognacy: Option<Uuid>,
@@ -30,9 +33,16 @@ pub struct Word {
     pub extra: Option<JsonValue>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub created_by: Uuid,
-    pub updated_by: Uuid,
+    #[serde(skip_serializing)]
+    pub _created_by: Uuid,
+    #[serde(skip_serializing)]
+    pub _updated_by: Uuid,
+
+    // materialized
     pub bookmark: String,
+    pub language_code: Option<String>,
+    pub created_by: Option<String>,
+    pub updated_by: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -176,26 +186,8 @@ impl WordRepository {
 
         tx.commit().await?;
 
-        let result = Word {
-            id: word_result.id,
-            language: word_result.language,
-            word_class: word_result.word_class,
-            cognacy: word_result.cognacy,
-            word: word_result.word,
-            slug: word_result.slug,
-            lemma: word_result.lemma,
-            definition: word_result.definition,
-            ipa: word_result.ipa,
-            notes: word_result.notes,
-            extra: word_result.extra,
-            created_at: word_result.created_at,
-            updated_at: word_result.updated_at,
-            created_by: word_result.created_by,
-            updated_by: word_result.updated_by,
-            bookmark: bookmark_slug,
-        };
-
-        Ok(result)
+        // fetch the created word to get materialized fields
+        self.find_by_id(word_result.id).await
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Word> {
@@ -203,10 +195,30 @@ impl WordRepository {
             Word,
             r#"
                 SELECT
-                    words.*,
-                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                    words.id,
+                    words.language,
+                    words.word_class,
+                    words.cognacy,
+                    words.word,
+                    words.slug,
+                    words.lemma,
+                    words.definition,
+                    words.ipa,
+                    words.notes,
+                    words.extra,
+                    words.created_at,
+                    words.updated_at,
+                    words.created_by as "_created_by!",
+                    words.updated_by as "_updated_by!",
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!",
+                    languages.code as language_code,
+                    created.username as created_by,
+                    updated.username as updated_by
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN users AS created ON created.id = words.created_by
+                LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE words.id = $1
             "#,
             id
@@ -228,10 +240,30 @@ impl WordRepository {
             Word,
             r#"
                 SELECT
-                    words.*,
-                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                    words.id,
+                    words.language,
+                    words.word_class,
+                    words.cognacy,
+                    words.word,
+                    words.slug,
+                    words.lemma,
+                    words.definition,
+                    words.ipa,
+                    words.notes,
+                    words.extra,
+                    words.created_at,
+                    words.updated_at,
+                    words.created_by as "_created_by!",
+                    words.updated_by as "_updated_by!",
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!",
+                    languages.code as language_code,
+                    created.username as created_by,
+                    updated.username as updated_by
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN users AS created ON created.id = words.created_by
+                LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE words.slug = $1 AND words.lemma = $2 AND words.language = $3
             "#,
             slug,
@@ -321,7 +353,26 @@ impl WordRepository {
                     updated_at = CURRENT_TIMESTAMP,
                     lemma = COALESCE($10, lemma)
                 WHERE id = $1
-                RETURNING words.*, (SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma') as "bookmark!"
+                RETURNING
+                    words.id,
+                    words.language,
+                    words.word_class,
+                    words.cognacy,
+                    words.word,
+                    words.slug,
+                    words.lemma,
+                    words.definition,
+                    words.ipa,
+                    words.notes,
+                    words.extra,
+                    words.created_at,
+                    words.updated_at,
+                    words.created_by as "_created_by!",
+                    words.updated_by as "_updated_by!",
+                    (SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma') as "bookmark!",
+                    (SELECT code FROM languages WHERE id = words.language) as language_code,
+                    (SELECT username FROM users WHERE id = words.created_by) as created_by,
+                    (SELECT username FROM users WHERE id = words.updated_by) as updated_by
             "#,
             word.id,
             word_class,
@@ -395,10 +446,30 @@ impl WordRepository {
             Word,
             r#"
                 SELECT
-                    words.*,
-                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                    words.id,
+                    words.language,
+                    words.word_class,
+                    words.cognacy,
+                    words.word,
+                    words.slug,
+                    words.lemma,
+                    words.definition,
+                    words.ipa,
+                    words.notes,
+                    words.extra,
+                    words.created_at,
+                    words.updated_at,
+                    words.created_by as "_created_by!",
+                    words.updated_by as "_updated_by!",
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!",
+                    languages.code as language_code,
+                    created.username as created_by,
+                    updated.username as updated_by
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN users AS created ON created.id = words.created_by
+                LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE
                 words.language = $1
                 AND ($2::UUID IS NULL OR words.word_class = $2)

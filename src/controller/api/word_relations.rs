@@ -1,7 +1,7 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{bad_request, unauthorized_no_session, AppResult},
     model::{
-        languages::LanguageRepository, word_relations::{CreateWordRelation, SearchWordRelations, WordRelation, WordRelationRepository, WordRelationSearchResult, WordRelationType}, words::{CreateWord, UpdateWord, Word, WordRepository, WordSearch}
+        languages::LanguageRepository, word_relations::{CognacyFull, CreateWordRelation, SearchWordRelations, WordRelation, WordRelationRepository, WordRelationSearchResult, WordRelationType}, words::{CreateWord, UpdateWord, Word, WordRepository, WordSearch}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
@@ -20,6 +20,8 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
         .route("/languages/{code}/words/{slug}/{lemma}/relations", post(add_relation))
         .route("/languages/{code}/words/{slug}/{lemma}/relations", get(search_relations))
+        .route("/languages/{code}/words/{slug}/{lemma}/relations/{related_code}/{related_slug}/{related_lemma}", delete(delete_relation))
+        .route("/languages/{code}/words/{slug}/{lemma}/etymology", get(get_etymology))
 }
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;#[derive(Deserialize)]
@@ -47,7 +49,7 @@ pub async fn add_relation(
     let consequent_language = languages.find_by_code(&req.language).await?;
     let consequent = words.find_by_slug_and_lemma(Some(requestor), consequent_language.id, &req.slug, req.lemma).await?;
 
-    let relation = word_relations.create(
+    let word_relation = word_relations.create(
         requestor,
         CreateWordRelation {
             antecedent,
@@ -56,7 +58,28 @@ pub async fn add_relation(
         },
     ).await?;
 
-    Ok(Json(relation))
+    Ok(Json(word_relation))
+}
+
+pub async fn delete_relation(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    Path((code, slug, lemma, related_code, related_slug, related_lemma)): Path<(String, String, i32, String, String, i32)>,
+) -> ApiResponse<StatusCode> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let language = languages.find_by_code(&code).await?;
+    let antecedent = words.find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma).await?;
+    let consequent_language = languages.find_by_code(&related_code).await?;
+    let consequent = words.find_by_slug_and_lemma(Some(requestor), consequent_language.id, &related_slug, related_lemma).await?;
+
+    word_relations.delete(requestor, &antecedent, &consequent).await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn search_relations(
@@ -72,6 +95,24 @@ pub async fn search_relations(
     let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
 
     word_relations.search(pagination, search, &word).await
+}
+
+pub async fn get_etymology(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
+) -> ApiResponse<Json<CognacyFull>> {
+    let language = languages.find_by_code(&code).await?;
+    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+
+    let cognacy = word_relations.get_cognacy(&word).await?;
+
+    match cognacy {
+        Some(cognacy) => Ok(Json(cognacy)),
+        None => Err(bad_request("word is not part of any cognacy graph")),
+    }
 }
 
 #[cfg(test)]
@@ -165,11 +206,10 @@ mod tests {
         )
         .await;
         let response = app.call(request).await.unwrap();
-        print_response_body(response).await;
-        // assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
 
-        // let body = crate::tests::response_to_value(response.into_body()).await;
-        // assert_eq!(body["kind"], "borrowed");
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["kind"], "borrowed");
     }
 
     #[tokio::test]
@@ -271,5 +311,275 @@ mod tests {
         assert!(body["items"].is_array());
         let items = body["items"].as_array().unwrap();
         assert!(items.iter().all(|item| item["kind"] == "borrowed"));
+    }
+
+    #[tokio::test]
+    async fn test_get_etymology() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let (lang_code, slug1, slug2) = setup_language_with_words(&token, &mut app).await;
+
+        // Add a borrowed relation to create a cognacy graph
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": slug2,
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/{slug1}/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Get the etymology/cognacy graph
+        let request = get(&format!("languages/{lang_code}/words/{slug1}/1/etymology")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+
+        // Check that we have a cognacy object with edges and words
+        assert!(body["cognacy"].is_object());
+        assert!(body["cognacy"]["inner"]["V1"]["edges"].is_array());
+        assert_eq!(body["cognacy"]["inner"]["V1"]["edges"].as_array().unwrap().len(), 1);
+
+        // Check that we have both words in the words map
+        assert!(body["words"].is_object());
+        let words_map = body["words"].as_object().unwrap();
+        assert_eq!(words_map.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_etymology_no_relations() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let (lang_code, slug1, _slug2) = setup_language_with_words(&token, &mut app).await;
+
+        // Try to get etymology for a word with no relations
+        let request = get(&format!("languages/{lang_code}/words/{slug1}/1/etymology")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_delete_relation() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let (lang_code, slug1, slug2) = setup_language_with_words(&token, &mut app).await;
+
+        // Add a relation
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": slug2,
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/{slug1}/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Delete the relation
+        let request = crate::controller::api::tests::delete(
+            &token,
+            &format!("languages/{lang_code}/words/{slug1}/1/relations/{lang_code}/{slug2}/1"),
+        );
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Verify the relation is gone by searching
+        let request = get(&format!("languages/{lang_code}/words/{slug1}/1/relations")).await;
+        let response = app.call(request).await.unwrap();
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["items"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_relation_splits_cognacy() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let (lang_code, slug1, slug2) = setup_language_with_words(&token, &mut app).await;
+
+        // Create a third word
+        let body = json!({
+            "slug": "test3",
+            "word_class": "n",
+            "word": "test3",
+            "definition": "test definition 3",
+        });
+
+        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Create a chain: test1 -> test2 -> test3
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": slug2,
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/{slug1}/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": "test3",
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/{slug2}/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Delete the middle edge (test2 -> test3), splitting the graph
+        let request = crate::controller::api::tests::delete(
+            &token,
+            &format!("languages/{lang_code}/words/{slug2}/1/relations/{lang_code}/test3/1"),
+        );
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Verify test1 still has etymology (just with test2)
+        let request = get(&format!("languages/{lang_code}/words/{slug1}/1/etymology")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["words"].as_object().unwrap().len(), 2); // test1 and test2
+
+        // Verify test3 no longer has etymology
+        let request = get(&format!("languages/{lang_code}/words/test3/1/etymology")).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST); // no cognacy graph
+    }
+
+    #[tokio::test]
+    async fn test_cyclic_relation_fails() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let (lang_code, slug1, slug2) = setup_language_with_words(&token, &mut app).await;
+
+        // Create a third word
+        let body = json!({
+            "slug": "test3",
+            "word_class": "n",
+            "word": "test3",
+            "definition": "test definition 3",
+        });
+
+        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Create a chain: test1 -> test2 -> test3
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": slug2,
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/{slug1}/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": "test3",
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/{slug2}/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Try to create a cycle by adding test3 -> test1
+        let body = json!({
+            "kind": "borrowed",
+            "language": lang_code,
+            "slug": slug1,
+            "lemma": 1,
+        });
+
+        let request = post(
+            &token,
+            &format!("languages/{lang_code}/words/test3/1/relations"),
+            body,
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+
+        // Should fail with bad request because it would create a cycle
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

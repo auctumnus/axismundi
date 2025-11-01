@@ -36,7 +36,6 @@ Thumbs.db
 *.tmp
 *.temp
 
-.sqlx
 .direnv
 
 config.json
