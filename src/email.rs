@@ -1,5 +1,8 @@
 use async_trait::async_trait;
+use resend_rs::types::CreateEmailBaseOptions;
+use resend_rs::Resend;
 
+use crate::config::ResendConfig;
 use crate::err::AppResult;
 
 #[async_trait]
@@ -28,12 +31,16 @@ pub trait EmailService: Send + Sync + std::fmt::Debug {
 
 #[derive(Debug, Clone)]
 pub struct ResendEmailService {
-    // TODO: add smtp config
+    client: Resend,
+    from_email: String,
 }
 
 impl ResendEmailService {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: &ResendConfig) -> Self {
+        Self {
+            client: Resend::new(&config.api_key),
+            from_email: config.from_email.clone(),
+        }
     }
 }
 
@@ -45,8 +52,30 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        // TODO: implement actual email sending
-        println!("would send verification email to {to} (user {user_id}) with token {token}");
+        let verification_url = format!("https://axismundi.org/verify-email?token={}", token);
+        let subject = "verify your email";
+        let html = format!(
+            r#"<html>
+<body>
+<h1>verify your email</h1>
+<p>click the link below to verify your email address:</p>
+<p><a href="{}">verify email</a></p>
+<p>or copy and paste this link into your browser:</p>
+<p>{}</p>
+<p>user id: {}</p>
+</body>
+</html>"#,
+            verification_url, verification_url, user_id
+        );
+
+        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html);
+
+        self.client
+            .emails
+            .send(email)
+            .await
+            .map_err(|e| crate::err::internal_error(format!("failed to send email: {}", e)))?;
+
         Ok(())
     }
 
@@ -56,8 +85,31 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        // TODO: implement actual email sending
-        println!("would send password reset email to {to} (user {user_id}) with token {token}");
+        let reset_url = format!("https://axismundi.org/reset-password?token={}", token);
+        let subject = "reset your password";
+        let html = format!(
+            r#"<html>
+<body>
+<h1>reset your password</h1>
+<p>click the link below to reset your password:</p>
+<p><a href="{}">reset password</a></p>
+<p>or copy and paste this link into your browser:</p>
+<p>{}</p>
+<p>user id: {}</p>
+<p>if you didn't request this password reset, you can safely ignore this email.</p>
+</body>
+</html>"#,k
+            reset_url, reset_url, user_id
+        );
+
+        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html);
+
+        self.client
+            .emails
+            .send(email)
+            .await
+            .map_err(|e| crate::err::internal_error(format!("failed to send email: {}", e)))?;
+
         Ok(())
     }
 
@@ -67,10 +119,36 @@ impl EmailService for ResendEmailService {
         old_email: &str,
         new_email: &str,
     ) -> AppResult<()> {
-        // TODO: implement actual email sending
-        println!(
-            "would send email change notification to {old_email} and {new_email} (user {user_id})"
+        let subject = "your email address has been changed";
+        let html = format!(
+            r#"<html>
+<body>
+<h1>email address changed</h1>
+<p>this is a notification that your email address has been changed from {} to {}.</p>
+<p>user id: {}</p>
+<p>if you didn't make this change, please contact support immediately.</p>
+</body>
+</html>"#,
+            old_email, new_email, user_id
         );
+
+        let email_old = CreateEmailBaseOptions::new(&self.from_email, [old_email], subject)
+            .with_html(&html);
+        let email_new =
+            CreateEmailBaseOptions::new(&self.from_email, [new_email], subject).with_html(&html);
+
+        self.client
+            .emails
+            .send(email_old)
+            .await
+            .map_err(|e| crate::err::internal_error(format!("failed to send email to old address: {}", e)))?;
+
+        self.client
+            .emails
+            .send(email_new)
+            .await
+            .map_err(|e| crate::err::internal_error(format!("failed to send email to new address: {}", e)))?;
+
         Ok(())
     }
 }

@@ -36,9 +36,16 @@ const fn default_environment() -> Environment {
 }
 
 #[derive(Clone, Deserialize, Debug)]
+pub struct ResendConfig {
+    pub api_key: String,
+    pub from_email: String,
+}
+
+#[derive(Clone, Deserialize, Debug)]
 pub struct AppConfig {
     pub database_url: String,
     pub s3: S3Config,
+    pub resend: ResendConfig,
 
     #[serde(default = "default_file_upload_limit")]
     #[allow(dead_code)]
@@ -64,6 +71,10 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 secret_key: "minioadmin123_test".to_string(),
                 endpoint: "http://localhost:7000".to_string(),
                 public_url_base: Some("http://localhost:6060/axismundi-test".to_string()),
+            },
+            resend: ResendConfig {
+                api_key: "re_test_key".to_string(),
+                from_email: "test@example.com".to_string(),
             },
             file_upload_limit_bytes: default_file_upload_limit(),
             port: 3001,

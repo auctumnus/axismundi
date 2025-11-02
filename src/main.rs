@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app_state = AppState {
         pool: pool.clone(),
-        email_service: std::sync::Arc::new(email::ResendEmailService::new()),
+        email_service: std::sync::Arc::new(email::ResendEmailService::new(&config::CONFIG.resend)),
     };
 
     let app = create_router(app_state);
