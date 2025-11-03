@@ -2,6 +2,7 @@
 name = "axismundi"
 version = "0.1.0"
 edition = "2024"
+default-run = "axismundi"
 
 [dependencies]
 anyhow = "1.0.98"
@@ -39,6 +40,16 @@ http-body-util = "0.1.3"
 unicode-normalization = "0.1.24"
 daggy = "0.9.0"
 strum = { version = "0.27.2", features = ["derive"] }
+bollard = "0.19.4"
+reqwest = "0.12.24"
+
+[[bin]]
+name = "maid"
+path = "src/maid.rs"
+
+[[bin]]
+name = "knight"
+path = "src/knight.rs"
 
 [dev-dependencies]
 random_word = { version = "0.5.2", features = ["en"] }

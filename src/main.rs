@@ -13,7 +13,7 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util::AppState;
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, email::make_email_service};
 mod config;
 mod controller;
 mod email;
@@ -38,9 +38,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    let email_service = std::sync::Arc::new(make_email_service(&config::CONFIG.resend));
+
     let app_state = AppState {
         pool: pool.clone(),
-        email_service: std::sync::Arc::new(email::ResendEmailService::new(&config::CONFIG.resend)),
+        email_service,
     };
 
     let app = create_router(app_state);

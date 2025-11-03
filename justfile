@@ -4,7 +4,6 @@ default:
 # Start only the database
 db:
     @echo "Starting PostgreSQL database..."
-    pstree
     docker compose -f docker-compose.db.yml up -d
     @echo "Waiting for database to be ready..."
     @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \

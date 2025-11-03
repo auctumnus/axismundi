@@ -1,3 +1,6 @@
+axismundi is a constructed language creation and documentation app. users will use it from
+the web (or other clients, maybe) to construct languages
+
 always run tests using `just test`; we need this to bring up the db
 example invocations:
 - `just test`: runs full test suite, no coverage

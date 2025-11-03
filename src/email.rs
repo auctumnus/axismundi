@@ -92,14 +92,12 @@ impl EmailService for ResendEmailService {
 <body>
 <h1>reset your password</h1>
 <p>click the link below to reset your password:</p>
-<p><a href="{}">reset password</a></p>
+<p><a href="{reset_url}">reset password</a></p>
 <p>or copy and paste this link into your browser:</p>
-<p>{}</p>
-<p>user id: {}</p>
+<p>{reset_url}</p>
 <p>if you didn't request this password reset, you can safely ignore this email.</p>
 </body>
-</html>"#,k
-            reset_url, reset_url, user_id
+</html>"#
         );
 
         let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html);
@@ -124,12 +122,10 @@ impl EmailService for ResendEmailService {
             r#"<html>
 <body>
 <h1>email address changed</h1>
-<p>this is a notification that your email address has been changed from {} to {}.</p>
-<p>user id: {}</p>
+<p>this is a notification that your email address has been changed from {old_email} to {new_email}.</p>
 <p>if you didn't make this change, please contact support immediately.</p>
 </body>
-</html>"#,
-            old_email, new_email, user_id
+</html>"#
         );
 
         let email_old = CreateEmailBaseOptions::new(&self.from_email, [old_email], subject)
@@ -150,6 +146,17 @@ impl EmailService for ResendEmailService {
             .map_err(|e| crate::err::internal_error(format!("failed to send email to new address: {}", e)))?;
 
         Ok(())
+    }
+}
+
+pub fn make_email_service(config: &ResendConfig) -> impl EmailService {
+    #[cfg(test)]
+    {
+        crate::email::tests::MockEmailService::new()
+    }
+    #[cfg(not(test))]
+    {
+        ResendEmailService::new(config)
     }
 }
 

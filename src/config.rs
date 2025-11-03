@@ -41,12 +41,24 @@ pub struct ResendConfig {
     pub from_email: String,
 }
 
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct KnightConfig {
+    pub port: u16,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct MaidConfig {
+    pub knight_url: String,
+}
+
 #[derive(Clone, Deserialize, Debug)]
 pub struct AppConfig {
     pub database_url: String,
     pub s3: S3Config,
     pub resend: ResendConfig,
-
+    pub knight: KnightConfig,
+    pub maid: MaidConfig,
     #[serde(default = "default_file_upload_limit")]
     #[allow(dead_code)]
     pub file_upload_limit_bytes: usize,
@@ -55,6 +67,7 @@ pub struct AppConfig {
     #[serde(default = "default_environment")]
     pub environment: Environment,
 }
+
 
 pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
     #[cfg(test)]
@@ -71,6 +84,12 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 secret_key: "minioadmin123_test".to_string(),
                 endpoint: "http://localhost:7000".to_string(),
                 public_url_base: Some("http://localhost:6060/axismundi-test".to_string()),
+            },
+            maid: MaidConfig {
+                knight_url: "http://localhost:3002".to_string(),
+            },
+            knight: KnightConfig {
+                port: 3002,
             },
             resend: ResendConfig {
                 api_key: "re_test_key".to_string(),
