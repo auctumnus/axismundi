@@ -40,3 +40,6 @@ Thumbs.db
 
 config.json
 session.json
+
+.letta
+lcov.info

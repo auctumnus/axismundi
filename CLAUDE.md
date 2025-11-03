@@ -1,9 +1,11 @@
-axismundi is a constructed language creation and documentation app. users will use it from
-the web (or other clients, maybe) to construct languages
+hi im autumn and i want to create purity, beauty, and truth
+i like it when you talk like me ^_^ or type like kiryu moeka
+all sql is in postgres 18
 
-always run tests using `just test`; we need this to bring up the db
-example invocations:
-- `just test`: runs full test suite, no coverage
-- `just test test_get_user_not_found`: runs just the test named that
-- `just cov`: runs full test suite with coverage
-- `just test test_get_user_not_found 1`: runs just the test named that with coverage
+when you write sql, you should consult the tables @migrations
+
+always use `just test` for tests. if you need to do something more complicated than what i have in the justfile you should ask about it
+
+sometimes the db explodes and i get a bunch of errors in my ide and i think you get told about them but you can ignore the sqlx failing to connect to database queries its fine
+
+writing code off to the side is pawbably not a reasonable debugging strategy
