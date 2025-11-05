@@ -1,4 +1,4 @@
-import { readdir, mkdir, readFile, writeFile, watch } from 'fs/promises';
+import { readdir, mkdir, readFile, writeFile, watch, copyFile } from 'fs/promises';
 import { join, dirname, relative, extname, basename } from 'path';
 import { existsSync } from 'fs';
 import { transform } from 'lightningcss';
@@ -83,7 +83,9 @@ async function processFile(filePath: string) {
       const outputPath = join(outputDir, `${baseName}.js`);
       await processJS(filePath, outputPath);
     } else {
-      console.log(`Skipping: ${relativePath} (unsupported file type)`);
+      console.log(`Copying ${relativePath} (no processing, unsupported file type)`);
+      const outputPath = join(outputDir, basename(filePath));
+      await copyFile(filePath, outputPath);
     }
   } catch (err: any) {
     console.error(`Error processing ${relativePath}:`, err.message);

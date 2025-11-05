@@ -4,14 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Axismundi{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/reset.css">
+    <link rel="stylesheet" href="/static/colors.css">
     <link rel="stylesheet" href="/static/main.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="/static/main.js"></script>
+    <script defer src="/static/sidebar.js"></script>
+    {% block head %}{% endblock %}
 </head>
 <body>
-    <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
-        <a href="/contact">Contact</a>
-    </nav>
+    <svg id="icon-store" viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg">
+        <!-- Icons from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
+        <symbol viewBox="0 0 24 24" id="panel-open"><path fill="currentColor" d="M12.5 9.2v5.6q0 .35.3.475t.55-.125l2.45-2.45q.3-.3.3-.7t-.3-.7l-2.45-2.45q-.25-.25-.55-.125t-.3.475M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm5-2h9V5h-9z"></path></symbol>
+        <symbol viewBox="0 0 24 24" id="panel-idle"><path fill="currentColor" d="M12.5 9.2v5.6q0 .35.3.475t.55-.125l2.45-2.45q.3-.3.3-.7t-.3-.7l-2.45-2.45q-.25-.25-.55-.125t-.3.475M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm3-2V5H5v14zm2 0h9V5h-9zm-2 0H5z"></path></symbol>
+    </svg>
+    <header>
+        <div class="left">
+            <a id="logomark" href="/">
+                <svg xmlns="http://www.w3.org/2000/svg" width="35.906" height="28.357" viewBox="0 0 9.5 7.503"><path d="M109.75 162.506v7.228zM105 169.75h9.5z" style="fill:none;stroke:currentColor;stroke-width:.48734;stroke-dasharray:none;stroke-opacity:1" transform="translate(-105 -162.497)"/><path d="M109.75 162.506s.249 7.244-4.75 7.244" style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:.5;stroke-dasharray:none;stroke-opacity:1" transform="translate(-105 -162.497)"/><path d="M109.75 162.506s-.243 7.244 4.75 7.244" style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:.499999;stroke-dasharray:none;stroke-opacity:1" transform="translate(-105 -162.497)"/></svg>
+                <span>axismundi</span>
+            </a>
+            <span class="separator">/</span>
+            <a href="#" class="breadcrumb">Classical Doccábhic</a>
+        </div>
+        <div class="right">
+            <img class="pfp medium" alt="user profile picture" src="https://pbs.twimg.com/profile_images/1874597312518885376/r350pvo-_400x400.jpg">
+        </div>
+    </header>
+    <div id="sidebar-controls">
+        <button id="open-sidebar">
+            <svg><use href="#panel-open"></use></svg>
+        </button><span id="safety-triangle">&nbsp;</span>
+    </div>
+
+    <aside>
+        <nav id="sidebar-panel">
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="#">Explore</a></li>
+                <li><a href="#">Notifications</a></li>
+                <li><a href="#">Messages</a></li>
+                <li><a href="#">Bookmarks</a></li>
+                <li><a href="#">Lists</a></li>
+                <li><a href="#">Profile</a></li>
+                <li><a href="#">More</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main></main>
     
     {% block content %}{% endblock %}
     

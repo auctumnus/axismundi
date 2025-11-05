@@ -35,7 +35,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .route("/about", get(about))
         .route("/contact", get(contact))
         .nest_service("/static", ServeDir::new("frontend/dist"))
-        .nest_service("/assets", ServeDir::new("frontend/dist/assets"));
+        .nest_service("/assets", ServeDir::new("assets"));
 
     Router::<AppState>::new()
         .merge(secure_routes)
