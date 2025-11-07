@@ -77,7 +77,7 @@ mod tests {
     use reqwest::StatusCode;
     use std::sync::Arc;
 
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     pub(crate) async fn post_without_auth(uri: &str, body: serde_json::Value) -> Request<Body> {
         Request::builder()
@@ -222,7 +222,7 @@ mod tests {
         // verify email
         let sent_emails = email_service.get_sent_emails();
         let email_lowercase = email.to_lowercase();
-        let verification_email = sent_emails.iter().find(|e| e.to == email_lowercase && e.email_type == crate::email::tests::EmailType::Verification)
+        let verification_email = sent_emails.iter().find(|e| e.to == email_lowercase && e.email_type == crate::email::EmailType::Verification)
             .unwrap_or_else(|| panic!("No verification email found for {email_lowercase}. Sent emails: {sent_emails:?}"));
 
         let user_id = verification_email.user_id;
@@ -230,7 +230,7 @@ mod tests {
             "token": verification_email.token,
             "email": email_lowercase,
         });
-        let path = format!("users/{user_id}/verify");
+        let path = format!("verify/{user_id}");
         let resp = app
             .clone()
             .oneshot(post_without_auth(&path, verify_body).await)

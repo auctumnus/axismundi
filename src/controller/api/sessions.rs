@@ -71,7 +71,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{get_with_auth, make_authed_user};
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     #[tokio::test]
     async fn test_login() {
@@ -103,7 +103,7 @@ mod tests {
             .iter()
             .find(|e| {
                 e.to == email_lowercase
-                    && e.email_type == crate::email::tests::EmailType::Verification
+                    && e.email_type == crate::email::EmailType::Verification
             })
             .unwrap();
 
@@ -114,7 +114,7 @@ mod tests {
         });
 
         let request = crate::controller::api::tests::post_without_auth(
-            &format!("users/{user_id}/verify"),
+            &format!("verify/{user_id}"),
             verify_body,
         )
         .await;

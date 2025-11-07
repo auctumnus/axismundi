@@ -28,34 +28,39 @@ impl EmailVerificationTokenRepository {
         Self { state }
     }
 
-    /// Creates a verification token within a transaction and returns the unhashed token
+    /// Creates a verification token within a transaction and returns the record with unhashed token
     pub async fn create(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         user_id: Uuid,
         email: String,
-    ) -> AppResult<String> {
-        let token = nanoid::nanoid!(6, NON_CONFUSABLES);
+    ) -> AppResult<EmailVerificationToken> {
+        let unhashed_token = nanoid::nanoid!(6, NON_CONFUSABLES);
         let expires_at = Utc::now() + chrono::Duration::days(1);
         // Tokens that require an extra level of security, **such as password reset tokens**,
         // should be hashed with SHA-256.
         // https://thecopenhagenbook.com/server-side-tokens#storing-tokens
-        let hashed_token = crate::util::stable_hash(&token);
+        let hashed_token = crate::util::stable_hash(&unhashed_token);
 
-        sqlx::query!(
+        let mut record = sqlx::query_as!(
+            EmailVerificationToken,
             r#"
                 INSERT INTO email_verification_tokens (user_id, token, expires_at, email)
                 VALUES ($1, $2, $3, $4)
+                RETURNING *
             "#,
             user_id,
             hashed_token,
             expires_at,
             email
         )
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
 
-        Ok(token)
+        // Replace the hashed token with the unhashed one for sending
+        record.token = unhashed_token;
+
+        Ok(record)
     }
 
     /// Sends a verification email with the given token
@@ -109,6 +114,41 @@ impl EmailVerificationTokenRepository {
         } else {
             Err(not_found("Token not found or already invalidated"))
         }
+    }
+
+    pub async fn resend(&self, original_token_id: Uuid) -> AppResult<EmailVerificationToken> {
+        let mut tx = self.state.pool.begin().await?;
+
+        let original = sqlx::query_as!(
+            EmailVerificationToken,
+            r#"
+                SELECT * FROM email_verification_tokens
+                WHERE id = $1 AND invalidated_at IS NULL
+            "#,
+            original_token_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| not_found("token not found or already invalidated"))?;
+
+        sqlx::query!(
+            r#"
+                UPDATE email_verification_tokens
+                SET invalidated_at = NOW()
+                WHERE id = $1
+            "#,
+            original_token_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let new_token = self.create(&mut tx, original.user_id, original.email.clone()).await?;
+
+        tx.commit().await?;
+
+        self.send(original.user_id, &original.email, &new_token.token).await?;
+
+        Ok(new_token)
     }
 
     #[allow(dead_code)]

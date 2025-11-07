@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use async_trait::async_trait;
 use resend_rs::types::CreateEmailBaseOptions;
 use resend_rs::Resend;
@@ -152,19 +154,13 @@ impl EmailService for ResendEmailService {
 pub fn make_email_service(config: &ResendConfig) -> impl EmailService {
     #[cfg(test)]
     {
-        crate::email::tests::MockEmailService::new()
+        crate::email::MockEmailService::new()
     }
     #[cfg(not(test))]
     {
         ResendEmailService::new(config)
     }
 }
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use super::*;
-
-    use std::sync::{Arc, Mutex};
 
     // mock email service for testing
     #[derive(Clone, Debug)]
@@ -211,6 +207,7 @@ pub(crate) mod tests {
             to: &str,
             token: &str,
         ) -> AppResult<()> {
+            tracing::debug!("sending verification email; to: {to}, token: {token}, user_id: {user_id}");
             self.sent_emails.lock().unwrap().push(SentEmail {
                 to: to.to_string(),
                 email_type: EmailType::Verification,
@@ -226,6 +223,7 @@ pub(crate) mod tests {
             to: &str,
             token: &str,
         ) -> AppResult<()> {
+            tracing::debug!("sending password reset email; to: {to}, token: {token}, user_id: {user_id}");
             self.sent_emails.lock().unwrap().push(SentEmail {
                 to: to.to_string(),
                 email_type: EmailType::PasswordReset,
@@ -241,6 +239,7 @@ pub(crate) mod tests {
             old_email: &str,
             new_email: &str,
         ) -> AppResult<()> {
+            tracing::debug!("sending email change notification; old_email: {old_email}, new_email: {new_email}, user_id: {user_id}");
             self.sent_emails.lock().unwrap().push(SentEmail {
                 to: old_email.to_string(),
                 email_type: EmailType::EmailChangeNotification,
@@ -256,4 +255,3 @@ pub(crate) mod tests {
             Ok(())
         }
     }
-}

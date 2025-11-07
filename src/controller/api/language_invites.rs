@@ -205,7 +205,7 @@ mod tests {
     use crate::controller::api::tests::{
         delete_without_auth, make_authed_user, post, print_response_body,
     };
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     #[tokio::test]
     async fn test_invite_user_to_language() {

@@ -137,7 +137,7 @@ mod tests {
     use crate::controller::api::tests::{
         delete_without_auth, get_with_auth, make_authed_user, post, put_without_auth,
     };
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     #[tokio::test]
     async fn test_get_language_permissions() {

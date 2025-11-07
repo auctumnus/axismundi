@@ -111,7 +111,7 @@ mod tests {
     use crate::controller::api::tests::{
         delete_without_auth, get, make_authed_user, post, put_without_auth,
     };
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     #[tokio::test]
     async fn test_create_word() {

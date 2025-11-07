@@ -13,19 +13,15 @@ graph LR
     Princess[Princess Process<br/>main app logic]
     DB[(Database)]
     Maid[Maid Processes<br/>sandboxed]
-    Knight[Knight]
     DockerDaemon[Docker Daemon]
     External[External Services]
     User -->|requests| Proxy
     Proxy -->|forward| Princess
-    Knight -->|maid control requests| DockerDaemon
-    DockerDaemon -->|maid control actions| Maid
+    DockerDaemon -->|health checks| Maid
     Princess -->|add tasks| DB
     Maid -->|poll tasks| DB
     Maid -->|work| External
-    Maid -->|gossip| Knight
     style Princess fill:#ff0066,color:#fff
-    style Maid fill:#7700ff,color:#fff
     style Knight fill:#009edc,color:#fff
     style DockerDaemon fill:#fff,color:#000,stroke:#F8D3DAFF
 ```
@@ -41,8 +37,6 @@ a maid is created by God (docker or whatever), and then goes to find her princes
 making a row for herself, and then starts 2 {tokio task, thread, something}s, a "work loop" and a "gossip loop".
 
 for some timeout values N < M < L:
-
-### work loop
 
 1. try to take a task
 2. if there is no task, sleep for N seconds and goto 1
@@ -76,34 +70,6 @@ flowchart TD
     style ReportSuccess fill:#428f46
     style ReportRetry fill:#daaa3f
 ```
-
-### gossip loop
-
-1. wait M seconds
-2. select all maids who have not checked in in L seconds
-3. if you are in this set, die politely
-4. ask the Knight to kill all of them
-
-```mermaid
-flowchart TD
-    Start([Start]) --> Wait[Wait M seconds]
-    Wait --> Query[Query DB for maids<br/>not checked in L seconds]
-    Query --> DBCheck{DB accessible?}
-    DBCheck -->|No| Die([Die])
-    DBCheck -->|Yes| AmIDead{Am I in this set?}
-    AmIDead -->|Yes| Die([Die])
-    AmIDead -->|No| KillOthers[Ask the Knight to kill them]
-    KillOthers --> Wait
-    
-    style Die fill:#c93c37
-```
-
-## the life of a knight
-
-a Knight holds a very powerful weapon: the docker socket. maids are not allowed to have access to
-the docker socket because they are the most likely to get killed, and the docker socket is equivalent
-to root on the host. the Knight acts as a docker socket proxy, accepting "kill container" requests so
-long as the target is a maid
 
 ## references
 

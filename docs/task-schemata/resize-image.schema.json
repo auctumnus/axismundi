@@ -1,0 +1,25 @@
+{
+    "type": "object",
+    "properties": {
+        "schema_version": {
+            "type": "integer",
+            "const": 1
+        },
+        "object_key": {
+            "type": "string",
+            "description": "The S3 object key of the image to resize"
+        },
+        "output_key": {
+            "type": "string",
+            "description": "The S3 object key where the resized image will be saved"
+        },
+        "width": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "height": {
+            "type": "integer",
+            "minimum": 1
+        }
+    }
+}

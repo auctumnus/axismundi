@@ -35,7 +35,7 @@ mod tests {
     use crate::controller::api::tests::{
         get, make_authed_user, post, put
     };
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     #[tokio::test]
     async fn test_get_bookmark_user() {

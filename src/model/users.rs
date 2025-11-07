@@ -2,6 +2,7 @@ use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use regex::Regex;
+use resend_rs::types::Email;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -9,7 +10,7 @@ use validator::Validate;
 use zxcvbn::Score;
 
 use crate::{
-    err::{bad_request, internal_error, not_found, AppResult}, model::password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}, pagination::{PaginatedRequest, PaginatedResponse}, util::{ensure_verified, re, s3::S3, AppState}
+    err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified, re, s3::S3}
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -20,7 +21,7 @@ where
     S: Serializer,
 {
     match object_id {
-        Some(id) => serializer.serialize_str(&S3.get_object_url(id)),
+        Some(filename) => serializer.serialize_str(&S3.get_profile_picture_url(filename)),
         None => serializer.serialize_none(),
     }
 }
@@ -55,6 +56,12 @@ pub struct User {
 impl User {
     pub const fn is_verified(&self) -> bool {
         self.verified_at.is_some()
+    }
+
+    pub fn get_profile_picture_url(&self) -> Option<String> {
+        self.profile_picture_object_id
+            .as_ref()
+            .map(|object_id| S3.get_profile_picture_url(object_id))
     }
 }
 
@@ -147,7 +154,7 @@ impl UserRepository {
         Ok(true)
     }
 
-    pub async fn create(&self, user: CreateUser) -> AppResult<User> {
+    pub async fn create(&self, user: CreateUser) -> AppResult<(User, EmailVerificationToken)> {
         user.validate()?;
 
         if self.username_exists(&user.username).await? {
@@ -167,6 +174,10 @@ impl UserRepository {
         let password_hash = crate::util::hash(&user.password)
             .map_err(|_| internal_error("password hash failed"))?;
 
+        // select a random default profile picture
+        let default_pfps = ["default-pfps/1.webp", "default-pfps/2.webp", "default-pfps/3.webp"];
+        let random_pfp = default_pfps[rand::random::<usize>() % default_pfps.len()];
+
         // Begin transaction: create user + verification token + bookmark atomically
         let mut tx = self.state.pool.begin().await?;
 
@@ -174,9 +185,9 @@ impl UserRepository {
             r#"
                 insert into users
                     (username, email, password_hash, display_name, description,
-                     pronouns, gender)
+                     pronouns, gender, profile_picture_object_id)
                 values
-                    ($1, $2, $3, $4, $5, $6, $7)
+                    ($1, $2, $3, $4, $5, $6, $7, $8)
                 returning id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
                 "#,
             user.username,
@@ -185,7 +196,8 @@ impl UserRepository {
             user.display_name,
             user.description,
             user.pronouns,
-            user.gender
+            user.gender,
+            random_pfp
         )
         .fetch_one(&mut *tx)
         .await?;
@@ -225,7 +237,7 @@ impl UserRepository {
         tx.commit().await?;
 
         // Send email outside transaction - if this fails, token exists for retry/resend
-        if let Err(e) = token_repo.send(result.id, &result.email, &token).await {
+        if let Err(e) = token_repo.send(result.id, &result.email, &token.token).await {
             // Log the error but don't fail the registration
             // User exists with token, can implement resend endpoint later
             tracing::error!(
@@ -235,7 +247,7 @@ impl UserRepository {
             );
         }
 
-        Ok(result)
+        Ok((result, token))
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<User> {
@@ -400,7 +412,7 @@ impl UserRepository {
 
         if let Some(token) = token {
             let email = updates.email.unwrap();
-            if let Err(e) = tokens.send(id, &email, &token).await {
+            if let Err(e) = tokens.send(id, &email, &token.token).await {
                 // Log the error but don't fail the update
                 // User exists with token, can implement resend endpoint later
                 tracing::error!(

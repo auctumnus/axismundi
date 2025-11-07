@@ -13,7 +13,7 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util::AppState;
 
-use crate::{config::CONFIG, email::make_email_service};
+use crate::{config::CONFIG, email::{make_email_service, MockEmailService}, model::users::User, util::extract_session::Session};
 mod config;
 mod controller;
 mod email;
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let email_service = std::sync::Arc::new(make_email_service(&config::CONFIG.resend));
+    let email_service = std::sync::Arc::new(MockEmailService::new());
 
     let app_state = AppState {
         pool: pool.clone(),
@@ -72,10 +72,11 @@ fn create_router(app_state: AppState) -> Router {
 #[derive(Template)]
 #[template(path = "error.html")]
 struct ErrorTemplate {
+    current_user: Option<User>,
     error: err::AppError,
 }
 
-async fn fallback(req_headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
+async fn fallback(sess: Session, req_headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
     let content_type = req_headers
         .get(axum::http::header::ACCEPT)
         .and_then(|v| v.to_str().ok())
@@ -86,6 +87,7 @@ async fn fallback(req_headers: HeaderMap) -> (StatusCode, HeaderMap, String) {
     match content_type {
         s if s.contains("text/html") => {
             let template = ErrorTemplate {
+                current_user: sess.user().cloned(),
                 error: err::AppError::new("Not Found".to_owned(), StatusCode::NOT_FOUND),
             };
             let mut headers = HeaderMap::new();
@@ -121,7 +123,7 @@ pub(crate) mod tests {
 
     pub(crate) async fn test_app() -> Result<RouterIntoService<axum::body::Body>, sqlx::Error> {
         let pool = PgPool::connect(&CONFIG.database_url).await?;
-        let email_service = std::sync::Arc::new(email::tests::MockEmailService::new());
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
         let app_state = AppState {
             pool,
             email_service,

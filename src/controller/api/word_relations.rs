@@ -125,7 +125,7 @@ mod tests {
     use crate::controller::api::tests::{
         assert_response_status, get, make_authed_user, post, post_without_auth
     };
-    use crate::email::tests::MockEmailService;
+    use crate::email::MockEmailService;
 
     async fn setup_language_with_words(
         token: &str,

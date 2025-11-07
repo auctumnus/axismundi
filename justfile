@@ -93,12 +93,34 @@ run:
 watch-frontend:
     cd frontend && bun run dev
 
-# Full development setup (database + backend + frontend watching)
+# Start all services except the app (db, minio, thumbor, thumbor proxy)
 dev-full:
-    just db &
-    sleep 3
-    cd frontend && bun run dev &
-    just run
+    @echo "Starting all development services..."
+    docker compose up -d postgres minio createbuckets thumbor
+    @echo "Waiting for services to be ready..."
+    @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
+        echo "Database is unavailable - sleeping"; \
+        sleep 1; \
+    done
+    @until curl -f http://localhost:9000/minio/health/live >/dev/null 2>&1; do \
+        echo "Minio is unavailable - sleeping"; \
+        sleep 1; \
+    done
+    @until curl -f http://localhost:8888/healthcheck >/dev/null 2>&1; do \
+        echo "Thumbor is unavailable - sleeping"; \
+        sleep 1; \
+    done
+    @echo "All services ready!"
+    @echo "PostgreSQL: postgres://user:password@localhost:5432/axismundi"
+    @echo "Minio Web UI: http://localhost:9001 (minioadmin/minioadmin123)"
+    @echo "Minio S3 API: http://localhost:9000"
+    @echo "Thumbor: http://localhost:8888"
+    @echo ""
+    @echo "Now you can run: just run"
+
+dev-down:
+    @echo "Stopping all development services..."
+    docker compose down
 
 # Build the application
 build:

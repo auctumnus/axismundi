@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+
+{% block title %}Axismundi - Account created{% endblock %}
+
+{% block content %}
+<h1>Account created</h1>
+<p>Your account has been successfully created. You should check your email for a verification link.</p>
+<p>If you don't see the email, try:</p>
+<ul>
+    <li>checking your spam folder</li>
+    <li><a href="/resend-verification/{{ token_id }}">resending the verification email</a></li>
+    <li><a href="/support">contacting support</a></li>
+</ul>
+
+{% endblock %}

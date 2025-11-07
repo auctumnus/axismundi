@@ -3,7 +3,11 @@
 {% block title %}{{ error.status_code }} | Axismundi{% endblock %}
 
 {% block content %}
-<h1>Error {{ error.status_code }}</h1>
-<p>{{ error.message }}</p>
-<a href="/">Go back to home</a>
+<h1>{{ error.status_code }}</h1>
+{% if error.status_code == 404 %}
+    <p>the page you are looking for could not be found</p>
+{% else %}
+    <p>{{ error.message }}</p>
+{% endif %}
+<a href="/">go back home</a>
 {% endblock %}
