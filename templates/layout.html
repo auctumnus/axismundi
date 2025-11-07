@@ -44,7 +44,9 @@
                     {% if let Some(user) = current_user %}
                         <nav class="user-panel">
                             <div class="user-card">
-                                <img class="pfp large" alt="user profile picture" src="{% if let Some(pfp_url) = user.get_profile_picture_url() %}{{ pfp_url }}{% else %}/static/default-pfp.webp{% endif %}">
+                                <div class="pfp-container">
+                                    <img class="pfp medium" alt="user profile picture" src="{% if let Some(pfp_url) = user.get_profile_picture_url() %}{{ pfp_url }}{% else %}/static/default-pfp.webp{% endif %}">
+                                </div>
                                 <div class="user-info">
                                     {% if let Some(display_name) = user.display_name %}
                                         <p class="display-name">{{ display_name }}</p>
