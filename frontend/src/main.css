@@ -33,7 +33,7 @@
 
   --padding-right: calc((100dvh - var(--page-width)) / 2);
 
-  --border: .1rem solid light-dark(var(--color-slate-300), var(--color-slate-700));
+  --border: 1px solid light-dark(var(--color-slate-300), var(--color-slate-700));
 }
 
 #icon-store {
@@ -171,6 +171,7 @@ svg.icon {
 }
 
 #current-user {
+  cursor: pointer;
   z-index: 100;
 }
 
@@ -181,7 +182,7 @@ svg.icon {
   border-radius: var(--rounding);
   border: var(--border);
   background-color: var(--background-panel);
-  box-shadow: 0 1px 3px 0 var(--color-shadow);
+  box-shadow: 0 4px 6px -1px var(--color-shadow), 0 2px 4px -2px var(--color-shadow);
   z-index: 1000;
   padding: .325rem;
   visibility: hidden;
@@ -251,6 +252,7 @@ svg.icon {
       }
       svg.icon {
         position: relative;
+        top: -1px;
         margin-right: .5rem;
       }
     }

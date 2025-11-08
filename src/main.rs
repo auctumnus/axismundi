@@ -13,7 +13,7 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util::AppState;
 
-use crate::{config::CONFIG, email::{make_email_service, MockEmailService}, model::users::User, util::extract_session::Session};
+use crate::{config::CONFIG, email::MockEmailService, model::users::User, util::extract_session::Session};
 mod config;
 mod controller;
 mod email;

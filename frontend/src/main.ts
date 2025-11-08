@@ -1,5 +1,9 @@
 const initializeUserPanel = () => {
     const currentUserElement = document.getElementById("current-user")!;
+    if(!currentUserElement) {
+        return;
+    }
+
     const userPanel = document.querySelector("nav.user-panel")! as HTMLElement;
     const safetyTriangle = document.getElementById("safety-triangle")!;
 
