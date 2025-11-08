@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block title %}Axismundi - Settings{% endblock %}
+
+{% block content %}
+<h1>settings</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+{% let user = current_user.as_ref().unwrap() %}
+<h2>user settings</h2>
+<form class="default" method="post" action="/user/{{ user.username }}/update">
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" value="{{ user.email }}" required>
+</form>
+{% endblock %}

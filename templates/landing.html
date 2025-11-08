@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+
+{% block title %}Axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/landing.css">
+{% endblock %}
+
+{% block content %}
+
+<h1>welcome to axismundi</h1>
+
+<p>
+    <span class="axismundi">axismundi</span> is a platform for creating
+    and documenting <i>constructed languages</i>, or <i>conlangs</i>.
+    it is designed to be a collaborative space for language enthusiasts
+    to share their work, get feedback, and connect with others who share
+    their passion. it includes various tools to help you build your
+    lexicon, grammar, and phonology.
+</p>
+
+<div class="button-container">
+    <a href="/register" class="button">Get started</a>
+    <a href="/about" class="button secondary">Learn more</a>
+</div>
+
+{% endblock %}

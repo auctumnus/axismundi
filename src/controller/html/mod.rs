@@ -3,11 +3,12 @@ use std::sync::Arc;
 use crate::{
     ErrorTemplate,
     err::AppError,
-    model::users::User,
+    model::users::{User, UserRepository},
+    model::languages::Language,
     util::{AppState, extract_session::Session},
 };
 use askama::Template;
-use axum::{Router, http::StatusCode, response::Html, routing::get};
+use axum::{Router, http::StatusCode, response::{Html, IntoResponse, Redirect}, routing::get};
 use governor::middleware::NoOpMiddleware;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
@@ -36,7 +37,8 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_user_routes);
 
     let normal_routes = Router::<AppState>::new()
-        .route("/", get(home))
+        .route("/", get(landing))
+        .route("/home", get(home))
         .nest_service("/static", ServeDir::new("frontend/dist"))
         .nest_service("/assets", ServeDir::new("assets"))
         .merge(normal_user_routes);
@@ -44,13 +46,6 @@ pub fn create_html_controller() -> Router<AppState> {
     Router::<AppState>::new()
         .merge(secure_routes)
         .merge(normal_routes)
-}
-
-#[derive(Template)]
-#[template(path = "home.html")]
-#[allow(dead_code)]
-struct HomeTemplate {
-    current_user: Option<User>,
 }
 
 fn render_template<T: Template>(template: T) -> Html<String> {
@@ -76,7 +71,44 @@ pub fn render_result<T: Template>(current_user: Option<User>, res: Result<T, App
     }
 }
 
-async fn home(s: Session) -> Html<String> {
+#[derive(Template)]
+#[template(path = "landing.html")]
+struct LandingTemplate {
+    current_user: Option<User>,
+}
+
+async fn landing(s: Session) -> impl IntoResponse {
+    if let Some(_user) = s.user() {
+        return Redirect::to("/home").into_response();
+    }
+
     let current_user = s.user().cloned();
-    render_template(HomeTemplate { current_user })
+    render_template(LandingTemplate { current_user }).into_response()
+}
+
+#[derive(Template)]
+#[template(path = "home.html")]
+struct HomeTemplate {
+    current_user: Option<User>,
+    languages: Vec<Language>,
+}
+
+async fn home(users: UserRepository, s: Session) -> Result<impl IntoResponse, Html<String>> {
+    let Some(user) = s.user().cloned() else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let languages = users.top_languages(user.id, 5).await.map_err(error_template(Some(&user)))?;
+
+    let template = HomeTemplate {
+        current_user: Some(user),
+        languages,
+    };
+
+    let body = render_template(template);
+    Ok((StatusCode::OK, body).into_response())
+}
+
+pub fn error_template(current_user: Option<&User>) -> impl FnOnce(AppError) -> Html<String> {
+    move |error| render_template(ErrorTemplate { current_user: current_user.cloned(), error })
 }

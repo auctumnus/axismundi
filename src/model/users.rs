@@ -10,7 +10,7 @@ use validator::Validate;
 use zxcvbn::Score;
 
 use crate::{
-    err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified, re, s3::S3}
+    err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, languages::Language, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified, re, s3::S3}
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -728,6 +728,36 @@ impl UserRepository {
         tx.commit().await?;
 
         Ok(())
+    }
+
+    pub async fn top_languages(&self, user_id: Uuid, limit: i64) -> AppResult<Vec<Language>> {
+        let result = sqlx::query_as!(
+            Language,
+            r#"
+            SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                WHERE languages.created_by = $1
+                ORDER BY languages.updated_at DESC
+                LIMIT $2
+            "#,
+            user_id,
+            limit
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(result)
     }
 }
 

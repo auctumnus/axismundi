@@ -1,5 +1,5 @@
 use askama::Template;
-use axum::{Router, extract::Query, response::{Html, Redirect}, routing::{get, post}};
+use axum::{Router, extract::Query, response::{Html, IntoResponse, Redirect}, routing::{get, post}};
 use axum_extra::extract::{CookieJar, cookie::Cookie};
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -16,7 +16,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let normal_routes = Router::<AppState>::new()
         .route("/login", get(login_form))
         .route("/register", get(signup_form))
-        .route("/resend-verification/{token_id}", get(resend_verification_form));
+        .route("/resend-verification/{token_id}", get(resend_verification_form))
+        .route("/settings", get(settings_form));
 
     (secure_routes, normal_routes)
 }
@@ -168,4 +169,24 @@ async fn verify(users: UserRepository, path: axum::extract::Path<Uuid>, Query(ve
         .map(|_| VerifiedTemplate { current_user: None });
 
     render_result(None, res)
+}
+
+#[derive(Template)]
+#[template(path = "settings.html")]
+struct SettingsTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+}
+async fn settings_form(s: Session) -> Result<impl IntoResponse, Html<String>> {
+    let Some(user) = s.user().cloned() else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let template = SettingsTemplate {
+        current_user: Some(user),
+        error: None,
+    };
+
+    let body = render_template(template);
+    Ok((StatusCode::OK, body).into_response())
 }

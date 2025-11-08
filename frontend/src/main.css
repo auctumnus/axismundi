@@ -5,8 +5,7 @@
   --background-page: light-dark(var(--color-slate-100), var(--color-slate-900));
 
   --foreground-primary: light-dark(var(--color-slate-900), var(--color-slate-100));
-  --foreground-secondary: light-dark(var(--color-slate-700), var(--color-slate-300));
-  --foreground-tertiary: light-dark(var(--color-slate-500), var(--color-slate-200));
+  --foreground-secondary: light-dark(var(--color-slate-500), var(--color-slate-400));
 
   --input-background: light-dark(var(--color-slate-200), var(--color-slate-800));
   --input-border: light-dark(var(--color-slate-400), var(--color-slate-600));
@@ -15,7 +14,7 @@
   --error-foreground: var(--color-red-700);
   --error-border: .1rem solid var(--color-red-500);
 
-  --color-shadow: color-mix(in oklab,var(--color-slate-900) 10%,transparent);
+  --color-shadow: light-dark(color-mix(in oklab,var(--color-slate-900) 10%,transparent), color-mix(in oklab, black 30%, transparent));
 
   --font-normal: 'Roboto', Arial, sans-serif;
   --font-heading: 'Roboto Slab', 'Roboto', Arial, sans-serif;
@@ -105,7 +104,7 @@ header {
 
   .separator {
     user-select: none;
-    color: var(--foreground-tertiary);
+    color: var(--foreground-secondary);
   }
 
   a#logomark {
@@ -224,10 +223,6 @@ svg.icon {
       .display-name {
         font-weight: bold;
       }
-
-      .username::before {
-        content: '@';
-      }
     }
   }
 
@@ -316,6 +311,34 @@ div.error {
   }
 }
 
+a.button, form.default button[type="submit"] {
+  font-family: var(--font-heading);
+  padding: .75rem;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--foreground-primary);
+  color: var(--background-page);
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+
+  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+
+  &.secondary {
+    border: 1px solid var(--foreground-primary);
+    background-color: transparent;
+    color: var(--foreground-primary);
+
+    &:hover {
+      background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+    }
+  }
+
+  &:hover {
+    background-color: var(--foreground-secondary);
+  }
+}
+
 form.default {
   display: flex;
   flex-direction: column;
@@ -337,20 +360,5 @@ form.default {
     background-color: var(--input-background);
     color: var(--foreground-primary);
     font-size: 1rem;
-  }
-
-  button[type="submit"] {
-    font-family: var(--font-heading);
-    padding: .75rem;
-    border: none;
-    border-radius: 4px;
-    background-color: var(--foreground-primary);
-    color: var(--background-page);
-    font-size: 1rem;
-    cursor: pointer;
-
-    &:hover {
-      background-color: var(--foreground-secondary);
-    }
   }
 }

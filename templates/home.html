@@ -1,7 +1,27 @@
 {% extends "layout.html" %}
 
-{% block title %}Axismundi - Home{% endblock %}
+{% block title %}Axismundi - home{% endblock %}
+
+{% block head %}
+<script src="/static/home.js" defer></script>
+{% endblock %}
 
 {% block content %}
+
+<h1><span id="welcome">welcome</span>, {{ current_user.as_ref().unwrap().username }}</h1>
+
+<h2>your languages</h2>
+{% if languages.is_empty() %}
+<p>you haven't added any languages yet.</p>
+<a href="/languages/new" class="button">get started</a>
+{% else %}
+<ul id="language-list">
+    {% for language in languages %}
+    <li>
+        <a href="/languages/{{ language.id }}">{{ language.name }}</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
 
 {% endblock %}
