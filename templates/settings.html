@@ -13,24 +13,77 @@
 {% endif %}
 
 {% let user = current_user.as_ref().unwrap() %}
-<form class="default" method="post" action="/user/{{ user.username }}/update">
-    <h2>Account Information</h2>
+<form id="settings-form" class="default">
+    <h2>profile</h2>
     <section>
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" value="{{ user.email }}" required>
+        <label for="display_name">display name</label>
+        <input type="text" id="display_name" name="display_name" value="{% if let Some(display_name) = user.display_name %}{{ display_name }}{% endif %}" maxlength="30">
+        <small>this is how your name appears to others (2-30 characters)</small>
     </section>
     <section>
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" value="{{ user.username }}" required>
-    </section>
-    <h2>Change Password</h2>
-    <section>
-        <label for="current_password">Current Password</label>
-        <input type="password" id="current_password" name="current_password" required>
+        <label for="description">description</label>
+        <textarea id="description" name="description" maxlength="1000" rows="4">{% if let Some(description) = user.description %}{{ description }}{% endif %}</textarea>
+        <small>tell people about yourself (max 1000 characters)</small>
     </section>
     <section>
-        <label for="new_password">New Password</label>
-        <input type="password" id="new_password" name="new_password">
+        <label for="pronouns">pronouns</label>
+        <input type="text" id="pronouns" name="pronouns" value="{% if let Some(pronouns) = user.pronouns %}{{ pronouns }}{% endif %}" maxlength="15">
+        <small>e.g., they/them, she/her, he/him (2-15 characters)</small>
     </section>
+    <section>
+        <label for="gender">gender color</label>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="color" id="gender" name="gender" value="#{% if let Some(gender) = user.gender %}{{ gender }}{% else %}888888{% endif %}" style="width: 50px; height: 50px;">
+            <input type="text" id="gender_hex" name="gender_hex" value="{% if let Some(gender) = user.gender %}{{ gender }}{% else %}888888{% endif %}" maxlength="6" pattern="[a-fA-F0-9]{6}" placeholder="888888" style="width: 100px;">
+        </div>
+        <small>pick a color that represents your gender (hex code)</small>
+    </section>
+
+    <h2>profile picture</h2>
+    <section>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            {% if let Some(pfp_url) = user.get_profile_picture_url() %}
+                <img id="profile-picture-preview" src="{{ pfp_url }}" alt="profile picture" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover;">
+            {% else %}
+                <img id="profile-picture-preview" src="/static/default-pfp.webp" alt="profile picture" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover;">
+            {% endif %}
+            <div>
+                <input type="file" id="profile_picture" name="profile_picture" accept="image/*">
+                <small>upload a new profile picture (max 5MB, images only)</small>
+            </div>
+        </div>
+    </section>
+
+    <h2>account information</h2>
+    <section>
+        <label for="username">username</label>
+        <input type="text" id="username" name="username" value="{{ user.username }}" pattern="[a-z0-9_-]+" maxlength="30">
+        <small>lowercase letters, numbers, dashes, and underscores only (2-30 characters)</small>
+    </section>
+    <section>
+        <label for="email">email</label>
+        <input type="email" id="email" name="email" value="{{ user.email }}">
+        <small>changing your email will require re-verification</small>
+    </section>
+
+    <h2>change password</h2>
+    <section>
+        <label for="current_password">current password</label>
+        <input type="password" id="current_password" name="current_password">
+        <small>required if you want to change your password</small>
+    </section>
+    <section>
+        <label for="new_password">new password</label>
+        <input type="password" id="new_password" name="new_password" minlength="8" maxlength="100">
+        <small>min 8 characters, max 100 characters</small>
+    </section>
+
+    <div id="settings-message" style="display: none; padding: 1rem; margin: 1rem 0; border-radius: 4px;"></div>
+
+    <button type="submit" style="margin-top: 1rem;">save changes</button>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/settings.js"></script>
 {% endblock %}
