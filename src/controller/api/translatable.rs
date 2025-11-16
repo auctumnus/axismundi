@@ -19,9 +19,9 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
         .route("/translatable", post(create_translatable))
         .route("/translatable", get(search_translatable))
-        .route("/translatable/{id}", get(get_translatable))
-        .route("/translatable/{id}", put(edit_translatable))
-        .route("/translatable/{id}", delete(delete_translatable))
+        .route("/translatable/{slug}", get(get_translatable))
+        .route("/translatable/{slug}", put(edit_translatable))
+        .route("/translatable/{slug}", delete(delete_translatable))
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -43,9 +43,9 @@ pub async fn create_translatable(
 
 pub async fn get_translatable(
     translatables: TranslatableRepository,
-    Path(id): Path<Uuid>,
+    Path(slug): Path<String>,
 ) -> ApiResponse<Json<Translatable>> {
-    let translatable = translatables.find_by_id(id).await?;
+    let translatable = translatables.find_by_slug(&slug).await?;
     Ok(Json(translatable))
 }
 
@@ -60,12 +60,14 @@ pub async fn search_translatable(
 pub async fn edit_translatable(
     s: Session,
     translatables: TranslatableRepository,
-    Path(id): Path<Uuid>,
+    Path(slug): Path<String>,
     Json(updates): Json<UpdateTranslatable>,
 ) -> ApiResponse<Json<Translatable>> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
+
+    let id = translatables.find_by_slug(&slug).await?.id;
 
     translatables.update(requestor, id, updates).await.map(Json)
 }
@@ -73,13 +75,15 @@ pub async fn edit_translatable(
 pub async fn delete_translatable(
     s: Session,
     translatables: TranslatableRepository,
-    Path(id): Path<Uuid>,
+    Path(slug): Path<String>,
 ) -> ApiResponse<StatusCode> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
-    translatables.delete(requestor, id).await?;
+    let translatable = translatables.find_by_slug(&slug).await?;
+
+    translatables.delete(requestor, translatable).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

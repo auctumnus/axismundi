@@ -31,10 +31,7 @@ pub struct Translatable {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateTranslatable {
-    #[validate(length(min = 1, max = 200))]
-    pub slug: String,
-
-    #[validate(length(min = 1, max = 500))]
+    #[validate(length(min = 1, max = 40))]
     pub title: String,
 
     #[validate(length(min = 1, max = 100000))]
@@ -116,6 +113,34 @@ impl TranslatableRepository {
         result.ok_or_else(|| not_found(format!("translatable with id '{id}'")))
     }
 
+    pub async fn find_by_slug(&self, slug: &str) -> AppResult<Translatable> {
+        let result = sqlx::query_as!(
+            Translatable,
+            r#"
+                SELECT
+                    id,
+                    slug,
+                    title,
+                    english,
+                    source_name,
+                    source_url,
+                    source_content,
+                    source_language,
+                    created_at,
+                    updated_at,
+                    created_by,
+                    updated_by
+                FROM translatable
+                WHERE slug = $1
+            "#,
+            slug
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("translatable with slug '{slug}'")))
+    }
+
     pub async fn create(
         &self,
         requestor: &User,
@@ -125,6 +150,8 @@ impl TranslatableRepository {
 
         ensure_verified(requestor)?;
 
+        let slug = slug::slugify(&translatable.title);
+
         let result = sqlx::query_as!(
             Translatable,
             r#"
@@ -132,7 +159,7 @@ impl TranslatableRepository {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
                 RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by
             "#,
-            translatable.slug,
+            slug,
             translatable.title,
             translatable.english,
             translatable.source_name,
@@ -168,6 +195,12 @@ impl TranslatableRepository {
 
         ensure_verified(requestor)?;
 
+        let slug = if let Some(ref new_title) = updates.title {
+            Some(slug::slugify(new_title))
+        } else {
+            None
+        };
+
         let result = sqlx::query_as!(
             Translatable,
             r#"
@@ -185,7 +218,7 @@ impl TranslatableRepository {
                 RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by
             "#,
             id,
-            updates.slug,
+            slug,
             updates.title,
             updates.english,
             updates.source_name,
@@ -213,16 +246,15 @@ impl TranslatableRepository {
         Ok(updated_translatable)
     }
 
-    pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
+    pub async fn delete(&self, requestor: &User, translatable: Translatable) -> AppResult<bool> {
         ensure_verified(requestor)?;
 
         // Only allow creator to delete
-        let existing = self.find_by_id(id).await?;
-        if existing.created_by != requestor.id {
+        if translatable.created_by != requestor.id {
             return Err(crate::err::forbidden("only the creator can delete this translatable"));
         }
 
-        let result = sqlx::query!("DELETE FROM translatable WHERE id = $1", id)
+        let result = sqlx::query!("DELETE FROM translatable WHERE id = $1", translatable.id)
             .execute(&self.state.pool)
             .await?;
 

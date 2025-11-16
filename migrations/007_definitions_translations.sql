@@ -19,7 +19,7 @@ create index idx_definitions_word on definitions(word);
 create table translatable (
     id uuid primary key default uuidv7(),
 
-    slug text not null,
+    slug text not null unique,
     title text not null,
 
     english text not null,
