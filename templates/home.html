@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 
-{% block title %}Axismundi - home{% endblock %}
+{% block title %}home - axismundi{% endblock %}
 
 {% block head %}
 <script src="/static/home.js" defer></script>
@@ -16,15 +16,22 @@
 <h2>your languages</h2>
 {% if languages.is_empty() %}
 <p>you haven't added any languages yet.</p>
-<a href="/languages/new" class="button">get started</a>
+<a href="/new-language" class="button">get started</a>
 {% else %}
 <ul id="language-list">
     {% for language in languages %}
     <li>
-        <a href="/languages/{{ language.id }}">{{ language.name }}</a>
+        <a href="/languages/{{ language.code }}">{{ language.name }}</a>
     </li>
     {% endfor %}
 </ul>
+{% endif %}
+
+<h2>recent activity</h2>
+{% if activities.is_empty() %}
+<p>no recent activity to show.</p>
+{% else %}
+    
 {% endif %}
 
 {% endblock %}

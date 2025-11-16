@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}{% call u::name(user) %} - axismundi{% endblock %}
+
+{% block content %}
+
+<div class="profile-header">
+    {% if let Some(profile_picture_url) = user.get_profile_picture_url() %}
+        <img src="{{ profile_picture_url }}" alt="Profile picture" class="profile-picture">
+    {% endif %}
+    <h1>{% call u::name(user) %}</h1>
+    <p class="username">@{{ user.username }}</p>
+</div>
+
+{% if let Some(current_user) = current_user %}
+    {% if current_user.id == user.id %}
+    <a href="/settings" class="button">edit profile</a>
+    {% endif %}
+{% endif %}
+
+<div class="profile-info">
+    {% if let Some(pronouns) = user.pronouns %}
+        <div class="profile-field">
+            <strong>Pronouns:</strong> {{ pronouns }}
+        </div>
+    {% endif %}
+
+    {% if let Some(gender) = user.gender %}
+        <div class="profile-field">
+            <strong>Gender:</strong>
+            <span class="gender-color" style="background-color: {{ gender }}; display: inline-block; width: 1em; height: 1em; border-radius: 0.2em; vertical-align: middle;"></span>
+            <code>{{ gender }}</code>
+        </div>
+    {% endif %}
+
+    {% if let Some(description) = user.description %}
+        <div class="profile-field">
+            <strong>About:</strong>
+            <p>{{ description }}</p>
+        </div>
+    {% endif %}
+
+    <div class="profile-field">
+        <strong>Member since:</strong> {{ user.created_at.format("%B %d, %Y") }}
+    </div>
+</div>
+
+{% if !activities.is_empty() %}
+<div class="profile-activities">
+    <h2>Recent Activity</h2>
+    <ul class="activity-list">
+        {% for activity in activities %}
+        <li class="activity-item">
+            <time datetime="{{ activity.timestamp.to_rfc3339() }}">{{ activity.timestamp.format("%B %d, %Y at %H:%M") }}</time>
+            <span class="activity-type">
+                {% match activity.activity %}
+                    {% when crate::model::user_activities::ActivityType::CreateWord %}
+                        Created a word
+                    {% when crate::model::user_activities::ActivityType::UpdateWord %}
+                        Updated a word
+                    {% when crate::model::user_activities::ActivityType::CreateTranslatable %}
+                        Created a translatable
+                    {% when crate::model::user_activities::ActivityType::UpdateTranslatable %}
+                        Updated a translatable
+                    {% when crate::model::user_activities::ActivityType::CreateTranslation %}
+                        Created a translation
+                    {% when crate::model::user_activities::ActivityType::UpdateTranslation %}
+                        Updated a translation
+                    {% when crate::model::user_activities::ActivityType::CreateLanguage %}
+                        Created a language
+                    {% when crate::model::user_activities::ActivityType::UpdateLanguage %}
+                        Updated a language
+                {% endmatch %}
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% endblock %}

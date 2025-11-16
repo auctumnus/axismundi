@@ -163,6 +163,19 @@ impl LanguageRepository {
 
         tx.commit().await?;
 
+        // Create activity if language is public
+        if !result.private {
+            let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo.create(
+                requestor.id,
+                crate::model::user_activities::ActivityType::CreateLanguage,
+                result.id,
+                "language",
+                None,
+                None,
+            ).await?;
+        }
+
         Ok(result)
     }
 
@@ -254,7 +267,22 @@ impl LanguageRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        result.ok_or_else(|| not_found(format!("language with id '{id}'")))
+        let updated_lang = result.ok_or_else(|| not_found(format!("language with id '{id}'")))?;
+
+        // Create activity if language is public
+        if !updated_lang.private {
+            let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo.create(
+                requestor.id,
+                crate::model::user_activities::ActivityType::UpdateLanguage,
+                updated_lang.id,
+                "language",
+                None,
+                None,
+            ).await?;
+        }
+
+        Ok(updated_lang)
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
@@ -475,6 +503,50 @@ impl LanguageRepository {
             limit: pagination.limit,
             has_more,
         })
+    }
+
+    pub async fn find_owner(&self, language_id: Uuid) -> AppResult<User> {
+        let result = sqlx::query_as!(
+            User,
+            r#"
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                JOIN language_permissions ON language_permissions.user = users.id
+                WHERE language_permissions.language = $1
+                AND language_permissions.permission = 'owner'
+            "#,
+            language_id
+        )
+        .fetch_one(&self.state.pool);
+
+        result.await.map_err(Into::into)
+    }
+
+    pub async fn count_contributors(&self, language_id: Uuid) -> AppResult<i64> {
+        let result = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(DISTINCT user) FROM language_permissions
+                WHERE language = $1 AND permission IN ('editor', 'admin')
+            "#,
+            language_id
+        )
+        .fetch_one(&self.state.pool).await?;
+
+        Ok(result.unwrap_or(0))
     }
 }
 

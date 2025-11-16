@@ -13,4 +13,3 @@ CREATE INDEX word_classes_name_trgm_idx ON word_classes USING GIN (name gin_trgm
 
 -- word search indexes
 CREATE INDEX words_word_trgm_idx ON words USING GIN (word gin_trgm_ops);
-CREATE INDEX words_definition_trgm_idx ON words USING GIN (definition gin_trgm_ops);

@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}new word class - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - new word class</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/new-word-class">
+    <section>
+        <label for="abbreviation">Abbreviation</label>
+        {% call u::field_error(name="abbreviation") %}
+        <input type="text" id="abbreviation" name="abbreviation" required value="{{previous_abbreviation}}">
+        <span class="hint">short form (e.g., "n", "v", "adj")</span>
+    </section>
+
+    <section>
+        <label for="name">Name</label>
+        {% call u::field_error(name="name") %}
+        <input type="text" id="name" name="name" required value="{{previous_name}}">
+        <span class="hint">full name (e.g., "noun", "verb", "adjective")</span>
+    </section>
+
+    <button type="submit">Create word class</button>
+    <a href="/languages/{{ language.code }}/word-classes" class="button">Cancel</a>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

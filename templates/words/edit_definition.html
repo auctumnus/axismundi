@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit definition - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}">go back to {{ word.word }}</a>
+<h1>edit definition</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/definitions/{{ definition.id }}/edit">
+    <section>
+        <label for="definition">Definition</label>
+        {% call u::field_error(name="definition") %}
+        <input type="text" id="definition" name="definition" required value="{{previous_definition}}">
+    </section>
+
+    <section>
+        <label for="context">Context (optional)</label>
+        {% call u::field_error(name="context") %}
+        <input type="text" id="context" name="context" value="{{previous_context}}">
+    </section>
+
+    <button type="submit">Update definition</button>
+    <a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="button">Cancel</a>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

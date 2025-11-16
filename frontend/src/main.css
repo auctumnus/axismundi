@@ -340,6 +340,10 @@ a.button, form.default button[type="submit"] {
   }
 }
 
+a.button {
+  display: inline-block;
+}
+
 a.button-secondary, form.default button[type="reset"], button.clear {
   font-family: var(--font-heading);
   padding: .75rem;
@@ -360,6 +364,16 @@ a.button-secondary, form.default button[type="reset"], button.clear {
   }
 }
 
+
+.badge {
+  display: inline-flex;
+  padding: .25rem .5rem;
+  flex-direction: row;
+  gap: .5rem;
+  align-items: center;
+  text-decoration: none;
+}
 .display-name.gendered {
   font-weight: 600;
+  color: var(--color);
 }

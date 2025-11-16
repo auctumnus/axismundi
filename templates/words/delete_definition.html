@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete definition - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<a href="/languages/{{ language.code}}/words/{{ word.slug }}/{{ word.lemma }}">go back to {{ word.word }}</a>
+
+<h1>delete definition</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<p>Are you sure you want to delete this definition?</p>
+
+<div class="definition-preview">
+    <p><strong>Definition:</strong> {{ definition.definition }}</p>
+    {% if let Some(context) = definition.context %}
+        <p><strong>Context:</strong> {{ context }}</p>
+    {% endif %}
+</div>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/definitions/{{ definition.id }}/delete">
+    <button type="submit" class="button-danger">Delete definition</button>
+    <a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="button">Cancel</a>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

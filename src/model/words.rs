@@ -27,7 +27,6 @@ pub struct Word {
     pub word: String,
     pub slug: String,
     pub lemma: i32,
-    pub definition: String,
     pub ipa: Option<String>,
     pub notes: Option<String>,
     pub extra: Option<JsonValue>,
@@ -53,14 +52,11 @@ pub struct CreateWord {
     #[validate(length(min = 1, max = 10))]
     pub word_class: String,
 
-    #[validate(length(min = 1, max = 5000))]
-    pub definition: String,
-
     #[validate(length(max = 200))]
     pub ipa: Option<String>,
 
     #[validate(length(max = 10000))]
-    pub notes: Option<String>,    
+    pub notes: Option<String>,
 
     pub extra: Option<JsonValue>,
 }
@@ -72,9 +68,6 @@ pub struct UpdateWord {
 
     #[validate(length(min = 1, max = 10))]
     pub word_class: Option<String>,
-
-    #[validate(length(min = 1, max = 5000))]
-    pub definition: Option<String>,
 
     #[validate(length(max = 200))]
     pub ipa: Option<String>,
@@ -160,8 +153,8 @@ impl WordRepository {
 
         let word_result = sqlx::query!(
             r#"
-                INSERT INTO words (language, word_class, word, slug, lemma, definition, ipa, notes, extra, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+                INSERT INTO words (language, word_class, word, slug, lemma, ipa, notes, extra, created_by, updated_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
                 RETURNING words.*
             "#,
             language,
@@ -169,7 +162,6 @@ impl WordRepository {
             word.word,
             slug,
             lemma,
-            word.definition,
             word.ipa,
             word.notes,
             word.extra,
@@ -191,7 +183,24 @@ impl WordRepository {
         tx.commit().await?;
 
         // fetch the created word to get materialized fields
-        self.find_by_id(word_result.id).await
+        let created_word = self.find_by_id(word_result.id).await?;
+
+        // Create activity if language is public
+        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let lang = lang_repo.find_by_id(language).await?;
+        if !lang.private {
+            let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo.create(
+                requestor.id,
+                crate::model::user_activities::ActivityType::CreateWord,
+                created_word.id,
+                "word",
+                Some(language),
+                Some("language"),
+            ).await?;
+        }
+
+        Ok(created_word)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Word> {
@@ -206,7 +215,6 @@ impl WordRepository {
                     words.word,
                     words.slug,
                     words.lemma,
-                    words.definition,
                     words.ipa,
                     words.notes,
                     words.extra,
@@ -251,7 +259,6 @@ impl WordRepository {
                     words.word,
                     words.slug,
                     words.lemma,
-                    words.definition,
                     words.ipa,
                     words.notes,
                     words.extra,
@@ -349,13 +356,12 @@ impl WordRepository {
                 SET word_class = COALESCE($2, word_class),
                     word = COALESCE($3, word),
                     slug = COALESCE($4, slug),
-                    definition = COALESCE($5, definition),
-                    ipa = COALESCE($6, ipa),
-                    notes = COALESCE($7, notes),
-                    extra = COALESCE($8, extra),
-                    updated_by = $9,
+                    ipa = COALESCE($5, ipa),
+                    notes = COALESCE($6, notes),
+                    extra = COALESCE($7, extra),
+                    updated_by = $8,
                     updated_at = CURRENT_TIMESTAMP,
-                    lemma = COALESCE($10, lemma)
+                    lemma = COALESCE($9, lemma)
                 WHERE id = $1
                 RETURNING
                     words.id,
@@ -365,7 +371,6 @@ impl WordRepository {
                     words.word,
                     words.slug,
                     words.lemma,
-                    words.definition,
                     words.ipa,
                     words.notes,
                     words.extra,
@@ -382,7 +387,6 @@ impl WordRepository {
             word_class,
             updates.word,
             slug,
-            updates.definition,
             updates.ipa,
             updates.notes,
             updates.extra,
@@ -394,7 +398,24 @@ impl WordRepository {
 
         tx.commit().await?;
 
-        result.ok_or_else(|| not_found(format!("word with id '{}'", word.id)))
+        let updated_word = result.ok_or_else(|| not_found(format!("word with id '{}'", word.id)))?;
+
+        // Create activity if language is public
+        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let lang = lang_repo.find_by_id(word.language).await?;
+        if !lang.private {
+            let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo.create(
+                requestor.id,
+                crate::model::user_activities::ActivityType::UpdateWord,
+                updated_word.id,
+                "word",
+                Some(word.language),
+                Some("language"),
+            ).await?;
+        }
+
+        Ok(updated_word)
     }
 
     pub async fn delete_by_lemma(&self, requestor: &User, language: Uuid, slug: &str, lemma: i32) -> AppResult<bool> {
@@ -458,7 +479,6 @@ impl WordRepository {
                     words.word,
                     words.slug,
                     words.lemma,
-                    words.definition,
                     words.ipa,
                     words.notes,
                     words.extra,
@@ -484,13 +504,11 @@ impl WordRepository {
                 ORDER BY (
                     CASE
                         WHEN $6::TEXT IS NOT NULL AND words.word ILIKE '%' || $6 || '%' THEN 100.0
-                        WHEN $6::TEXT IS NOT NULL AND words.definition ILIKE '%' || $6 || '%' THEN 90.0
                         WHEN $6::TEXT IS NOT NULL AND words.notes ILIKE '%' || $6 || '%' THEN 80.0
                         ELSE 0.0
                     END +
                     CASE WHEN $6::TEXT IS NOT NULL THEN
                         similarity(words.word, $6) * 3.0 +
-                        COALESCE(similarity(words.definition, $6), 0.0) * 2.0 +
                         COALESCE(similarity(words.notes, $6), 0.0) * 1.0
                     ELSE 0.0
                     END

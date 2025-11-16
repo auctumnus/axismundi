@@ -83,7 +83,7 @@ impl EmailService for ResendEmailService {
 
     async fn send_password_reset_email(
         &self,
-        user_id: uuid::Uuid,
+        _user_id: uuid::Uuid,
         to: &str,
         token: &str,
     ) -> AppResult<()> {
@@ -115,7 +115,7 @@ impl EmailService for ResendEmailService {
 
     async fn send_email_change_notification(
         &self,
-        user_id: uuid::Uuid,
+        _user_id: uuid::Uuid,
         old_email: &str,
         new_email: &str,
     ) -> AppResult<()> {
@@ -154,6 +154,7 @@ impl EmailService for ResendEmailService {
 pub fn make_email_service(config: &ResendConfig) -> impl EmailService {
     #[cfg(test)]
     {
+        let _ = config; // Suppress unused warning in tests
         crate::email::MockEmailService::new()
     }
     #[cfg(not(test))]

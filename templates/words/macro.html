@@ -1,0 +1,37 @@
+{% macro make_lemma(word, definitions, language_code, user_has_permission) %}
+{% if let Some(ipa) = word.ipa %}
+    {% if !ipa.is_empty() %}<p class="ipa">/{{ ipa }}/</p>{%endif%}
+{% endif %}
+
+{% if !definitions.is_empty() %}
+    <h3>Definitions</h3>
+    <ol>
+        {% for definition in definitions %}
+            <li>
+                {{ definition.definition }}
+                {% if let Some(context) = definition.context %}
+                    <p class="context">{{ context }}</p>
+                {% endif %}
+                {% if user_has_permission %}
+                    <details class="definition-actions">
+                        <summary>manage definition</summary>
+                        <div class="action-buttons">
+                            <a href="/languages/{{ language_code }}/definitions/{{ definition.id }}/edit" class="button-small">Edit</a>
+                            <a href="/languages/{{ language_code }}/definitions/{{ definition.id }}/delete" class="button-small button-danger">Delete</a>
+                        </div>
+                    </details>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ol>
+{% else %}
+    <p>No definition set.</p>
+{% endif %}
+
+{% if let Some(notes) = word.notes %}
+{% if !notes.is_empty() %}
+<h3>notes</h3>
+<p>{{ notes }}</p>
+{% endif %}
+{% endif %}
+{% endmacro %}

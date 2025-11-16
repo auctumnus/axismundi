@@ -19,6 +19,12 @@ mod word_classes;
 mod words;
 mod bookmarks;
 mod word_relations;
+mod definitions;
+mod translatable;
+mod translations;
+mod quotations;
+mod quotation_suggestions;
+mod user_activities;
 
 // pretty sure i need that there, actually...
 #[allow(clippy::needless_return)]
@@ -37,7 +43,13 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(language_invites::create_router())
         .merge(word_classes::create_router())
         .merge(words::create_router())
-        .merge(word_relations::create_router());
+        .merge(word_relations::create_router())
+        .merge(definitions::create_router())
+        .merge(translatable::create_router())
+        .merge(translations::create_router())
+        .merge(quotations::create_router())
+        .merge(quotation_suggestions::create_router())
+        .merge(user_activities::create_router());
 
     // Only apply rate limiting in non-test builds
     #[cfg(not(test))]

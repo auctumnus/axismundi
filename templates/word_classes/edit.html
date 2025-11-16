@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit {{ word_class.name }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - edit word class</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/edit">
+    <section>
+        <label for="abbreviation">Abbreviation</label>
+        {% call u::field_error(name="abbreviation") %}
+        <input type="text" id="abbreviation" name="abbreviation" required value="{{previous_abbreviation}}">
+        <span class="hint">short form (e.g., "n", "v", "adj")</span>
+    </section>
+
+    <section>
+        <label for="name">Name</label>
+        {% call u::field_error(name="name") %}
+        <input type="text" id="name" name="name" required value="{{previous_name}}">
+        <span class="hint">full name (e.g., "noun", "verb", "adjective")</span>
+    </section>
+
+    <button type="submit">Update word class</button>
+    <a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}" class="button">Cancel</a>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

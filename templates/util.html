@@ -26,3 +26,54 @@
     {{ user.username.clone() }}
 {% endif %}
 {% endmacro %}
+
+{% macro badge(user) %}
+<a href="/users/{{user.username}}" class="badge">
+    {% if let Some(pfp_url) = user.get_profile_picture_url() %}
+        <img class="pfp medium" alt="{% call name(user) %}'s profile picture" src="{{ pfp_url }}">
+    {% else %}
+        <img class="pfp medium" alt="{% call name(user) %}'s profile picture" src="/static/default-pfp.webp">
+    {% endif %}
+    {% if let Some(gender) = &user.gender %}
+        <span class="display-name gendered" style="--color: #{{gender}}">{% call name(user) %}</span>
+    {% else %}
+        <span class="display-name">{% call name(user) %}</span>
+    {% endif %}
+</a>
+{% endmacro %}
+
+{% macro relative(timestamp) %}
+<time datetime="{{ timestamp.to_rfc3339() }}">
+    {{ crate::util::relative_time(timestamp) }}
+</time>
+{% endmacro %}
+
+{% macro make_activity(activity) %}
+<li class="activity-item">
+    {% call badge(activity.user) %}
+    <span class="activity-description">
+        {{ activity.verb() }}
+        {% match activity.entity %}
+            {% when crate::model::user_activities::ActivityEntity::Language { language } %}
+                the language <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+            {% when crate::model::user_activities::ActivityEntity::Word { language, word } %}
+                the word <a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+            {% when crate::model::user_activities::ActivityEntity::User { user } %}
+                the user <a href="/users/{{ user.username }}">{{ user.username }}</a>
+            {% when crate::model::user_activities::ActivityEntity::Translatable { translatable } %}
+                the translatable <a href="/translatables/{{ translatable.id }}">{{ translatable.slug }}</a>
+            {% when crate::model::user_activities::ActivityEntity::Translation { language, translation } %}
+                the translation <a href="/languages/{{ language.code }}/translations/{{ translation.id }}">{{ translation.translatable_slug }}</a>
+        {% endmatch %}
+    </span>
+    {% if let Some(related) = &activity.related_entity %}
+        <span class="activity-related">
+            {% match related %}
+                {% when crate::model::user_activities::RelatedEntity::Language { language } %}
+                    in <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+            {% endmatch %}
+        </span>
+    {% endif %}
+</li>
+
+{% endmacro %}

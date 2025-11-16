@@ -2,12 +2,10 @@ use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use regex::Regex;
-use resend_rs::types::Email;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::FromRow;
 use uuid::Uuid;
 use validator::{Validate, ValidateArgs, ValidationErrors};
-use zxcvbn::Score;
 
 use crate::{
     err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, languages::Language, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password}

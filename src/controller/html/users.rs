@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controller::html::{render_result, render_template}, err::AppError, model::{email_verification_tokens::EmailVerificationTokenRepository, sessions::SessionRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
+use crate::{controller::html::{render_result, render_template}, err::AppError, model::{email_verification_tokens::EmailVerificationTokenRepository, sessions::SessionRepository, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -18,7 +18,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/login", get(login_form))
         .route("/register", get(signup_form))
         .route("/resend-verification/{token_id}", get(resend_verification_form))
-        .route("/settings", get(settings_form));
+        .route("/settings", get(settings_form))
+        .route("/logout", get(logout_form))
+        .route("/logout", post(logout_submit))
+        .route("/users/{username}", get(profile));
 
     (secure_routes, normal_routes)
 }
@@ -285,4 +288,73 @@ async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<Set
             let body = render_template(template);
             Html(body).into_response()
         })
+}
+
+#[derive(Template)]
+#[template(path = "logout/form.html")]
+struct LogoutTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+}
+
+async fn logout_form(s: Session) -> Html<String> {
+    let current_user = s.user().cloned();
+    render_template(LogoutTemplate { current_user, error: None })
+}
+
+async fn logout_submit(jar: CookieJar, s: Session, sessions: SessionRepository) -> (CookieJar, Redirect) {
+    if let Some(session) = s.session() {
+        let _ = sessions.invalidate(session.clone()).await;
+    }
+
+    let jar = jar.remove(Cookie::from(SESSION_COOKIE_NAME));
+
+    (jar, Redirect::to("/"))
+}
+
+#[derive(Template)]
+#[template(path = "users/profile.html")]
+struct ProfileTemplate {
+    current_user: Option<User>,
+    user: User,
+    activities: Vec<crate::model::user_activities::UserActivity>,
+}
+
+async fn profile(
+    s: Session,
+    users: UserRepository,
+    activities: UserActivityRepository,
+    path: axum::extract::Path<String>,
+) -> (StatusCode, Html<String>) {
+    let username = path.0;
+    let current_user = s.user().cloned();
+
+    let user_result = users.find_by_username(&username).await;
+
+    let user = match user_result {
+        Ok(u) => u,
+        Err(e) => return render_result::<ProfileTemplate>(current_user, Err(e)),
+    };
+
+    // Get user activities (limit to 20)
+    let activities_result = activities.list_by_user(
+        current_user.as_ref(),
+        user.id,
+        None,
+        PaginatedRequest {
+            limit: 20,
+            offset: 0,
+        }
+    ).await;
+
+    let activities_list = match activities_result {
+        Ok(paginated) => paginated.items,
+        Err(_) => Vec::new(), // If we can't fetch activities, just show empty list
+    };
+
+    render_result(current_user.clone(), Ok(ProfileTemplate {
+        current_user,
+        user,
+        activities: activities_list,
+    }))
 }

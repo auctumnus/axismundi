@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}word classes - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - word classes</h1>
+
+{% if let Some(_user) = current_user %}
+    <a href="/languages/{{ language.code }}/new-word-class" class="button">new word class</a>
+{% endif %}
+
+{% if word_classes.is_empty() %}
+    <p class="empty-description">no word classes yet</p>
+{% else %}
+    <table>
+        <thead>
+            <tr>
+                <th>abbreviation</th>
+                <th>name</th>
+                <th>actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for wc in word_classes %}
+                <tr>
+                    <td>{{ wc.abbreviation }}</td>
+                    <td>{{ wc.name }}</td>
+                    <td>
+                        <a href="/languages/{{ language.code }}/word-classes/{{ wc.abbreviation }}">view</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

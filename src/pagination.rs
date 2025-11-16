@@ -20,7 +20,7 @@ pub struct PaginatedResponse<T> {
     pub has_more: bool,
 }
 
-#[derive(Default, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PaginatedRequest {
     #[serde(default = "default_limit")]
     pub limit: PaginationSize,
@@ -30,6 +30,15 @@ pub struct PaginatedRequest {
 
 fn default_limit() -> PaginationSize {
     10
+}
+
+impl Default for PaginatedRequest {
+    fn default() -> Self {
+        Self {
+            limit: default_limit(),
+            offset: 0,
+        }
+    }
 }
 
 impl FromRequestParts<AppState> for PaginatedRequest {

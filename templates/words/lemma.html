@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "macro.html" as m -%}
+
+{% block title %}{{ word.word }}{% if other_lemmata %} ({{ word.lemma }}){% endif %} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<a href="{{ previous_search }}">back to search results</a>
+
+<h1>{{ word.word }}</h1>
+
+{% if user_has_permission %}
+    <a href="/languages/{{ language.code }}/words/{{ word.id }}/new-definition" class="button">+ Add definition</a>
+{% endif %}
+
+{% call m::make_lemma(word, definitions, language.code, user_has_permission) %}
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

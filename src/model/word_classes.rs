@@ -172,6 +172,33 @@ impl WordClassRepository {
         result.ok_or_else(|| not_found(format!("word class with id '{id}'")))
     }
 
+    pub async fn list_all(&self, language: Uuid) -> AppResult<Vec<WordClass>> {
+        let result = sqlx::query_as!(
+            WordClass,
+            r#"
+                SELECT
+                    word_classes.id,
+                    word_classes.language,
+                    word_classes.name,
+                    word_classes.abbreviation,
+                    word_classes.created_at,
+                    word_classes.updated_at,
+                    word_classes.created_by,
+                    word_classes.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_classes
+                LEFT JOIN bookmarks ON bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class'
+                WHERE word_classes.language = $1
+                ORDER BY word_classes.name
+            "#,
+            language
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn find_by_abbreviation(
         &self,
         language: Uuid,

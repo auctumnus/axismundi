@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}{{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>{{ language.name }}</h1>
+
+<div>
+    <span>by</span>
+    {% call u::badge(&owner) %}
+    {% if contributor_count > 0 %}
+        <span>and</span>
+        <a href="/languages/{{ language.code }}/contributors">{{ contributor_count }} contributor{% if contributor_count != 1 %}s{% endif %}</a>
+    {% endif %}
+</div>
+
+{% if let Some(user) = current_user %}
+    {% if user.id == owner.id %}
+    <a href="/languages/{{ language.code }}/edit" class="button">edit language</a>
+    {% endif %}
+{% endif %}
+
+{% if !language.description.is_empty() %}
+    <p>{{ language.description }}</p>
+{% else %}
+    <p class="empty-description">no description provided</p>
+{% endif %}
+
+<h2>word classes</h2>
+
+<a href="/languages/{{ language.code }}/word-classes" class="button">view all</a>
+
+<h2>words</h2>
+
+<a href="/languages/{{ language.code }}/words" class="button">view all</a>
+
+{% endblock %}

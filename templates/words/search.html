@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}search words - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>search words</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="get" action="/languages/{{ language.code }}/words/search">
+    <div class="search-bar">
+        <section>
+            <label for="q">Search query</label>
+            {% call u::field_error(name="q") %}
+            <input type="text" id="q" name="q" required value="{{ previous_query }}">
+        </section>    
+
+        <button type="submit">Search</button>
+    </div>
+    <details>
+        <summary>Advanced options</summary>
+        <section>
+        </section>
+    </details>
+</form>
+
+{% if let Some(results) = results %}
+    {% if results.is_empty() %}
+        <p>No results found.</p>
+    {% else %}
+        <ul class="word-list">
+            {% for word in results %}
+                <li>
+                    <a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}

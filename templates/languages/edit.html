@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>edit {{ language.name }}</h1>
+
+<a href="/languages/{{ language.code }}/word-classes" class="button">view word classes</a>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/edit">
+    <section>
+        <label for="code">Language code</label>
+        {% call u::field_error(name="code") %}
+        <input type="text" id="code" name="code" required value="{{previous_code}}">
+        <span class="hint">use only lowercase letters (a-z), numbers (0-9), dashes (-), and underscores (_). must start and end with a letter or number.</span>
+    </section>
+
+    <section>
+        <label for="name">Language name</label>
+        {% call u::field_error(name="name") %}
+        <input type="text" id="name" name="name" required value="{{previous_name}}">
+    </section>
+
+    <section>
+        <label for="description">Description</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description" rows="4">{{previous_description}}</textarea>
+    </section>
+
+    <button type="submit">Update language</button>
+    <a href="/languages/{{ language.code }}" class="button">Cancel</a>
+</form>
+
+{% endblock %}

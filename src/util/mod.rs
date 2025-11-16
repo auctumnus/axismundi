@@ -21,6 +21,7 @@ mod re {
     pub(crate) use re;
 }
 
+use chrono::Utc;
 pub(crate) use re::re;
 
 mod repo {
@@ -129,4 +130,10 @@ pub fn get_top_level_error(error: &Option<AppError>) -> Option<&str> {
     } else {
         None
     }
+}
+
+pub fn relative_time(timestamp: chrono::DateTime<Utc>) -> String {
+    let now = Utc::now();
+    let dt = now - timestamp;
+    chrono_humanize::HumanTime::from(dt).to_string()
 }

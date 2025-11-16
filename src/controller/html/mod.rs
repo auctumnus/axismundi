@@ -5,6 +5,7 @@ use crate::{
     err::AppError,
     model::users::{User, UserRepository},
     model::languages::Language,
+    model::user_activities::{UserActivity, UserActivityRepository},
     util::{AppState, extract_session::Session},
 };
 use askama::Template;
@@ -14,6 +15,9 @@ use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
 
 mod users;
+mod languages;
+mod words;
+mod word_classes;
 
 pub fn create_html_controller() -> Router<AppState> {
     let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
@@ -32,16 +36,25 @@ pub fn create_html_controller() -> Router<AppState> {
     });
     
     let (secure_user_routes, normal_user_routes) = users::create_router();
+    let (secure_language_routes, normal_language_routes) = languages::create_router();
+    let (secure_word_routes, normal_word_routes) = words::create_router();
+    let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
 
     let secure_routes = Router::<AppState>::new()
-        .merge(secure_user_routes);
+        .merge(secure_user_routes)
+        .merge(secure_language_routes)
+        .merge(secure_word_routes)
+        .merge(secure_word_class_routes);
 
     let normal_routes = Router::<AppState>::new()
         .route("/", get(landing))
         .route("/home", get(home))
         .nest_service("/static", ServeDir::new("frontend/dist"))
         .nest_service("/assets", ServeDir::new("assets"))
-        .merge(normal_user_routes);
+        .merge(normal_user_routes)
+        .merge(normal_language_routes)
+        .merge(normal_word_routes)
+        .merge(normal_word_class_routes);
 
     Router::<AppState>::new()
         .merge(secure_routes)
@@ -91,18 +104,21 @@ async fn landing(s: Session) -> impl IntoResponse {
 struct HomeTemplate {
     current_user: Option<User>,
     languages: Vec<Language>,
+    activities: Vec<UserActivity>,
 }
 
-async fn home(users: UserRepository, s: Session) -> Result<impl IntoResponse, Html<String>> {
+async fn home(users: UserRepository, activities_repo: UserActivityRepository, s: Session) -> Result<impl IntoResponse, Html<String>> {
     let Some(user) = s.user().cloned() else {
         return Ok(Redirect::to("/").into_response());
     };
 
     let languages = users.top_languages(user.id, 5).await.map_err(error_template(Some(&user)))?;
+    let activities = activities_repo.list_site_wide().await.map_err(error_template(Some(&user)))?;
 
     let template = HomeTemplate {
         current_user: Some(user),
         languages,
+        activities,
     };
 
     let body = render_template(template);

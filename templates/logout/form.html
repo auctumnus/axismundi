@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block title %}log out - axismundi{% endblock %}
+
+{% block content %}
+<h1>Log out</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/logout">
+    <p>Are you sure you want to log out?</p>
+
+    <button type="submit">Log out</button>
+</form>
+
+{% endblock %}

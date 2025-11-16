@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "macro.html" as m -%}
+
+{% block title %}{{ word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>{{ word }}</h1>
+
+{% for lemma in lemmata %}
+    <div class="lemma">
+        <h2>{{ parts_of_speech[loop.index0] }}</h2>
+        {% call m::make_lemma(lemma, words_definitions[loop.index0], language.code, user_has_permission) %}
+        <a href="/languages/{{ language.code }}/words/{{ lemma.slug }}/{{ lemma.lemma }}">details</a>
+    </div>
+{% endfor %}
+
+{% endblock %}
+
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
