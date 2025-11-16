@@ -620,6 +620,7 @@ mod tests {
         // so we probably need a visual hash or something?
 
         let profile_picture_url = profile_picture_url.unwrap().as_str().unwrap();
+        println!("Profile picture URL: {}", profile_picture_url);
         let profile_picture_response = reqwest::get(profile_picture_url).await.unwrap();
         assert_eq!(profile_picture_response.status(), StatusCode::OK);
     }

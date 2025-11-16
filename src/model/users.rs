@@ -6,11 +6,11 @@ use resend_rs::types::Email;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::FromRow;
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidateArgs, ValidationErrors};
 use zxcvbn::Score;
 
 use crate::{
-    err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, languages::Language, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified, re, s3::S3}
+    err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, languages::Language, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password}
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -65,10 +65,11 @@ impl User {
     }
 }
 
-static USERNAME_REGEX: LazyLock<Regex> = re!("^([a-z0-9](-|_)?)+[a-z0-9]");
-static GENDER_REGEX: LazyLock<Regex> = re!("^([a-fA-F0-9]{3}){1,2}$"); // hex code
+static USERNAME_REGEX: LazyLock<Regex> = re!("^([a-z0-9](-|_)?)+[a-z0-9]$");
+static GENDER_REGEX: LazyLock<Regex> = re!("^#?([a-fA-F0-9]{3}){1,2}$"); // hex code
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
+#[validate(context = "PasswordValidationContext<'v_a>")]
 pub struct CreateUser {
     #[validate(length(min = 2, max = 30), regex(path = USERNAME_REGEX))]
     pub username: String,
@@ -76,8 +77,8 @@ pub struct CreateUser {
     #[validate(email)]
     pub email: String,
 
-    #[validate(length(min = 8, max = 100))]
     #[serde(skip_serializing)]
+    #[validate(length(min = 8, max = 100), custom(function = "crate::util::validate_password", use_context))]
     pub password: String,
 
     #[validate(length(min = 2, max = 30))]
@@ -94,6 +95,7 @@ pub struct CreateUser {
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
+#[validate(context = "PasswordValidationContext<'v_a>")]
 pub struct UpdateUser {
     #[validate(length(min = 2, max = 30), regex(path = USERNAME_REGEX))]
     pub username: Option<String>,
@@ -112,7 +114,7 @@ pub struct UpdateUser {
     #[serde(skip_serializing)]
     pub current_password: Option<String>,
 
-    #[validate(length(min = 8, max = 100))]
+    #[validate(length(min = 8, max = 100), custom(function = "crate::util::validate_password", use_context))]
     #[serde(skip_serializing)]
     pub new_password: Option<String>,
 }
@@ -135,27 +137,14 @@ impl UserRepository {
         Self { state }
     }
 
-    fn check_password_strength(password: &str, _user_inputs: &[&str]) -> AppResult<bool> {
-        // TODO: we should also check against haveibeenpwned
-        // TODO: use user_inputs from zxcvbn to improve strength checking
-
-        // https://thecopenhagenbook.com/password-authentication#input-validation
-        // > Use libraries like zxcvbn to check for weak passwords.
-        let password_strength = zxcvbn::zxcvbn(password, &[]);
-        if password_strength.score() < Score::Three {
-            let message = password_strength
-                .feedback()
-                .map_or("password is too weak".to_string(), |reason| {
-                    format!("password is too weak: {reason}")
-                });
-
-            return Err(bad_request(message));
-        }
-        Ok(true)
-    }
-
     pub async fn create(&self, user: CreateUser) -> AppResult<(User, EmailVerificationToken)> {
-        user.validate()?;
+        let user_inputs = vec![
+            &user.username,
+            &user.email,
+            user.display_name.as_deref().unwrap_or(""),
+        ];
+
+        user.validate_with_args(&user_inputs.as_ref())?;
 
         if self.username_exists(&user.username).await? {
             return Err(bad_request("username is in use"));
@@ -164,12 +153,6 @@ impl UserRepository {
         if self.email_exists(&user.email).await? {
             return Err(bad_request("email is in use"));
         }
-
-        Self::check_password_strength(&user.password, &[
-            &user.username,
-            &user.email,
-            user.display_name.as_deref().unwrap_or(""),
-        ])?;
 
         let password_hash = crate::util::hash(&user.password)
             .map_err(|_| internal_error("password hash failed"))?;
@@ -180,6 +163,10 @@ impl UserRepository {
 
         // Begin transaction: create user + verification token + bookmark atomically
         let mut tx = self.state.pool.begin().await?;
+
+        let gender = user.gender.map(|g| {
+            g.strip_prefix("#").unwrap_or(&g).to_lowercase()
+        });
 
         let user_result = sqlx::query!(
             r#"
@@ -196,7 +183,7 @@ impl UserRepository {
             user.display_name,
             user.description,
             user.pronouns,
-            user.gender,
+            gender,
             random_pfp
         )
         .fetch_one(&mut *tx)
@@ -359,7 +346,13 @@ impl UserRepository {
             ));
         }
 
-        updates.validate()?;
+        let user_inputs = vec![
+            updates.username.as_deref().unwrap_or(&requestor.username),
+            updates.email.as_deref().unwrap_or(&requestor.email),
+            updates.display_name.as_deref().unwrap_or(&requestor.display_name.as_deref().unwrap_or("")),
+        ];
+
+        updates.validate_with_args(&user_inputs.as_ref())?;
 
         ensure_verified(requestor)?;
 
@@ -367,6 +360,11 @@ impl UserRepository {
             if self.username_exists(username).await? {
                 return Err(bad_request("Username is in use"));
             }
+        }
+
+        // disallow changing email and password at the same time
+        if updates.email.is_some() && updates.new_password.is_some() {
+            return Err(bad_request("Cannot change email and password at the same time"));
         }
 
         let tokens = EmailVerificationTokenRepository::new(self.state.clone());
@@ -379,11 +377,44 @@ impl UserRepository {
                 return Err(bad_request("Email is in use"));
             }
 
+            // The user should be asked for their password
+            if let Some(current_password) = &updates.current_password {
+                let is_valid = crate::util::verify(current_password, &requestor.password_hash)
+                    .map_err(|_| internal_error("password verification failed"))?;
+                if !is_valid {
+                    return Err(bad_request("Current password is incorrect"));
+                }
+            } else {
+                return Err(bad_request("Current password is required to change email"));
+            }
+
             // changing email requires re-verification
             Some(tokens.create(&mut tx, id, email.to_lowercase()).await?)
         } else {
             None
         };
+
+        let password_hash = if let Some(new_password) = &updates.new_password {
+            // The user should be asked for their current password
+            if let Some(current_password) = &updates.current_password {
+                let is_valid = crate::util::verify(current_password, &requestor.password_hash)
+                    .map_err(|_| internal_error("password verification failed"))?;
+                if !is_valid {
+                    return Err(bad_request("Current password is incorrect"));
+                }
+            } else {
+                return Err(bad_request("Current password is required to change password"));
+            }
+
+            &crate::util::hash(new_password)
+                .map_err(|_| internal_error("password hash failed"))?
+        } else {
+            &requestor.password_hash
+        };
+
+        let gender = updates.gender.map(|g| {
+            g.strip_prefix("#").unwrap_or(&g).to_lowercase()
+        }).or(requestor.gender.clone());
 
         let result = sqlx::query_as!(
             User,
@@ -394,7 +425,8 @@ impl UserRepository {
                 description = COALESCE($4, description),
                 pronouns = COALESCE($5, pronouns),
                 gender = COALESCE($6, gender),
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = CURRENT_TIMESTAMP,
+                password_hash = $7
             WHERE id = $1
             RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
             "#,
@@ -403,7 +435,8 @@ impl UserRepository {
             updates.display_name,
             updates.description,
             updates.pronouns,
-            updates.gender
+            gender,
+            password_hash
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -693,11 +726,11 @@ impl UserRepository {
 
     pub async fn reset_password(&self, user_id: Uuid, token: PasswordResetToken, new_password: &str) -> AppResult<()> {
         let user = self.find_by_id(user_id).await?;
-        Self::check_password_strength(new_password, &[
-            &user.username,
-            &user.email,
-            user.display_name.as_deref().unwrap_or(""),
-        ])?;
+        validate_password(new_password, &[&user.username, &user.email, user.display_name.as_deref().unwrap_or("")]).map_err(|e| {
+            let mut errors = ValidationErrors::new();
+            errors.add("new_password", e);
+            errors
+        })?;
         let password_hash = crate::util::hash(new_password)
             .map_err(|_| internal_error("password hash failed"))?;
 

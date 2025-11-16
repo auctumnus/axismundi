@@ -1,6 +1,22 @@
 default:
   just --list
 
+dev:
+  just dev-full
+  @echo "Starting the app..."
+  concurrently --names 後,前 "just dev-backend" "just dev-frontend"
+
+dev-backend:
+  watchexec -w templates -w src -r cargo run
+
+dev-frontend:
+  cd frontend && bun run dev
+
+make-test-user:
+    @echo "Creating test user ..."
+    curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"aaa@aaa.com","password":"kitty paw fuzzy socks","username":"autumn"}'
+    docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'aaa@aaa.com'"
+
 # Start only the database
 db:
     @echo "Starting PostgreSQL database..."

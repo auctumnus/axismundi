@@ -1,18 +1,25 @@
 :root {
   color-scheme: light dark;
 
-  --background-panel: light-dark(white, var(--color-slate-950));
-  --background-page: light-dark(var(--color-slate-100), var(--color-slate-900));
+  --light-background-panel: white;
+  --dark-background-panel: var(--color-slate-950);
+  --light-background-page: var(--color-slate-100);
+  --dark-background-page: var(--color-slate-900);
+  --light-foreground-primary: var(--color-slate-900);
+  --dark-foreground-primary: var(--color-slate-100);
 
-  --foreground-primary: light-dark(var(--color-slate-900), var(--color-slate-100));
+  --background-panel: light-dark(var(--light-background-panel), var(--dark-background-panel));
+  --background-page: light-dark(var(--light-background-page), var(--dark-background-page));
+
+  --foreground-primary: light-dark(var(--light-foreground-primary), var(--dark-foreground-primary));
   --foreground-secondary: light-dark(var(--color-slate-500), var(--color-slate-400));
 
-  --input-background: light-dark(var(--color-slate-200), var(--color-slate-800));
-  --input-border: light-dark(var(--color-slate-400), var(--color-slate-600));
-
-  --error-background: color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel));
+  --error-background: light-dark(color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel)), oklch(7.8% 0.092 26.042));
   --error-foreground: var(--color-red-700);
-  --error-border: .1rem solid var(--color-red-500);
+  --error-border: var(--color-red-500);
+
+  --focus-ring: light-dark(color-mix(in oklab, var(--color-sky-500) 40%, transparent), color-mix(in oklab, var(--color-sky-400) 40%, transparent));
+  --focus-ring-error: light-dark(color-mix(in oklab, var(--color-red-500) 40%, transparent), color-mix(in oklab, var(--color-red-400) 40%, transparent));
 
   --color-shadow: light-dark(color-mix(in oklab,var(--color-slate-900) 10%,transparent), color-mix(in oklab, black 30%, transparent));
 
@@ -55,6 +62,12 @@ body {
     max-width: var(--page-width);
     margin: 0 auto;
   }
+}
+
+a:focus-visible, a.button:focus-visible, button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 header {
@@ -269,6 +282,13 @@ main {
     margin-bottom: 1rem;
   }
 
+  h2 {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+  }
+
   p {
     margin-bottom: 1rem;
     line-height: 1.5;
@@ -289,25 +309,6 @@ main {
       margin-bottom: .5rem;
       list-style: disc;
     }
-  }
-}
-
-div.error {
-  background-color: var(--error-background);
-  color: var(--error-foreground);
-  border: var(--error-border);
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border-radius: 4px;
-
-  h2 {
-    margin-top: 0;
-    font-family: var(--font-heading);
-    margin-bottom: .5rem;
-  }
-
-  p {
-    margin: 0;
   }
 }
 
@@ -339,25 +340,26 @@ a.button, form.default button[type="submit"] {
   }
 }
 
-form.default {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin: 0 auto 2rem auto;
+a.button-secondary, form.default button[type="reset"], button.clear {
+  font-family: var(--font-heading);
+  padding: .75rem;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--foreground-primary);
+  background-color: light-dark(--background-panel);
+  border: 1px solid var(--foreground-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
 
-  label {
-    font-family: var(--font-heading);
-  }
+  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
 
-  input[type="text"],
-  input[type="email"],
-  input[type="password"] {
-    font-family: var(--font-normal);
-    padding: .5rem;
-    border: 1px solid var(--input-border);
-    border-radius: 4px;
-    background-color: var(--input-background);
-    color: var(--foreground-primary);
-    font-size: 1rem;
+  &:hover {
+    background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
   }
+}
+
+.display-name.gendered {
+  font-weight: 600;
 }

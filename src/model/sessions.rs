@@ -39,6 +39,10 @@ impl SessionRepository {
 
         let result = user_repo.find_by_email(email).await;
 
+        if matches!(result, Err(AppError { status_code: axum::http::StatusCode::NOT_FOUND, .. })) {
+            println!("could not find : {}", email);
+        }
+
         let password_hash = match result {
             Ok(ref user) => user.password_hash.clone(),
             Err(
@@ -50,7 +54,7 @@ impl SessionRepository {
             _ => String::new(),
         };
 
-        if !password_hash.is_empty() && crate::util::verify(password, &password_hash)? {
+        if crate::util::verify(password, &password_hash)? {
             if let Ok(user) = result {
                 // TODO: should we actually be checking this?
                 ensure_verified(&user)?;
@@ -85,6 +89,7 @@ impl SessionRepository {
                 ))
             }
         } else {
+            println!("Failed login attempt for email: {}", email);
             Err(AppError::new(
                 "Invalid email or password".to_string(),
                 axum::http::StatusCode::UNAUTHORIZED,

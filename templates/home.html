@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{%- import "util.html" as u -%}
 
 {% block title %}Axismundi - home{% endblock %}
 
@@ -8,7 +9,9 @@
 
 {% block content %}
 
-<h1><span id="welcome">welcome</span>, {{ current_user.as_ref().unwrap().username }}</h1>
+{% let user = current_user.as_ref().unwrap() %}
+
+<h1><span id="welcome">welcome</span>, {% call u::name(user) %}</h1>
 
 <h2>your languages</h2>
 {% if languages.is_empty() %}

@@ -102,8 +102,8 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 secret_key: "minioadmin123_test".to_string(),
                 endpoint: "http://localhost:7000".to_string(),
                 public_url_base: Some("http://localhost:6060/axismundi-test".to_string()),
-                thumbor_url_base: None, // no thumbor in tests, fall back to originals
-                thumbor_security_key: None,
+                thumbor_url_base: Some("http://localhost:8888".to_string()),
+                thumbor_security_key: Some("change-me-in-production".to_string()),
             },
             maid: MaidConfig {
                 health_check_timeout_ms: default_health_check_timeout_ms(),

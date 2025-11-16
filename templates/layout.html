@@ -6,15 +6,23 @@
     <title>{% block title %}Axismundi{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto+Slab:wght@100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/reset.css">
     <link rel="stylesheet" href="/static/colors.css">
     <link rel="stylesheet" href="/static/main.css">
+    <link rel="stylesheet" href="/static/forms.css">
+    <meta name="darkreader-lock">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script defer src="/static/main.js"></script>
     {% block head %}{% endblock %}
+    {% if let Some(user) = current_user %}
+    <script>
+        window.user = {
+            username: "{{ user.username }}",
+            display_name: {% if let Some(display_name) = &user.display_name %}"{{ display_name }}"{% else %}null{% endif %},
+        }
+    </script>
+    {% endif %}
 </head>
 <body>
 
@@ -62,7 +70,7 @@
                         </nav>
                     {% endif %}
                 {% else %}
-                    <a href="/login" class="button">Log in</a>
+                    <a href="/login">Log in</a>
                 {% endif %}
             </div>
         </div>

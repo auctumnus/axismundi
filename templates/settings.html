@@ -2,6 +2,20 @@
 
 {% block title %}Axismundi - Settings{% endblock %}
 
+{%- import "util.html" as u -%}
+
+{% block head %}
+<link rel="stylesheet" href="/static/settings.css">
+<script src="/static/settings.js" defer></script>
+<noscript>
+    <style>
+        input#gender {
+            width: 100%;
+        }
+    </style>
+</noscript>
+{% endblock %}
+
 {% block content %}
 <h1>settings</h1>
 
@@ -12,25 +26,74 @@
     </div>
 {% endif %}
 
+<h2>account information</h2>
+
 {% let user = current_user.as_ref().unwrap() %}
-<form class="default" method="post" action="/user/{{ user.username }}/update">
-    <h2>Account Information</h2>
-    <section>
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" value="{{ user.email }}" required>
-    </section>
+{% let previous_input = &previous_input %}
+{% let current_user = &current_user %}
+<form class="default" method="post" action="/settings">
     <section>
         <label for="username">Username</label>
-        <input type="text" id="username" name="username" value="{{ user.username }}" required>
+        {% call u::field_error(name="username") %}
+        <input type="text" id="username" name="username" required value="{{previous_username}}">
+        <span class="hint">use only lowercase letters (a-z), numbers (0-9), dashes (-), and underscores (_). must start and end with a letter or number.</span>
     </section>
-    <h2>Change Password</h2>
+
     <section>
-        <label for="current_password">Current Password</label>
+        <label for="display_name">Display name</label>
+        {% call u::field_error(name="display_name") %}
+        <input type="text" id="display_name" name="display_name" value="{{prev!(current_user, previous_input, display_name)}}">
+    </section>
+
+    <section>
+        <label for="description">Description</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description" rows="4">{{prev!(current_user, previous_input, description)}}</textarea>
+    </section>
+
+    <section>
+        <label for="pronouns">Pronouns</label>
+        {% call u::field_error(name="pronouns") %}
+        <input type="text" id="pronouns" name="pronouns" value="{{prev!(current_user, previous_input, pronouns)}}">
+    </section>
+
+    <section>
+        <label for="gender">Gender</label>
+        {% call u::field_error(name="gender") %}
+        <gender-input initial-value="{{prev!(current_user, previous_input, gender)}}">
+            <input type="text" id="gender" name="gender" value="{{prev!(current_user, previous_input, gender)}}">
+        </gender-input>
+    </section>
+    <button type="submit">Update account information</button>
+</form>
+
+<h2>change email</h2>
+<form class="default" method="post" action="/settings">
+    <section>
+        <label for="email">New email address</label>
+        {% call u::field_error(name="email") %}
+        <input type="email" id="email" name="email" required>
+    </section>
+    <section>
+        <label for="current_password">Current password</label>
+        {% call u::field_error(name="current_password") %}
+        <input type="password" id="current_password" name="current_password" required>
+    </section>
+    <button type="submit">Update email</button>
+</form>
+
+<h2>change password</h2>
+<form class="default" method="post" action="/settings">
+    <section>
+        <label for="current_password">Current password</label>
+        {% call u::field_error(name="current_password") %}
         <input type="password" id="current_password" name="current_password" required>
     </section>
     <section>
-        <label for="new_password">New Password</label>
-        <input type="password" id="new_password" name="new_password">
+        <label for="new_password">New password</label>
+        {% call u::field_error(name="new_password") %}
+        <input type="password" id="new_password" name="new_password" required>
     </section>
+    <button type="submit">Update password</button>
 </form>
 {% endblock %}

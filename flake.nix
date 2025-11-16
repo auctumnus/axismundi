@@ -39,6 +39,8 @@
           just  
           cargo-llvm-cov
           pstree
+          watchexec
+          concurrently
         ];
 
         buildInputs =

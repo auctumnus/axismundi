@@ -1,0 +1,28 @@
+<!-- This is a file for Askama macros; it should never be directly rendered. -->
+
+{% macro field_error(name) %}
+{% if let Some(errors) = crate::util::get_error(error, name) %}
+    <ul class="field-errors">
+        {% for error in errors %}
+            <li>{{ error.to_string() }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}
+{% endmacro %}
+
+{% macro top_level_error() %}
+{% if let Some(error) = crate::util::get_top_level_error(error) %}
+    <div class="error">
+        <h2>Error</h2>
+        <p>{{ error }}</p>
+    </div>
+{% endif %}
+{% endmacro %}
+
+{% macro name(user) %}
+{% if let Some(name) = user.display_name.clone() %}
+    {{ name }}
+{% else %}
+    {{ user.username.clone() }}
+{% endif %}
+{% endmacro %}

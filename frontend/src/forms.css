@@ -1,0 +1,149 @@
+:root {
+
+  --input-background: light-dark(var(--color-slate-200), var(--color-slate-800));
+  --input-border: light-dark(var(--color-slate-400), var(--color-slate-600));
+  --input-background-error: light-dark(color-mix(in oklab, var(--color-red-600) 10%, var(--input-background)), color-mix(in oklab, var(--color-red-800) 10%, var(--input-background)));
+
+  --input-background-focus: light-dark(color-mix(in oklab, var(--color-sky-500) 5%, var(--input-background)), color-mix(in oklab, var(--color-sky-400) 10%, var(--input-background)));
+  --input-border-focus: light-dark(var(--color-sky-500), var(--color-sky-400));
+  --input-background-error-focus: light-dark(color-mix(in oklab, var(--color-red-500) 10%, var(--input-background)), color-mix(in oklab, var(--color-red-400) 10%, var(--input-background)));
+  --input-border-error-focus: light-dark(var(--color-red-500), var(--color-red-400));
+
+  --warning-background: light-dark(color-mix(in oklab, var(--color-yellow-400) 10%, var(--background-panel)), oklch(85% 0.1 90));
+    --warning-foreground: var(--color-yellow-700);
+    --warning-border: var(--color-yellow-500);
+}
+
+form.default {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0 auto 2rem auto;
+
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+
+    &:has(.field-errors) {
+      box-shadow:
+        -.5rem 0 0 0 var(--background-page),
+        -1rem 0 0 0 var(--error-border);
+
+      input[type="text"],
+      input[type="email"],
+      input[type="password"],
+      textarea {
+        border: 1px solid var(--error-border);
+        background-color: var(--input-background-error);
+
+        &:focus-visible {
+          outline: 2px solid var(--focus-ring-error);
+          border: 1px solid var(--input-border-error-focus);
+          background-color: var(--input-background-error-focus);
+          outline-offset: 2px;
+        }
+
+        &:active {
+          background-color: var(--input-background-error-focus);
+          border: 1px solid var(--input-border-error-focus);
+        }
+      }
+    }
+
+    .hint {
+      font-size: .85rem;
+      color: var(--foreground-secondary);
+    }
+  }
+
+  ul.field-errors {
+    background-color: var(--error-background);
+    color: var(--error-foreground);
+    border: 1px solid var(--error-border);
+    margin-bottom: .375rem;
+    padding: 1rem;
+    border-radius: 4px;
+    gap: .5rem;
+    flex-direction: column;
+    display: flex;
+
+    li {
+      font-size: .9rem;
+      list-style: none;
+      margin: 0;
+    }
+  }
+
+  label {
+    font-family: var(--font-heading);
+  }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    font-family: var(--font-normal);
+    padding: .5rem;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-background);
+    color: var(--foreground-primary);
+    font-size: 1rem;
+    outline: 0;
+    outline-color: transparent;
+
+    transition: background-color 250ms ease-in-out,
+                border-color 250ms ease-in-out;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      border: 1px solid var(--input-border-focus);
+      background-color: var(--input-background-focus);
+      outline-offset: 2px;
+    }
+
+    &:active {
+      background-color: var(--input-background-focus);
+      border: 1px solid var(--input-border-focus);
+    }
+  }
+}
+
+div.error {
+  background-color: var(--error-background);
+  color: var(--error-foreground);
+  border: 1px solid var(--error-border);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+
+  h2 {
+    margin-top: 0;
+    font-family: var(--font-heading);
+    margin-bottom: .5rem;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+div.warning {
+  background-color: var(--warning-background);
+  color: var(--warning-foreground);
+  border: 1px solid var(--warning-border);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+
+  h2 {
+    margin-top: 0;
+    font-family: var(--font-heading);
+    margin-bottom: .5rem;
+  }
+
+  p {
+    margin: 0;
+  }
+}

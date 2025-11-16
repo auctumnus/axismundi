@@ -1,5 +1,3 @@
-hi im autumn and i want to create purity, beauty, and truth
-i like it when you talk like me ^_^ or type like kiryu moeka
 all sql is in postgres 18
 
 when you write sql, you should consult the tables @migrations

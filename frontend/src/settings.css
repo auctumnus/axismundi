@@ -1,0 +1,125 @@
+#gender-container {
+        display: flex;
+        flex-direction: row;
+    }
+
+    .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-left: 1rem;
+    }
+
+    .slider-container {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-direction: row;
+        flex: 1;
+    }
+
+    #gender, #hue-value, #saturation-value, #lightness-value {
+        /* we don't actually ship berkeley mono; this only uses it if you have it installed,
+           but i like that font too much to not use it */
+        font-family: 'Berkeley Mono', 'Roboto Mono', monospace;
+    }
+
+    #hue-value,
+    #saturation-value,
+    #lightness-value {
+        width: calc(3ch + 1rem + 2.5px);
+    }
+
+    #hue-slider,
+    #saturation-slider,
+    #lightness-slider {
+        flex: 1;
+        &::-webkit-slider-runnable-track,
+        &::-moz-range-track {
+            height: 8px;
+            border-radius: 4px;
+        }
+
+        &::-webkit-slider-thumb,
+        &::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 0;
+            background-color: var(--foreground-primary);
+            box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            margin-top: -4px; /* half the height of the thumb minus half the height of the track */
+        }
+    }
+
+    #hue-slider {
+        &::-webkit-slider-runnable-track, &::-moz-range-track {
+            background: linear-gradient(to right, hsl(0, var(--saturation), var(--lightness)), hsl(60, var(--saturation), var(--lightness)), hsl(120, var(--saturation), var(--lightness)), hsl(180, var(--saturation), var(--lightness)), hsl(240, var(--saturation), var(--lightness)), hsl(300, var(--saturation), var(--lightness)), hsl(360, var(--saturation), var(--lightness)));
+        }
+    }
+
+    #saturation-slider {
+        &::-webkit-slider-runnable-track, &::-moz-range-track {
+            background: linear-gradient(to right, hsl(var(--hue), 0%, var(--lightness)), hsl(var(--hue), 100%, var(--lightness)));
+        }
+    }
+
+    #lightness-slider {
+        &::-webkit-slider-runnable-track, &::-moz-range-track {
+            background: linear-gradient(to right, black, hsl(var(--hue), var(--saturation), 50%), white);
+        }
+    }
+
+    #color-preview {
+        min-width: 100px;
+        min-height: 100%;
+        flex: 1;
+        border: var(--border);
+        background-color: var(--color);
+        border-radius: 4px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        span {
+            color: var(--foreground-secondary);
+            font-family: var(--font-normal);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+    }
+
+    .text-preview {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+
+        .text-preview-light, .text-preview-dark {
+            flex: 1;
+            padding: 1rem;
+            border: var(--border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .text-preview-light {
+            background-color: var(--light-background-page);
+            color: var(--color, var(--light-foreground-primary));
+        }
+
+        .text-preview-dark {
+            background-color: var(--dark-background-page);
+            color: var(--color, var(--dark-foreground-primary));
+        }
+    }
+
+.warning {
+    margin-top: 1rem;
+    margin-bottom: 0;
+}

@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use validator::ValidationError;
 
 use crate::config;
 
@@ -11,15 +12,65 @@ use crate::config;
 pub struct AppError {
     pub message: String,
     pub status_code: StatusCode,
+    pub validation_errors: Option<validator::ValidationErrors>,
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+fn prettify_validation_error(error: &ValidationError) -> String {
+    if let Some(message) = &error.message {
+        message.to_string()
+    } else {
+        match error.code.as_ref() {
+            "length" => {
+                let min = error.params.get("min").and_then(serde_json::Value::as_u64);
+                let max = error.params.get("max").and_then(serde_json::Value::as_u64);
+                if let (Some(min), Some(max)) = (min, max) {
+                    format!("length must be between {} and {}", min, max)
+                } else if let Some(min) = min {
+                    format!("length must be at least {}", min)
+                } else if let Some(max) = max {
+                    format!("length must be at most {}", max)
+                } else {
+                    "invalid length".to_string()
+                }
+            },
+            "regex" => "value is incorrectly formatted".to_string(),
+            "email" => "invalid email format".to_string(),
+            "password_strength" => "password is too weak".to_string(),
+            _ => "invalid value".to_string(),
+        }
+    }
+}
 
 impl AppError {
     pub const fn new(message: String, status_code: StatusCode) -> Self {
         Self {
             message,
             status_code,
+            validation_errors: None,
+        }
+    }
+
+    pub fn error_for_field(&self, field: &str) -> Option<Vec<String>> {
+        if let Some(errors) = &self.validation_errors {
+            if let Some(error) = errors.field_errors().get(field) {
+                if !error.is_empty() {
+                    let error = error.iter()
+                        .map(prettify_validation_error)
+                        .collect();
+
+                    return Some(error)
+                }
+            }
+        }
+        None
+    }
+
+    pub fn top_level_error(&self) -> Option<&str> {
+        match self.validation_errors {
+            None => Some(&self.message),
+            Some(_) => None,
         }
     }
 }
@@ -79,6 +130,7 @@ impl From<anyhow::Error> for AppError {
         Self {
             message: err.to_string(),
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            validation_errors: None,
         }
     }
 }
@@ -88,6 +140,7 @@ impl From<validator::ValidationErrors> for AppError {
         Self {
             message: errors.to_string(),
             status_code: StatusCode::BAD_REQUEST,
+            validation_errors: Some(errors),
         }
     }
 }
@@ -98,6 +151,7 @@ impl From<sqlx::Error> for AppError {
             sqlx::Error::RowNotFound => Self {
                 message: "Resource not found".to_string(),
                 status_code: StatusCode::NOT_FOUND,
+                validation_errors: None,
             },
             _ => internal_error(err),
         }

@@ -1,5 +1,5 @@
 use crate::{
-    err::{AppResult, internal_error},
+    err::{AppError, AppResult, internal_error},
     model::users::User,
 };
 use argon2::{
@@ -43,6 +43,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
+use validator::ValidationError;
 
 /// Hash plaintext using Argon2 and return the hash as a string.
 pub fn hash(plaintext: &str) -> AppResult<String> {
@@ -78,6 +79,25 @@ pub fn ensure_verified(user: &User) -> AppResult<()> {
     Ok(())
 }
 
+pub type PasswordValidationContext<'v_a> = &'v_a [&'v_a str];
+
+pub fn validate_password(value: &str, user_inputs: PasswordValidationContext) -> Result<(), ValidationError> {
+    let password_strength = zxcvbn::zxcvbn(value, user_inputs);
+    if password_strength.score() < zxcvbn::Score::Three {
+        let message = password_strength
+            .feedback()
+            .map_or("password is too weak".to_string(), |reason| {
+                format!("password is too weak: {reason}")
+            });
+
+        let err = ValidationError::new("password_strength");
+
+        let err = err.with_message(message.into());
+        return Err(err);
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct AppState {
     pub pool: sqlx::PgPool,
@@ -90,5 +110,23 @@ impl Clone for AppState {
             pool: self.pool.clone(),
             email_service: self.email_service.clone(),
         }
+    }
+}
+
+// we use this in the html templates, and we get a &Option<AppError> which is annoying to work with
+#[allow(clippy::ref_option)]
+pub fn get_error(error: &Option<AppError>, field: &str) -> Option<Vec<String>> {
+    if let Some(err) = error {
+        err.error_for_field(field)
+    } else {
+        None
+    }
+}
+
+pub fn get_top_level_error(error: &Option<AppError>) -> Option<&str> {
+    if let Some(err) = error {
+        err.top_level_error()
+    } else {
+        None
     }
 }
