@@ -87,6 +87,8 @@ pub fn create_api_controller() -> Router<AppState> {
 mod tests {
     use axum::{body::Body, http::Request, routing::RouterIntoService};
     use reqwest::StatusCode;
+    use serde_json::json;
+    use tower::Service as _;
     use std::sync::Arc;
 
     use crate::email::MockEmailService;
@@ -227,6 +229,10 @@ mod tests {
             .oneshot(post_without_auth("users", user_body).await)
             .await
             .unwrap();
+        if resp.status() != 200 {
+            crate::controller::api::tests::print_response_body(resp).await;
+            panic!("Failed to create user {username}");
+        }
         assert_eq!(resp.status(), 200);
 
         println!("made user {username}");
@@ -286,5 +292,74 @@ mod tests {
             panic!("Expected status {expected_status}, got {status}");
         }
         response
+    }
+
+    pub(crate) async fn create_test_language(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>) -> serde_json::Value {
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+        let request = post(token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let language = crate::tests::response_to_value(response.into_body()).await;
+
+        // add noun word class
+        let body = json!({
+            "name": "noun",
+            "abbreviation": "n",
+        });
+        let request = crate::controller::api::tests::post(token, &format!("languages/{code}/word-classes"), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        language
+    }
+
+    pub(crate) async fn create_test_word(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str) -> serde_json::Value {
+        let body = json!({
+            "word": crate::tests::random_name(),
+            "word_class": "n",
+        });
+        let request = post(token, &format!("languages/{language_code}/words"), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+       crate::tests::response_to_value(response.into_body()).await
+    }
+
+    pub(crate) async fn create_test_definition(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str, word_slug: &str, word_lemma: i64) -> serde_json::Value {
+        let body = json!({
+            "definition": "A test definition",
+        });
+        let request = post(token, &format!("languages/{language_code}/words/{word_slug}/{word_lemma}/definitions"), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+       crate::tests::response_to_value(response.into_body()).await
+    }
+
+    pub(crate) async fn create_test_translatable(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str) -> serde_json::Value {
+        let body = json!({
+            "title": "A test translatable",
+            "english": "test"
+        });
+        let request = post(token, "translatable", body).await;
+        let response = app.call(request).await.unwrap();
+        if response.status() != StatusCode::OK {
+            print_response_body(response).await;
+            panic!("Failed to create test translatable");
+        }
+        assert_eq!(response.status(), StatusCode::OK);
+        crate::tests::response_to_value(response.into_body()).await
+    }
+
+    pub(crate) async fn create_test_translation(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, translatable_id: &str, language_code: &str) -> serde_json::Value {
+        let body = json!({
+            "translated_text": "A test translation",
+        });
+        let request = post(token, &format!("translatable/{translatable_id}/translations/{language_code}"), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+       crate::tests::response_to_value(response.into_body()).await
     }
 }

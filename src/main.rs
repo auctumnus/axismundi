@@ -156,8 +156,9 @@ pub(crate) mod tests {
         format!(
             "{}_{}",
             random_word::get(random_word::Lang::En),
-            nanoid::nanoid!(4)
+            nanoid::nanoid!(4).replace("_", "")
         )
+        .replace('-', "")
         .to_lowercase()
     }
 

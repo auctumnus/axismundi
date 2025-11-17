@@ -30,6 +30,8 @@ pub struct Quotation {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateQuotation {
+    pub definition: Uuid,
+    
     #[validate(range(min = 0))]
     pub span_start: i32,
     #[validate(range(min = 0))]
@@ -205,11 +207,13 @@ impl QuotationRepository {
                     SELECT 1 FROM quotation
                     WHERE span_start < $1 AND span_end > $2
                     AND translation = $3
+                    AND id <> $4
                 )
             "#,
             span_end,
             span_start,
-            existing.translation
+            existing.translation,
+            id
         )
         .fetch_one(&self.state.pool)
         .await?;

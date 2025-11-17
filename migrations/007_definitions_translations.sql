@@ -78,14 +78,6 @@ create table quotation (
 
 create index idx_quotation_translation on quotation(translation);
 
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-
-ALTER TABLE quotation
-ADD CONSTRAINT no_overlapping_quotations
-EXCLUDE USING gist (
-  int4range(span_start, span_end) WITH &&
-);
-
 create table quotation_suggestion (
     id uuid primary key default uuidv7(),
 

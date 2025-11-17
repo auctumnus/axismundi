@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -151,6 +152,7 @@ impl TranslatableRepository {
         ensure_verified(requestor)?;
 
         let slug = slug::slugify(&translatable.title);
+        let slug = format!("{slug}-{}", nanoid!(6));
 
         let result = sqlx::query_as!(
             Translatable,
@@ -194,6 +196,12 @@ impl TranslatableRepository {
         updates.validate()?;
 
         ensure_verified(requestor)?;
+
+        let existing = self.find_by_id(id).await?;
+        // Only allow creator to update
+        if existing.created_by != requestor.id {
+            return Err(crate::err::forbidden("only the creator can update this translatable"));
+        }
 
         let slug = if let Some(ref new_title) = updates.title {
             Some(slug::slugify(new_title))

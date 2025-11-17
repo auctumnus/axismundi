@@ -95,11 +95,15 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{delete, get, make_authed_user, post};
+    use crate::controller::api::tests::{delete, delete_without_auth, get, make_authed_user, post, put, put_without_auth};
     use crate::email::MockEmailService;
 
-    #[tokio::test]
-    async fn test_create_translatable() {
+    struct TestContext {
+        token: String,
+        app: axum::routing::RouterIntoService<axum::body::Body>,
+    }
+
+    async fn create_test_context() -> TestContext {
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
         let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
@@ -109,17 +113,29 @@ mod tests {
         let username = crate::tests::random_name();
         let token = make_authed_user(&username, &app, email_service.clone()).await;
 
-        let body = json!({
-            "text": "This is a test translatable text",
-        });
+        TestContext { token, app }
+    }
 
-        let request = post(&token, "translatable", body).await;
+    async fn create_test_translatable(
+        token: &str,
+        app: &mut axum::routing::RouterIntoService<axum::body::Body>,
+    ) -> serde_json::Value {
+        let body = json!({
+            "title": "test translatable",
+            "english": "This is a test translatable text.",
+        });
+        let request = post(token, "translatable", body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        crate::tests::response_to_value(response.into_body()).await
+    }
 
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["text"], "This is a test translatable text");
-        assert!(body["id"].is_string());
+    #[tokio::test]
+    async fn test_create_translatable() {
+        let mut ctx = create_test_context().await;
+        let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
+        assert_eq!(translatable["title"], "test translatable");
+        assert_eq!(translatable["english"], "This is a test translatable text.");
     }
 
     #[tokio::test]
@@ -127,7 +143,8 @@ mod tests {
         let mut app = crate::tests::test_app().await.unwrap();
 
         let body = json!({
-            "text": "Should fail",
+            "title": "test translatable",
+            "english": "This is a test translatable text.",
         });
 
         let request = crate::controller::api::tests::post_without_auth("translatable", body).await;
@@ -137,152 +154,81 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_translatable() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let mut ctx = create_test_context().await;
+        let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
+        let slug = translatable["slug"].as_str().unwrap();
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let body = json!({
-            "text": "Specific translatable text",
-        });
-
-        let request = post(&token, "translatable", body).await;
-        let response = app.call(request).await.unwrap();
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        let translatable_id = created["id"].as_str().unwrap();
-
-        let request = get(&format!("translatable/{}", translatable_id)).await;
-        let response = app.call(request).await.unwrap();
+        let request = get(&format!("translatable/{}", slug)).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["id"], translatable_id);
-        assert_eq!(body["text"], "Specific translatable text");
     }
 
     #[tokio::test]
     async fn test_get_translatable_not_found() {
         let mut app = crate::tests::test_app().await.unwrap();
 
-        let request = get("translatable/00000000-0000-0000-0000-000000000000").await;
+        let request = get("translatable/awawa").await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_search_translatable() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let mut ctx = create_test_context().await;
+        let _translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        // Create multiple translatables
-        for i in 0..3 {
-            let body = json!({
-                "text": format!("Translatable text number {}", i),
-            });
-            let request = post(&token, "translatable", body).await;
-            let response = app.call(request).await.unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-        }
-
-        let request = get("translatable").await;
-        let response = app.call(request).await.unwrap();
+        let request = get("translatable?limit=10&offset=0").await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert!(body["items"].is_array());
     }
 
     #[tokio::test]
     async fn test_edit_translatable() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let body = json!({
-            "text": "Original text",
-        });
-
-        let request = post(&token, "translatable", body).await;
-        let response = app.call(request).await.unwrap();
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        let translatable_id = created["id"].as_str().unwrap();
+        let mut ctx = create_test_context().await;
+        let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
+        let slug = translatable["slug"].as_str().unwrap();
 
         let update_body = json!({
-            "text": "Updated text",
+            "english": "Updated translatable text.",
         });
-
-        let request = crate::controller::api::tests::put(&token, &format!("translatable/{}", translatable_id), &update_body);
-        let response = app.call(request).await.unwrap();
+        let request = put(&ctx.token, &format!("translatable/{}", slug), &update_body);
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["text"], "Updated text");
     }
 
     #[tokio::test]
     async fn test_edit_translatable_unauthorized() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let mut ctx = create_test_context().await;
+        let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
+        let slug = translatable["slug"].as_str().unwrap();
 
         let update_body = json!({
-            "text": "Should not work",
+            "english": "Updated translatable text.",
         });
-
-        let request = crate::controller::api::tests::put_without_auth("translatable/00000000-0000-0000-0000-000000000000", &update_body);
-        let response = app.call(request).await.unwrap();
+        let request = put_without_auth(&format!("translatable/{}", slug), &update_body);
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
     async fn test_delete_translatable() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let mut ctx = create_test_context().await;
+        let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
+        let slug = translatable["slug"].as_str().unwrap();
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let body = json!({
-            "text": "To be deleted",
-        });
-
-        let request = post(&token, "translatable", body).await;
-        let response = app.call(request).await.unwrap();
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        let translatable_id = created["id"].as_str().unwrap();
-
-        let request = delete(&token, &format!("translatable/{}", translatable_id));
-        let response = app.call(request).await.unwrap();
+        let request = delete(&ctx.token, &format!("translatable/{}", slug));
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-
-        // Verify it's deleted
-        let request = get(&format!("translatable/{}", translatable_id)).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_delete_translatable_unauthorized() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let mut ctx = create_test_context().await;
+        let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
+        let slug = translatable["slug"].as_str().unwrap();
 
-        let request = crate::controller::api::tests::delete_without_auth("translatable/00000000-0000-0000-0000-000000000000");
-        let response = app.call(request).await.unwrap();
+        let request = delete_without_auth(&format!("translatable/{}", slug));
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

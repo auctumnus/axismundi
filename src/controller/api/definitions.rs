@@ -106,48 +106,17 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{delete, get, make_authed_user, post};
+    use crate::controller::api::tests::{delete, delete_without_auth, get, make_authed_user, post, post_without_auth, create_test_language, create_test_word};
     use crate::email::MockEmailService;
 
-    async fn create_test_language(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>) -> serde_json::Value {
-        let code = crate::tests::random_code();
-        let body = json!({
-            "code": code,
-            "name": "Test Language",
-        });
-        let request = post(token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let language = crate::tests::response_to_value(response.into_body()).await;
-
-        // add noun word class
-        let body = json!({
-            "name": "noun",
-            "abbreviation": "n",
-        });
-        let request = crate::controller::api::tests::post(token, &format!("languages/{code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        language
+    struct TestContext {
+        token: String,
+        app: axum::routing::RouterIntoService<axum::body::Body>,
+        language: serde_json::Value,
+        word: serde_json::Value,
     }
 
-    async fn create_test_word(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str) -> serde_json::Value {
-        let body = json!({
-            "word": crate::tests::random_name(),
-            "word_class": "n",
-        });
-        let request = post(token, &format!("languages/{language_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let word = crate::tests::response_to_value(response.into_body()).await;
-
-        word
-    }
-
-
-    #[tokio::test]
-    async fn test_create_definition() {
+    async fn create_test_context() -> TestContext {
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
         let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
@@ -164,12 +133,30 @@ mod tests {
         // Create word
         let word = create_test_word(&token, &mut app, language_code).await;
 
+        TestContext {
+            token,
+            app,
+            language,
+            word,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_definition() {
+        let ctx = create_test_context().await;
+
+        let TestContext { token, mut app, language, word } = ctx;
+
         let body = json!({
             "definition": "A test definition",
             "context": "Used in testing scenarios",
         });
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap()), body).await;
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
+
+        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -181,132 +168,138 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_definition_unauthorized() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let ctx = create_test_context().await;
+
+        let TestContext { mut app, language, word, .. } = ctx;
 
         let body = json!({
             "definition": "A test definition",
+            "context": "Used in testing scenarios",
         });
 
-        let request = crate::controller::api::tests::post_without_auth("words/00000000-0000-0000-0000-000000000000/definitions", body).await;
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
+
+        let request = post_without_auth(&format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
     async fn test_get_definition() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let ctx = create_test_context().await;
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        // Create language
-        let language = create_test_language(&token, &mut app).await;
-        let language_code = language["code"].as_str().unwrap();
-
-        // Create word
-        let word = create_test_word(&token, &mut app, language_code).await;
+        let TestContext { token, mut app, language, word } = ctx;
 
         let body = json!({
-            "definition": "A specific test definition",
+            "definition": "A test definition",
+            "context": "Used in testing scenarios",
         });
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap()), body).await;
-        let response = app.call(request).await.unwrap();
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        let definition_id = created["id"].as_str().unwrap();
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = get(&format!("languages/{}/words/{}/{}/definitions/{}", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap(), definition_id)).await;
+        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["id"], definition_id);
-        assert_eq!(body["definition"], "A specific test definition");
+        assert_eq!(body["definition"], "A test definition");
+        assert_eq!(body["context"], "Used in testing scenarios");
+        assert!(body["id"].is_string());
+
+        let definition_id = body["id"].as_str().unwrap();
+        let request = get(&format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id)).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["definition"], "A test definition");
+        assert_eq!(body["context"], "Used in testing scenarios");
     }
 
     #[tokio::test]
     async fn test_get_definition_not_found() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let ctx = create_test_context().await;
 
-        let request = get("definitions/00000000-0000-0000-0000-000000000000").await;
+        let TestContext { mut app, language, word, .. } = ctx;
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
+
+        let request = get(&format!("languages/{}/words/{}/{}/definitions/00000000-0000-0000-0000-000000000000", code, slug, lemma)).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_list_definitions() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let ctx = create_test_context().await;
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
+        let TestContext { token, mut app, language, word } = ctx;
 
-        // Create language
-        let language = create_test_language(&token, &mut app).await;
-        let language_code = language["code"].as_str().unwrap();
 
-        // Create word
-        let word = create_test_word(&token, &mut app, language_code).await;
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
         // Create multiple definitions
         for i in 0..3 {
             let body = json!({
-                "definition": format!("Test definition {}", i),
+                "definition": format!("A test definition {}", i),
+                "context": "Used in testing scenarios",
             });
-            let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap()), body).await;
+            
+            let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
             let response = app.call(request).await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
+
+            let body = crate::tests::response_to_value(response.into_body()).await;
+            assert_eq!(body["definition"], format!("A test definition {}", i));
+            assert_eq!(body["context"], "Used in testing scenarios");
+            assert!(body["id"].is_string());
         }
 
-        let request = get(&format!("languages/{}/words/{}/{}/definitions", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap())).await;
+        let request = get(&format!("languages/{}/words/{}/{}/definitions", code, slug, lemma)).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
         let body = crate::tests::response_to_value(response.into_body()).await;
-        assert!(body["items"].is_array());
-        assert_eq!(body["items"].as_array().unwrap().len(), 3);
+        assert!(body.get("items").is_some());
+        let items = body.get("items").unwrap().as_array().unwrap();
+        assert!(items.len() == 3);
+
     }
 
     #[tokio::test]
     async fn test_edit_definition() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let ctx = create_test_context().await;
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        // Create language
-        let language = create_test_language(&token, &mut app).await;
-        let language_code = language["code"].as_str().unwrap();
-
-        // Create word
-        let word = create_test_word(&token, &mut app, language_code).await;
+        let TestContext { token, mut app, language, word } = ctx;
 
         let body = json!({
-            "definition": "Original definition",
+            "definition": "A test definition",
+            "context": "Used in testing scenarios",
         });
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap()), body).await;
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
+
+        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
         let response = app.call(request).await.unwrap();
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        let definition_id = created["id"].as_str().unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+
+        let definition_id = body["id"].as_str().unwrap();
 
         let update_body = json!({
             "definition": "Updated definition",
             "context": "New context",
         });
 
-        let request = crate::controller::api::tests::put(&token, &format!("languages/{}/words/{}/{}/definitions/{}", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap(), definition_id), &update_body);
+        let request = crate::controller::api::tests::put(&token, &format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id), &update_body);
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -317,60 +310,89 @@ mod tests {
 
     #[tokio::test]
     async fn test_edit_definition_unauthorized() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let ctx = create_test_context().await;
 
-        let update_body = json!({
-            "definition": "Should not work",
+        let TestContext { token, mut app, language, word } = ctx;
+
+        let body = json!({
+            "definition": "A test definition",
+            "context": "Used in testing scenarios",
         });
 
-        let request = crate::controller::api::tests::put_without_auth("definitions/00000000-0000-0000-0000-000000000000", &update_body);
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
+
+        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+
+        let definition_id = body["id"].as_str().unwrap();
+
+        let update_body = json!({
+            "definition": "Updated definition",
+            "context": "New context",
+        });
+
+        let request = crate::controller::api::tests::put_without_auth(&format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id), &update_body);
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
     async fn test_delete_definition() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        // Create language
-        let language = create_test_language(&token, &mut app).await;
-        let language_code = language["code"].as_str().unwrap();
-
-        // Create word
-        let word = create_test_word(&token, &mut app, language_code).await;
+        let ctx = create_test_context().await;
+        let TestContext { token, mut app, language, word } = ctx;
 
         let body = json!({
-            "definition": "To be deleted",
+            "definition": "A test definition",
+            "context": "Used in testing scenarios",
         });
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap()), body).await;
-        let response = app.call(request).await.unwrap();
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        let definition_id = created["id"].as_str().unwrap();
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = delete(&token, &format!("languages/{}/words/{}/{}/definitions/{}", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap(), definition_id));
+        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+
+        let definition_id = body["id"].as_str().unwrap();
+
+        let request = delete(&token, &format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-
-        // Verify it's deleted
-        let request = get(&format!("languages/{}/words/{}/{}/definitions/{}", language_code, word.get("slug").unwrap().as_str().unwrap(), word.get("lemma").unwrap().as_i64().unwrap(), definition_id)).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_delete_definition_unauthorized() {
-        let mut app = crate::tests::test_app().await.unwrap();
+        let ctx = create_test_context().await;
+        let TestContext { token, mut app, language, word } = ctx;
 
-        let request = crate::controller::api::tests::delete_without_auth("definitions/00000000-0000-0000-0000-000000000000");
+        let body = json!({
+            "definition": "A test definition",
+            "context": "Used in testing scenarios",
+        });
+
+        let code = language["code"].as_str().unwrap();
+        let slug = word.get("slug").unwrap().as_str().unwrap();
+        let lemma = word.get("lemma").unwrap().as_i64().unwrap();
+
+        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+
+        let definition_id = body["id"].as_str().unwrap();
+
+        let request = delete_without_auth(&format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
     }
 }

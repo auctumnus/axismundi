@@ -155,7 +155,6 @@ mod tests {
             "slug": "test1",
             "word_class": "n",
             "word": "test1",
-            "definition": "test definition 1",
         });
 
         let request = post(token, &format!("languages/{lang_code}/words"), body).await;
@@ -167,7 +166,6 @@ mod tests {
             "slug": "test2",
             "word_class": "n",
             "word": "test2",
-            "definition": "test definition 2",
         });
 
         let request = post(token, &format!("languages/{lang_code}/words"), body).await;

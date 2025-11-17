@@ -70,7 +70,7 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{get_with_auth, make_authed_user};
+    use crate::controller::api::tests::{get_with_auth, make_authed_user, print_response_body};
     use crate::email::MockEmailService;
 
     #[tokio::test]
@@ -149,6 +149,10 @@ mod tests {
         let request =
             crate::controller::api::tests::post_without_auth("sessions", login_body).await;
         let response = app.call(request).await.unwrap();
+        if response.status() != StatusCode::UNAUTHORIZED {
+            print_response_body(response).await;
+            panic!("expected unauthorized");
+        }
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 

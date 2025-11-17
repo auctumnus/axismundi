@@ -31,6 +31,8 @@ pub struct QuotationSuggestion {
 pub struct CreateQuotationSuggestion {
     #[validate(length(min = 1, max = 10000))]
     pub span_content: String,
+
+    pub definition: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -102,10 +104,11 @@ impl QuotationSuggestionRepository {
         &self,
         requestor: &User,
         language_id: Uuid,
-        definition_id: Uuid,
         suggestion: CreateQuotationSuggestion,
     ) -> AppResult<QuotationSuggestion> {
         suggestion.validate()?;
+
+        let definition_id = suggestion.definition;
 
         ensure_verified(requestor)?;
 
@@ -239,6 +242,7 @@ impl QuotationSuggestionRepository {
         requestor: Option<&User>,
         language_id: Uuid,
         pagination: PaginatedRequest,
+        content: String,
     ) -> AppResult<PaginatedResponse<QuotationSuggestion>> {
         // Check if requestor has permission to view suggestions for this language
         if let Some(user) = requestor {
@@ -268,14 +272,15 @@ impl QuotationSuggestionRepository {
                     created_by,
                     updated_by
                 FROM quotation_suggestion
-                WHERE language = $1
+                WHERE language = $1 AND span_content ILIKE $4
                 ORDER BY created_at DESC
                 LIMIT $2
                 OFFSET $3
             "#,
             language_id,
             i64::from(pagination.limit),
-            i64::from(pagination.offset)
+            i64::from(pagination.offset),
+            content
         )
         .fetch_all(&self.state.pool);
 

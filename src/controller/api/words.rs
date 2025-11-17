@@ -147,7 +147,6 @@ mod tests {
             "slug": "test",
             "word_class": "n",
             "word": "test",
-            "definition": "test definition",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
@@ -166,7 +165,6 @@ mod tests {
             "slug": "test",
             "word_class": "n",
             "word": "test",
-            "definition": "test definition",
         });
 
         let request =
@@ -211,7 +209,6 @@ mod tests {
                 "slug": format!("test{}", i),
                 "word_class": "n",
                 "word": format!("test{}", i),
-                "definition": format!("test definition {}", i),
             });
 
             let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
@@ -263,7 +260,6 @@ mod tests {
             "slug": "unique",
             "word_class": "n",
             "word": "unique",
-            "definition": "unique definition",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
@@ -323,7 +319,6 @@ mod tests {
             "slug": "noun1",
             "word_class": "n",
             "word": "noun1",
-            "definition": "noun definition",
         });
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
         let response = app.call(request).await.unwrap();
@@ -334,7 +329,6 @@ mod tests {
             "slug": "verb1",
             "word_class": "v",
             "word": "verb1",
-            "definition": "verb definition",
         });
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
         let response = app.call(request).await.unwrap();
@@ -382,10 +376,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "slug": "test",
             "word_class": "n",
             "word": "test",
-            "definition": "test definition",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
@@ -396,7 +388,7 @@ mod tests {
         let bookmark = body["bookmark"].as_str().unwrap().to_string();
 
         let update_body = json!({
-            "definition": "updated definition",
+            "word": "test123",
         });
 
         let request = crate::controller::api::tests::put(
@@ -408,7 +400,6 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["definition"], "updated definition");
         assert_eq!(body["bookmark"], bookmark);
     }
 
@@ -445,7 +436,6 @@ mod tests {
             "slug": "test",
             "word_class": "n",
             "word": "test",
-            "definition": "test definition",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
@@ -453,7 +443,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let update_body = json!({
-            "definition": "updated definition",
+            "word": "test_new",
         });
 
         let request = put_without_auth(&format!("languages/{lang_code}/words/test/1"), &update_body);
@@ -495,7 +485,6 @@ mod tests {
             "slug": "test",
             "word_class": "n",
             "word": "test",
-            "definition": "test definition",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
@@ -544,7 +533,6 @@ mod tests {
             "slug": "test",
             "word_class": "n",
             "word": "test",
-            "definition": "test definition",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/words"), body).await;

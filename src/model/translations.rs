@@ -96,6 +96,35 @@ impl TranslationRepository {
         result.ok_or_else(|| not_found(format!("translation with id '{id}'")))
     }
 
+    pub async fn find_by_slug(&self, slug: &str) -> AppResult<Translation> {
+        let result = sqlx::query_as!(
+            Translation,
+            r#"
+                SELECT
+                    t.id,
+                    t.translatable,
+                    t.language,
+                    t.translated_text,
+                    t.translator_name,
+                    t.translator_url,
+                    t.created_at,
+                    t.updated_at,
+                    t.created_by,
+                    t.updated_by,
+                    tr.slug as translatable_slug,
+                    tr.title as translatable_title
+                FROM translation t
+                JOIN translatable tr ON t.translatable = tr.id
+                WHERE tr.slug = $1
+            "#,
+            slug
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("translation with slug '{slug}'")))
+    }
+
     pub async fn find_by_translatable_and_language(
         &self,
         translatable_id: Uuid,
