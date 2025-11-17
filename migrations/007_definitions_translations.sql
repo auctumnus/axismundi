@@ -50,6 +50,10 @@ create table translation (
     translator_name text,
     translator_url text,
 
+    ipa text,
+    gloss text,
+    notes text,
+
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
     created_by uuid not null references users(id) on delete set null,

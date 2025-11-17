@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}{{ translatable.title }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>{{ translatable.title }}</h1>
+
+<div>
+    <span>added by</span>
+    {% call u::badge(&creator) %}
+</div>
+
+<p>{{ translatable.english }}</p>
+
+<h2>translations</h2>
+<a class="button" href="/translatable/{{translatable.slug}}/new-translation">add translation</a>
+<ul>
+    {% for translation in translations %}
+    <li>
+        <a href="/translatable/{{ translatable.slug }}/translations/{{ translation.language.code }}">
+            {{ translation.language.name }}
+        </a>
+        {% if let Some(contributor) = translation.contributor %}
+            <span>by</span>
+            {% call u::badge(&contributor) %}
+        {% endif %}
+    </li>
+    {% else %}
+    <p>No translations yet.</p>
+    {% endfor %}
+</ul>
+
+{% endblock %}

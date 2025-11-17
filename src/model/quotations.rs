@@ -199,6 +199,18 @@ impl QuotationRepository {
         let span_end = updates.span_end.unwrap_or(existing.span_end);
         let span_start = updates.span_start.unwrap_or(existing.span_start);
 
+        if span_start >= span_end {
+            return Err(bad_request("span_start must be less than span_end"));
+        }
+
+        if span_start < 0 || span_end < 0 {
+            return Err(bad_request("span_start and span_end must be non-negative"));
+        }
+
+        if span_end > translation.translated_text.chars().count() as i32 {
+            return Err(bad_request("span_end exceeds length of translated text"));
+        }
+
 
         // check for overlapping quotations
         let overlapping = sqlx::query!(

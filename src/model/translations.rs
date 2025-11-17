@@ -19,10 +19,14 @@ pub struct Translation {
     #[serde(skip_serializing)]
     pub language: Uuid,
     pub translated_text: String,
+    pub ipa: Option<String>,
+    pub gloss: Option<String>,
+    pub notes: Option<String>,
     pub translator_name: Option<String>,
     pub translator_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+
     #[serde(skip_serializing)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
@@ -34,7 +38,7 @@ pub struct Translation {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateTranslation {
-    #[validate(length(min = 1, max = 100000))]
+    #[validate(length(min = 1, max = 100_000))]
     pub translated_text: String,
 
     #[validate(length(max = 1000))]
@@ -43,11 +47,20 @@ pub struct CreateTranslation {
     #[validate(url)]
     #[validate(length(max = 2000))]
     pub translator_url: Option<String>,
+
+    #[validate(length(max = 100_000))]
+    pub ipa: Option<String>,
+
+    #[validate(length(max = 100_000))]
+    pub gloss: Option<String>,
+
+    #[validate(length(max = 100_000))]
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateTranslation {
-    #[validate(length(min = 1, max = 100000))]
+    #[validate(length(min = 1, max = 100_000))]
     pub translated_text: Option<String>,
 
     #[validate(length(max = 1000))]
@@ -56,6 +69,15 @@ pub struct UpdateTranslation {
     #[validate(url)]
     #[validate(length(max = 2000))]
     pub translator_url: Option<String>,
+
+    #[validate(length(max = 100_000))]
+    pub ipa: Option<String>,
+
+    #[validate(length(max = 100_000))]
+    pub gloss: Option<String>,
+
+    #[validate(length(max = 100_000))]
+    pub notes: Option<String>,
 }
 
 pub struct TranslationRepository {
@@ -75,6 +97,9 @@ impl TranslationRepository {
                     t.id,
                     t.translatable,
                     t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
                     t.translated_text,
                     t.translator_name,
                     t.translator_url,
@@ -104,6 +129,9 @@ impl TranslationRepository {
                     t.id,
                     t.translatable,
                     t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
                     t.translated_text,
                     t.translator_name,
                     t.translator_url,
@@ -137,6 +165,9 @@ impl TranslationRepository {
                     t.id,
                     t.translatable,
                     t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
                     t.translated_text,
                     t.translator_name,
                     t.translator_url,
@@ -202,14 +233,17 @@ impl TranslationRepository {
             Translation,
             r#"
                 WITH inserted AS (
-                    INSERT INTO translation (translatable, language, translated_text, translator_name, translator_url, created_by, updated_by)
-                    VALUES ($1, $2, $3, $4, $5, $6, $6)
-                    RETURNING id, translatable, language, translated_text, translator_name, translator_url, created_at, updated_at, created_by, updated_by
+                    INSERT INTO translation (translatable, language, translated_text, translator_name, translator_url, created_by, updated_by, ipa, gloss, notes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9)
+                    RETURNING id, translatable, language, translated_text, translator_name, translator_url, created_at, updated_at, created_by, updated_by, ipa, gloss, notes
                 )
                 SELECT
                     i.id,
                     i.translatable,
                     i.language,
+                    i.ipa,
+                    i.gloss,
+                    i.notes,
                     i.translated_text,
                     i.translator_name,
                     i.translator_url,
@@ -227,7 +261,10 @@ impl TranslationRepository {
             translation.translated_text,
             translation.translator_name,
             translation.translator_url,
-            requestor.id
+            requestor.id,
+            translation.ipa,
+            translation.gloss,
+            translation.notes
         )
         .fetch_one(&self.state.pool)
         .await?;
@@ -287,15 +324,21 @@ impl TranslationRepository {
                     SET translated_text = COALESCE($2, translated_text),
                         translator_name = COALESCE($3, translator_name),
                         translator_url = COALESCE($4, translator_url),
-                        updated_by = $5,
+                        ipa = COALESCE($5, ipa),
+                        gloss = COALESCE($6, gloss),
+                        notes = COALESCE($7, notes),
+                        updated_by = $8,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $1
-                    RETURNING id, translatable, language, translated_text, translator_name, translator_url, created_at, updated_at, created_by, updated_by
+                    RETURNING id, translatable, language, translated_text, translator_name, translator_url, created_at, updated_at, created_by, updated_by, ipa, gloss, notes
                 )
                 SELECT
                     u.id,
                     u.translatable,
                     u.language,
+                    u.ipa,
+                    u.gloss,
+                    u.notes,
                     u.translated_text,
                     u.translator_name,
                     u.translator_url,
@@ -312,6 +355,9 @@ impl TranslationRepository {
             updates.translated_text,
             updates.translator_name,
             updates.translator_url,
+            updates.ipa,
+            updates.gloss,
+            updates.notes,
             requestor.id
         )
         .fetch_optional(&self.state.pool)
@@ -378,6 +424,9 @@ impl TranslationRepository {
                     t.id,
                     t.translatable,
                     t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
                     t.translated_text,
                     t.translator_name,
                     t.translator_url,
@@ -436,6 +485,9 @@ impl TranslationRepository {
                     t.id,
                     t.translatable,
                     t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
                     t.translated_text,
                     t.translator_name,
                     t.translator_url,
