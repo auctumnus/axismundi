@@ -20,6 +20,10 @@
     <label for="password">Password</label>
     <input type="password" id="password" name="password" required>
 
+    {% if let Some(redirect_url) = redirect_url %}
+        <input type="hidden" name="redirect_url" value="{{ redirect_url }}">
+    {% endif %}
+
     <button type="submit">Log in</button>
     
     <p>If you've forgotten your password, you can <a href="/reset-password">reset it</a>.</p>

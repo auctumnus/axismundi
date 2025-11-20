@@ -1,31 +1,30 @@
 use askama::Template;
-use axum::{Router, extract::Query, response::{Html, IntoResponse, Redirect}, routing::{get, post}};
+use axum::{Router, extract::Query, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
 use axum_extra::extract::{CookieJar, cookie::Cookie};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controller::html::{render_result, render_template}, err::AppError, model::{email_verification_tokens::EmailVerificationTokenRepository, sessions::SessionRepository, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
+use crate::{controller::html::{okay, render_generic_error, render_template}, err::AppError, model::{email_verification_tokens::EmailVerificationTokenRepository, sessions::SessionRepository, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
-        .route("/login", post(login_submit))
-        .route("/register", post(signup_submit))
-        .route("/resend-verification/{token_id}", post(resend_verification_submit))
-        .route("/verify/{user_id}", get(verify))
-        .route("/settings", post(settings_submit));
+        .route("/verify/{user_id}", get(verify));
     let normal_routes = Router::<AppState>::new()
-        .route("/login", get(login_form))
-        .route("/register", get(signup_form))
-        .route("/resend-verification/{token_id}", get(resend_verification_form))
-        .route("/settings", get(settings_form))
-        .route("/logout", get(logout_form))
-        .route("/logout", post(logout_submit))
+        .route("/login", get(login_form).post(login_submit))
+        .route("/register", get(signup_form).post(signup_submit))
+        .route("/resend-verification/{token_id}", get(resend_verification_form).post(resend_verification_submit))
+        .route("/settings", get(settings_form).post(settings_submit))
+        .route("/logout", get(logout_form).post(logout_submit))
         .route("/users/{username}", get(profile));
 
     (secure_routes, normal_routes)
 }
 
+pub async fn render_login_form(s: Session, error: Option<AppError>, redirect_url: Option<String>) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+    okay(render_template(LoginFormTemplate { current_user, error, redirect_url }))
+}
 
 #[derive(Template)]
 #[template(path = "login/form.html")]
@@ -33,11 +32,11 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 struct LoginFormTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
+    redirect_url: Option<String>,
 }
 
-async fn login_form(s: Session) -> Html<String> {
-    let current_user = s.user().cloned();
-    render_template(LoginFormTemplate { current_user, error: None })
+async fn login_form(s: Session) -> (StatusCode, Response) {
+    render_login_form(s, None, None).await
 }
 
 #[derive(Deserialize)]
@@ -53,9 +52,9 @@ struct LoginQuery {
 
 const ALLOWED_REDIRECTS: &[&str] = &["settings"];
 
-async fn login_submit(jar: CookieJar, s: Session, sessions: SessionRepository, query: Query<LoginQuery>, form: axum::Form<LoginFormData>) -> Result<(CookieJar, Redirect), (StatusCode, Html<String>)>{
-    sessions.login(&form.email, &form.password).await
-        .map(|(token, _)| {
+async fn login_submit(jar: CookieJar, s: Session, sessions: SessionRepository, query: Query<LoginQuery>, form: axum::Form<LoginFormData>) -> (CookieJar, (StatusCode, Response)) {
+    match sessions.login(&form.email, &form.password).await {
+        Ok((token, _)) => {
             let jar = jar.add(
                 Cookie::build((SESSION_COOKIE_NAME, token.clone()))
                     .path("/")
@@ -63,20 +62,24 @@ async fn login_submit(jar: CookieJar, s: Session, sessions: SessionRepository, q
                     .secure(true),
             );
 
-            if ALLOWED_REDIRECTS.contains(&query.redirect.as_deref().unwrap_or("")) {
-                return (jar, Redirect::to(&format!("/{}", query.redirect.as_deref().unwrap())));
-            }
+            let redirect = if ALLOWED_REDIRECTS.contains(&query.redirect.as_deref().unwrap_or("")) {
+                Redirect::to(&format!("/{}", query.redirect.as_deref().unwrap()))
+            } else {
+                Redirect::to("/")
+            };
 
-            (jar, Redirect::to("/"))
-        })
-        .map_err(|e| {
+            (jar, (StatusCode::SEE_OTHER, redirect.into_response()))
+        }
+        Err(e) => {
             let current_user = s.user().cloned();
             let body = render_template(LoginFormTemplate {
                 current_user,
                 error: Some(e),
+                redirect_url: query.redirect.clone(),
             });
-            (StatusCode::UNAUTHORIZED, body)
-        })
+            (jar, (StatusCode::UNAUTHORIZED, body))
+        }
+    }
 }
 
 #[derive(Template)]
@@ -88,9 +91,9 @@ struct SignupFormTemplate {
     previous_input: Option<SignupFormData>,
 }
 
-async fn signup_form(s: Session) -> Html<String> {
+async fn signup_form(s: Session) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-    render_template(SignupFormTemplate { current_user, error: None, previous_input: None })
+    okay(render_template(SignupFormTemplate { current_user, error: None, previous_input: None }))
 }
 
 #[derive(Deserialize)]
@@ -108,8 +111,8 @@ struct SignupSuccessTemplate {
     token_id: Uuid,
 }
 
-async fn signup_submit(users: UserRepository, form: axum::Form<SignupFormData>) -> (StatusCode, Html<String>) {
-    users.create(CreateUser {
+async fn signup_submit(users: UserRepository, form: axum::Form<SignupFormData>) -> (StatusCode, Response) {
+    let res = users.create(CreateUser {
         email: form.email.clone(),
         password: form.password.clone(),
         username: form.username.clone(),
@@ -117,17 +120,24 @@ async fn signup_submit(users: UserRepository, form: axum::Form<SignupFormData>) 
         description: None,
         pronouns: None,
         gender: None,
-    }).await
-        .map_or_else(|e| {
-            let body = render_template(SignupFormTemplate {
+    }).await;
+
+    match res {
+        Err(e) => {
+            let template = SignupFormTemplate {
                 current_user: None,
                 error: Some(e),
-                previous_input: Some(form.0),
-            });
+                previous_input: Some(SignupFormData {
+                    username: form.username.clone(),
+                    email: form.email.clone(),
+                    password: String::new(),
+                }),
+            };
+            let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)
-        }, |(_, token)| {
-            (StatusCode::OK, render_template(SignupSuccessTemplate { current_user: None, token_id: token.id }))
-        })
+        },
+        Ok((_, token)) => okay(render_template(SignupSuccessTemplate { current_user: None, token_id: token.id })),
+    }
 }
 
 #[derive(Template)]
@@ -139,10 +149,10 @@ struct ResendVerificationTemplate {
     error: Option<AppError>,
 }
 
-async fn resend_verification_form(s: Session, path: axum::extract::Path<Uuid>) -> Html<String> {
+async fn resend_verification_form(s: Session, path: axum::extract::Path<Uuid>) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let token_id = *path;
-    render_template(ResendVerificationTemplate { current_user, token_id, error: None })
+    okay(render_template(ResendVerificationTemplate { current_user, token_id, error: None }))
 }
 
 #[derive(Deserialize)]
@@ -150,7 +160,7 @@ struct ResendVerificationFormData {
     token_id: Uuid,
 }
 
-async fn resend_verification_submit(tokens: EmailVerificationTokenRepository, form: axum::Form<ResendVerificationFormData>) -> (StatusCode, Html<String>) {
+async fn resend_verification_submit(tokens: EmailVerificationTokenRepository, form: axum::Form<ResendVerificationFormData>) -> (StatusCode, Response) {
     tokens.resend(form.token_id).await
         .map_or_else(|e| {
             let body = render_template(ResendVerificationTemplate {
@@ -160,7 +170,7 @@ async fn resend_verification_submit(tokens: EmailVerificationTokenRepository, fo
             });
             (StatusCode::BAD_REQUEST, body)
         }, |token| {
-            (StatusCode::OK, render_template(ResendVerificationTemplate {
+            okay(render_template(ResendVerificationTemplate {
                 current_user: None,
                 token_id: token.id,
                 error: None,
@@ -181,11 +191,20 @@ pub(crate) struct VerifyEmail {
 }
 
 #[axum::debug_handler(state=AppState)]
-async fn verify(users: UserRepository, path: axum::extract::Path<Uuid>, Query(verify): Query<VerifyEmail>) -> (StatusCode, Html<String>) {
+async fn verify(users: UserRepository, path: axum::extract::Path<Uuid>, Query(verify): Query<VerifyEmail>) -> (StatusCode, Response) {
     let res = users.verify(*path, &verify.email, &verify.token).await
         .map(|_| VerifiedTemplate { current_user: None });
 
-    render_result(None, res)
+    match res {
+        Ok(template) => {
+            let body = render_template(template);
+            (StatusCode::OK, body)
+        },
+        Err(e) => {
+            let body = render_template(VerifiedTemplate { current_user: None });
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -220,9 +239,9 @@ struct SettingsTemplate {
     previous_username: String,
     previous_email: String,
 }
-async fn settings_form(s: Session) -> Result<impl IntoResponse, Html<String>> {
+async fn settings_form(s: Session) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/").into_response());
+        return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
     let template = SettingsTemplate {
@@ -234,7 +253,7 @@ async fn settings_form(s: Session) -> Result<impl IntoResponse, Html<String>> {
     };
 
     let body = render_template(template);
-    Ok((StatusCode::OK, body).into_response())
+    (StatusCode::OK, body)
 }
 
 fn coalesce(in_form: &Option<String>, in_resource: &Option<String>) -> Option<String> {
@@ -249,12 +268,12 @@ fn coalesce(in_form: &Option<String>, in_resource: &Option<String>) -> Option<St
     })
 }
 
-async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<SettingsFormData>) -> Result<impl IntoResponse, impl IntoResponse> {
+async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<SettingsFormData>) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/").into_response());
+        return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
-    users.update(&user, user.id, UpdateUser {
+    match users.update(&user, user.id, UpdateUser {
         username: coalesce(&form.username, &Some(user.username.clone())),
         email: coalesce(&form.email, &Some(user.email.clone())),
         display_name: coalesce(&form.display_name, &user.display_name),
@@ -263,9 +282,9 @@ async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<Set
         gender: coalesce(&form.gender, &user.gender),
         current_password: form.current_password.clone(),
         new_password: form.new_password.clone(),
-    }).await
-        .map(|_| Redirect::to("/settings").into_response())
-        .map_err(|e| {
+    }).await {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+        Err(e) => {
             let redacted = SettingsFormData {
                 username: form.username.clone(),
                 display_name: form.display_name.clone(),
@@ -286,8 +305,9 @@ async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<Set
             };
 
             let body = render_template(template);
-            Html(body).into_response()
-        })
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }
 
 #[derive(Template)]
@@ -297,19 +317,19 @@ struct LogoutTemplate {
     error: Option<AppError>,
 }
 
-async fn logout_form(s: Session) -> Html<String> {
+async fn logout_form(s: Session) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-    render_template(LogoutTemplate { current_user, error: None })
+    okay(render_template(LogoutTemplate { current_user, error: None }))
 }
 
-async fn logout_submit(jar: CookieJar, s: Session, sessions: SessionRepository) -> (CookieJar, Redirect) {
+async fn logout_submit(jar: CookieJar, s: Session, sessions: SessionRepository) -> (CookieJar, (StatusCode, Response)) {
     if let Some(session) = s.session() {
         let _ = sessions.invalidate(session.clone()).await;
     }
 
     let jar = jar.remove(Cookie::from(SESSION_COOKIE_NAME));
 
-    (jar, Redirect::to("/"))
+    (jar, (StatusCode::SEE_OTHER, Redirect::to("/").into_response()))
 }
 
 #[derive(Template)]
@@ -325,7 +345,7 @@ async fn profile(
     users: UserRepository,
     activities: UserActivityRepository,
     path: axum::extract::Path<String>,
-) -> (StatusCode, Html<String>) {
+) -> (StatusCode, Response) {
     let username = path.0;
     let current_user = s.user().cloned();
 
@@ -333,7 +353,7 @@ async fn profile(
 
     let user = match user_result {
         Ok(u) => u,
-        Err(e) => return render_result::<ProfileTemplate>(current_user, Err(e)),
+        Err(e) => return render_generic_error(s, e).await,
     };
 
     // Get user activities (limit to 20)
@@ -352,9 +372,9 @@ async fn profile(
         Err(_) => Vec::new(), // If we can't fetch activities, just show empty list
     };
 
-    render_result(current_user.clone(), Ok(ProfileTemplate {
+    (StatusCode::OK, render_template(ProfileTemplate {
         current_user,
         user,
         activities: activities_list,
-    }))
+    }).into_response())
 }

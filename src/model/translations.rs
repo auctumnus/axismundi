@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    err::{AppResult, bad_request, not_found},
+    err::{AppError, AppResult, bad_request, not_found},
     model::{language_invites::PermissionLevel, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -157,7 +158,7 @@ impl TranslationRepository {
         &self,
         translatable_id: Uuid,
         language_id: Uuid,
-    ) -> AppResult<Option<Translation>> {
+    ) -> AppResult<Translation> {
         let result = sqlx::query_as!(
             Translation,
             r#"
@@ -184,7 +185,7 @@ impl TranslationRepository {
             translatable_id,
             language_id
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_one(&self.state.pool)
         .await?;
 
         Ok(result)
@@ -222,11 +223,16 @@ impl TranslationRepository {
             .find_by_id(translatable_id)
             .await?;
 
-        if let Some(_) = self
+        match self
             .find_by_translatable_and_language(translatable_id, language_id)
-            .await?
-        {
-            return Err(bad_request("a translation for this translatable in this language already exists"));
+            .await {
+            Ok(_) => {
+                return Err(bad_request(
+                    "a translation for this translatable in this language already exists",
+                ));
+            }
+            Err(AppError { status_code: StatusCode::NOT_FOUND, .. }) => {}
+            e => return e,
         }
 
         let result = sqlx::query_as!(

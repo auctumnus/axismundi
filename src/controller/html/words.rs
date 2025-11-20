@@ -2,25 +2,23 @@ use askama::Template;
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{IntoResponse, Redirect, Response},
     Router,
 };
 use serde::Deserialize;
 
 use crate::{
-    controller::html::{render_template, error_template},
-    err::{AppError, not_found},
-    model::{
-        definitions::{Definition, DefinitionRepository, CreateDefinition, UpdateDefinition},
+    attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, not_found}, get_user, model::{
+        definitions::{CreateDefinition, Definition, DefinitionRepository, UpdateDefinition},
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         users::User,
         word_classes::{WordClass, WordClassRepository},
-        words::{Word, WordRepository, WordSearch, CreateWord},
+        words::{CreateWord, Word, WordRepository, WordSearch},
     },
     pagination::PaginatedRequest,
-    util::{extract_session::Session, AppState},
+    util::{AppState, extract_session::Session},
 };
 use uuid::Uuid;
 
@@ -151,16 +149,9 @@ async fn word_search(
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
     Query(query): Query<WordSearchQuery>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -195,7 +186,7 @@ async fn word_search(
                     user_has_permission,
                 };
                 let body = render_template(template);
-                return (StatusCode::BAD_REQUEST, body).into_response();
+                return (StatusCode::BAD_REQUEST, body);
             }
         };
 
@@ -209,7 +200,7 @@ async fn word_search(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn view_lemmata(
@@ -220,16 +211,9 @@ async fn view_lemmata(
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug)): Path<(String, String)>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -246,32 +230,22 @@ async fn view_lemmata(
         ..Default::default()
     };
 
-    let lemmata = match words
+    let lemmata = attempt!(s, words
         .search(language.id, PaginatedRequest::default(), search)
-        .await
-    {
-        Ok(res) => res.items,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+        .await)
+        .items;
 
     if lemmata.is_empty() {
-        let body = error_template(current_user.as_ref())(not_found(format!(
-            "word with slug '{slug}'"
-        )));
-        return (StatusCode::NOT_FOUND, body).into_response();
+        return render_generic_error(s, not_found(format!("word with slug '{slug}'"))).await;
     }
 
     // If there's only one lemma, redirect to it directly
     if lemmata.len() == 1 {
         let lemma = &lemmata[0];
-        return Redirect::to(&format!(
+        return (StatusCode::SEE_OTHER, Redirect::to(&format!(
             "/languages/{}/words/{}/{}",
             language_code, slug, lemma.lemma
-        ))
-        .into_response();
+        )).into_response());
     }
 
     let word = lemmata[0].word.clone();
@@ -315,7 +289,7 @@ async fn view_lemmata(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn new_word(
@@ -324,16 +298,9 @@ async fn new_word(
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -344,13 +311,7 @@ async fn new_word(
         false
     };
 
-    let word_classes_list = match word_classes.list_all(language.id).await {
-        Ok(classes) => classes,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
-        }
-    };
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
     let template = NewWordTemplate {
         current_user,
@@ -369,7 +330,7 @@ async fn new_word(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn new_word_submit(
@@ -381,31 +342,16 @@ async fn new_word_submit(
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
-) -> impl IntoResponse {
-    let Some(user) = s.user().cloned() else {
-        return Redirect::to("/login").into_response();
-    };
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
 
-    let word_classes_list = match word_classes.list_all(language.id).await {
-        Ok(classes) => classes,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
-        }
-    };
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
     // Filter out empty definitions and limit to 10
     const MAX_DEFINITIONS: usize = 10;
@@ -442,7 +388,7 @@ async fn new_word_submit(
         };
 
         let body = render_template(template);
-        return (StatusCode::BAD_REQUEST, body).into_response();
+        return (StatusCode::BAD_REQUEST, body);
     }
 
     let create_word = CreateWord {
@@ -482,11 +428,10 @@ async fn new_word_submit(
     .await;
 
     match result {
-        Ok(word) => Redirect::to(&format!(
+        Ok(word) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
             "/languages/{}/words/{}/{}",
             language_code, word.slug, word.lemma
-        ))
-        .into_response(),
+        )).into_response()),
         Err(e) => {
             let template = NewWordTemplate {
                 current_user: Some(user),
@@ -505,7 +450,7 @@ async fn new_word_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
+            (StatusCode::BAD_REQUEST, body)
         }
     }
 }
@@ -517,16 +462,9 @@ async fn view_lemma(
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -537,16 +475,9 @@ async fn view_lemma(
         false
     };
 
-    let word = match words
+    let word = attempt!(s, words
         .find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma)
-        .await
-    {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+        .await);
 
     // Fetch definitions for this word
     let (definitions, _has_more) = match definitions_repo
@@ -575,7 +506,7 @@ async fn view_lemma(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn new_definition(
@@ -584,24 +515,10 @@ async fn new_definition(
     words: WordRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, word_id)): Path<(String, Uuid)>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let word = match words.find_by_id(word_id).await {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_id(word_id).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -623,7 +540,7 @@ async fn new_definition(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn new_definition_submit(
@@ -634,26 +551,10 @@ async fn new_definition_submit(
     permissions: LanguagePermissionRepository,
     Path((language_code, word_id)): Path<(String, Uuid)>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<DefinitionFormData>,
-) -> impl IntoResponse {
-    let Some(user) = s.user().cloned() else {
-        return Redirect::to("/login").into_response();
-    };
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let word = match words.find_by_id(word_id).await {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_id(word_id).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -666,11 +567,10 @@ async fn new_definition_submit(
     };
 
     match definitions_repo.create(&user, word_id, create_def).await {
-        Ok(_) => Redirect::to(&format!(
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
             "/languages/{}/words/{}/{}",
             language_code, word.slug, word.lemma
-        ))
-        .into_response(),
+        )).into_response()),
         Err(e) => {
             let template = NewDefinitionTemplate {
                 current_user: Some(user),
@@ -683,7 +583,7 @@ async fn new_definition_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
+            (StatusCode::BAD_REQUEST, body)
         }
     }
 }
@@ -695,32 +595,11 @@ async fn edit_definition(
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, definition_id)): Path<(String, Uuid)>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let definition = match definitions_repo.find_by_id(definition_id).await {
-        Ok(def) => def,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let word = match words.find_by_id(definition.word).await {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
+    let word = attempt!(s, words.find_by_id(definition.word).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -743,7 +622,7 @@ async fn edit_definition(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn edit_definition_submit(
@@ -754,34 +633,11 @@ async fn edit_definition_submit(
     permissions: LanguagePermissionRepository,
     Path((language_code, definition_id)): Path<(String, Uuid)>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<DefinitionFormData>,
-) -> impl IntoResponse {
-    let Some(user) = s.user().cloned() else {
-        return Redirect::to("/login").into_response();
-    };
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let definition = match definitions_repo.find_by_id(definition_id).await {
-        Ok(def) => def,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let word = match words.find_by_id(definition.word).await {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
+    let word = attempt!(s, words.find_by_id(definition.word).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -794,11 +650,10 @@ async fn edit_definition_submit(
     };
 
     match definitions_repo.update(&user, definition_id, update).await {
-        Ok(_) => Redirect::to(&format!(
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
             "/languages/{}/words/{}/{}",
             language_code, word.slug, word.lemma
-        ))
-        .into_response(),
+        )).into_response()),
         Err(e) => {
             let template = EditDefinitionTemplate {
                 current_user: Some(user),
@@ -812,7 +667,7 @@ async fn edit_definition_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
+            (StatusCode::BAD_REQUEST, body)
         }
     }
 }
@@ -824,32 +679,11 @@ async fn delete_definition(
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, definition_id)): Path<(String, Uuid)>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let definition = match definitions_repo.find_by_id(definition_id).await {
-        Ok(def) => def,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let word = match words.find_by_id(definition.word).await {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(current_user.as_ref())(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
+    let word = attempt!(s, words.find_by_id(definition.word).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -870,7 +704,7 @@ async fn delete_definition(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 async fn delete_definition_submit(
@@ -880,34 +714,11 @@ async fn delete_definition_submit(
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, definition_id)): Path<(String, Uuid)>,
-) -> impl IntoResponse {
-    let Some(user) = s.user().cloned() else {
-        return Redirect::to("/login").into_response();
-    };
-
-    let language = match languages.find_by_code(&language_code).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let definition = match definitions_repo.find_by_id(definition_id).await {
-        Ok(def) => def,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
-
-    let word = match words.find_by_id(definition.word).await {
-        Ok(w) => w,
-        Err(e) => {
-            let body = error_template(Some(&user))(e);
-            return (StatusCode::NOT_FOUND, body).into_response();
-        }
-    };
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
+    let word = attempt!(s, words.find_by_id(definition.word).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -915,11 +726,10 @@ async fn delete_definition_submit(
         .unwrap_or(false);
 
     match definitions_repo.delete(&user, definition_id).await {
-        Ok(_) => Redirect::to(&format!(
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
             "/languages/{}/words/{}/{}",
             language_code, word.slug, word.lemma
-        ))
-        .into_response(),
+        )).into_response()),
         Err(e) => {
             let template = DeleteDefinitionTemplate {
                 current_user: Some(user),
@@ -931,7 +741,7 @@ async fn delete_definition_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
+            (StatusCode::BAD_REQUEST, body)
         }
     }
 }

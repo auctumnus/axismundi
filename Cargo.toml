@@ -48,6 +48,7 @@ rand = "0.8.5"
 thumbor = "0.1.11"
 chrono-humanize = "0.2.3"
 slug = "0.1.6"
+percent-encoding = "2.3.2"
 
 [dev-dependencies]
 random_word = { version = "0.5.2", features = ["en"] }

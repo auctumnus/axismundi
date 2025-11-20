@@ -1,25 +1,16 @@
 use askama::Template;
 use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::{Html, IntoResponse, Redirect},
-    Router,
-    routing::{get, post},
-    Form,
+    Form, Router, extract::Path, http::StatusCode, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}
 };
 use serde::Deserialize;
 
 use crate::{
-    controller::html::{error_template, render_template},
-    err::AppError,
-    model::{
+    attempt, controller::html::{okay, render_generic_error, render_template}, err::AppError, get_user, model::{
         languages::Language,
         translatable::{CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch, UpdateTranslatable},
         translations::TranslationRepository,
         users::{User, UserRepository},
-    },
-    pagination::PaginatedRequest,
-    util::{extract_session::Session, AppState},
+    }, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -46,9 +37,9 @@ struct NewTranslatableTemplate {
     previous_english: String,
 }
 
-async fn new_translatable_form(s: Session) -> Result<Html<String>, Redirect> {
+async fn new_translatable_form(s: Session) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return Err(Redirect::to("/login"));
+        return (StatusCode::UNAUTHORIZED, Redirect::to("/login").into_response());
     };
 
     let template = NewTranslatableTemplate {
@@ -58,7 +49,7 @@ async fn new_translatable_form(s: Session) -> Result<Html<String>, Redirect> {
         previous_english: String::new(),
     };
 
-    Ok(render_template(template))
+    (StatusCode::OK, render_template(template).into_response())
 }
 
 #[derive(Deserialize)]
@@ -71,12 +62,10 @@ async fn new_translatable_submit(
     s: Session,
     translatables: TranslatableRepository,
     Form(form): Form<NewTranslatableFormData>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
 
-    translatables
+    let translatable = translatables
         .create(
             &user,
             CreateTranslatable {
@@ -88,9 +77,12 @@ async fn new_translatable_submit(
                 source_language: None,
             },
         )
-        .await
-        .map(|translatable| Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response())
-        .map_err(|e| {
+        .await;
+
+    match translatable {
+        Ok(translatable) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response()),
+        Err(e) => {
+            let status_code = e.status_code;
             let template = NewTranslatableTemplate {
                 current_user: Some(user),
                 error: Some(e),
@@ -99,8 +91,9 @@ async fn new_translatable_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
-        })
+            (status_code, body)
+        }
+    }
 }
 
 #[derive(Template)]
@@ -123,7 +116,7 @@ async fn search_translatables(
     s: Session,
     translatables: TranslatableRepository,
     axum::extract::Query(query): axum::extract::Query<SearchQuery>,
-) -> impl IntoResponse {
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
 
     let search = if !query.q.is_empty() {
@@ -141,6 +134,7 @@ async fn search_translatables(
     {
         Ok(res) => Some(res.items),
         Err(e) => {
+            let status_code = e.status_code;
             let template = SearchTranslatablesTemplate {
                 current_user,
                 error: Some(e),
@@ -148,7 +142,7 @@ async fn search_translatables(
                 results: None,
             };
             let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body).into_response();
+            return (status_code, body);
         }
     };
 
@@ -160,7 +154,7 @@ async fn search_translatables(
     };
 
     let body = render_template(template);
-    (StatusCode::OK, body).into_response()
+    okay(body)
 }
 
 #[derive(Clone)]
@@ -185,19 +179,19 @@ async fn view_translatable(
     languages: crate::model::languages::LanguageRepository,
     users: UserRepository,
     Path(slug): Path<String>,
-) -> Result<impl IntoResponse, AppError> {
-    let translatable = translatables.find_by_slug(&slug).await?;
-    let creator = users.find_by_id(translatable.created_by).await?;
+) -> (StatusCode, Response) {
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let creator = attempt!(s, users.find_by_id(translatable.created_by).await);
 
     // Fetch all translations for this translatable
-    let translations_list = translations
+    let translations_list = attempt!(s, translations
         .list_by_translatable(translatable.id, PaginatedRequest { limit: 100, offset: 0 })
-        .await?;
+        .await);
 
     // For each translation, fetch the language and contributor
     let mut translations_with_info = Vec::new();
     for translation in translations_list.items {
-        let language = languages.find_by_id(translation.language).await?;
+        let language = attempt!(s, languages.find_by_id(translation.language).await);
         let contributor = users.find_by_id(translation.created_by).await.ok();
 
         translations_with_info.push(TranslationWithLanguageAndContributor {
@@ -212,9 +206,7 @@ async fn view_translatable(
         creator,
         translations: translations_with_info,
     };
-
-    let body = render_template(template);
-    Ok((StatusCode::OK, body).into_response())
+    okay(render_template(template))
 }
 
 #[derive(Template)]
@@ -232,15 +224,10 @@ async fn edit_translatable_form(
     s: Session,
     translatables: TranslatableRepository,
     Path(slug): Path<String>,
-) -> Result<Html<String>, Redirect> {
-    let Some(user) = s.user().cloned() else {
-        return Err(Redirect::to("/login"));
-    };
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
 
-    let translatable = translatables
-        .find_by_slug(&slug)
-        .await
-        .map_err(|_| Redirect::to("/translatables"))?;
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
     let template = EditTranslatableTemplate {
         current_user: Some(user),
@@ -250,7 +237,7 @@ async fn edit_translatable_form(
         previous_english: translatable.english,
     };
 
-    Ok(render_template(template))
+    okay(render_template(template))
 }
 
 #[derive(Deserialize)]
@@ -264,15 +251,9 @@ async fn edit_translatable_submit(
     translatables: TranslatableRepository,
     Path(slug): Path<String>,
     Form(form): Form<EditTranslatableFormData>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
-
-    let translatable = translatables
-        .find_by_slug(&slug)
-        .await
-        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()).into_response())?;
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
     let updates = UpdateTranslatable {
         slug: None,
@@ -292,11 +273,9 @@ async fn edit_translatable_submit(
         source_language: None,
     };
 
-    translatables
-        .update(&user, translatable.id, updates)
-        .await
-        .map(|updated| Redirect::to(&format!("/translatable/{}", updated.slug)).into_response())
-        .map_err(|e| {
+    match translatables.update(&user, translatable.id, updates).await {
+        Ok(updated) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/translatable/{}", updated.slug)).into_response()),
+        Err(e) => {
             let template = EditTranslatableTemplate {
                 current_user: Some(user),
                 translatable: translatable.clone(),
@@ -306,6 +285,7 @@ async fn edit_translatable_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
-        })
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }

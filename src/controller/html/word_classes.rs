@@ -1,12 +1,10 @@
 use askama::Template;
-use axum::{Router, response::{Html, IntoResponse, Redirect}, routing::{get, post}, extract::Path};
+use axum::{Router, extract::Path, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
-    controller::html::render_template,
-    err::AppError,
-    model::{
+    attempt, controller::html::{okay, render_generic_error, render_template}, err::AppError, get_user, model::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
@@ -46,9 +44,9 @@ async fn list_word_classes(
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
-) -> Result<impl IntoResponse, AppError> {
-    let language = languages.find_by_code(&code).await?;
-    let classes = word_classes.list_all(language.id).await?;
+) -> (StatusCode, Response) {
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let classes = attempt!(s, word_classes.list_all(language.id).await);
 
     let user_has_permission = if let Some(user) = s.user() {
         permissions
@@ -67,7 +65,7 @@ async fn list_word_classes(
     };
 
     let body = render_template(template);
-    Ok((StatusCode::OK, body).into_response())
+    okay(body)
 }
 
 #[derive(Template)]
@@ -87,12 +85,9 @@ async fn new_word_class_form(
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
-) -> Result<Html<String>, Redirect> {
-    let Some(user) = s.user().cloned() else {
-        return Err(Redirect::to("/login"));
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|_| Redirect::to("/languages"))?;
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -108,7 +103,7 @@ async fn new_word_class_form(
         user_has_permission,
     };
 
-    Ok(render_template(template))
+    okay(render_template(template))
 }
 
 #[derive(Deserialize)]
@@ -124,21 +119,16 @@ async fn new_word_class_submit(
     permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
     form: axum::Form<NewWordClassFormData>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|e| {
-        (StatusCode::NOT_FOUND, e.to_string()).into_response()
-    })?;
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
 
-    word_classes
+    match word_classes
         .create(
             &user,
             &code,
@@ -148,8 +138,9 @@ async fn new_word_class_submit(
             },
         )
         .await
-        .map(|_| Redirect::to(&format!("/languages/{}/word-classes", code)).into_response())
-        .map_err(|e| {
+    {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/word-classes", code)).into_response()),
+        Err(e) => {
             let template = NewWordClassFormTemplate {
                 current_user: Some(user),
                 language,
@@ -160,8 +151,9 @@ async fn new_word_class_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
-        })
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }
 
 #[derive(Template)]
@@ -179,9 +171,9 @@ async fn view_word_class(
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     Path((code, abbreviation)): Path<(String, String)>,
-) -> Result<impl IntoResponse, AppError> {
-    let language = languages.find_by_code(&code).await?;
-    let word_class = word_classes.find_by_abbreviation(language.id, &abbreviation).await?;
+) -> (StatusCode, Response) {
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let word_class = attempt!(s, word_classes.find_by_abbreviation(language.id, &abbreviation).await);
 
     let user_has_permission = if let Some(user) = s.user() {
         permissions
@@ -200,7 +192,7 @@ async fn view_word_class(
     };
 
     let body = render_template(template);
-    Ok((StatusCode::OK, body).into_response())
+    okay(body)
 }
 
 #[derive(Template)]
@@ -222,16 +214,12 @@ async fn edit_word_class_form(
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     Path((code, abbreviation)): Path<(String, String)>,
-) -> Result<Html<String>, Redirect> {
-    let Some(user) = s.user().cloned() else {
-        return Err(Redirect::to("/login"));
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|_| Redirect::to("/languages"))?;
-    let word_class = word_classes
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let word_class = attempt!(s, word_classes
         .find_by_abbreviation(language.id, &abbreviation)
-        .await
-        .map_err(|_| Redirect::to(&format!("/languages/{}/word-classes", code)))?;
+        .await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -248,7 +236,7 @@ async fn edit_word_class_form(
         user_has_permission,
     };
 
-    Ok(render_template(template))
+    okay(render_template(template))
 }
 
 #[derive(Deserialize)]
@@ -264,21 +252,12 @@ async fn edit_word_class_submit(
     permissions: LanguagePermissionRepository,
     Path((code, abbreviation)): Path<(String, String)>,
     form: axum::Form<EditWordClassFormData>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|e| {
-        (StatusCode::NOT_FOUND, e.to_string()).into_response()
-    })?;
-
-    let word_class = word_classes
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let word_class = attempt!(s, word_classes
         .find_by_abbreviation(language.id, &abbreviation)
-        .await
-        .map_err(|e| {
-            (StatusCode::NOT_FOUND, e.to_string()).into_response()
-        })?;
+        .await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -298,14 +277,12 @@ async fn edit_word_class_submit(
         },
     };
 
-    word_classes
+    match word_classes
         .update(&user, word_class.id, updates)
         .await
-        .map(|updated| {
-            Redirect::to(&format!("/languages/{}/word-classes/{}", code, updated.abbreviation))
-                .into_response()
-        })
-        .map_err(|e| {
+    {
+        Ok(updated) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/word-classes/{}", code, updated.abbreviation)).into_response()),
+        Err(e) => {
             let template = EditWordClassFormTemplate {
                 current_user: Some(user),
                 language,
@@ -317,8 +294,9 @@ async fn edit_word_class_submit(
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
-        })
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }
 
 async fn delete_word_class_submit(
@@ -326,25 +304,18 @@ async fn delete_word_class_submit(
     languages: LanguageRepository,
     word_classes: WordClassRepository,
     Path((code, abbreviation)): Path<(String, String)>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|e| {
-        (StatusCode::NOT_FOUND, e.to_string()).into_response()
-    })?;
-
-    let word_class = word_classes
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let word_class = attempt!(s, word_classes
         .find_by_abbreviation(language.id, &abbreviation)
-        .await
-        .map_err(|e| {
-            (StatusCode::NOT_FOUND, e.to_string()).into_response()
-        })?;
+        .await);
 
-    word_classes
+    match word_classes
         .delete(&user, word_class.id)
         .await
-        .map(|_| Redirect::to(&format!("/languages/{}/word-classes", code)).into_response())
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()).into_response())
+    {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/word-classes", code)).into_response()),
+        Err(e) => render_generic_error(s, e).await
+    }
 }

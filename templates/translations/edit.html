@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit translation - axismundi{% endblock %}
+
+{% block content %}
+<h1>edit translation</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<p>You are editing the translation for: <strong>{{ translatable.title }}</strong></p>
+
+<p>You are translating into <strong>{{ language.name }}</strong></p>
+
+<p>{{ translatable.english }}</p>
+
+<form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit-translation">
+    <section>
+        <label for="translated_text">Translated text</label>
+        {% call u::field_error(name="translated_text") %}
+        <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
+    </section>
+
+    <input type="hidden" name="language_id" value="{{ language.id }}">
+
+    <button type="submit">Edit</button>
+</form>
+
+{% endblock %}

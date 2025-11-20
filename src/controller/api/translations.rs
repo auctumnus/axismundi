@@ -80,13 +80,7 @@ pub async fn get_translation(
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
 
-    match translation {
-        Some(t) => Ok(Json(t)),
-        None => Err(crate::err::not_found(format!(
-            "translation for translatable '{}' in language '{}'",
-            translatable_slug, code
-        ))),
-    }
+    Ok(Json(translation))
 }
 
 pub async fn list_translations_by_translatable(
@@ -133,16 +127,9 @@ pub async fn edit_translation(
     let language = languages.find_by_code(&code).await?;
 
     // Find existing translation
-    let existing = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
-
-    let Some(translation) = existing else {
-        return Err(crate::err::not_found(format!(
-            "translation for translatable '{}' in language '{}'",
-            translatable_slug, code
-        )));
-    };
 
     translations
         .update(requestor, translation.id, updates)
@@ -168,16 +155,9 @@ pub async fn delete_translation(
     let language = languages.find_by_code(&code).await?;
 
     // Find existing translation
-    let existing = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
-
-    let Some(translation) = existing else {
-        return Err(crate::err::not_found(format!(
-            "translation for translatable '{}' in language '{}'",
-            translatable_slug, code
-        )));
-    };
 
     translations.delete(requestor, translation.id).await?;
 

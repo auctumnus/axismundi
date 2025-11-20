@@ -319,6 +319,34 @@ impl LanguageRepository {
         Ok(result.is_some())
     }
 
+    pub async fn find_all_by_user(&self, user_id: Uuid) -> AppResult<Vec<Language>> {
+        let result = sqlx::query_as!(
+            Language,
+            r#"
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                JOIN language_permissions ON language_permissions.language = languages.id
+                WHERE language_permissions.user = $1
+            "#,
+            user_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn search(
         &self,
         pagination: PaginatedRequest,
@@ -550,7 +578,7 @@ impl LanguageRepository {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LanguageSearch {
     pub text_query: Option<String>,
     pub owned_by: Option<String>,

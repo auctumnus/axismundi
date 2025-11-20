@@ -61,11 +61,9 @@ pub async fn create_quotation(
         .find_by_slug(&translatable_slug)
         .await?;
 
-    let Some(translation) = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
-        .await? else {
-            return Err(crate::err::not_found("Translation not found"));
-    };
+        .await?;
 
     let definition = definitions
         .find_by_id(req.definition)
@@ -90,11 +88,9 @@ pub async fn get_quotation_from_translation(
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
 
-    let Some(translation) = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
-        .await? else {
-            return Err(crate::err::not_found("Translation not found"));
-    };
+        .await?;
 
     let quotation = quotations.find_by_id(id).await?;
 
@@ -119,11 +115,9 @@ pub async fn list_quotations_by_translation(
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
 
-    let Some(translation) = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
-        .await? else {
-            return Err(crate::err::not_found("Translation not found"));
-    };
+        .await?;
 
     quotations.list_by_translation(translation.id, pagination).await
 }
@@ -165,11 +159,9 @@ pub async fn edit_quotation_from_translation(
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
 
-    let Some(translation) = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
-        .await? else {
-            return Err(crate::err::not_found("Translation not found"));
-    };
+        .await?;
 
     // Verify quotation belongs to this translation
     let quotation = quotations.find_by_id(id).await?;
@@ -197,11 +189,9 @@ pub async fn delete_quotation_from_translation(
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
 
-    let Some(translation) = translations
+    let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
-        .await? else {
-            return Err(crate::err::not_found("Translation not found"));
-    };
+        .await?;
 
     // Verify quotation belongs to this translation
     let quotation = quotations.find_by_id(id).await?;

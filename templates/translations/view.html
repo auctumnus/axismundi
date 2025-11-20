@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}{{ language.name }} translation of '{{ translatable.title }}' - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>{{ translatable.title }}</h1>
+
+<div>
+    <span>added by</span>
+    {% call u::badge(&translatable_creator) %}
+</div>
+
+<p>{{ translatable.english }}</p>
+
+<h2>Translation into {{ language.name }}</h2>
+
+<div>
+    <span>translated by</span>
+    {% call u::badge(&translation_creator) %}
+</div>
+
+<p>{{ translation.translated_text }}</p>
+
+
+{% endblock %}

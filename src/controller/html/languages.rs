@@ -1,9 +1,9 @@
 use askama::Template;
-use axum::{Router, response::{Html, IntoResponse, Redirect}, routing::{get, post}};
+use axum::{Router, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::{controller::html::render_template, err::AppError, model::{languages::{CreateLanguage, Language, LanguageRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}};
+use crate::{attempt, controller::html::{okay, render_template}, err::AppError, get_user, model::{languages::{CreateLanguage, Language, LanguageRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -29,10 +29,8 @@ struct NewLanguageFormTemplate {
     previous_description: String,
 }
 
-async fn new_language_form(s: Session) -> Result<Html<String>, Redirect> {
-    let Some(user) = s.user().cloned() else {
-        return Err(Redirect::to("/login"));
-    };
+async fn new_language_form(s: Session) -> (StatusCode, Response) {
+    let user = get_user!(s);
 
     let template = NewLanguageFormTemplate {
         current_user: Some(user),
@@ -42,7 +40,7 @@ async fn new_language_form(s: Session) -> Result<Html<String>, Redirect> {
         previous_description: String::new(),
     };
 
-    Ok(render_template(template))
+    okay(render_template(template))
 }
 
 #[derive(Deserialize)]
@@ -52,19 +50,17 @@ struct NewLanguageFormData {
     description: String,
 }
 
-async fn new_language_submit(s: Session, languages: LanguageRepository, form: axum::Form<NewLanguageFormData>) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
+async fn new_language_submit(s: Session, languages: LanguageRepository, form: axum::Form<NewLanguageFormData>) -> (StatusCode, Response) {
+    let user = get_user!(s);
 
-    languages.create(&user, CreateLanguage {
+    match languages.create(&user, CreateLanguage {
         code: form.code.clone(),
         name: form.name.clone(),
         description: form.description.clone(),
         private: false,
-    }).await
-        .map(|lang| Redirect::to(&format!("/languages/{}", lang.code)).into_response())
-        .map_err(|e| {
+    }).await {
+        Ok(lang) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}", lang.code)).into_response()),
+        Err(e) => {
             let template = NewLanguageFormTemplate {
                 current_user: Some(user),
                 error: Some(e),
@@ -74,8 +70,9 @@ async fn new_language_submit(s: Session, languages: LanguageRepository, form: ax
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
-        })
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }
 
 #[derive(Template)]
@@ -87,12 +84,10 @@ struct ViewLanguageTemplate {
     contributor_count: i64,
 }
 
-async fn view_language(s: Session, languages: LanguageRepository, _users: UserRepository, axum::extract::Path(code): axum::extract::Path<String>) -> Result<impl IntoResponse, AppError> {
-    let language = languages.find_by_code(&code).await?;
-
-    let owner = languages.find_owner(language.id).await?;
-
-    let contributor_count = languages.count_contributors(language.id).await?;
+async fn view_language(s: Session, languages: LanguageRepository, _users: UserRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let owner = attempt!(s, languages.find_owner(language.id).await);
+    let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
 
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
@@ -102,7 +97,7 @@ async fn view_language(s: Session, languages: LanguageRepository, _users: UserRe
     };
 
     let body = render_template(template);
-    Ok((StatusCode::OK, body).into_response())
+    okay(body)
 }
 
 #[derive(Template)]
@@ -117,12 +112,9 @@ struct EditLanguageFormTemplate {
     previous_description: String,
 }
 
-async fn edit_language_form(s: Session, languages: LanguageRepository, axum::extract::Path(code): axum::extract::Path<String>) -> Result<Html<String>, Redirect> {
-    let Some(user) = s.user().cloned() else {
-        return Err(Redirect::to("/login"));
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|_| Redirect::to("/languages"))?;
+async fn edit_language_form(s: Session, languages: LanguageRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
 
     let template = EditLanguageFormTemplate {
         current_user: Some(user),
@@ -133,7 +125,7 @@ async fn edit_language_form(s: Session, languages: LanguageRepository, axum::ext
         previous_description: language.description,
     };
 
-    Ok(render_template(template))
+    okay(render_template(template))
 }
 
 #[derive(Deserialize)]
@@ -143,14 +135,9 @@ struct EditLanguageFormData {
     description: String,
 }
 
-async fn edit_language_submit(s: Session, languages: LanguageRepository, axum::extract::Path(code): axum::extract::Path<String>, form: axum::Form<EditLanguageFormData>) -> Result<impl IntoResponse, impl IntoResponse> {
-    let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/login").into_response());
-    };
-
-    let language = languages.find_by_code(&code).await.map_err(|e| {
-        (StatusCode::NOT_FOUND, e.to_string()).into_response()
-    })?;
+async fn edit_language_submit(s: Session, languages: LanguageRepository, axum::extract::Path(code): axum::extract::Path<String>, form: axum::Form<EditLanguageFormData>) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
 
     let updates = crate::model::languages::UpdateLanguage {
         code: if form.code != language.code { Some(form.code.clone()) } else { None },
@@ -159,9 +146,9 @@ async fn edit_language_submit(s: Session, languages: LanguageRepository, axum::e
         private: None,
     };
 
-    languages.update(&user, language.id, updates).await
-        .map(|lang| Redirect::to(&format!("/languages/{}", lang.code)).into_response())
-        .map_err(|e| {
+    match languages.update(&user, language.id, updates).await {
+        Ok(lang) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}", lang.code)).into_response()),
+        Err(e) => {
             let template = EditLanguageFormTemplate {
                 current_user: Some(user),
                 language: language.clone(),
@@ -172,6 +159,7 @@ async fn edit_language_submit(s: Session, languages: LanguageRepository, axum::e
             };
 
             let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body).into_response()
-        })
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
 }

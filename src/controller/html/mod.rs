@@ -1,15 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
-    ErrorTemplate,
-    err::AppError,
-    model::users::{User, UserRepository},
-    model::languages::Language,
-    model::user_activities::{UserActivity, UserActivityRepository},
-    util::{AppState, extract_session::Session},
+    ErrorTemplate, controller::html::users::render_login_form, err::{AppError, internal_error}, model::{languages::Language, user_activities::{UserActivity, UserActivityRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}
 };
 use askama::Template;
-use axum::{Router, http::StatusCode, response::{Html, IntoResponse, Redirect}, routing::get};
+use axum::{Router, http::{StatusCode}, response::{Response, Html, IntoResponse, Redirect}, routing::get};
 use governor::middleware::NoOpMiddleware;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
@@ -19,6 +14,7 @@ mod languages;
 mod words;
 mod word_classes;
 mod translatables;
+mod translations;
 
 pub fn create_html_controller() -> Router<AppState> {
     let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
@@ -41,13 +37,15 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_word_routes, normal_word_routes) = words::create_router();
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
+    let (secure_translation_routes, normal_translation_routes) = translations::create_router();
 
     let secure_routes = Router::<AppState>::new()
         .merge(secure_user_routes)
         .merge(secure_language_routes)
         .merge(secure_word_routes)
         .merge(secure_word_class_routes)
-        .merge(secure_translatable_routes);
+        .merge(secure_translatable_routes)
+        .merge(secure_translation_routes);
 
     let normal_routes = Router::<AppState>::new()
         .route("/", get(landing))
@@ -58,34 +56,22 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_language_routes)
         .merge(normal_word_routes)
         .merge(normal_word_class_routes)
-        .merge(normal_translatable_routes);
+        .merge(normal_translatable_routes)
+        .merge(normal_translation_routes);
 
     Router::<AppState>::new()
         .merge(secure_routes)
         .merge(normal_routes)
 }
 
-fn render_template<T: Template>(template: T) -> Html<String> {
+fn render_template<T: Template>(template: T) -> Response{ 
     template.render().map_or_else(
         |e| {
             tracing::error!("Template rendering error: {}", e);
             Html("500 Internal Server Error".to_string())
         },
         Html,
-    )
-}
-
-pub fn render_result<T: Template>(current_user: Option<User>, res: Result<T, AppError>) -> (StatusCode, Html<String>) {
-    match res {
-        Ok(t) => {
-            let html = render_template(t);
-            (StatusCode::OK, html)
-        }
-        Err(e) => {
-            let html = render_template(ErrorTemplate { current_user, error: e.clone() });
-            (StatusCode::OK, html)
-        }
-    }
+    ).into_response()
 }
 
 #[derive(Template)]
@@ -100,35 +86,95 @@ async fn landing(s: Session) -> impl IntoResponse {
     }
 
     let current_user = s.user().cloned();
-    render_template(LandingTemplate { current_user }).into_response()
+    render_template(LandingTemplate { current_user })
 }
 
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
+    error: Option<AppError>,
     current_user: Option<User>,
     languages: Vec<Language>,
     activities: Vec<UserActivity>,
 }
 
-async fn home(users: UserRepository, activities_repo: UserActivityRepository, s: Session) -> Result<impl IntoResponse, Html<String>> {
+async fn home(users: UserRepository, activities_repo: UserActivityRepository, s: Session) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return Ok(Redirect::to("/").into_response());
+        return (StatusCode::OK, Redirect::to("/").into_response());
     };
 
-    let languages = users.top_languages(user.id, 5).await.map_err(error_template(Some(&user)))?;
-    let activities = activities_repo.list_site_wide().await.map_err(error_template(Some(&user)))?;
+    let Ok(languages) = users.top_languages(user.id, 5).await else {
+        return render_generic_error(s, internal_error("Failed to load top languages")).await;
+    };
+    let Ok(activities) = activities_repo.list_site_wide().await else {
+        return render_generic_error(s, internal_error("Failed to load user activities")).await;
+    };
 
     let template = HomeTemplate {
         current_user: Some(user),
         languages,
         activities,
+        error: None,
     };
 
     let body = render_template(template);
-    Ok((StatusCode::OK, body).into_response())
+    (StatusCode::OK, body)
 }
 
-pub fn error_template(current_user: Option<&User>) -> impl FnOnce(AppError) -> Html<String> {
-    move |error| render_template(ErrorTemplate { current_user: current_user.cloned(), error })
+pub async fn render_generic_error(s: Session, error: AppError) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+    let status_code = error.status_code;
+    let template = ErrorTemplate {
+        current_user,
+        error,
+    };
+    let body = render_template(template);
+    (status_code, body)
+}
+
+pub async fn no_session(redirect: Option<String>) -> (StatusCode, Response) {
+    match redirect {
+        Some(redirect) => {
+            let login_url = format!("/login?redirect={}", percent_encoding::percent_encode(redirect.as_bytes(), percent_encoding::NON_ALPHANUMERIC));
+            (StatusCode::TEMPORARY_REDIRECT, Redirect::to(&login_url).into_response())
+        },
+        None => (StatusCode::TEMPORARY_REDIRECT, Redirect::to("/login").into_response()),
+    }
+}
+
+pub fn okay(res: Response) -> (StatusCode, Response) {
+    (StatusCode::OK, res)
+}
+
+#[macro_use]
+mod macros {
+    #[macro_export]
+    macro_rules! attempt {
+        ($session:expr, $expr:expr) => {
+            match $expr {
+                Ok(val) => val,
+                Err(e) => return $crate::controller::html::render_generic_error($session, e).await,
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! get_user {
+        ($session:expr) => {
+            match $session.user().cloned() {
+                Some(user) => user,
+                None => {
+                    return $crate::controller::html::no_session(None).await;
+                }
+            }
+        };
+        ($session:expr, $redirect:expr) => {
+            match $session.user().cloned() {
+                Some(user) => user,
+                None => {
+                    return $crate::controller::html::no_session(Some($redirect)).await;
+                }
+            }
+        };
+    }
 }
