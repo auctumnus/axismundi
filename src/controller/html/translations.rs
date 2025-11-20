@@ -1,3 +1,5 @@
+use std::thread::current;
+
 use askama::Template;
 use axum::{
     Form, Router, extract::Path, http::StatusCode, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}
@@ -7,10 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, bad_request, not_found}, get_user, model::{
-        languages::{Language, LanguageRepository, LanguageSearch},
-        translatable::{Translatable, TranslatableRepository},
-        translations::{CreateTranslation, Translation, TranslationRepository, UpdateTranslation},
-        users::{User, UserRepository},
+        language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, UpdateTranslation}, users::{User, UserRepository}
     }, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
 };
 
@@ -231,6 +230,7 @@ struct ViewTranslationTemplate {
     language: Language,
     translation: Translation,
     translation_creator: User,
+    current_user_has_permission: bool,
 }
 
 async fn view_translation(
@@ -238,6 +238,7 @@ async fn view_translation(
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
+    permissions: LanguagePermissionRepository,
     users: UserRepository,
     Path((slug, code)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
@@ -250,6 +251,14 @@ async fn view_translation(
     let translatable_creator = attempt!(s, users.find_by_id(translatable.created_by).await);
     let translation_creator = attempt!(s, users.find_by_id(translation.created_by).await);
 
+    let current_user_has_permission = if let Some(current_user) = s.user() {
+        attempt!(s, permissions
+            .find_by_user_and_language(current_user.id, language.id)
+            .await).is_some()
+    } else {
+        false
+    };
+
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),
         translatable,
@@ -257,6 +266,7 @@ async fn view_translation(
         language,
         translation,
         translation_creator,
+        current_user_has_permission,
     };
 
     let body = render_template(template);

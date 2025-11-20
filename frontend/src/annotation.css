@@ -1,0 +1,190 @@
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: color-mix(in oklab, black 50%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: var(--background-panel);
+  padding: 1.5rem;
+  border-radius: var(--rounding);
+  border: var(--border);
+  min-width: 400px;
+  box-shadow: 0 4px 6px -1px var(--color-shadow), 0 2px 4px -2px var(--color-shadow);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  font-family: var(--font-heading);
+}
+
+.modal-content-error {
+  max-width: 400px;
+}
+
+.error-message {
+  margin: 1rem 0;
+  color: var(--error-foreground);
+  background-color: var(--error-background);
+  border: 1px solid var(--error-border);
+  border-radius: 4px;
+  padding: .75rem;
+}
+
+.modal-field {
+  margin-bottom: 1rem;
+}
+
+.modal-label {
+  display: block;
+  margin-bottom: .5rem;
+  font-family: var(--font-heading);
+}
+
+.modal-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: .5rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: var(--font-normal);
+  background-color: var(--input-background);
+  color: var(--foreground-primary);
+  resize: vertical;
+  outline: 0;
+  outline-color: transparent;
+  transition: background-color 250ms ease-in-out,
+              border-color 250ms ease-in-out;
+}
+
+.modal-textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  border: 1px solid var(--input-border-focus);
+  background-color: var(--input-background-focus);
+  outline-offset: 2px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+}
+
+.modal-button {
+  font-family: var(--font-heading);
+  padding: .75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+}
+
+.modal-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.modal-button-cancel {
+  border: 1px solid var(--foreground-primary);
+  background-color: transparent;
+  color: var(--foreground-primary);
+}
+
+.modal-button-cancel:hover {
+  background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+}
+
+.modal-button-submit {
+  border: none;
+  background-color: var(--foreground-primary);
+  color: var(--background-page);
+}
+
+.modal-button-submit:hover {
+  background-color: var(--foreground-secondary);
+}
+
+/* Toolbar styles */
+.toolbar {
+  padding: .5rem;
+  border-bottom: var(--border);
+  margin-bottom: .5rem;
+  display: flex;
+  gap: .5rem;
+}
+
+.toolbar-button {
+  font-family: var(--font-normal);
+  padding: .325rem .75rem;
+  border: var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: var(--input-background);
+  color: var(--foreground-primary);
+  font-size: .9rem;
+  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+}
+
+.toolbar-button:hover {
+  background-color: var(--input-background-focus);
+  border-color: var(--input-border-focus);
+}
+
+.toolbar-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.toolbar-button-active {
+  background-color: var(--warning-background);
+  border-color: var(--warning-border);
+  color: var(--warning-foreground);
+}
+
+/* Editor styles */
+.editor-editable {
+  min-height: 200px;
+  padding: .5rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--foreground-primary);
+  font-family: var(--font-normal);
+  outline: 0;
+  outline-color: transparent;
+  transition: background-color 250ms ease-in-out,
+              border-color 250ms ease-in-out;
+}
+
+.editor-editable:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  border: 1px solid var(--input-border-focus);
+  background-color: var(--input-background-focus);
+  outline-offset: 2px;
+}
+
+/* Annotated text styles */
+.annotated-text {
+  background-color: color-mix(in oklab, var(--warning-background) 25%, transparent);
+  border-bottom: 2px solid var(--warning-border);
+  cursor: help;
+}
+
+/* App styles */
+.app-container {
+  font-family: var(--font-normal);
+}
+
+.app-title {
+  text-align: center;
+  font-family: var(--font-heading);
+}

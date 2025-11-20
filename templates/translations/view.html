@@ -3,6 +3,7 @@
 
 {% block title %}{{ language.name }} translation of '{{ translatable.title }}' - axismundi{% endblock %}
 
+
 {% block content %}
 
 <h1>{{ translatable.title }}</h1>
@@ -15,6 +16,12 @@
 <p>{{ translatable.english }}</p>
 
 <h2>Translation into {{ language.name }}</h2>
+
+{% if current_user_has_permission %}
+<div class="actions">
+    <a class="button" href="/translatable/{{ translatable.slug }}/edit-translation/{{ language.code }}">Edit translation</a>
+</div>
+{% endif %}
 
 <div>
     <span>translated by</span>

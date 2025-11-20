@@ -43,3 +43,5 @@ session.json
 
 .letta
 lcov.info
+
+.parcel-cache

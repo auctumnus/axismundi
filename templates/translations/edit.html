@@ -3,6 +3,16 @@
 
 {% block title %}edit translation - axismundi{% endblock %}
 
+{% block head %}
+    <script>
+        window.language = {
+            name: "{{ language.name }}",
+            code: "{{ language.code }}",
+        }
+    </script>
+    <link rel="stylesheet" href="/static/annotation.css">
+    <script src="/static/annotation.js" defer></script>
+{% endblock %}
 {% block content %}
 <h1>edit translation</h1>
 
@@ -23,8 +33,10 @@
     <section>
         <label for="translated_text">Translated text</label>
         {% call u::field_error(name="translated_text") %}
+        <div id="annotation-editor-root">
         <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
-    </section>
+    </div></section>
+
 
     <input type="hidden" name="language_id" value="{{ language.id }}">
 
