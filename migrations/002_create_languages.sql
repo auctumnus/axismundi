@@ -7,6 +7,8 @@ create table languages (
 
     private boolean not null default false,
 
+    like_count bigint not null default 0,
+
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
 

@@ -65,7 +65,7 @@ pub async fn search_words(
 ) -> PaginatedApiResponse<Word> {
     let language = languages.find_by_code(&code).await?;
 
-    words.search(language.id, pagination, query).await
+    words.search(&language.id, pagination, query).await
 }
 
 pub async fn edit_word(

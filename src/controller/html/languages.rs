@@ -1,9 +1,11 @@
+use std::default;
+
 use askama::Template;
 use axum::{Router, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::{attempt, controller::html::{okay, render_template}, err::AppError, get_user, model::{languages::{CreateLanguage, Language, LanguageRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}};
+use crate::{attempt, controller::html::{okay, render_template}, err::AppError, get_user, md::render_md, model::{language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::PaginatedRequest, util::{AppState, extract_session::Session}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -75,25 +77,96 @@ async fn new_language_submit(s: Session, languages: LanguageRepository, form: ax
     }
 }
 
+struct WordWithAuthor {
+    word: Word,
+    author: User,
+}
+
+struct TranslationWithAuthor {
+    translation: crate::model::translations::Translation,
+    translatable: crate::model::translatable::Translatable,
+    author: User,
+}
+
 #[derive(Template)]
 #[template(path = "languages/view.html")]
 struct ViewLanguageTemplate {
     current_user: Option<User>,
+    recent_words: Vec<WordWithAuthor>,
+    recent_translations: Vec<TranslationWithAuthor>,
     language: Language,
     owner: User,
     contributor_count: i64,
+    rendered_description: String,
+    can_edit_language: bool,
+    can_delete_language: bool,
 }
 
-async fn view_language(s: Session, languages: LanguageRepository, _users: UserRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+#[axum::debug_handler(state=AppState)]
+async fn view_language(s: Session, languages: LanguageRepository, users: UserRepository, words: WordRepository, translations: TranslationRepository, translatables: TranslatableRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
+    let rendered_description = attempt!(s, languages.render_description(&language).await);
+    let recent_words = attempt!(s, words.search(&language.id, PaginatedRequest {
+        limit: 5,
+        offset: 0,
+    }, WordSearch {
+        ..Default::default()
+    }).await);
+
+    let recent_translations = attempt!(s, translations.list_by_language(language.id, PaginatedRequest {
+        limit: 5,
+        offset: 0,
+    }).await);
+
+    let can_edit_language = if let Some(user) = s.user() {
+        permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let can_delete_language = if let Some(user) = s.user() {
+        permissions
+            .has_permission(user.id, language.id, PermissionLevel::Owner)
+            .await
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    // Fetch authors for each word
+    let mut words_with_authors = Vec::new();
+    for word in recent_words.items {
+        let author = attempt!(s, users.find_by_id(word._created_by).await);
+        words_with_authors.push(WordWithAuthor { word, author });
+    }
+
+    // Fetch authors and translatables for each translation
+    let mut translations_with_authors = Vec::new();
+    for translation in recent_translations.items {
+        let author = attempt!(s, users.find_by_id(translation.created_by).await);
+        let translatable = attempt!(s, translatables.find_by_id(translation.translatable).await);
+        translations_with_authors.push(TranslationWithAuthor {
+            translation,
+            translatable,
+            author
+        });
+    }
 
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
+        recent_words: words_with_authors,
+        recent_translations: translations_with_authors,
         language,
         owner,
         contributor_count,
+        rendered_description,
+        can_edit_language,
+        can_delete_language,
     };
 
     let body = render_template(template);
@@ -110,11 +183,23 @@ struct EditLanguageFormTemplate {
     previous_code: String,
     previous_name: String,
     previous_description: String,
+    can_edit_language: bool,
+    can_delete_language: bool,
 }
 
-async fn edit_language_form(s: Session, languages: LanguageRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+async fn edit_language_form(s: Session, languages: LanguageRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
+
+    let can_edit_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let can_delete_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Owner)
+        .await
+        .unwrap_or(false);
 
     let template = EditLanguageFormTemplate {
         current_user: Some(user),
@@ -123,6 +208,8 @@ async fn edit_language_form(s: Session, languages: LanguageRepository, axum::ext
         previous_code: language.code,
         previous_name: language.name,
         previous_description: language.description,
+        can_edit_language,
+        can_delete_language,
     };
 
     okay(render_template(template))
@@ -135,9 +222,14 @@ struct EditLanguageFormData {
     description: String,
 }
 
-async fn edit_language_submit(s: Session, languages: LanguageRepository, axum::extract::Path(code): axum::extract::Path<String>, form: axum::Form<EditLanguageFormData>) -> (StatusCode, Response) {
+async fn edit_language_submit(s: Session, languages: LanguageRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>, form: axum::Form<EditLanguageFormData>) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
+
+    let can_edit_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
 
     let updates = crate::model::languages::UpdateLanguage {
         code: if form.code != language.code { Some(form.code.clone()) } else { None },
@@ -150,12 +242,17 @@ async fn edit_language_submit(s: Session, languages: LanguageRepository, axum::e
         Ok(lang) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}", lang.code)).into_response()),
         Err(e) => {
             let template = EditLanguageFormTemplate {
+                can_delete_language: permissions
+                    .has_permission(user.id, language.id, PermissionLevel::Owner)
+                    .await
+                    .unwrap_or(false),
                 current_user: Some(user),
                 language: language.clone(),
                 error: Some(e),
                 previous_code: form.code.clone(),
                 previous_name: form.name.clone(),
                 previous_description: form.description.clone(),
+                can_edit_language,
             };
 
             let body = render_template(template);

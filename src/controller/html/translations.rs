@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, bad_request, not_found}, get_user, model::{
-        language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, UpdateTranslation}, users::{User, UserRepository}
+        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, UpdateTranslation}, users::{User, UserRepository}
     }, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
 };
 
@@ -33,9 +33,13 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 struct NewTranslationStep1Template {
     current_user: Option<User>,
     error: Option<AppError>,
+    translatable: Translatable,
     translatable_id: String,
     available_languages: Vec<Language>,
     previous_language_code: String,
+    can_edit_translatable: bool,
+    language: Option<Language>,
+    can_edit_language: bool,
 }
 
 async fn new_translation_step_1_form(
@@ -50,12 +54,18 @@ async fn new_translation_step_1_form(
 
     let available_languages = attempt!(s, languages.find_all_by_user(user.id).await);
 
+    let can_edit_translatable = translatable.created_by == user.id;
+
     let template = NewTranslationStep1Template {
         current_user: Some(user),
         error: None,
+        translatable: translatable.clone(),
         translatable_id: translatable.slug,
         available_languages,
         previous_language_code: String::new(),
+        can_edit_translatable,
+        language: None,
+        can_edit_language: false,
     };
 
     okay(render_template(template))
@@ -71,6 +81,8 @@ struct NewTranslationStep2Template {
     translatable: Translatable,
     language: Language,
     previous_translated_text: String,
+    can_edit_translatable: bool,
+    can_edit_language: bool,
 }
 
 #[derive(Deserialize)]
@@ -88,6 +100,7 @@ async fn new_translation_submit(
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
+    permissions: LanguagePermissionRepository,
     Path(slug): Path<String>,
     Form(form): Form<NewTranslationFormData>,
 ) -> (StatusCode, Response) {
@@ -97,6 +110,8 @@ async fn new_translation_submit(
         .find_by_slug(&slug)
         .await);
 
+    let can_edit_translatable = translatable.created_by == user.id;
+
     if form.step == 1 {
         let Some(language_code) = form.language_code.clone() else {
             let error = bad_request("Language code is required");
@@ -105,9 +120,13 @@ async fn new_translation_submit(
             let template = NewTranslationStep1Template {
                 current_user: Some(user),
                 error: Some(error),
+                translatable: translatable.clone(),
                 translatable_id: translatable.slug,
                 available_languages,
                 previous_language_code: String::new(),
+                can_edit_translatable,
+                language: None,
+                can_edit_language: false,
             };
 
             return (StatusCode::BAD_REQUEST, render_template(template))
@@ -123,13 +142,22 @@ async fn new_translation_submit(
             let template = NewTranslationStep1Template {
                 current_user: Some(user),
                 error: Some(error),
+                translatable: translatable.clone(),
                 translatable_id: translatable.slug,
                 available_languages,
                 previous_language_code: language_code,
+                can_edit_translatable,
+                language: None,
+                can_edit_language: false,
             };
 
             return (StatusCode::BAD_REQUEST, render_template(template))
         };
+
+        let can_edit_language = permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
         let template = NewTranslationStep2Template {
             current_user: Some(user),
@@ -137,6 +165,8 @@ async fn new_translation_submit(
             translatable,
             language,
             previous_translated_text: String::new(),
+            can_edit_translatable,
+            can_edit_language,
         };
 
         okay(render_template(template))
@@ -148,6 +178,11 @@ async fn new_translation_submit(
         let language = attempt!(s, languages
             .find_by_id(language_id)
             .await);
+
+        let can_edit_language = permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
         let Some(translated_text) = form.translated_text.clone() else {
             let error = bad_request("Translated text is required");
@@ -162,6 +197,8 @@ async fn new_translation_submit(
                 translatable,
                 language,
                 previous_translated_text: String::new(),
+                can_edit_translatable,
+                can_edit_language,
             };
 
             return (StatusCode::BAD_REQUEST, render_template(template))
@@ -199,6 +236,8 @@ async fn new_translation_submit(
                     translatable,
                     language,
                     previous_translated_text: translated_text,
+                    can_edit_translatable,
+                    can_edit_language,
                 };
 
                 (StatusCode::BAD_REQUEST, render_template(template))
@@ -211,9 +250,13 @@ async fn new_translation_submit(
         let template = NewTranslationStep1Template {
             current_user: Some(user),
             error: Some(error),
+            translatable: translatable.clone(),
             translatable_id: translatable.slug,
             available_languages,
             previous_language_code: String::new(),
+            can_edit_translatable,
+            language: None,
+            can_edit_language: false,
         };
 
         (StatusCode::BAD_REQUEST, render_template(template))
@@ -231,6 +274,9 @@ struct ViewTranslationTemplate {
     translation: Translation,
     translation_creator: User,
     current_user_has_permission: bool,
+    can_edit_translatable: bool,
+    can_edit_language: bool,
+    can_edit_translation: bool,
 }
 
 async fn view_translation(
@@ -259,6 +305,23 @@ async fn view_translation(
         false
     };
 
+    let can_edit_translatable = if let Some(current_user) = s.user() {
+        translatable.created_by == current_user.id
+    } else {
+        false
+    };
+
+    let can_edit_language = if let Some(current_user) = s.user() {
+        permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let can_edit_translation = current_user_has_permission;
+
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),
         translatable,
@@ -267,6 +330,9 @@ async fn view_translation(
         translation,
         translation_creator,
         current_user_has_permission,
+        can_edit_translatable,
+        can_edit_language,
+        can_edit_translation,
     };
 
     let body = render_template(template);
@@ -283,6 +349,9 @@ struct EditTranslationTemplate {
     translatable: Translatable,
     language: Language,
     previous_translated_text: String,
+    can_edit_translatable: bool,
+    can_edit_language: bool,
+    can_edit_translation: bool,
 }
 
 async fn edit_translation_form(
@@ -290,6 +359,7 @@ async fn edit_translation_form(
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
+    permissions: LanguagePermissionRepository,
     Path((slug, code)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
@@ -302,12 +372,29 @@ async fn edit_translation_form(
         .find_by_translatable_and_language(translatable.id, language.id)
         .await);
 
+    let can_edit_translatable = translatable.created_by == user.id;
+
+    let can_edit_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_translation = permissions
+        .find_by_user_and_language(user.id, language.id)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
         translatable,
         language,
         previous_translated_text: translation.translated_text.clone(),
+        can_edit_translatable,
+        can_edit_language,
+        can_edit_translation,
     };
 
     okay(render_template(template))
@@ -324,6 +411,7 @@ async fn edit_translation_submit(
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
+    permissions: LanguagePermissionRepository,
     Path(slug): Path<String>,
     Form(form): Form<EditTranslationFormData>,
 ) -> (StatusCode, Response) {
@@ -336,6 +424,20 @@ async fn edit_translation_submit(
     let language = attempt!(s, languages
         .find_by_id(form.language_id)
         .await);
+
+    let can_edit_translatable = translatable.created_by == user.id;
+
+    let can_edit_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_translation = permissions
+        .find_by_user_and_language(user.id, language.id)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
 
     let existing_translation = attempt!(s, translations
         .find_by_translatable_and_language(translatable.id, language.id)
@@ -370,6 +472,9 @@ async fn edit_translation_submit(
                 translatable: translatable.clone(),
                 language,
                 previous_translated_text: form.translated_text.clone(),
+                can_edit_translatable,
+                can_edit_language,
+                can_edit_translation,
             };
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)

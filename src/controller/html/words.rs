@@ -172,7 +172,7 @@ async fn word_search(
     };
 
     let results = match words
-            .search(language.id, PaginatedRequest::default(), search)
+            .search(&language.id, PaginatedRequest::default(), search)
             .await
         {
             Ok(res) => Some(res.items),
@@ -231,7 +231,7 @@ async fn view_lemmata(
     };
 
     let lemmata = attempt!(s, words
-        .search(language.id, PaginatedRequest::default(), search)
+        .search(&language.id, PaginatedRequest::default(), search)
         .await)
         .items;
 

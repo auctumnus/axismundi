@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
-    ErrorTemplate, controller::html::users::render_login_form, err::{AppError, internal_error}, model::{languages::Language, user_activities::{UserActivity, UserActivityRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}
+    ErrorTemplate, controller::html::users::render_login_form, err::{AppError, internal_error}, model::{contribution_stats::{ContributionStats, ContributionStatsRepository}, languages::{Language, LanguageRepository}, user_activities::{UserActivity, UserActivityRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}
 };
+
+use crate::attempt;
 use askama::Template;
 use axum::{Router, http::{StatusCode}, response::{Response, Html, IntoResponse, Redirect}, routing::get};
 use governor::middleware::NoOpMiddleware;
@@ -89,23 +91,42 @@ async fn landing(s: Session) -> impl IntoResponse {
     render_template(LandingTemplate { current_user })
 }
 
+pub struct LanguagesWithContributors {
+    pub language: Language,
+    pub top_contributors: Vec<User>,
+    pub is_liked: bool,
+}
+
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
     error: Option<AppError>,
     current_user: Option<User>,
-    languages: Vec<Language>,
+    languages: Vec<LanguagesWithContributors>,
     activities: Vec<UserActivity>,
 }
 
-async fn home(users: UserRepository, activities_repo: UserActivityRepository, s: Session) -> (StatusCode, Response) {
+async fn home(users: UserRepository, languages: LanguageRepository, activities_repo: UserActivityRepository, contribution_stats: ContributionStatsRepository, s: Session) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (StatusCode::OK, Redirect::to("/").into_response());
     };
 
-    let Ok(languages) = users.top_languages(user.id, 5).await else {
+    let Ok(l) = users.top_languages(user.id, 5).await else {
         return render_generic_error(s, internal_error("Failed to load top languages")).await;
     };
+    let mut languages_with_contributors = Vec::with_capacity(l.len());
+    for lang in &l {
+        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&lang.id, 5).await);
+        let is_liked = attempt!(s, languages.is_liked(&user.id, &lang.id).await);
+        let language_with_contributors = LanguagesWithContributors {
+            language: lang.clone(),
+            top_contributors,
+            is_liked,
+        };
+        languages_with_contributors.push(language_with_contributors);
+    }
+    let languages = languages_with_contributors;
+
     let Ok(activities) = activities_repo.list_site_wide().await else {
         return render_generic_error(s, internal_error("Failed to load user activities")).await;
     };

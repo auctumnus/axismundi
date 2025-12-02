@@ -6,6 +6,9 @@
 
 {% block head %}
 <link rel="stylesheet" href="/static/settings.css">
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
 <script src="/static/settings.js" defer></script>
 <noscript>
     <style>
@@ -31,7 +34,7 @@
 {% let user = current_user.as_ref().unwrap() %}
 {% let previous_input = &previous_input %}
 {% let current_user = &current_user %}
-<form class="default" method="post" action="/settings">
+<form id="settings-form" class="default" method="post" action="/settings">
     <section>
         <label for="username">Username</label>
         {% call u::field_error(name="username") %}
@@ -96,4 +99,22 @@
     </section>
     <button type="submit">Update password</button>
 </form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'settings-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ prev!(current_user, previous_input, description) | json | safe }}</script>
 {% endblock %}

@@ -24,10 +24,17 @@ pub struct Translatable {
     pub source_language: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub translations_count: i64,
     #[serde(skip_serializing)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
     pub updated_by: Uuid,
+}
+
+impl Translatable {
+    pub fn words_count(&self) -> usize {
+        self.english.split_whitespace().count()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -102,7 +109,12 @@ impl TranslatableRepository {
                     created_at,
                     updated_at,
                     created_by,
-                    updated_by
+                    updated_by,
+                    (
+                        SELECT COUNT(*)
+                        FROM translation
+                        WHERE translation.translatable = translatable.id
+                    ) AS "translations_count!"
                 FROM translatable
                 WHERE id = $1
             "#,
@@ -130,7 +142,12 @@ impl TranslatableRepository {
                     created_at,
                     updated_at,
                     created_by,
-                    updated_by
+                    updated_by,
+                    (
+                        SELECT COUNT(*)
+                        FROM translation
+                        WHERE translation.translatable = translatable.id
+                    ) AS "translations_count!"
                 FROM translatable
                 WHERE slug = $1
             "#,
@@ -159,7 +176,7 @@ impl TranslatableRepository {
             r#"
                 INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, created_by, updated_by)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, 0 AS "translations_count!"
             "#,
             slug,
             translatable.title,
@@ -223,7 +240,12 @@ impl TranslatableRepository {
                     updated_by = $9,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by,
+                    (
+                        SELECT COUNT(*)
+                        FROM translation
+                        WHERE translation.translatable = translatable.id
+                    ) AS "translations_count!"
             "#,
             id,
             slug,
@@ -274,6 +296,15 @@ impl TranslatableRepository {
         pagination: PaginatedRequest,
         search: TranslatableSearch,
     ) -> AppResult<PaginatedResponse<Translatable>> {
+
+        let owner = if let Some(ref username) = search.created_by {
+            let user_repo = crate::model::users::UserRepository::new(self.state.clone());
+            let user = user_repo.find_by_username(username).await?;
+            Some(user.id)
+        } else {
+            None
+        };
+
         let items_future = sqlx::query_as!(
             Translatable,
             r#"
@@ -289,12 +320,18 @@ impl TranslatableRepository {
                     created_at,
                     updated_at,
                     created_by,
-                    updated_by
+                    updated_by,
+                    (
+                        SELECT COUNT(*)
+                        FROM translation
+                        WHERE translation.translatable = translatable.id
+                    ) AS "translations_count!"
                 FROM translatable
                 WHERE
                 ($1::TIMESTAMPTZ IS NULL OR created_at < $1)
                 AND ($2::TIMESTAMPTZ IS NULL OR created_at > $2)
                 AND ($3::TEXT IS NULL OR source_language = $3)
+                AND ($7::UUID IS NULL OR created_by = $7)
                 ORDER BY (
                     CASE
                         WHEN $4::TEXT IS NOT NULL AND english ILIKE '%' || $4 || '%' THEN 100.0
@@ -317,7 +354,8 @@ impl TranslatableRepository {
             search.source_language,
             search.q,
             i64::from(pagination.limit),
-            i64::from(pagination.offset)
+            i64::from(pagination.offset),
+            owner
         )
         .fetch_all(&self.state.pool);
 
@@ -351,10 +389,11 @@ impl TranslatableRepository {
     }
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize, Clone)]
 pub struct TranslatableSearch {
     pub q: Option<String>,
     pub source_language: Option<String>,
+    pub created_by: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
 }

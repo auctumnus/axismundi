@@ -3,10 +3,15 @@
 
 {% block title %}edit {{ language.name }} - axismundi{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
 {% block content %}
 <h1>edit {{ language.name }}</h1>
 
-<a href="/languages/{{ language.code }}/word-classes" class="button">view word classes</a>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -15,7 +20,7 @@
     </div>
 {% endif %}
 
-<form class="default" method="post" action="/languages/{{ language.code }}/edit">
+<form id="language-edit-form" class="default" method="post" action="/languages/{{ language.code }}/edit">
     <section>
         <label for="code">Language code</label>
         {% call u::field_error(name="code") %}
@@ -32,11 +37,58 @@
     <section>
         <label for="description">Description</label>
         {% call u::field_error(name="description") %}
-        <textarea id="description" name="description" rows="4">{{previous_description}}</textarea>
+        <textarea id="description" name="description">{{previous_description}}</textarea>
     </section>
 
     <button type="submit">Update language</button>
-    <a href="/languages/{{ language.code }}" class="button">Cancel</a>
 </form>
 
+{% if can_delete_language %}
+<h2>Delete language</h2>
+
+<p>This action is irreversible and cannot be undone.</p>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/delete" onsubmit="return confirm('Are you sure you want to delete this language? This action cannot be undone.');">
+    <button type="submit" class="danger">Delete language</button>
+</form>
+{% endif %}
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'language-edit-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+<li>
+    <h2>{{ language.name }}</h2>
+    <ul>
+    <li><a href="/languages/{{ language.code }}">main page</a></li>
+    <li><a href="/languages/{{ language.code }}/words">dictionary</a></li>
+    <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
+    <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
+    {% if can_edit_language %}
+        <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
+        <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
+    {% endif %}
+    </ul>
+</li>
 {% endblock %}

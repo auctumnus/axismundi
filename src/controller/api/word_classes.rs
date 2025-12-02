@@ -63,7 +63,7 @@ pub async fn get_word_class(
 ) -> ApiResponse<Json<WordClass>> {
     let language = languages.find_by_code(&code).await?;
     word_classes
-        .find_by_abbreviation(language.id, &abbreviation)
+        .find_by_abbreviation(&language.id, &abbreviation)
         .await
         .map(Json)
 }
@@ -81,7 +81,7 @@ pub async fn edit_word_class(
 
     let language = languages.find_by_code(&code).await?;
     let word_class = word_classes
-        .find_by_abbreviation(language.id, &abbreviation)
+        .find_by_abbreviation(&language.id, &abbreviation)
         .await
         .map_err(|_| not_found(format!("word class '{abbreviation}'")))?;
 
@@ -103,7 +103,7 @@ pub async fn delete_word_class(
 
     let language = languages.find_by_code(&code).await?;
     let word_class = word_classes
-        .find_by_abbreviation(language.id, &abbreviation)
+        .find_by_abbreviation(&language.id, &abbreviation)
         .await
         .map_err(|_| not_found(format!("word class '{abbreviation}'")))?;
 

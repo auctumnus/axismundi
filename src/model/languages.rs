@@ -21,6 +21,7 @@ pub struct Language {
     pub name: String,
     pub description: String,
     pub private: bool,
+    pub like_count: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
@@ -68,6 +69,11 @@ impl LanguageRepository {
         Self { state }
     }
 
+    pub async fn render_description(&self, language: &Language) -> AppResult<String> {
+        let rendered = crate::md::render_md(&language.description)?;
+        Ok(rendered)
+    }
+
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Language> {
         let result = sqlx::query_as!(
             Language,
@@ -78,6 +84,7 @@ impl LanguageRepository {
                     languages.name,
                     languages.description,
                     languages.private,
+                    languages.like_count,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -139,6 +146,7 @@ impl LanguageRepository {
             id: lang_result.id,
             code: lang_result.code,
             name: lang_result.name,
+            like_count: 0,
             description: lang_result.description,
             private: lang_result.private,
             created_at: lang_result.created_at,
@@ -189,6 +197,7 @@ impl LanguageRepository {
                     languages.name,
                     languages.description,
                     languages.private,
+                    languages.like_count,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -329,6 +338,7 @@ impl LanguageRepository {
                     languages.name,
                     languages.description,
                     languages.private,
+                    languages.like_count,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -366,6 +376,7 @@ impl LanguageRepository {
                     languages.name,
                     languages.description,
                     languages.private,
+                    languages.like_count,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -575,6 +586,93 @@ impl LanguageRepository {
         .fetch_one(&self.state.pool).await?;
 
         Ok(result.unwrap_or(0))
+    }
+
+    pub async fn is_liked(&self, language_id: &Uuid, user_id: &Uuid) -> AppResult<bool> {
+        let result = sqlx::query!(
+            r#"
+                SELECT 1 as exists FROM language_likes
+                WHERE language_id = $1 AND user_id = $2
+            "#,
+            language_id,
+            user_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result.is_some())
+    }
+
+    pub async fn like_language(&self, language_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        let mut tx = self.state.pool.begin().await?;
+        let result = sqlx::query!(
+            r#"
+                INSERT INTO language_likes (language_id, user_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+            "#,
+            language_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let likes = if result.rows_affected() > 0 {
+            let likes = sqlx::query_scalar!(
+                r#"
+                    UPDATE languages
+                    SET like_count = like_count + 1
+                    WHERE id = $1
+                    RETURNING like_count
+                "#,
+                language_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            Some(likes)
+        } else {
+            None
+        };
+        tx.commit().await?;
+
+        Ok(likes)
+    }
+
+    pub async fn unlike_language(&self, language_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        let mut tx = self.state.pool.begin().await?;
+        let result = sqlx::query!(
+            r#"
+                DELETE FROM language_likes
+                WHERE language_id = $1 AND user_id = $2
+            "#,
+            language_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let likes = if result.rows_affected() > 0 {
+            let likes = sqlx::query_scalar!(
+                r#"
+                    UPDATE languages
+                    SET like_count = GREATEST(like_count - 1, 0)
+                    WHERE id = $1
+                    RETURNING like_count
+                "#,
+                language_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            Some(likes)
+        } else {
+            None
+        };
+
+        tx.commit().await?;
+
+        Ok(likes)
     }
 }
 

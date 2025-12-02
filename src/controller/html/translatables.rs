@@ -106,30 +106,26 @@ struct SearchTranslatablesTemplate {
     results: Option<Vec<Translatable>>,
 }
 
-#[derive(Deserialize)]
-struct SearchQuery {
-    #[serde(default)]
-    q: String,
-}
-
 async fn search_translatables(
     s: Session,
     translatables: TranslatableRepository,
-    axum::extract::Query(query): axum::extract::Query<SearchQuery>,
+    axum::extract::Query(query): axum::extract::Query<TranslatableSearch>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
 
-    let search = if !query.q.is_empty() {
-        TranslatableSearch {
-            q: Some(query.q.clone()),
-            ..Default::default()
-        }
-    } else {
-        Default::default()
-    };
+    if query.q.as_ref().is_none_or(|q| q.is_empty()) {
+        let template = SearchTranslatablesTemplate {
+            current_user,
+            error: None,
+            previous_query: query.q.clone().unwrap_or_default(),
+            results: None,
+        };
+        let body = render_template(template);
+        return okay(body);
+    }
 
     let results = match translatables
-        .search(PaginatedRequest::default(), search)
+        .search(PaginatedRequest::default(), query.clone())
         .await
     {
         Ok(res) => Some(res.items),
@@ -138,7 +134,7 @@ async fn search_translatables(
             let template = SearchTranslatablesTemplate {
                 current_user,
                 error: Some(e),
-                previous_query: query.q,
+                previous_query: query.q.clone().unwrap_or_default(),
                 results: None,
             };
             let body = render_template(template);
@@ -149,7 +145,7 @@ async fn search_translatables(
     let template = SearchTranslatablesTemplate {
         current_user,
         error: None,
-        previous_query: query.q,
+        previous_query: query.q.unwrap_or_default(),
         results,
     };
 

@@ -5,4 +5,5 @@ things left to do:
 - no reachable todo!() or unimplemented!()
 - reduce panic surface or figure out if we can horizontally scale
 - frontend
+  - @mention support is really really janky rn
 - real mail with resend

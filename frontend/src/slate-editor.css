@@ -1,0 +1,423 @@
+/* ============================================
+   Modal Styles
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: color-mix(in oklab, black 50%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: var(--background-panel);
+  padding: 1.5rem;
+  border-radius: var(--rounding);
+  border: var(--border);
+  min-width: 400px;
+  box-shadow: 0 4px 6px -1px var(--color-shadow), 0 2px 4px -2px var(--color-shadow);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  font-family: var(--font-heading);
+}
+
+.modal-content-error {
+  max-width: 400px;
+}
+
+.error-message {
+  margin: 1rem 0;
+  color: var(--error-foreground);
+  background-color: var(--error-background);
+  border: 1px solid var(--error-border);
+  border-radius: var(--rounding);
+  padding: .75rem;
+}
+
+.modal-field {
+  margin-bottom: 1rem;
+}
+
+.modal-label {
+  display: block;
+  margin-bottom: .5rem;
+  font-family: var(--font-heading);
+}
+
+.modal-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: .5rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--rounding);
+  font-size: 1rem;
+  font-family: var(--font-normal);
+  background-color: var(--input-background);
+  color: var(--foreground-primary);
+  resize: vertical;
+  outline: 0;
+  outline-color: transparent;
+  transition: background-color 250ms ease-in-out,
+              border-color 250ms ease-in-out;
+}
+
+.modal-textarea:focus-visible {
+  border: 1px solid var(--input-border-focus);
+  background-color: var(--input-background-focus);
+}
+
+.modal-actions {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+}
+
+.modal-button {
+  font-family: var(--font-heading);
+  padding: .75rem;
+  border-radius: var(--rounding);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+}
+
+.modal-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.modal-button-cancel {
+  border: 1px solid var(--foreground-primary);
+  background-color: transparent;
+  color: var(--foreground-primary);
+}
+
+.modal-button-cancel:hover {
+  background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+}
+
+.modal-button-submit {
+  border: none;
+  background-color: var(--foreground-primary);
+  color: var(--background-page);
+}
+
+.modal-button-submit:hover {
+  background-color: var(--foreground-secondary);
+}
+
+
+/* ============================================
+   Editor Container Styles
+   ============================================ */
+
+/* ============================================
+   Toolbar Styles
+   ============================================ */
+
+.editor-toolbar,
+.toolbar {
+  position: relative;
+  display: flex;
+}
+
+/* Alternate compact toolbar style */
+.toolbar {
+  padding: .5rem;
+  margin: 0;
+}
+
+
+/* ============================================
+   Menu Styles
+   ============================================ */
+
+.editor-menu > * {
+  display: inline-block;
+}
+
+
+/* ============================================
+   Button Styles
+   ============================================ */
+
+.editor-button,
+.toolbar-button {
+  border: 1px solid var(--input-border, transparent);
+  border-bottom: 1px solid transparent;
+  background: var(--input-background, none);
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--foreground-secondary, #ccc);
+  transition: color 0.2s, background-color var(--duration-fast, 0.2s) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+  font-family: var(--font-normal);
+  font-size: .9rem;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  &:first-child {
+    border-top-left-radius: 4px;
+  }
+  &:not(:first-child) {
+    border-left: 1px solid transparent;
+  }
+  &:last-child {
+    border-top-right-radius: 4px;
+  }
+}
+.toolbar-button {
+  padding: .325rem .75rem;
+}
+
+.editor-button:hover,
+.toolbar-button:hover {
+  background-color: var(--input-background-focus, #f5f5f5);
+  border-color: var(--input-border-focus, transparent);
+  border-left: 1px solid var(--input-border-focus, transparent);
+  border-bottom: 1px solid var(--input-border-focus, transparent);
+}
+
+.editor-button.active {
+  color: var(--foreground-primary, #000);
+}
+
+.toolbar-button-active {
+  background-color: var(--warning-background);
+  border-color: var(--warning-border);
+  color: var(--warning-foreground);
+}
+
+.editor-button.reversed {
+  color: var(--foreground-secondary, #aaa);
+}
+
+.editor-button.reversed.active {
+  color: var(--background-page, #fff);
+}
+
+
+/* ============================================
+   Icon Styles
+   ============================================ */
+
+.editor-icon {
+  font-size: 18px;
+  vertical-align: text-bottom;
+}
+
+
+/* ============================================
+   Editable Area Styles
+   ============================================ */
+
+[data-slate-editor],
+.editor-editable {
+  min-height: 300px;
+  padding: 1rem;
+  outline: none;
+  font-family: var(--font-normal);
+  color: var(--foreground-primary);
+  border: 1px solid var(--input-border, transparent);
+  border-radius: var(--rounding);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background-color: var(--input-background, transparent);
+  transition: background-color 250ms ease-in-out,
+              border-color 250ms ease-in-out;
+}
+
+.editor-editable {
+  min-height: 200px;
+  padding: .5rem;
+}
+
+[data-slate-editor]:focus-visible,
+.editor-editable:focus-visible {
+  border: 1px solid var(--input-border-focus);
+  background-color: var(--input-background-focus);
+}
+
+[data-slate-editor] > * + * {
+  margin-top: .5rem;
+}
+
+
+/* ============================================
+   Block Elements
+   ============================================ */
+
+[data-slate-editor] h1 {
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0.67em 0;
+  font-family: var(--font-heading, inherit);
+}
+
+[data-slate-editor] h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0.75em 0;
+  font-family: var(--font-heading, inherit);
+}
+
+[data-slate-editor] h3 {
+  font-size: 1.17em;
+  font-weight: bold;
+  margin: 0.83em 0;
+  font-family: var(--font-heading, inherit);
+}
+
+[data-slate-editor] blockquote {
+  border-left: 3px solid var(--foreground-tertiary, #ddd);
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 20px;
+  color: var(--foreground-secondary, #666);
+  font-style: italic;
+}
+
+[data-slate-editor] ul {
+  list-style-type: disc;
+  padding-left: 24px;
+}
+
+[data-slate-editor] ol {
+  list-style-type: decimal;
+  padding-left: 24px;
+}
+
+[data-slate-editor] li {
+  margin: 4px 0;
+}
+
+[data-slate-editor] code {
+  background-color: var(--code-background, #f4f4f4);
+  padding: 2px 4px;
+  border-radius: var(--rounding);
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--code-foreground, inherit);
+}
+
+[data-slate-editor] pre {
+  background-color: var(--code-background, #f4f4f4);
+  padding: 10px;
+  border-radius: var(--rounding);
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+}
+
+
+/* ============================================
+   Mention Styles
+   ============================================ */
+
+.mention {
+  padding: 2px 4px;
+  margin: 0 1px;
+  vertical-align: baseline;
+  display: inline-block;
+  border-radius: var(--rounding);
+  background-color: var(--mention-background, #eee);
+  font-weight: 500;
+  color: var(--mention-foreground, #5b5fc7);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.mention:hover {
+  background-color: var(--mention-background-hover, #e0e0e0);
+}
+
+
+/* ============================================
+   Mention Dropdown
+   ============================================ */
+
+.mention-dropdown {
+  position: absolute;
+  z-index: 1000;
+  background: var(--background-panel, white);
+  border: var(--border, 1px solid #ddd);
+  border-radius: var(--rounding, 4px);
+  box-shadow: 0 2px 8px var(--color-shadow, rgba(0, 0, 0, 0.15));
+  max-height: 200px;
+  overflow-y: auto;
+  min-width: 200px;
+}
+
+.mention-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: var(--foreground-primary);
+}
+
+.mention-item:hover,
+.mention-item.selected {
+  background-color: var(--input-background-focus, #f0f0f0);
+}
+
+.mention-item.selected {
+  background-color: var(--selected-background, #e6f2ff);
+}
+
+
+/* ============================================
+   Annotated Text Styles
+   ============================================ */
+
+.annotated-text {
+  background-color: color-mix(in oklab, var(--warning-background) 25%, transparent);
+  border-bottom: 2px solid var(--warning-border);
+  cursor: help;
+}
+
+
+/* ============================================
+   Placeholder Styles
+   ============================================ */
+
+[data-slate-editor] [data-slate-placeholder] {
+  opacity: 0.333;
+  user-select: none;
+  color: var(--foreground-secondary, inherit);
+}
+
+
+/* ============================================
+   Selection Styles
+   ============================================ */
+
+[data-slate-editor] ::selection {
+  background-color: var(--selection-background, #b4d5fe);
+}
+
+
+/* ============================================
+   App Container
+   ============================================ */
+
+.app-container {
+  font-family: var(--font-normal);
+}
+
+.app-title {
+  text-align: center;
+  font-family: var(--font-heading);
+}
+
+
+[role="textbox"] p {
+  
+}

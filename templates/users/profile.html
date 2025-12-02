@@ -3,80 +3,225 @@
 
 {% block title %}{% call u::name(user) %} - axismundi{% endblock %}
 
-{% block content %}
+{% block head %}
+<link rel="stylesheet" href="/static/profile.css">
+<link rel="stylesheet" href="/static/activity.css">
+<link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/translatable-card.css">
+<script src="/static/time.js" type="module" defer></script>
+<script src="/static/language-card.js" defer></script>
+<script type="importmap">
+    {
+        "imports": {
+            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
+        }
+    }
+</script>
+<script src="/static/tooltip.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/tooltip.css">
+{% endblock %}
 
-<div class="profile-header">
-    {% if let Some(profile_picture_url) = user.get_profile_picture_url() %}
-        <img src="{{ profile_picture_url }}" alt="Profile picture" class="profile-picture">
+{% block content %}
+<div class="card profile-card">
+    <div class="banner"></div>
+    {% if let Some(pfp_url) = user.get_profile_picture_url() %}
+        <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="{{ pfp_url }}">
+    {% else %}
+        <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="/static/default-pfp.webp">
     {% endif %}
-    <h1>{% call u::name(user) %}</h1>
-    <p class="username">@{{ user.username }}</p>
+    <div class="riding">
+        {% if let Some(current_user) = current_user %}
+            {% if current_user.id == user.id %}
+            <a href="/settings" class="button">edit profile</a>
+            {% endif %}
+        {% endif %}
+    </div>
+    <div class="content">
+        <div class="name">
+            {% if let Some(display_name) = user.display_name %}
+                {% if let Some(gender) = user.gender %}
+                    <h1 class="display-name gender-color" style="--gender: #{{ gender }};">{{ display_name }}</h1>
+                {% else %}
+                    <h1 class="display-name">{{ display_name }}</h1>
+                {% endif %}
+                <p class="username">@{{ user.username }}</p>
+            {% else %}
+                {% if let Some(gender) = user.gender %}
+                    <h1 class="username gender-color" style="--gender: #{{ gender }};">@{{ user.username }}</h1>
+                {% else %}
+                    <h1 class="username">@{{ user.username }}</h1>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% if !rendered_description.is_empty() %}
+            {{ rendered_description | safe }}
+        {% endif %}
+    </div>
+
+    <table>
+        {% if let Some(pronouns) = user.pronouns %}
+            <tr>
+                <th>pronouns</th>
+                <td>{{ pronouns }}</td>
+            </tr>
+        {% endif %}
+        {% if let Some(gender) = user.gender %}
+            <tr>
+                <th>gender</th>
+                <td><span class="gender-color gender-text" style="--gender: #{{ gender }};">#{{ gender }}</span></td>
+            </tr>
+        {% endif %}
+        <tr>
+            <th>joined on</th>
+            <td>{{ user.created_at.format("%B %d, %Y") }}</td>
+        </tr>
+    </table>
 </div>
 
-{% if let Some(current_user) = current_user %}
-    {% if current_user.id == user.id %}
-    <a href="/settings" class="button">edit profile</a>
+
+
+{% if languages.is_empty() %}
+    <h2>languages</h2>
+    {% if let Some(current_user) = current_user %}
+        {% if current_user.id == user.id %}
+            <p>you haven't added any languages yet.</p>
+            <a href="/new-language" class="button">get started</a>
+        {% else %}
+            <p class="empty-description">no languages yet</p>
+        {% endif %}
+    {% else %}
+        <p class="empty-description">no languages yet</p>
     {% endif %}
+{% else %}
+<div class="header-with-actions">
+    <h2 class="with-action">languages</h2>
+    <ul>
+        {% if let Some(current_user) = current_user %}
+            {% if current_user.id == user.id %}
+        <li><a class="with-icon" href="/new-language">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <span>new language</span>
+            </a></li>
+            {% endif %}
+        {% endif %}
+        <li><a class="with-icon" href="/languages?owned_by={{ user.username }}">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            <span>view all</span>
+        </a></li>
+    </ul>
+</div>
+<ul id="language-list">
+    {% for language_with_contributors in languages %}
+    <li class="language-card">
+        <a href="/languages/{{ language_with_contributors.language.code }}">
+            <span class="left">
+                <span class="language-name">{{ language_with_contributors.language.name }}</span>
+                {% call u::language_summary(&language_with_contributors.language) %}
+                <ul class="contributor-list">
+                    {% for contributor in language_with_contributors.top_contributors %}
+                    <li class="compressed-pfps">
+                        {% call u::pfp(&contributor, size="small") %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </span>
+            <span class="likes {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
+                <span class="icon-button-container yellow">
+                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
+                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                </span>
+                <span class="like-count">{{ language_with_contributors.language.like_count }}</span>
+            </span>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
 {% endif %}
 
-<div class="profile-info">
-    {% if let Some(pronouns) = user.pronouns %}
-        <div class="profile-field">
-            <strong>Pronouns:</strong> {{ pronouns }}
-        </div>
+{% if translatables.is_empty() %}
+<h2>translatables</h2>
+{% if let Some(current_user) = current_user %}
+        {% if current_user.id == user.id %}
+            <p>you haven't added any translatables yet.</p>
+            <a href="/new-translatable" class="button">get started</a>
+        {% else %}
+            <p class="empty-description">no translatables yet</p>
+        {% endif %}
+    {% else %}
+        <p class="empty-description">no translatables yet</p>
     {% endif %}
-
-    {% if let Some(gender) = user.gender %}
-        <div class="profile-field">
-            <strong>Gender:</strong>
-            <span class="gender-color" style="background-color: {{ gender }}; display: inline-block; width: 1em; height: 1em; border-radius: 0.2em; vertical-align: middle;"></span>
-            <code>{{ gender }}</code>
-        </div>
-    {% endif %}
-
-    {% if let Some(description) = user.description %}
-        <div class="profile-field">
-            <strong>About:</strong>
-            <p>{{ description }}</p>
-        </div>
-    {% endif %}
-
-    <div class="profile-field">
-        <strong>Member since:</strong> {{ user.created_at.format("%B %d, %Y") }}
-    </div>
+{% else %}
+<div class="header-with-actions">
+    <h2 class="with-action">translatables</h2>
+    <ul>
+        {% if let Some(current_user) = current_user %}
+            {% if current_user.id == user.id %}
+        <li><a class="with-icon" href="/new-translatable">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <span>new translatable</span>
+            </a></li>
+            {% endif %}
+        {% endif %}
+        <li><a class="with-icon" href="/translatables?created_by={{ user.username }}">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            <span>view all</span>
+        </a></li>
+    </ul>
 </div>
-
-{% if !activities.is_empty() %}
-<div class="profile-activities">
-    <h2>Recent Activity</h2>
-    <ul class="activity-list">
-        {% for activity in activities %}
-        <li class="activity-item">
-            <time datetime="{{ activity.timestamp.to_rfc3339() }}">{{ activity.timestamp.format("%B %d, %Y at %H:%M") }}</time>
-            <span class="activity-type">
-                {% match activity.activity %}
-                    {% when crate::model::user_activities::ActivityType::CreateWord %}
-                        Created a word
-                    {% when crate::model::user_activities::ActivityType::UpdateWord %}
-                        Updated a word
-                    {% when crate::model::user_activities::ActivityType::CreateTranslatable %}
-                        Created a translatable
-                    {% when crate::model::user_activities::ActivityType::UpdateTranslatable %}
-                        Updated a translatable
-                    {% when crate::model::user_activities::ActivityType::CreateTranslation %}
-                        Created a translation
-                    {% when crate::model::user_activities::ActivityType::UpdateTranslation %}
-                        Updated a translation
-                    {% when crate::model::user_activities::ActivityType::CreateLanguage %}
-                        Created a language
-                    {% when crate::model::user_activities::ActivityType::UpdateLanguage %}
-                        Updated a language
-                {% endmatch %}
-            </span>
+    <ul id="translatable-list">
+        {% for translatable in translatables %}
+        <li class="translatable-card">
+            <a href="/translatables/{{ translatable.slug }}/">
+                <span class="translatable-title">{{ translatable.title }}</span>
+                <ul class="translatable-summary">
+                    {% let words_count = translatable.words_count() %}
+                    {% let translations_count = translatable.translations_count %}
+                    <li>{{ words_count }} {% if words_count == (1 as usize) %}word{% else %}words{% endif %}</li>
+                    <li>{{ translations_count }} {% if translations_count == &(1 as i64) %}translation{% else %}translations{% endif %}</li>
+                </ul>
+            </a>
         </li>
         {% endfor %}
     </ul>
-</div>
+{% endif %}
+
+<h2>recent activity</h2>
+
+{% if activities.is_empty() %}
+<p class="empty-description">no recent activity.</p>
+{% else %}
+    <ul class="activity-list">
+        {% for activity in activities %}
+        <li class="activity-item">
+            <span class="activity-type">
+                {{ activity.activity.verb() }}
+                {% match activity.entity %}
+                    {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
+                        <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+                    {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                        <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
+                    {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
+                        <a href="/translatables/{{ translatable.slug }}/">{{ translatable.title }}</a>
+                    {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
+                        <span>a translation for</span>
+                        <a href="/languages/{{ lang_code }}/translatables/{{ translation.translatable_slug }}/translations/{{ lang_code }}">{{ translation.translatable_title }}</a>
+                    {% else %}
+                        <span>something unknown</span>
+                {% endmatch %}
+                {% if let Some(entity) = activity.related_entity %}
+                    <span>in</span>
+                    {% match entity %}
+                        {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                            <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
+                        {% else %}
+                            <span>an unknown entity</span>
+                    {% endmatch %}
+                {% endif %}
+            </span>
+            <time datetime="{{ activity.timestamp.to_rfc3339() }}">{{ activity.timestamp.format("%B %d, %Y at %H:%M") }}</time>
+        </li>
+        {% endfor %}
+    </ul>
 {% endif %}
 
 {% endblock %}

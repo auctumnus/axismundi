@@ -3,37 +3,109 @@
 
 {% block title %}{{ language.name }} - axismundi{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/language-view.css">
+<link rel="stylesheet" href="/static/word-card.css">
+{% endblock %}
+
 {% block content %}
 
-<h1>{{ language.name }}</h1>
+<div class="card">
+    <div class="header-with-actions">
+        <h1>{{ language.name }}</h1>
+    {% if can_edit_language %}
+        <a class="icon button gray" href="/languages/{{ language.code }}/edit"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg></a>
+    {% endif %}
+    </div>
 
-<div>
-    <span>by</span>
-    {% call u::badge(&owner) %}
-    {% if contributor_count > 0 %}
-        <span>and</span>
-        <a href="/languages/{{ language.code }}/contributors">{{ contributor_count }} contributor{% if contributor_count != 1 %}s{% endif %}</a>
+    <div class="contributors">
+        <span>by</span>
+        {% call u::badge(&owner, size="small") %}
+        {% if contributor_count > 0 %}
+            <span>and</span>
+            <a href="/languages/{{ language.code }}/contributors">{{ contributor_count }} contributor{% if contributor_count != 1 %}s{% endif %}</a>
+        {% endif %}
+    </div>
+    
+    {% if !rendered_description.is_empty() %}
+        <p>{{ rendered_description | safe }}</p>
+    {% else %}
+        <p class="empty-description">no description provided</p>
     {% endif %}
 </div>
 
-{% if let Some(user) = current_user %}
-    {% if user.id == owner.id %}
-    <a href="/languages/{{ language.code }}/edit" class="button">edit language</a>
-    {% endif %}
+<div class="header-with-actions">
+    <h2>words</h2>
+    <ul>
+        {% if can_edit_language %}
+            <li><a class="with-icon" href="/languages/{{ language.code }}/new-word">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <span>new word</span>
+            </a></li>
+        {% endif %}
+        <li><a class="with-icon" href="/languages/{{ language.code }}/words">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            <span>view all</span>
+        </a></li>
+    </ul>
+</div>
+
+{% for word_with_author in recent_words %}
+    <div class="card word-card">
+        <a class="badge-main" href="/languages/{{ language.code }}/words/{{ word_with_author.word.slug }}/{{ word_with_author.word.lemma }}">{{ word_with_author.word.word }}</a>
+        <div>
+            <span>added by</span>
+            {% call u::badge(&word_with_author.author, size="small") %}
+            <span>{% call u::relative(&word_with_author.word.created_at) %}</span>
+        </div>
+    </div>
+{% endfor %}
+
+{% if recent_words.len() <= 0 %}
+    <p class="empty-description">no words yet</p>
 {% endif %}
 
-{% if !language.description.is_empty() %}
-    <p>{{ language.description }}</p>
+<div class="header-with-actions">
+    <h2>translations</h2>
+    <ul>
+        <li><a class="with-icon" href="/languages/{{ language.code }}/translations">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            <span>view all</span>
+        </a></li>
+    </ul>
+</div>
+
+{% for translation_with_author in recent_translations %}
+    <div class="card word-card">
+        <a class="badge-main" href="/translatable/{{ translation_with_author.translatable.slug }}/translations/{{ language.code }}">{{ translation_with_author.translatable.title }}</a>
+        <div>
+            <span>translated by</span>
+            {% call u::badge(&translation_with_author.author) %}
+            <span>{% call u::relative(&translation_with_author.translation.created_at) %}</span>
+        </div>
+    </div>
+{% endfor %}
+
+{% if recent_translations.len() <= 0 %}
+    <p class="empty-description">no translations yet</p>
 {% else %}
-    <p class="empty-description">no description provided</p>
+    <a href="/languages/{{ language.code }}/translations" class="button">view all</a>
 {% endif %}
 
-<h2>word classes</h2>
+{% endblock %}
 
-<a href="/languages/{{ language.code }}/word-classes" class="button">view all</a>
-
-<h2>words</h2>
-
-<a href="/languages/{{ language.code }}/words" class="button">view all</a>
-
+{% block footer %}
+<li>
+    <h2>{{ language.name }}</h2>
+    <ul>
+    <li><a href="/languages/{{ language.code }}">main page</a></li>
+    <li><a href="/languages/{{ language.code }}/words">dictionary</a></li>
+    <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
+    <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
+    {% if can_edit_language %}
+        <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
+        <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
+    {% endif %}
+    </ul>
+</li>
 {% endblock %}

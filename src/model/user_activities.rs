@@ -26,7 +26,7 @@ pub enum ActivityType {
 impl ActivityType {
     pub fn verb(&self) -> &str {
         match self {
-            ActivityType::CreateLanguage | ActivityType::CreateWord | ActivityType::CreateTranslatable | ActivityType::CreateTranslation => "created",
+            ActivityType::CreateLanguage | ActivityType::CreateWord | ActivityType::CreateTranslatable | ActivityType::CreateTranslation => "added",
             ActivityType::UpdateLanguage | ActivityType::UpdateWord | ActivityType::UpdateTranslatable | ActivityType::UpdateTranslation => "updated",
         }
     }
@@ -34,14 +34,11 @@ impl ActivityType {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum ActivityEntity {
-    Word { word: Word, lang_code: String },
+    Word(Word, String),
     Language(Language),
     User(User),
     Translatable(Translatable),
-    Translation {
-        translation: Translation,
-        lang_code: String,
-    }
+    Translation(Translation, String),
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -627,10 +624,7 @@ impl UserActivityRepository {
                     let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
                         .find_by_id(word.language)
                         .await?;
-                    Ok(ActivityEntity::Word {
-                        word,
-                        lang_code: lang.code,
-                    })
+                    Ok(ActivityEntity::Word(word, lang.code))
                 } else {
                     Err(bad_request(format!(
                         "unable to resolve entity with id '{}'",
@@ -678,10 +672,7 @@ impl UserActivityRepository {
                     let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
                         .find_by_id(translation.language)
                         .await?;
-                    Ok(ActivityEntity::Translation {
-                        translation,
-                        lang_code: lang.code,
-                    })
+                    Ok(ActivityEntity::Translation(translation, lang.code))
                 } else {
                     Err(bad_request(format!(
                         "unable to resolve entity with id '{}'",

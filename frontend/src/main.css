@@ -13,6 +13,7 @@
 
   --foreground-primary: light-dark(var(--light-foreground-primary), var(--dark-foreground-primary));
   --foreground-secondary: light-dark(var(--color-slate-500), var(--color-slate-400));
+  --foreground-accent: var(--color-sky-500);
 
   --error-background: light-dark(color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel)), oklch(7.8% 0.092 26.042));
   --error-foreground: var(--color-red-700);
@@ -22,6 +23,7 @@
   --focus-ring-error: light-dark(color-mix(in oklab, var(--color-red-500) 40%, transparent), color-mix(in oklab, var(--color-red-400) 40%, transparent));
 
   --color-shadow: light-dark(color-mix(in oklab,var(--color-slate-900) 10%,transparent), color-mix(in oklab, black 30%, transparent));
+  --shadow-hover: 0 10px 15px -3px var(--color-shadow), 0 4px 6px -4px var(--color-shadow);
 
   --font-normal: 'Roboto', Arial, sans-serif;
   --font-heading: 'Roboto Slab', 'Roboto', Arial, sans-serif;
@@ -35,7 +37,7 @@
 
   --page-width: 600px;
 
-  --rounding: calc(0.625rem + 4px);
+  --rounding: 4px;
 
   --padding-right: calc((100dvh - var(--page-width)) / 2);
 
@@ -51,6 +53,9 @@ body {
   background-color: var(--background-page);
   color: var(--foreground-primary);
 
+  display: flex;
+  flex-direction: column;
+
   min-height: 100dvh;
   max-width: 100dvw;
 
@@ -64,10 +69,20 @@ body {
   }
 }
 
+@media (max-width: 616px) {
+  :root {
+    --page-width: calc(100dvw - 2rem);
+  }
+  
+  body, header {
+    padding: 0 1rem;
+  }
+}
+
 a:focus-visible, a.button:focus-visible, button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--rounding);
 }
 
 header {
@@ -79,6 +94,7 @@ header {
   background-color: var(--background-page);
   box-shadow: 0 20px 25px -5px var(--background-page);
   position: fixed;
+  z-index: 100;
   top: 0;
   left: 0;
   right: 0;
@@ -144,15 +160,26 @@ header {
 
 img.pfp {
   border-radius: 100%;
+
+  width: var(--size);
+  height: var(--size);
+
+  &.small {
+    --size: 1.25rem;
+  width: var(--size);
+  height: var(--size);
+  }
   
   &.medium {
-    width: 1.75rem;
-    height: 1.75rem;
+    --size: 1.75rem;
+  width: var(--size);
+  height: var(--size);
   }
 
   &.large {
-    width: 3.5rem;
-    height: 3.5rem;
+    --size: 3.5rem;
+  width: var(--size);
+  height: var(--size);
   }
 }
 
@@ -275,6 +302,7 @@ svg.icon {
 
 main {
   flex: 1;
+  width: var(--page-width);
 
   h1 {
     font-family: var(--font-heading);
@@ -316,7 +344,7 @@ a.button, form.default button[type="submit"] {
   font-family: var(--font-heading);
   padding: .75rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--rounding);
   background-color: var(--foreground-primary);
   color: var(--background-page);
   font-size: 1rem;
@@ -348,7 +376,7 @@ a.button-secondary, form.default button[type="reset"], button.clear {
   font-family: var(--font-heading);
   padding: .75rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--rounding);
   background-color: transparent;
   color: var(--foreground-primary);
   background-color: light-dark(--background-panel);
@@ -367,13 +395,182 @@ a.button-secondary, form.default button[type="reset"], button.clear {
 
 .badge {
   display: inline-flex;
-  padding: .25rem .5rem;
+  padding: .25rem .375rem;
   flex-direction: row;
-  gap: .5rem;
+  gap: .375rem;
   align-items: center;
   text-decoration: none;
 }
 .display-name.gendered {
   font-weight: 600;
   color: var(--color);
+}
+
+footer {
+  margin-top: 3rem;
+  margin-bottom: 3rem;
+
+  width: var(--page-width);
+
+  > ul:not(.last) {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+
+    li h2 {
+      font-weight: 600;
+      margin-bottom: .5rem;
+      font-family: var(--font-heading);
+    }
+
+    a {
+      color: var(--foreground-secondary);
+
+      margin-top: .5rem;
+
+      &:hover {
+        color: var(--foreground-primary);
+        text-decoration: underline;
+      }
+    }
+  }
+
+  ul.last {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+    margin-top: 2rem;
+
+    font-size: .9rem;
+
+    li {
+      margin-bottom: 0;
+    }
+
+    a {
+      color: var(--foreground-secondary);
+
+      &:hover {
+        color: var(--foreground-primary);
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+.card {
+  background-color: var(--background-panel);
+  border: var(--border);
+  border-radius: var(--rounding);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  &:first-child {
+    margin-top: 1rem;
+  }
+}
+
+.header-with-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .5rem;
+
+
+    h1, h2 {
+      margin: 0;
+    }
+
+    ul {
+      display: flex;
+      flex-direction: row;
+      align-items: end;
+      gap: .5rem;
+      padding: 0;
+    }
+
+    li {
+      display: inline-flex;
+      flex-direction: row;
+      align-items: center;
+    }
+
+    li:not(:last-child)::after {
+      content: "·";
+      user-select: none;
+      pointer-events: none;
+      color: var(--foreground-secondary);
+      margin-left: .5rem;
+    }
+
+    a {
+      text-decoration: none;
+      color: var(--foreground-secondary);
+
+      transition: color var(--duration-very-fast) ease-in-out;
+
+      &:hover {
+        text-decoration: underline;
+        color: var(--foreground-primary);
+      }
+    }
+
+    ul, li {
+      list-style: none;
+      margin: 0;
+    }
+}
+
+a.icon.button {
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0px solid transparent;
+  border-radius: 100%;
+
+  background-color: transparent;
+  color: var(--foreground-secondary);
+
+  transition: background-color var(--duration-fast) ease-in-out,
+              color var(--duration-fast) ease-in-out;
+
+  &:hover.gray {
+    background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+  }
+}
+
+.ellipse {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: calc(var(--page-width) - 8rem);
+}
+
+a.with-icon {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: .25rem;
+
+  svg.icon {
+    position: relative;
+    top: .5px;
+    z-index: 0;
+  }
+
+  &:hover svg.icon {
+    color: var(--foreground-primary);
+  }
+
+  @media (max-width: 500px) {
+    svg.icon {
+      display: none;
+    }
+  }
 }

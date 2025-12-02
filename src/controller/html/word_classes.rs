@@ -36,6 +36,7 @@ struct ListWordClassesTemplate {
     language: Language,
     word_classes: Vec<WordClass>,
     user_has_permission: bool,
+    can_edit_language: bool,
 }
 
 async fn list_word_classes(
@@ -62,6 +63,7 @@ async fn list_word_classes(
         language,
         word_classes: classes,
         user_has_permission,
+        can_edit_language: user_has_permission,
     };
 
     let body = render_template(template);
@@ -78,6 +80,7 @@ struct NewWordClassFormTemplate {
     previous_name: String,
     previous_abbreviation: String,
     user_has_permission: bool,
+    can_edit_language: bool,
 }
 
 async fn new_word_class_form(
@@ -101,6 +104,7 @@ async fn new_word_class_form(
         previous_name: String::new(),
         previous_abbreviation: String::new(),
         user_has_permission,
+        can_edit_language: user_has_permission,
     };
 
     okay(render_template(template))
@@ -148,6 +152,7 @@ async fn new_word_class_submit(
                 previous_name: form.name.clone(),
                 previous_abbreviation: form.abbreviation.clone(),
                 user_has_permission,
+                can_edit_language: user_has_permission,
             };
 
             let body = render_template(template);
@@ -163,6 +168,7 @@ struct ViewWordClassTemplate {
     language: Language,
     word_class: WordClass,
     user_has_permission: bool,
+    can_edit_language: bool,
 }
 
 async fn view_word_class(
@@ -173,7 +179,7 @@ async fn view_word_class(
     Path((code, abbreviation)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let word_class = attempt!(s, word_classes.find_by_abbreviation(language.id, &abbreviation).await);
+    let word_class = attempt!(s, word_classes.find_by_abbreviation(&language.id, &abbreviation).await);
 
     let user_has_permission = if let Some(user) = s.user() {
         permissions
@@ -189,6 +195,7 @@ async fn view_word_class(
         language,
         word_class,
         user_has_permission,
+        can_edit_language: user_has_permission,
     };
 
     let body = render_template(template);
@@ -206,6 +213,7 @@ struct EditWordClassFormTemplate {
     previous_name: String,
     previous_abbreviation: String,
     user_has_permission: bool,
+    can_edit_language: bool,
 }
 
 async fn edit_word_class_form(
@@ -218,7 +226,7 @@ async fn edit_word_class_form(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
     let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(language.id, &abbreviation)
+        .find_by_abbreviation(&language.id, &abbreviation)
         .await);
 
     let user_has_permission = permissions
@@ -234,6 +242,7 @@ async fn edit_word_class_form(
         word_class,
         error: None,
         user_has_permission,
+        can_edit_language: user_has_permission,
     };
 
     okay(render_template(template))
@@ -256,7 +265,7 @@ async fn edit_word_class_submit(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
     let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(language.id, &abbreviation)
+        .find_by_abbreviation(&language.id, &abbreviation)
         .await);
 
     let user_has_permission = permissions
@@ -291,6 +300,7 @@ async fn edit_word_class_submit(
                 previous_name: form.name.clone(),
                 previous_abbreviation: form.abbreviation.clone(),
                 user_has_permission,
+                can_edit_language: user_has_permission,
             };
 
             let body = render_template(template);
@@ -308,7 +318,7 @@ async fn delete_word_class_submit(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
     let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(language.id, &abbreviation)
+        .find_by_abbreviation(&language.id, &abbreviation)
         .await);
 
     match word_classes

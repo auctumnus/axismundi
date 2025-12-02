@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controller::html::{okay, render_generic_error, render_template}, err::AppError, model::{email_verification_tokens::EmailVerificationTokenRepository, sessions::SessionRepository, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
+use crate::{controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors}, err::AppError, model::{contribution_stats::ContributionStatsRepository, email_verification_tokens::EmailVerificationTokenRepository, languages::{LanguageRepository, LanguageSearch}, sessions::SessionRepository, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -258,11 +258,12 @@ async fn settings_form(s: Session) -> (StatusCode, Response) {
 
 fn coalesce(in_form: &Option<String>, in_resource: &Option<String>) -> Option<String> {
     in_form.clone().and_then(|p| {
-        if p.is_empty() {
-            None
-        } else if in_resource.as_ref().map_or(false, |r| r == &p) {
+        if in_resource.as_ref().map_or(false, |r| r == &p) {
+            // Value unchanged, don't update
             None
         } else {
+            // Value changed (including empty string to clear the field)
+            // Empty string will be converted to NULL in the SQL query
             Some(p)
         }
     })
@@ -272,6 +273,8 @@ async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<Set
     let Some(user) = s.user().cloned() else {
         return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
+
+    println!("display name in form: {:?}", form.display_name);
 
     match users.update(&user, user.id, UpdateUser {
         username: coalesce(&form.username, &Some(user.username.clone())),
@@ -337,13 +340,19 @@ async fn logout_submit(jar: CookieJar, s: Session, sessions: SessionRepository) 
 struct ProfileTemplate {
     current_user: Option<User>,
     user: User,
+    languages: Vec<LanguagesWithContributors>,
     activities: Vec<crate::model::user_activities::UserActivity>,
+    translatables: Vec<crate::model::translatable::Translatable>,
+    rendered_description: String,
 }
 
 async fn profile(
     s: Session,
     users: UserRepository,
+    languages: LanguageRepository,
+    translatables: TranslatableRepository,
     activities: UserActivityRepository,
+    contribution_stats: ContributionStatsRepository,
     path: axum::extract::Path<String>,
 ) -> (StatusCode, Response) {
     let username = path.0;
@@ -356,13 +365,39 @@ async fn profile(
         Err(e) => return render_generic_error(s, e).await,
     };
 
-    // Get user activities (limit to 20)
+    let languages_result = languages.search(PaginatedRequest {
+        limit: 5,
+        offset: 0,
+    }, LanguageSearch {
+        owned_by: Some(username.clone()),
+        ..Default::default()
+    }).await;
+
+    let mut languages_with_contributors = Vec::new();
+    if let Ok(paginated) = languages_result {
+        for lang in &paginated.items {
+            let top_contributors = contribution_stats.get_top_contributors(&lang.id, 5).await.unwrap_or_default();
+            let is_liked = if let Some(ref cu) = current_user {
+                languages.is_liked(&cu.id, &lang.id).await.unwrap_or(false)
+            } else {
+                false
+            };
+            languages_with_contributors.push(LanguagesWithContributors {
+                language: lang.clone(),
+                top_contributors,
+                is_liked,
+            });
+        }
+    }
+    let languages_list = languages_with_contributors;
+
+    // Get user activities (limit to 5)
     let activities_result = activities.list_by_user(
         current_user.as_ref(),
         user.id,
         None,
         PaginatedRequest {
-            limit: 20,
+            limit: 5,
             offset: 0,
         }
     ).await;
@@ -372,9 +407,24 @@ async fn profile(
         Err(_) => Vec::new(), // If we can't fetch activities, just show empty list
     };
 
+    let translatables = translatables.search(PaginatedRequest { limit: 5, offset: 0 }, TranslatableSearch {
+        created_by: Some(username.clone()),
+        ..Default::default()
+    }).await;
+
+    let translatables_list = match translatables {
+        Ok(paginated) => paginated.items,
+        Err(_) => Vec::new(),
+    };
+
+    let rendered_description = users.render_description(&user).await.unwrap_or_default();
+
     (StatusCode::OK, render_template(ProfileTemplate {
         current_user,
         user,
+        languages: languages_list,
         activities: activities_list,
+        translatables: translatables_list,
+        rendered_description,
     }).into_response())
 }

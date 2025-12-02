@@ -144,7 +144,7 @@ impl WordRepository {
 
         let word_classes = crate::model::word_classes::WordClassRepository::new(self.state.clone());
         let word_class = word_classes
-            .find_by_abbreviation(language, &word.word_class)
+            .find_by_abbreviation(&language, &word.word_class)
             .await?;
 
         let (slug, lemma) = self.make_slug_and_lemma(language, &word.word).await?;
@@ -315,7 +315,7 @@ impl WordRepository {
         let word_class = if let Some(ref abbreviation) = updates.word_class {
             Some(
                 word_classes
-                    .find_by_abbreviation(word.language, abbreviation)
+                    .find_by_abbreviation(&word.language, abbreviation)
                     .await?
                     .id,
             )
@@ -449,7 +449,7 @@ impl WordRepository {
     #[allow(clippy::too_many_lines)]
     pub async fn search(
         &self,
-        language: Uuid,
+        language: &Uuid,
         pagination: PaginatedRequest,
         search: WordSearch,
     ) -> AppResult<PaginatedResponse<Word>> {

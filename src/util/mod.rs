@@ -132,8 +132,16 @@ pub fn get_top_level_error(error: &Option<AppError>) -> Option<&str> {
     }
 }
 
-pub fn relative_time(timestamp: chrono::DateTime<Utc>) -> String {
+pub fn relative_time(timestamp: &chrono::DateTime<Utc>) -> String {
     let now = Utc::now();
-    let dt = now - timestamp;
+    let dt = *timestamp - now;
     chrono_humanize::HumanTime::from(dt).to_string()
+}
+
+pub fn first_sentence(text: &str) -> &str {
+    if let Some(pos) = text.find('.') {
+        &text[..=pos]
+    } else {
+        text
+    }
 }

@@ -63,8 +63,8 @@ impl User {
     }
 }
 
-static USERNAME_REGEX: LazyLock<Regex> = re!("^([a-z0-9](-|_)?)+[a-z0-9]$");
-static GENDER_REGEX: LazyLock<Regex> = re!("^#?([a-fA-F0-9]{3}){1,2}$"); // hex code
+pub static USERNAME_REGEX: LazyLock<Regex> = re!("^([a-z0-9](-|_)?)+[a-z0-9]$");
+static GENDER_REGEX: LazyLock<Regex> = re!("^#?([a-fA-F0-9]{3}){1,2}$|^$"); // hex code
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 #[validate(context = "PasswordValidationContext<'v_a>")]
@@ -79,7 +79,7 @@ pub struct CreateUser {
     #[validate(length(min = 8, max = 100), custom(function = "crate::util::validate_password", use_context))]
     pub password: String,
 
-    #[validate(length(min = 2, max = 30))]
+    #[validate(length(max = 30))]
     pub display_name: Option<String>,
 
     #[validate(length(max = 1000))]
@@ -99,11 +99,11 @@ pub struct UpdateUser {
     pub username: Option<String>,
     #[validate(email)]
     pub email: Option<String>,
-    #[validate(length(min = 2, max = 30))]
+    #[validate(length(max = 30))]
     pub display_name: Option<String>,
     #[validate(length(max = 1000))]
     pub description: Option<String>,
-    #[validate(length(min = 2, max = 15))]
+    #[validate(length(max = 15))]
     pub pronouns: Option<String>,
     #[validate(regex(path = GENDER_REGEX))]
     pub gender: Option<String>,
@@ -133,6 +133,14 @@ pub struct UserRepository {
 impl UserRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
+    }
+
+    pub async fn render_description(&self, user: &User) -> AppResult<String> {
+        let rendered = user.description.as_ref()
+            .map(|desc| crate::md::render_md(desc))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(rendered)
     }
 
     pub async fn create(&self, user: CreateUser) -> AppResult<(User, EmailVerificationToken)> {
@@ -410,19 +418,37 @@ impl UserRepository {
             &requestor.password_hash
         };
 
-        let gender = updates.gender.map(|g| {
-            g.strip_prefix("#").unwrap_or(&g).to_lowercase()
-        }).or(requestor.gender.clone());
+        // Convert empty strings to None (clearing the field), or use the original value if not updating
+        let display_name_final = updates.display_name.as_ref()
+            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
+            .unwrap_or_else(|| requestor.display_name.clone());
+        let description_final = updates.description.as_ref()
+            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
+            .unwrap_or_else(|| requestor.description.clone());
+        let pronouns_final = updates.pronouns.as_ref()
+            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
+            .unwrap_or_else(|| requestor.pronouns.clone());
+
+        // Handle gender (which includes # prefix stripping)
+        let gender_final = if let Some(g) = &updates.gender {
+            if g.is_empty() {
+                None
+            } else {
+                Some(g.strip_prefix("#").unwrap_or(g).to_lowercase())
+            }
+        } else {
+            requestor.gender.clone()
+        };
 
         let result = sqlx::query_as!(
             User,
             r#"
             UPDATE users
             SET username = COALESCE($2, username),
-                display_name = COALESCE($3, display_name),
-                description = COALESCE($4, description),
-                pronouns = COALESCE($5, pronouns),
-                gender = COALESCE($6, gender),
+                display_name = $3,
+                description = $4,
+                pronouns = $5,
+                gender = $6,
                 updated_at = CURRENT_TIMESTAMP,
                 password_hash = $7
             WHERE id = $1
@@ -430,10 +456,10 @@ impl UserRepository {
             "#,
             id,
             updates.username,
-            updates.display_name,
-            updates.description,
-            updates.pronouns,
-            gender,
+            display_name_final,
+            description_final,
+            pronouns_final,
+            gender_final,
             password_hash
         )
         .fetch_optional(&mut *tx)
@@ -771,6 +797,7 @@ impl UserRepository {
                     languages.name,
                     languages.description,
                     languages.private,
+                    languages.like_count,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,

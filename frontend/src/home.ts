@@ -8,9 +8,11 @@ const greetings = [
     "selamat datang",
     "bem vinde",
     "witaj",
-    "مَرْحَبًا",
+    "مرحبا",
     "salve",
     "स्वागतम",
+    "benvengut",
+    "nau mai",
 ]
 
 let welcome = document.getElementById("welcome");

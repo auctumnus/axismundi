@@ -50,6 +50,12 @@ test flags="" cov="" $RUST_BACKTRACE="1":
         sleep .5; \
     done
     echo "Database is ready!"
+    echo "Waiting for Thumbor to be ready..."
+    while ! curl -sf http://localhost:7888/healthcheck >/dev/null 2>&1; do \
+        echo "Thumbor is unavailable - sleeping"; \
+        sleep .5; \
+    done
+    echo "Thumbor is ready!"
     echo "Creating database..."
     sqlx database create --database-url {{postgres_test_url}}
     if [ $? -ne 0 ]; then \

@@ -1,0 +1,175 @@
+ul#language-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+    li {
+        list-style: none;
+    }
+}
+
+@keyframes like {
+  from,
+  20%,
+  40%,
+  60%,
+  80%,
+  to {
+    animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+
+  0% {
+    opacity: 0;
+    transform: scale3d(0.3, 0.3, 0.3);
+  }
+
+  20% {
+    transform: scale3d(1.1, 1.1, 1.1);
+  }
+
+  40% {
+    transform: scale3d(0.9, 0.9, 0.9);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale3d(1.03, 1.03, 1.03);
+  }
+
+  80% {
+    transform: scale3d(0.97, 0.97, 0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+.language-card a {
+    display: flex;
+    flex-direction: row;
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+    gap: .5rem;
+    align-items: center;
+
+    text-decoration: none;
+
+    transition: border-color var(--duration-very-fast) ease-in-out, box-shadow var(--duration-very-fast) ease-in-out;
+
+    &:hover {
+        border-color: var(--foreground-secondary);
+    }
+
+    .left {
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+        flex-grow: 1;
+    }
+
+    .language-name {
+        font-weight: 600;
+        color: var(--foreground-primary);
+    }
+
+    .language-summary {
+        font-size: .875rem;
+        color: var(--foreground-secondary);
+    }
+
+    li.compressed-pfps {
+        margin-bottom: 0;
+    }
+
+    .likes {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .25rem;
+        color: var(--foreground-secondary);
+        font-size: .875rem;
+        margin-right: .25rem;
+
+        svg {
+            transition: transform var(--duration-fast) ease-in-out;
+        }
+
+        .when-liked {
+            display: none;
+            transition: color var(--duration-very-fast) ease-in-out;
+        }
+
+        &.liked {
+            svg {
+                animation-duration: 400ms;
+                animation-name: like;
+            }
+            .when-liked {
+                display: inline;
+                color: var(--color-amber-400);
+            }
+            .when-unliked {
+                display: none;
+            }
+        }
+    }
+
+
+    .contributor-list {
+        padding: 0;
+        margin: 0;
+
+        li {
+            list-style: none;
+        }
+    }
+}
+
+.like-count {
+    /* we don't actually ship berkeley mono; this only uses it if you have it installed,
+        but i like that font too much to not use it */
+    font-family: 'Berkeley Mono', 'Roboto Mono', monospace;
+}
+
+.icon-button-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--foreground-secondary);
+    font-size: .875rem;
+
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 100%;
+
+    min-width: 32px;
+    min-height: 32px;
+
+    transition: background-color var(--duration-very-fast) ease-in-out, color var(--duration-very-fast) ease-in-out;
+
+    svg {
+        width: 24px;
+        height: 24px;
+        color: inherit;
+    }
+
+    &.yellow:hover {
+        background-color: color-mix(in oklab, var(--color-amber-400) 10%, transparent 90%);
+        color: var(--color-amber-400);
+    }
+
+    &.gray:hover {
+        background-color: color-mix(in oklab, var(--foreground-secondary) 10%, transparent 90%);
+        color: var(--foreground-secondary);
+    }
+
+    &:hover {
+        cursor: pointer;
+    }
+}

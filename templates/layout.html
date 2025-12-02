@@ -80,6 +80,33 @@
     <main>
         {% block content %}{% endblock %}
     </main>
+
+    <footer>
+        <ul>
+            <li>
+            <h2>axismundi</h2>
+            <ul>
+                <li><a href="/">home</a></li>
+                <li><a href="/translatables">translatables</a></li>
+                <li><a href="/languages">languages</a></li>
+                <li><a href="/users">users</a></li>
+                {% if let Some(u) = current_user.as_ref() %}
+                <li><a href="/users/{{ u.username }}">my profile</a></li>
+                <li><a href="/settings">settings</a></li>
+                {% endif %}
+            </ul>
+            </li>
+    {% block footer %}
+    {% endblock %}
+        </ul>
+        <ul class="last">
+            <li><a href="/about">about</a></li>
+            <li><a href="/privacy">privacy policy</a></li>
+            <li><a href="/terms">terms of service</a></li>
+            <li><a href="https://github.com/auctumnus/axismundi">source code</a></li>
+        </ul>
+        </footer>
+
     
     {% block scripts %}{% endblock %}
 </body>

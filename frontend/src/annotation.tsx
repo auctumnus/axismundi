@@ -9,6 +9,7 @@ import { ReactEditor, useSlate } from 'slate-react'
 
 // Import the Slate components and React plugin.
 import { Slate, Editable, withReact } from 'slate-react'
+import './slate-editor.css'
 
 type AnnotationData = {
   note: string

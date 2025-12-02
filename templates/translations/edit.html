@@ -10,7 +10,7 @@
             code: "{{ language.code }}",
         }
     </script>
-    <link rel="stylesheet" href="/static/annotation.css">
+    <link rel="stylesheet" href="/static/slate-editor.css">
     <script src="/static/annotation.js" defer></script>
 {% endblock %}
 {% block content %}
@@ -43,4 +43,55 @@
     <button type="submit">Edit</button>
 </form>
 
+{% endblock %}
+
+{% block footer %}
+<footer>
+  <ul>
+    <li>
+      <h2>axismundi</h2>
+      <ul>
+        <li><a href="/">home</a></li>
+        <li><a href="/translatables">translatables</a></li>
+        <li><a href="/languages">languages</a></li>
+        <li><a href="/users">users</a></li>
+        {% if current_user.is_some() %}
+          <li><a href="/users/{{ current_user.as_ref().unwrap().username }}">my profile</a></li>
+          <li><a href="/settings">settings</a></li>
+        {% endif %}
+      </ul>
+    </li>
+    <li>
+        <h2>{{ translatable.title }}</h2>
+        <ul>
+            <li><a href="/translatable/{{ translatable.slug }}">view translatable</a></li>
+            <li><a href="/translatable/{{ translatable.slug }}/translations">view translations</a></li>
+            {% if can_edit_translatable %}
+                <li><a href="/translatable/{{ translatable.slug }}/edit">edit translatable</a></li>
+            {% endif %}
+        </ul>
+    </li>
+    <li>
+      <h2>{{ language.name }}</h2>
+      <ul>
+        <li><a href="/languages/{{ language.code }}">main page</a></li>
+        <li><a href="/languages/{{ language.code }}/words">dictionary</a></li>
+        <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
+        <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
+        {% if can_edit_language %}
+            <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
+            <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
+        {% endif %}
+    </li>
+    <li>
+        <h2>translation</h2>
+        <ul>
+            <li><a href="/translatable/{{ translatable.slug }}/translations/{{ language.code }}">view translation</a></li>
+            {% if can_edit_translation %}
+                <li><a href="/translatable/{{ translatable.slug }}/edit-translation">edit translation</a></li>
+            {% endif %}
+        </ul>
+    </li>
+  </ul>
+</footer>
 {% endblock %}

@@ -201,7 +201,7 @@ impl WordClassRepository {
 
     pub async fn find_by_abbreviation(
         &self,
-        language: Uuid,
+        language: &Uuid,
         abbreviation: &str,
     ) -> AppResult<WordClass> {
         let result = sqlx::query_as!(

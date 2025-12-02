@@ -1,0 +1,33 @@
+.card.word-card {
+    padding: 0;
+}
+
+.word-card {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+
+    transition: border-color var(--duration-very-fast) ease-in-out;
+
+    a.badge-main {
+        flex: 1;
+        display: inline-flex;
+        padding: 1rem;
+        text-decoration: none;
+    }
+
+    &:has(a.badge-main:hover) {
+        border-color: var(--foreground-secondary);
+    }
+
+    div {
+        font-size: .875rem;
+        color: var(--foreground-secondary);
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: .25rem;
+        padding: 1rem;
+    };
+}

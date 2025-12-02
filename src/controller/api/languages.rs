@@ -31,6 +31,8 @@ pub fn create_router() -> axum::Router<AppState> {
             "/languages/{code}/editors",
             axum::routing::get(get_language_editors),
         )
+        .route("/languages/{code}/like", axum::routing::post(like_language))
+        .route("/languages/{code}/unlike", axum::routing::post(unlike_language))
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -146,6 +148,50 @@ pub async fn get_language_editors(
         .search_editors_of_language(language.id, pagination, search)
         .await
         .map(Json)
+}
+
+#[derive(serde::Serialize)]
+pub struct LikeLanguageResponse {
+    pub liked: bool,
+    pub like_count: i64,
+}
+
+pub async fn like_language(
+    s: Session,
+    languages: LanguageRepository,
+    Path(code): Path<String>,
+) -> ApiResponse<Json<LikeLanguageResponse>> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let language = languages.find_by_code(&code).await?;
+
+    let like_count = languages.like_language(language.id, requestor.id).await?;
+    let response = LikeLanguageResponse {
+        liked: true,
+        like_count: like_count.unwrap_or(language.like_count),
+    };
+    Ok(Json(response))
+}
+
+pub async fn unlike_language(
+    s: Session,
+    languages: LanguageRepository,
+    Path(code): Path<String>,
+) -> ApiResponse<Json<LikeLanguageResponse>> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let language = languages.find_by_code(&code).await?;
+
+    let like_count = languages.unlike_language(language.id, requestor.id).await?;
+    let response = LikeLanguageResponse {
+        liked: false,
+        like_count: like_count.unwrap_or(language.like_count),
+    };
+    Ok(Json(response))
 }
 
 #[cfg(test)]
@@ -676,5 +722,41 @@ mod tests {
         let request = get(&format!("languages/{new_code}")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_like_unlike_language() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+
+        let username = crate::tests::random_name();
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+        });
+
+        let request = post(&token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = crate::controller::api::tests::post(&token, &format!("languages/{code}/like"), json!({})).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["liked"], true);
+        assert_eq!(body["like_count"], 1);
+
+        let request = crate::controller::api::tests::post(&token, &format!("languages/{code}/unlike"), json!({})).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["liked"], false);
+        assert_eq!(body["like_count"], 0);
     }
 }
