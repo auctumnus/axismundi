@@ -1,6 +1,6 @@
 use crate::{
     err::{AppError, AppResult, internal_error},
-    model::users::User,
+    model::users::User, pagination::PaginatedRequest,
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -44,6 +44,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
+use serde::Serialize;
 use validator::ValidationError;
 
 /// Hash plaintext using Argon2 and return the hash as a string.
@@ -142,6 +143,18 @@ pub fn first_sentence(text: &str) -> &str {
     if let Some(pos) = text.find('.') {
         &text[..=pos]
     } else {
-        text
+        text.split_at(100).0
+    }
+}
+
+pub fn serialize_search<T: Serialize>(pagination: &PaginatedRequest, query: T) -> String {
+    let q = serde_urlencoded::to_string(query).unwrap_or_default();
+    let p = serde_urlencoded::to_string(pagination).unwrap_or_default();
+    if q.is_empty() {
+        p
+    } else if p.is_empty() {
+        q
+    } else {
+        format!("{}&{}", q, p)
     }
 }

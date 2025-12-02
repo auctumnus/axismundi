@@ -6,6 +6,7 @@
 {% block head %}
 <link rel="stylesheet" href="/static/language-view.css">
 <link rel="stylesheet" href="/static/word-card.css">
+<link rel="stylesheet" href="/static/translation-card.css">
 {% endblock %}
 
 {% block content %}
@@ -49,17 +50,12 @@
         </a></li>
     </ul>
 </div>
+<ul id="word-list">
+    {% for word_with_meta in recent_words %}
+        {% call u::render_word_card(&word_with_meta) %}
+    {% endfor %}
 
-{% for word_with_author in recent_words %}
-    <div class="card word-card">
-        <a class="badge-main" href="/languages/{{ language.code }}/words/{{ word_with_author.word.slug }}/{{ word_with_author.word.lemma }}">{{ word_with_author.word.word }}</a>
-        <div>
-            <span>added by</span>
-            {% call u::badge(&word_with_author.author, size="small") %}
-            <span>{% call u::relative(&word_with_author.word.created_at) %}</span>
-        </div>
-    </div>
-{% endfor %}
+</ul>
 
 {% if recent_words.len() <= 0 %}
     <p class="empty-description">no words yet</p>
@@ -75,21 +71,14 @@
     </ul>
 </div>
 
+<ul id="translation-list">
 {% for translation_with_author in recent_translations %}
-    <div class="card word-card">
-        <a class="badge-main" href="/translatable/{{ translation_with_author.translatable.slug }}/translations/{{ language.code }}">{{ translation_with_author.translatable.title }}</a>
-        <div>
-            <span>translated by</span>
-            {% call u::badge(&translation_with_author.author) %}
-            <span>{% call u::relative(&translation_with_author.translation.created_at) %}</span>
-        </div>
-    </div>
+    {% call u::render_translation_card(&translation_with_author, language.code) %}
 {% endfor %}
+</ul>
 
 {% if recent_translations.len() <= 0 %}
     <p class="empty-description">no translations yet</p>
-{% else %}
-    <a href="/languages/{{ language.code }}/translations" class="button">view all</a>
 {% endif %}
 
 {% endblock %}

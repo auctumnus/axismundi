@@ -5,7 +5,7 @@ use axum::{Router, response::{Html, IntoResponse, Redirect, Response}, routing::
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::{attempt, controller::html::{okay, render_template}, err::AppError, get_user, md::render_md, model::{language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::PaginatedRequest, util::{AppState, extract_session::Session}};
+use crate::{attempt, controller::html::{okay, render_template}, err::AppError, get_user, md::render_md, model::{definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::PaginatedRequest, util::{AppState, extract_session::Session}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -77,9 +77,10 @@ async fn new_language_submit(s: Session, languages: LanguageRepository, form: ax
     }
 }
 
-struct WordWithAuthor {
+struct WordWithMeta {
     word: Word,
-    author: User,
+    first_definition: Option<Definition>,
+    creator: User,
 }
 
 struct TranslationWithAuthor {
@@ -92,7 +93,7 @@ struct TranslationWithAuthor {
 #[template(path = "languages/view.html")]
 struct ViewLanguageTemplate {
     current_user: Option<User>,
-    recent_words: Vec<WordWithAuthor>,
+    recent_words: Vec<WordWithMeta>,
     recent_translations: Vec<TranslationWithAuthor>,
     language: Language,
     owner: User,
@@ -103,7 +104,7 @@ struct ViewLanguageTemplate {
 }
 
 #[axum::debug_handler(state=AppState)]
-async fn view_language(s: Session, languages: LanguageRepository, users: UserRepository, words: WordRepository, translations: TranslationRepository, translatables: TranslatableRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+async fn view_language(s: Session, languages: LanguageRepository, definitions: DefinitionRepository, users: UserRepository, words: WordRepository, translations: TranslationRepository, translatables: TranslatableRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
@@ -139,10 +140,11 @@ async fn view_language(s: Session, languages: LanguageRepository, users: UserRep
     };
 
     // Fetch authors for each word
-    let mut words_with_authors = Vec::new();
+    let mut words_with_meta = Vec::new();
     for word in recent_words.items {
-        let author = attempt!(s, users.find_by_id(word._created_by).await);
-        words_with_authors.push(WordWithAuthor { word, author });
+        let creator = attempt!(s, words.find_creator(&word.id).await);
+        let first_definition = attempt!(s, definitions.get_first_by_word(&word.id).await);
+        words_with_meta.push(WordWithMeta { word, first_definition, creator });
     }
 
     // Fetch authors and translatables for each translation
@@ -159,7 +161,7 @@ async fn view_language(s: Session, languages: LanguageRepository, users: UserRep
 
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
-        recent_words: words_with_authors,
+        recent_words: words_with_meta,
         recent_translations: translations_with_authors,
         language,
         owner,

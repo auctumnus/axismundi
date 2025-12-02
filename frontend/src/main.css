@@ -81,7 +81,6 @@ body {
 
 a:focus-visible, a.button:focus-visible, button:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
   border-radius: var(--rounding);
 }
 
@@ -363,7 +362,7 @@ a.button, form.default button[type="submit"] {
     }
   }
 
-  &:hover {
+  &:not(.icon):hover {
     background-color: var(--foreground-secondary);
   }
 }
@@ -572,5 +571,31 @@ a.with-icon {
     svg.icon {
       display: none;
     }
+  }
+}
+
+.pagination {
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground-secondary);
+  .pages, .meta {
+    display: flex;
+    flex-direction: row;
+    gap: .5rem;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .meta {
+    font-size: .875rem;
+  }
+
+  .empty-pagination-button {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    text-align: center;
+    line-height: 32px;
+    user-select: none;
   }
 }

@@ -10,3 +10,7 @@
     color: var(--foreground-secondary);
     font-style: italic;
 }
+
+.translation-card .aside {
+    font-size: .875rem;
+}

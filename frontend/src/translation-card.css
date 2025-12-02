@@ -1,4 +1,4 @@
-ul#word-list {
+ul#translation-list {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -45,7 +45,7 @@ ul#word-list {
     transform: scale3d(1, 1, 1);
   }
 }
-.word-card a {
+.translation-card a {
     display: flex;
     flex-direction: row;
     border: var(--border);
@@ -71,14 +71,28 @@ ul#word-list {
         justify-content: space-between;
     }
 
-    .word-text {
+    .translation-title {
         font-weight: 600;
         color: var(--foreground-primary);
     }
 
-    .word-definition {
+    .creator, .translation-summary {
         font-size: .875rem;
         color: var(--foreground-secondary);
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: row;
+        gap: .25rem;
+        li {
+            list-style: none;
+
+            &:not(:last-child)::after {
+                content: "·";
+                margin: 0 0.5rem;
+            }
+        }
     }
 
     .likes {
@@ -113,16 +127,5 @@ ul#word-list {
                 display: none;
             }
         }
-
-        
-    }
-
-    .creator {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: .25rem;
-        font-size: .875rem;
-        color: var(--foreground-secondary)
     }
 }

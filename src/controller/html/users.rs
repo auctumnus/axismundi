@@ -1,11 +1,11 @@
 use askama::Template;
 use axum::{Router, extract::Query, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
-use axum_extra::extract::{CookieJar, cookie::Cookie};
+use axum_extra::extract::{CookieJar, Multipart, cookie::Cookie};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors}, err::AppError, model::{contribution_stats::ContributionStatsRepository, email_verification_tokens::EmailVerificationTokenRepository, languages::{LanguageRepository, LanguageSearch}, sessions::SessionRepository, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}}};
+use crate::{controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors, TranslatableWithLiked}, err::{AppError, bad_request}, model::{contribution_stats::ContributionStatsRepository, email_verification_tokens::EmailVerificationTokenRepository, languages::{LanguageRepository, LanguageSearch}, sessions::SessionRepository, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}, s3::S3}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -15,6 +15,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/register", get(signup_form).post(signup_submit))
         .route("/resend-verification/{token_id}", get(resend_verification_form).post(resend_verification_submit))
         .route("/settings", get(settings_form).post(settings_submit))
+        .route("/change-profile-picture", post(change_profile_picture))
         .route("/logout", get(logout_form).post(logout_submit))
         .route("/users/{username}", get(profile));
 
@@ -313,6 +314,125 @@ async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<Set
     }
 }
 
+const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
+
+async fn change_profile_picture(
+    s: Session,
+    users: UserRepository,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (StatusCode::SEE_OTHER, Redirect::to("/login?redirect=settings").into_response());
+    };
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    // Extract file from multipart form
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        let field_name = field.name().unwrap_or("");
+
+        if field_name == "profile_picture" {
+            content_type = field.content_type().map(|s| s.to_string());
+            let data = match field.bytes().await {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    let template = SettingsTemplate {
+                        previous_username: user.username.clone(),
+                        previous_email: user.email.clone(),
+                        current_user: Some(user),
+                        error: Some(bad_request(format!("Failed to read file: {e}"))),
+                        previous_input: None,
+                    };
+                    return (StatusCode::BAD_REQUEST, render_template(template));
+                }
+            };
+            file_data = Some(data.to_vec());
+            break;
+        }
+    }
+
+    let file_data = match file_data {
+        Some(data) => data,
+        None => {
+            let template = SettingsTemplate {
+                previous_username: user.username.clone(),
+                previous_email: user.email.clone(),
+                current_user: Some(user),
+                error: Some(bad_request("No profile picture file provided")),
+                previous_input: None,
+            };
+            return (StatusCode::BAD_REQUEST, render_template(template));
+        }
+    };
+
+    let content_type = match content_type {
+        Some(ct) => ct,
+        None => {
+            let template = SettingsTemplate {
+                previous_username: user.username.clone(),
+                previous_email: user.email.clone(),
+                current_user: Some(user),
+                error: Some(bad_request("No content type provided")),
+                previous_input: None,
+            };
+            return (StatusCode::BAD_REQUEST, render_template(template));
+        }
+    };
+
+    // Validate file size
+    if file_data.len() > MAX_FILE_SIZE {
+        let template = SettingsTemplate {
+            previous_username: user.username.clone(),
+            previous_email: user.email.clone(),
+            current_user: Some(user),
+            error: Some(bad_request("File size exceeds the maximum limit of 5MB")),
+            previous_input: None,
+        };
+        return (StatusCode::BAD_REQUEST, render_template(template));
+    }
+
+    // Upload to S3
+    let filename = match S3.upload_profile_picture(user.id, &file_data, &content_type).await {
+        Ok(f) => f,
+        Err(e) => {
+            let template = SettingsTemplate {
+                previous_username: user.username.clone(),
+                previous_email: user.email.clone(),
+                current_user: Some(user),
+                error: Some(e),
+                previous_input: None,
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, render_template(template));
+        }
+    };
+
+    // Update user record with new profile picture filename
+    match users.update_profile_picture(&user, user.id, &filename).await {
+        Ok(Some(_)) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+        Ok(None) => {
+            let template = SettingsTemplate {
+                previous_username: user.username.clone(),
+                previous_email: user.email.clone(),
+                current_user: Some(user),
+                error: Some(bad_request("User not found")),
+                previous_input: None,
+            };
+            (StatusCode::NOT_FOUND, render_template(template))
+        }
+        Err(e) => {
+            let template = SettingsTemplate {
+                previous_username: user.username.clone(),
+                previous_email: user.email.clone(),
+                current_user: Some(user),
+                error: Some(e),
+                previous_input: None,
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, render_template(template))
+        }
+    }
+}
+
 #[derive(Template)]
 #[template(path = "logout/form.html")]
 struct LogoutTemplate {
@@ -342,7 +462,7 @@ struct ProfileTemplate {
     user: User,
     languages: Vec<LanguagesWithContributors>,
     activities: Vec<crate::model::user_activities::UserActivity>,
-    translatables: Vec<crate::model::translatable::Translatable>,
+    translatables: Vec<TranslatableWithLiked>,
     rendered_description: String,
 }
 
@@ -407,15 +527,26 @@ async fn profile(
         Err(_) => Vec::new(), // If we can't fetch activities, just show empty list
     };
 
-    let translatables = translatables.search(PaginatedRequest { limit: 5, offset: 0 }, TranslatableSearch {
+    let translatables_result = translatables.search(PaginatedRequest { limit: 5, offset: 0 }, TranslatableSearch {
         created_by: Some(username.clone()),
         ..Default::default()
     }).await;
 
-    let translatables_list = match translatables {
-        Ok(paginated) => paginated.items,
-        Err(_) => Vec::new(),
-    };
+    let mut translatables_with_liked = Vec::new();
+    if let Ok(paginated) = translatables_result {
+        for translatable in &paginated.items {
+            let is_liked = if let Some(ref cu) = current_user {
+                translatables.is_liked(&translatable.id, &cu.id).await.unwrap_or(false)
+            } else {
+                false
+            };
+            translatables_with_liked.push(TranslatableWithLiked {
+                translatable: translatable.clone(),
+                is_liked,
+            });
+        }
+    }
+    let translatables_list = translatables_with_liked;
 
     let rendered_description = users.render_description(&user).await.unwrap_or_default();
 

@@ -512,7 +512,7 @@ impl WordRepository {
                         COALESCE(similarity(words.notes, $6), 0.0) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, words.id
+                ) DESC, words.id DESC
                 LIMIT $7
                 OFFSET $8
             "#,
@@ -559,9 +559,28 @@ impl WordRepository {
             has_more,
         })
     }
+
+    pub async fn find_creator(&self, word: &Uuid) -> AppResult<User> {
+        let result = sqlx::query_as!(
+            User,
+            r#"
+                SELECT users.*, 
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                JOIN words ON words.created_by = users.id
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                WHERE words.id = $1
+            "#,
+            word
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("creator for word with id '{}'", word)))
+    }
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 pub struct WordSearch {
     pub q: Option<String>,
     pub exact_slug: Option<String>,

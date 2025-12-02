@@ -239,7 +239,6 @@ const RichTextExample = React.forwardRef<CustomEditor, RichTextEditorProps>(
         <Editable
           renderElement={renderElement}
           renderLeaf={renderLeaf}
-          placeholder="Enter some text... Use @ to mention someone"
           spellCheck
           autoFocus
           onKeyDown={onKeyDown}

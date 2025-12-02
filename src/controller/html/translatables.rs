@@ -176,13 +176,17 @@ async fn view_translatable(
     users: UserRepository,
     Path(slug): Path<String>,
 ) -> (StatusCode, Response) {
+    println!("Viewing translatable: {}", slug);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    println!("Found translatable: {:?}", translatable);
     let creator = attempt!(s, users.find_by_id(translatable.created_by).await);
 
     // Fetch all translations for this translatable
     let translations_list = attempt!(s, translations
         .list_by_translatable(translatable.id, PaginatedRequest { limit: 100, offset: 0 })
         .await);
+
+    println!("Found translations: {:?}", translations_list);
 
     // For each translation, fetch the language and contributor
     let mut translations_with_info = Vec::new();

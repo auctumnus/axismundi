@@ -1,4 +1,4 @@
-import { autoPlacement, autoUpdate, computePosition, offset } from "@floating-ui/dom";
+import { autoUpdate, computePosition, flip, offset } from "@floating-ui/dom";
 
 
 const setupTooltip = (target: HTMLElement) => {
@@ -15,9 +15,10 @@ const setupTooltip = (target: HTMLElement) => {
 
     const updatePosition = () => {
         computePosition(target, tooltip, {
+            placement: "bottom",
             middleware: [
                 offset(4),
-                autoPlacement()
+                flip()
             ],
         }).then(({ x, y }) => {
             Object.assign(tooltip.style, {

@@ -7,6 +7,7 @@
 <script src="/static/home.js" defer></script>
 <script src="/static/language-card.js" defer></script>
 <link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/translatable-card.css">
 <script type="importmap">
     {
         "imports": {
@@ -15,7 +16,9 @@
     }
 </script>
 <script src="/static/tooltip.js" type="module" defer></script>
+<script src="/static/time.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/tooltip.css">
+<link rel="stylesheet" href="/static/activity.css">
 
 {% endblock %}
 
@@ -46,37 +49,39 @@
 </div>
 <ul id="language-list">
     {% for language_with_contributors in languages %}
-    <li class="language-card">
-        <a href="/languages/{{ language_with_contributors.language.code }}">
-            <span class="left">
-                <span class="language-name">{{ language_with_contributors.language.name }}</span>
-                {% call u::language_summary(&language_with_contributors.language) %}
-                <ul class="contributor-list">
-                    {% for contributor in language_with_contributors.top_contributors %}
-                    <li class="compressed-pfps">
-                        {% call u::pfp(&contributor, size="small") %}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </span>
-            <span class="likes {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
-                <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
-                </span>
-                <span class="like-count">{{ language_with_contributors.language.like_count }}</span>
-            </span>
-        </a>
-    </li>
+        {% call u::render_language_card(&language_with_contributors) %}
     {% endfor %}
 </ul>
 {% endif %}
+
+<div class="header-with-actions">
+    <h2 class="with-action">new translatables</h2>
+    <ul>
+        <li><a class="with-icon" href="/new-translatable">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <span>new translatable</span>
+            </a></li>
+        <li><a class="with-icon" href="/translatables">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            <span>view all</span>
+        </a></li>
+    </ul>
+</div>
+<ul id="translatable-list">
+    {% for translatable_with_liked in translatables %}
+        {% call u::translatable_card(&translatable_with_liked) %}
+    {% endfor %}
+</ul>
 
 <h2>recent activity</h2>
 {% if activities.is_empty() %}
 <p>no recent activity to show.</p>
 {% else %}
-    
+    <ul class="activity-list">
+        {% for activity in activities %}
+            {% call u::render_activity(&activity, true) %}
+        {% endfor %}
+    </ul>
 {% endif %}
 
 {% endblock %}

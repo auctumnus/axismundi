@@ -266,6 +266,32 @@ impl DefinitionRepository {
             has_more,
         })
     }
+
+    pub async fn get_first_by_word(&self, word_id: &Uuid) -> AppResult<Option<Definition>> {
+        let result = sqlx::query_as!(
+            Definition,
+            r#"
+                SELECT
+                    id,
+                    word,
+                    definition,
+                    context,
+                    created_at,
+                    updated_at,
+                    created_by,
+                    updated_by
+                FROM definitions
+                WHERE word = $1
+                ORDER BY created_at ASC
+                LIMIT 1
+            "#,
+            word_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
 }
 
 crate::util::repo_from_parts!(DefinitionRepository);

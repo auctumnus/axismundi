@@ -17,7 +17,7 @@ use crate::{
         word_classes::{WordClass, WordClassRepository},
         words::{CreateWord, Word, WordRepository, WordSearch},
     },
-    pagination::PaginatedRequest,
+    pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
 };
 use uuid::Uuid;
@@ -29,8 +29,10 @@ struct WordSearchTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
     language: Language,
-    previous_query: String,
-    results: Option<Vec<Word>>,
+    previous_query: WordSearch,
+    previous_pagination: PaginatedRequest,
+    results: Option<PaginatedResponse<WordWithMeta>>,
+    word_classes: Vec<WordClass>,
     user_has_permission: bool,
 }
 
@@ -119,12 +121,6 @@ struct DeleteDefinitionTemplate {
 }
 
 #[derive(Deserialize)]
-struct WordSearchQuery {
-    #[serde(default)]
-    q: String,
-}
-
-#[derive(Deserialize)]
 struct NewWordFormData {
     word: String,
     word_class: String,
@@ -142,13 +138,22 @@ struct DefinitionFormData {
     context: Option<String>,
 }
 
+struct WordWithMeta {
+    word: Word,
+    first_definition: Option<Definition>,
+    creator: User,
+}
+
 async fn word_search(
     s: Session,
     languages: LanguageRepository,
     words: WordRepository,
+    definitions: DefinitionRepository,
+    word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
-    Query(query): Query<WordSearchQuery>,
+    Query(query): Query<WordSearch>,
+    Query(pagination): Query<PaginatedRequest>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -162,40 +167,76 @@ async fn word_search(
         false
     };
 
-    let search = if !query.q.is_empty() {
-        WordSearch {
-            q: Some(query.q.clone()),
-            ..Default::default()
-        }
-    } else {
-        Default::default()
+    let query = WordSearch {
+        q: query.q.and_then(|q| {
+            let trimmed = q.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        word_class: query.word_class.and_then(|wc| {
+            let trimmed = wc.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        ..query
     };
 
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+
     let results = match words
-            .search(&language.id, PaginatedRequest::default(), search)
+            .search(&language.id, pagination.clone(), query.clone())
             .await
         {
-            Ok(res) => Some(res.items),
+            Ok(res) => res,
             Err(e) => {
                 let template = WordSearchTemplate {
                     current_user,
                     error: Some(e),
                     language,
-                    previous_query: query.q,
+                    previous_query: query,
+                    previous_pagination: pagination,
                     results: None,
+                    word_classes: word_classes_list,
                     user_has_permission,
                 };
                 let body = render_template(template);
                 return (StatusCode::BAD_REQUEST, body);
             }
         };
+    
+    let mut results_with_meta = vec![];
+    for word in results.items {
+        let creator = attempt!(s, words.find_creator(&word.id).await);
+        let first_definition = attempt!(s, definitions.get_first_by_word(&word.id).await);
+        results_with_meta.push(WordWithMeta {
+            word,
+            first_definition,
+            creator,
+        });
+    }
+
+    let results_with_meta = Some(PaginatedResponse {
+        items: results_with_meta,
+        total: results.total,
+        limit: results.limit,
+        offset: results.offset,
+        has_more: results.has_more,
+    });
 
     let template = WordSearchTemplate {
         current_user,
         error: None,
         language,
-        previous_query: query.q,
-        results,
+        previous_query: query,
+        previous_pagination: pagination,
+        results: results_with_meta,
+        word_classes: word_classes_list,
         user_has_permission,
     };
 

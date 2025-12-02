@@ -25,6 +25,7 @@ pub struct Translatable {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub translations_count: i64,
+    pub like_count: i64,
     #[serde(skip_serializing)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
@@ -110,6 +111,7 @@ impl TranslatableRepository {
                     updated_at,
                     created_by,
                     updated_by,
+                    like_count,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -143,6 +145,7 @@ impl TranslatableRepository {
                     updated_at,
                     created_by,
                     updated_by,
+                    like_count,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -176,7 +179,7 @@ impl TranslatableRepository {
             r#"
                 INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, created_by, updated_by)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, 0 AS "translations_count!"
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, 0 AS "translations_count!"
             "#,
             slug,
             translatable.title,
@@ -240,7 +243,7 @@ impl TranslatableRepository {
                     updated_by = $9,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by,
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -321,6 +324,7 @@ impl TranslatableRepository {
                     updated_at,
                     created_by,
                     updated_by,
+                    like_count,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -386,6 +390,92 @@ impl TranslatableRepository {
             limit: pagination.limit,
             has_more,
         })
+    }
+
+    pub async fn is_liked(&self, translatable_id: &Uuid, user_id: &Uuid) -> AppResult<bool> {
+        let result = sqlx::query!(
+            r#"
+                SELECT 1 as exists FROM translatable_likes
+                WHERE translatable_id = $1 AND user_id = $2
+            "#,
+            translatable_id,
+            user_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result.is_some())
+    }
+
+    pub async fn like_translatable(&self, translatable_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        let mut tx = self.state.pool.begin().await?;
+        let result = sqlx::query!(
+            r#"
+                INSERT INTO translatable_likes (translatable_id, user_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+            "#,
+            translatable_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let likes = if result.rows_affected() > 0 {
+            let likes = sqlx::query_scalar!(
+                r#"
+                    UPDATE translatable
+                    SET like_count = like_count + 1
+                    WHERE id = $1
+                    RETURNING like_count
+                "#,
+                translatable_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            Some(likes)
+        } else {
+            None
+        };
+        tx.commit().await?;
+
+        Ok(likes)
+    }
+
+    pub async fn unlike_translatable(&self, translatable_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        let mut tx = self.state.pool.begin().await?;
+        let result = sqlx::query!(
+            r#"
+                DELETE FROM translatable_likes
+                WHERE translatable_id = $1 AND user_id = $2
+            "#,
+            translatable_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let likes = if result.rows_affected() > 0 {
+            let likes = sqlx::query_scalar!(
+                r#"
+                    UPDATE translatable
+                    SET like_count = GREATEST(like_count - 1, 0)
+                    WHERE id = $1
+                    RETURNING like_count
+                "#,
+                translatable_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            Some(likes)
+        } else {
+            None
+        };
+        tx.commit().await?;
+
+        Ok(likes)
     }
 }
 

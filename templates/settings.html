@@ -70,6 +70,16 @@
     <button type="submit">Update account information</button>
 </form>
 
+<h2>change profile picture</h2>
+<form class="default" method="post" action="/change-profile-picture" enctype="multipart/form-data">
+    <section>
+        <label for="profile_picture">New profile picture</label>
+        {% call u::field_error(name="profile_picture") %}
+        <input type="file" id="profile_picture" name="profile_picture" accept="image/*" required>
+    </section>
+    <button type="submit">Update profile picture</button>
+</form>
+
 <h2>change email</h2>
 <form class="default" method="post" action="/settings">
     <section>

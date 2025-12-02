@@ -4,13 +4,25 @@
 
     font-size: .9rem;
 
+    .badge {
+        padding: 0;
+    }
+
     .activity-item {
         display: flex;
         flex-direction: row;
+        align-items: center;
         padding: 1rem;
         margin: 0;
         list-style: none;
         border-bottom: var(--border);
+    }
+
+    .activity-type {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: .25rem;
     }
 
     time::before {

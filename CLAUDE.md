@@ -15,3 +15,5 @@ html for pages goes in templates, code for them goes into src/controllers/html
 when you need to test changes to the html controllers, don't bother running `just test`, do `just build`
 
 "secure routes" means "has user security implications", not "needs authentication"
+
+the frontend has typescript stored in `frontend/src`; that's also where the css and such are

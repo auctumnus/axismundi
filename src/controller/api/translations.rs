@@ -33,10 +33,18 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
         .route("/translatable/{translatable_slug}/translations/{code}", get(get_translation))
         .route("/translatable/{translatable_slug}/translations/{code}", put(edit_translation))
         .route("/translatable/{translatable_slug}/translations/{code}", delete(delete_translation))
+        .route("/translatable/{translatable_slug}/translations/{code}/like", post(like_translation))
+        .route("/translatable/{translatable_slug}/translations/{code}/unlike", post(unlike_translation))
 }
 
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
+
+#[derive(serde::Serialize)]
+pub struct LikeTranslationResponse {
+    pub liked: bool,
+    pub like_count: i64,
+}
 
 pub async fn create_translation(
     s: Session,
@@ -162,6 +170,66 @@ pub async fn delete_translation(
     translations.delete(requestor, translation.id).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn like_translation(
+    s: Session,
+    Path((translatable_slug, code)): Path<(String, String)>,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    translations: TranslationRepository,
+) -> ApiResponse<Json<LikeTranslationResponse>> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    // Look up translatable by slug
+    let translatable = translatables.find_by_slug(&translatable_slug).await?;
+
+    // Look up language by code
+    let language = languages.find_by_code(&code).await?;
+
+    // Find existing translation
+    let translation = translations
+        .find_by_translatable_and_language(translatable.id, language.id)
+        .await?;
+
+    let like_count = translations.like_translation(translation.id, requestor.id).await?;
+    let response = LikeTranslationResponse {
+        liked: true,
+        like_count: like_count.unwrap_or(translation.like_count),
+    };
+    Ok(Json(response))
+}
+
+pub async fn unlike_translation(
+    s: Session,
+    Path((translatable_slug, code)): Path<(String, String)>,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    translations: TranslationRepository,
+) -> ApiResponse<Json<LikeTranslationResponse>> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    // Look up translatable by slug
+    let translatable = translatables.find_by_slug(&translatable_slug).await?;
+
+    // Look up language by code
+    let language = languages.find_by_code(&code).await?;
+
+    // Find existing translation
+    let translation = translations
+        .find_by_translatable_and_language(translatable.id, language.id)
+        .await?;
+
+    let like_count = translations.unlike_translation(translation.id, requestor.id).await?;
+    let response = LikeTranslationResponse {
+        liked: false,
+        like_count: like_count.unwrap_or(translation.like_count),
+    };
+    Ok(Json(response))
 }
 
 #[cfg(test)]
@@ -364,5 +432,31 @@ mod tests {
         let request = crate::controller::api::tests::delete_without_auth(&format!("translatable/{translatable_slug}/translations/{language_code}"));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_like_unlike_translation() {
+        let mut ctx = create_test_context().await;
+        let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
+        let language_code = ctx.language["code"].as_str().unwrap();
+
+        let token = &ctx.token;
+        let app = &mut ctx.app;
+
+        let _created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+
+        let request = crate::controller::api::tests::post(&ctx.token, &format!("translatable/{}/translations/{}/like", translatable_slug, language_code), json!({})).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["liked"], true);
+        assert_eq!(body["like_count"], 1);
+
+        let request = crate::controller::api::tests::post(&ctx.token, &format!("translatable/{}/translations/{}/unlike", translatable_slug, language_code), json!({})).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(body["liked"], false);
+        assert_eq!(body["like_count"], 0);
     }
 }

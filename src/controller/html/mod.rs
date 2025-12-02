@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    ErrorTemplate, controller::html::users::render_login_form, err::{AppError, internal_error}, model::{contribution_stats::{ContributionStats, ContributionStatsRepository}, languages::{Language, LanguageRepository}, user_activities::{UserActivity, UserActivityRepository}, users::{User, UserRepository}}, util::{AppState, extract_session::Session}
+    ErrorTemplate, controller::html::users::render_login_form, err::{AppError, internal_error}, model::{contribution_stats::{ContributionStats, ContributionStatsRepository}, languages::{Language, LanguageRepository}, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::{UserActivity, UserActivityRepository}, users::{User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
 };
 
 use crate::attempt;
@@ -97,6 +97,11 @@ pub struct LanguagesWithContributors {
     pub is_liked: bool,
 }
 
+pub struct TranslatableWithLiked {
+    pub translatable: crate::model::translatable::Translatable,
+    pub is_liked: bool,
+}
+
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
@@ -104,9 +109,10 @@ struct HomeTemplate {
     current_user: Option<User>,
     languages: Vec<LanguagesWithContributors>,
     activities: Vec<UserActivity>,
+    translatables: Vec<TranslatableWithLiked>,
 }
 
-async fn home(users: UserRepository, languages: LanguageRepository, activities_repo: UserActivityRepository, contribution_stats: ContributionStatsRepository, s: Session) -> (StatusCode, Response) {
+async fn home(users: UserRepository, languages: LanguageRepository, translatables: TranslatableRepository, activities_repo: UserActivityRepository, contribution_stats: ContributionStatsRepository, s: Session) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (StatusCode::OK, Redirect::to("/").into_response());
     };
@@ -127,6 +133,23 @@ async fn home(users: UserRepository, languages: LanguageRepository, activities_r
     }
     let languages = languages_with_contributors;
 
+    let translatables_res = translatables.search(PaginatedRequest {
+        limit: 5,
+        offset: 0,
+    }, Default::default()).await.map(|res| res.items).unwrap_or_else(|_| vec![]);
+
+    let translatables_with_liked = {
+        let mut vec = Vec::with_capacity(translatables_res.len());
+        for t in translatables_res {
+            let is_liked = attempt!(s, translatables.is_liked(&user.id, &t.id).await);
+            vec.push(TranslatableWithLiked {
+                translatable: t,
+                is_liked,
+            });
+        }
+        vec
+    };
+
     let Ok(activities) = activities_repo.list_site_wide().await else {
         return render_generic_error(s, internal_error("Failed to load user activities")).await;
     };
@@ -135,6 +158,7 @@ async fn home(users: UserRepository, languages: LanguageRepository, activities_r
         current_user: Some(user),
         languages,
         activities,
+        translatables: translatables_with_liked,
         error: None,
     };
 

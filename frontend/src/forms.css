@@ -20,9 +20,12 @@ form.default {
   gap: 1rem;
   margin: 0 auto 2rem auto;
 
-  section {
+  section:not(.advanced-search-panel) {
     display: flex;
     flex-direction: column;
+  }
+
+  section {
     gap: .5rem;
 
     &:has(.field-errors) {
@@ -42,7 +45,6 @@ form.default {
           outline: 2px solid var(--focus-ring-error);
           border: 1px solid var(--input-border-error-focus);
           background-color: var(--input-background-error-focus);
-          outline-offset: 2px;
         }
 
         &:active {
@@ -102,7 +104,6 @@ form.default {
       outline: 2px solid var(--focus-ring);
       border: 1px solid var(--input-border-focus);
       background-color: var(--input-background-focus);
-      outline-offset: 2px;
     }
 
     &:active {
@@ -115,6 +116,82 @@ form.default {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
     flex: 1;
+  }
+
+  input[type="file"] {
+    font-family: var(--font-normal);
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    color: var(--foreground-primary);
+    font-size: 1rem;
+    transition: background-color var(--duration-very-fast) ease-in-out,
+                border-color var(--duration-very-fast) ease-in-out;
+    border-radius: var(--rounding);
+    cursor: pointer;
+
+    max-width: min-content;
+
+    &:hover {
+      background-color: var(--input-background-focus);
+      border-color: var(--input-border-focus);
+
+      &::file-selector-button {
+        border-color: var(--input-border-focus);
+      }
+    }
+
+    &::file-selector-button {
+      font-family: var(--font-normal);
+      padding: .5rem 1rem;
+      margin-right: 1rem;
+      border-right: 1px solid var(--input-border);
+      background-color: var(--background-panel);
+    }
+  }
+
+  .select-container {
+    position: relative;
+    z-index: 0;
+    max-width: max-content;
+
+    select {
+      appearance: none;
+      width: 100%;
+      font-family: var(--font-normal);
+      padding: .5rem;
+      padding-right: 2.5rem;
+      border: 1px solid var(--input-border);
+      border-radius: var(--rounding);
+      background-color: var(--input-background);
+      color: var(--foreground-primary);
+      font-size: 1rem;
+      outline: 0;
+      outline-color: transparent;
+
+      transition: background-color 250ms ease-in-out,
+                  border-color 250ms ease-in-out;
+
+      &:focus-visible, &:focus {
+        outline: 2px solid var(--focus-ring);
+        border: 1px solid var(--input-border-focus);
+        background-color: var(--input-background-focus);
+      }
+
+      &:active {
+        background-color: var(--input-background-focus);
+        border: 1px solid var(--input-border-focus);
+      }
+    }
+
+    svg.icon {
+      position: absolute;
+      right: .75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: var(--foreground-secondary);
+    }
+
   }
 }
 
@@ -242,20 +319,64 @@ button.search.button[type="submit"] {
 .search-bar-container {
   display: flex;
   flex-direction: row;
-  width: 100%;
 }
 
-details {
-  border: 1px solid var(--input-border);
-  border-radius: var(--rounding);
-  background-color: var(--background-panel);
-  margin-bottom: 1rem;
+section.search-controls {
+  display: grid;
+
+  label[for="q"] {
+    display: none;
+  }
+
+  #advanced-search-toggle {
+    display: none;
+  }
+
+  #advanced-search-toggle-label {
+    margin-left: .5rem;
+    appearance: none;
+    padding: .75rem;
+    border: none;
+    border-radius: var(--rounding);
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+
+    transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+
+    border: 1px solid var(--foreground-primary);
+    background-color: transparent;
+    color: var(--foreground-primary);
+
+    &:hover {
+      background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+    }
+
+    svg.icon {
+      color: var(--foreground-primary);
+    }
+  }
+
 }
 
-summary {
-  cursor: pointer;
-  display: block;
-  padding: 1rem;
-  font-family: var(--font-heading);
-  font-size: .9rem;
+.advanced-search-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-medium) ease-in-out;
+
+  .inner {
+    overflow: hidden;
+
+    .card {
+      margin-top: 0;
+    }
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+}
+
+.search-bar-container:has(#advanced-search-toggle:checked) ~ .advanced-search-panel {
+  grid-template-rows: 1fr;
 }

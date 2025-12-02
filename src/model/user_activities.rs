@@ -602,9 +602,9 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self.resolve_entity(record.entity_id, &record.entity_type.as_str()).await?,
+                entity: self.resolve_entity(record.entity_id, record.entity_type.as_str()).await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
-                    self.resolve_related(related_id, &record.related_entity_type.as_deref().unwrap_or("")).await?
+                    self.resolve_related(related_id, record.related_entity_type.as_deref().unwrap_or("")).await?
                 } else {
                     None
                 },

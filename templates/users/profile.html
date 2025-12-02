@@ -8,8 +8,6 @@
 <link rel="stylesheet" href="/static/activity.css">
 <link rel="stylesheet" href="/static/language-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
-<script src="/static/time.js" type="module" defer></script>
-<script src="/static/language-card.js" defer></script>
 <script type="importmap">
     {
         "imports": {
@@ -18,6 +16,9 @@
     }
 </script>
 <script src="/static/tooltip.js" type="module" defer></script>
+<script src="/static/time.js" type="module" defer></script>
+<script src="/static/language-card.js" defer></script>
+<script src="/static/translatable-card.js" defer></script>
 <link rel="stylesheet" href="/static/tooltip.css">
 {% endblock %}
 
@@ -32,7 +33,8 @@
     <div class="riding">
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
-            <a href="/settings" class="button">edit profile</a>
+        <a class="icon button gray" href="/settings" aria-label="Edit profile"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg></a>
+    
             {% endif %}
         {% endif %}
     </div>
@@ -72,13 +74,11 @@
             </tr>
         {% endif %}
         <tr>
-            <th>joined on</th>
-            <td>{{ user.created_at.format("%B %d, %Y") }}</td>
+            <th>joined</th>
+            <td>{% call u::relative(&user.created_at) %}</td>
         </tr>
     </table>
 </div>
-
-
 
 {% if languages.is_empty() %}
     <h2>languages</h2>
@@ -112,28 +112,7 @@
 </div>
 <ul id="language-list">
     {% for language_with_contributors in languages %}
-    <li class="language-card">
-        <a href="/languages/{{ language_with_contributors.language.code }}">
-            <span class="left">
-                <span class="language-name">{{ language_with_contributors.language.name }}</span>
-                {% call u::language_summary(&language_with_contributors.language) %}
-                <ul class="contributor-list">
-                    {% for contributor in language_with_contributors.top_contributors %}
-                    <li class="compressed-pfps">
-                        {% call u::pfp(&contributor, size="small") %}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </span>
-            <span class="likes {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
-                <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
-                </span>
-                <span class="like-count">{{ language_with_contributors.language.like_count }}</span>
-            </span>
-        </a>
-    </li>
+        {% call u::render_language_card(&language_with_contributors) %}
     {% endfor %}
 </ul>
 {% endif %}
@@ -169,18 +148,8 @@
     </ul>
 </div>
     <ul id="translatable-list">
-        {% for translatable in translatables %}
-        <li class="translatable-card">
-            <a href="/translatables/{{ translatable.slug }}/">
-                <span class="translatable-title">{{ translatable.title }}</span>
-                <ul class="translatable-summary">
-                    {% let words_count = translatable.words_count() %}
-                    {% let translations_count = translatable.translations_count %}
-                    <li>{{ words_count }} {% if words_count == (1 as usize) %}word{% else %}words{% endif %}</li>
-                    <li>{{ translations_count }} {% if translations_count == &(1 as i64) %}translation{% else %}translations{% endif %}</li>
-                </ul>
-            </a>
-        </li>
+        {% for translatable_with_liked in translatables %}
+            {% call u::translatable_card(translatable_with_liked) %}
         {% endfor %}
     </ul>
 {% endif %}
@@ -192,34 +161,7 @@
 {% else %}
     <ul class="activity-list">
         {% for activity in activities %}
-        <li class="activity-item">
-            <span class="activity-type">
-                {{ activity.activity.verb() }}
-                {% match activity.entity %}
-                    {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
-                        <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
-                    {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                        <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
-                    {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
-                        <a href="/translatables/{{ translatable.slug }}/">{{ translatable.title }}</a>
-                    {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
-                        <span>a translation for</span>
-                        <a href="/languages/{{ lang_code }}/translatables/{{ translation.translatable_slug }}/translations/{{ lang_code }}">{{ translation.translatable_title }}</a>
-                    {% else %}
-                        <span>something unknown</span>
-                {% endmatch %}
-                {% if let Some(entity) = activity.related_entity %}
-                    <span>in</span>
-                    {% match entity %}
-                        {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                            <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
-                        {% else %}
-                            <span>an unknown entity</span>
-                    {% endmatch %}
-                {% endif %}
-            </span>
-            <time datetime="{{ activity.timestamp.to_rfc3339() }}">{{ activity.timestamp.format("%B %d, %Y at %H:%M") }}</time>
-        </li>
+            {% call u::render_activity(&activity, false) %}
         {% endfor %}
     </ul>
 {% endif %}

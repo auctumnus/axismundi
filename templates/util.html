@@ -36,7 +36,7 @@
 {% endmacro %}
 
 {% macro badge(user, size="medium") %}
-<a href="/users/{{user.username}}" class="badge">
+<a href="/users/{{user.username}}" class="badge" data-badge="{{ user.username }}">
     {% call pfp(user, size) %}
     {% if let Some(gender) = &user.gender %}
         <span class="display-name gendered" style="--color: #{{gender}}">{% call name(user) %}</span>
@@ -84,4 +84,120 @@
 
 {% macro language_summary(language) %}
 <span class="ellipse language-summary">{{ crate::util::first_sentence(language.description) }}</span>
+{% endmacro %}
+
+{% macro translatable_card(translatable_with_liked) %}
+<li class="translatable-card">
+    <a href="/translatable/{{ translatable_with_liked.translatable.slug }}">
+        <span class="left">
+            <span class="translatable-title">{{ translatable_with_liked.translatable.title }}</span>
+            <ul class="translatable-summary">
+                {% let words_count = translatable_with_liked.translatable.words_count() %}
+                {% let translations_count = translatable_with_liked.translatable.translations_count %}
+                <li>{{ words_count }} {% if words_count == (1 as usize) %}word{% else %}words{% endif %}</li>
+                <li>{{ translations_count }} {% if translations_count == &(1 as i64) %}translation{% else %}translations{% endif %}</li>
+            </ul>
+        </span>
+        <span class="likes {% if translatable_with_liked.is_liked %}liked{% endif %}" data-target="{{ translatable_with_liked.translatable.slug }}" data-tooltip="Like this translatable" role="button">
+            <span class="icon-button-container yellow">
+                <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
+                <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+            </span>
+            <span class="like-count">{{ translatable_with_liked.translatable.like_count }}</span>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% macro render_activity(activity, show_user=true) %}
+<li class="activity-item">
+    <span class="activity-type">
+        {% if show_user %}
+            {% call badge(&activity.user, "small") %}
+        {% endif %}
+        {{ activity.activity.verb() }}
+        {% match activity.entity %}
+            {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
+                <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+            {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
+            {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
+                <a href="/translatable/{{ translatable.slug }}">{{ translatable.title }}</a>
+            {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
+                <span>a</span>
+                <a href="/languages/{{ lang_code }}/translatable/{{ translation.translatable_slug }}/translation/{{ lang_code }}">translation for {{ translation.translatable_title }}</a>
+            {% else %}
+                <span>something unknown</span>
+        {% endmatch %}
+        {% if let Some(entity) = activity.related_entity %}
+            <span>in</span>
+            {% match entity %}
+                {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                    <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
+                {% else %}
+                    <span>an unknown entity</span>
+            {% endmatch %}
+        {% endif %}
+    </span>
+    {% call relative(&activity.timestamp) %}
+</li>
+{% endmacro %}
+
+{% macro render_language_card(language_with_contributors) %}
+    <li class="language-card">
+        <a href="/languages/{{ language_with_contributors.language.code }}">
+            <span class="left">
+                <span class="language-name">{{ language_with_contributors.language.name }}</span>
+                {% call language_summary(&language_with_contributors.language) %}
+                <ul class="contributor-list">
+                    {% for contributor in language_with_contributors.top_contributors %}
+                    <li class="compressed-pfps">
+                        {% call pfp(&contributor, size="small") %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </span>
+            <span class="likes {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
+                <span class="icon-button-container yellow">
+                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
+                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                </span>
+                <span class="like-count">{{ language_with_contributors.language.like_count }}</span>
+            </span>
+        </a>
+    </li>
+{% endmacro %}
+
+{% macro render_translation_card(translation_with_author, language_code) %}
+<li class="translation-card">
+    <a href="/languages/{{ language_code }}/translatable/{{ translation_with_author.translation.translatable_slug }}/translation/{{ language_code }}">
+        <span class="left">
+            <span class="translation-title">{{ translation_with_author.translatable.title }}</span>
+            <span class="creator">
+                <span>translated by</span>
+                {% call pfp(&translation_with_author.author, "small") %}
+                <span>{% call name(&translation_with_author.author) %}</span>
+                {% call relative(&translation_with_author.translation.created_at) %}
+            </span>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% macro render_word_card(word_with_meta) %}
+<li class="word-card">
+    <a href="/languages/{{ word_with_meta.word.language_code.as_ref().unwrap() }}/words/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}">
+        <span class="left">
+            <span class="word-text">{{ word_with_meta.word.word }}</span>
+            {% if let Some(definition) = &word_with_meta.first_definition %}
+                <span class="word-definition">{{ definition.definition }}</span>
+            {% else %}
+                <span class="word-definition no-definition">no definition</span>
+            {% endif %}
+            <span class="creator">
+                created by {% call pfp(&word_with_meta.creator, "small") %} {% call name(&word_with_meta.creator) %} {% call relative(&word_with_meta.word.created_at) %}
+            </span>
+        </span>
+    </a>
+</li>
 {% endmacro %}

@@ -236,7 +236,6 @@ export const AnnotationEditor = () => {
       <Toolbar />
       <Editable
         renderLeaf={renderLeaf}
-        placeholder="Enter some text..."
         className="editor-editable"
       />
     </Slate>

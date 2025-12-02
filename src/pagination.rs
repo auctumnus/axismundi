@@ -20,12 +20,43 @@ pub struct PaginatedResponse<T> {
     pub has_more: bool,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+impl<T> PaginatedResponse<T> {
+    pub fn request_last_page(&self) -> PaginatedRequest {
+        let last_offset = if self.total % (self.limit as i64) == 0 {
+            self.total - (self.limit as i64)
+        } else {
+            self.total - (self.total % (self.limit as i64))
+        };
+        PaginatedRequest {
+            limit: self.limit,
+            offset: last_offset as PaginationSize,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct PaginatedRequest {
     #[serde(default = "default_limit")]
     pub limit: PaginationSize,
     #[serde(default)]
     pub offset: PaginationSize,
+}
+
+impl PaginatedRequest {
+    pub fn with_previous_page(&self) -> Self {
+        let new_offset = (self.offset - self.limit).max(0);
+        Self {
+            limit: self.limit,
+            offset: new_offset,
+        }
+    }
+
+    pub fn with_next_page(&self) -> Self {
+        Self {
+            limit: self.limit,
+            offset: self.offset + self.limit,
+        }
+    }
 }
 
 fn default_limit() -> PaginationSize {
