@@ -30,6 +30,7 @@ pub struct Word {
     pub ipa: Option<String>,
     pub notes: Option<String>,
     pub extra: Option<JsonValue>,
+    pub like_count: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
@@ -40,6 +41,7 @@ pub struct Word {
     // materialized
     pub bookmark: String,
     pub language_code: Option<String>,
+    pub word_class_abbreviation: Option<String>,
     pub created_by: Option<String>,
     pub updated_by: Option<String>,
 }
@@ -115,6 +117,14 @@ impl WordRepository {
             .checked_add(1)
             .ok_or_else(|| internal_error("lemma count overflow"))?;
         Ok((slug, lemma))
+    }
+
+    pub async fn render_notes(&self, word: &Word) -> AppResult<String> {
+        let rendered = word.notes.as_ref()
+            .map(|notes| crate::md::render_md(notes))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(rendered)
     }
 
     pub async fn create(
@@ -218,17 +228,20 @@ impl WordRepository {
                     words.ipa,
                     words.notes,
                     words.extra,
+                    words.like_count,
                     words.created_at,
                     words.updated_at,
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     languages.code as language_code,
+                    word_classes.abbreviation as word_class_abbreviation,
                     created.username as created_by,
                     updated.username as updated_by
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN word_classes ON word_classes.id = words.word_class
                 LEFT JOIN users AS created ON created.id = words.created_by
                 LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE words.id = $1
@@ -262,17 +275,20 @@ impl WordRepository {
                     words.ipa,
                     words.notes,
                     words.extra,
+                    words.like_count,
                     words.created_at,
                     words.updated_at,
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     languages.code as language_code,
+                    word_classes.abbreviation as word_class_abbreviation,
                     created.username as created_by,
                     updated.username as updated_by
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN word_classes ON word_classes.id = words.word_class
                 LEFT JOIN users AS created ON created.id = words.created_by
                 LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE words.slug = $1 AND words.lemma = $2 AND words.language = $3
@@ -374,12 +390,14 @@ impl WordRepository {
                     words.ipa,
                     words.notes,
                     words.extra,
+                    words.like_count,
                     words.created_at,
                     words.updated_at,
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     (SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma') as "bookmark!",
                     (SELECT code FROM languages WHERE id = words.language) as language_code,
+                    (SELECT abbreviation FROM word_classes WHERE id = words.word_class) as word_class_abbreviation,
                     (SELECT username FROM users WHERE id = words.created_by) as created_by,
                     (SELECT username FROM users WHERE id = words.updated_by) as updated_by
             "#,
@@ -482,17 +500,20 @@ impl WordRepository {
                     words.ipa,
                     words.notes,
                     words.extra,
+                    words.like_count,
                     words.created_at,
                     words.updated_at,
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     languages.code as language_code,
+                    word_classes.abbreviation as word_class_abbreviation,
                     created.username as created_by,
                     updated.username as updated_by
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN word_classes ON word_classes.id = words.word_class
                 LEFT JOIN users AS created ON created.id = words.created_by
                 LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE
@@ -564,7 +585,7 @@ impl WordRepository {
         let result = sqlx::query_as!(
             User,
             r#"
-                SELECT users.*, 
+                SELECT users.*,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM users
                 JOIN words ON words.created_by = users.id
@@ -577,6 +598,112 @@ impl WordRepository {
         .await?;
 
         result.ok_or_else(|| not_found(format!("creator for word with id '{}'", word)))
+    }
+
+    pub async fn count_contributors(&self, word_id: Uuid) -> AppResult<i64> {
+        let result = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(DISTINCT user_id) FROM (
+                    SELECT created_by as user_id FROM words WHERE id = $1
+                    UNION
+                    SELECT updated_by as user_id FROM words WHERE id = $1
+                    UNION
+                    SELECT created_by as user_id FROM definitions WHERE word = $1
+                    UNION
+                    SELECT updated_by as user_id FROM definitions WHERE word = $1
+                ) contributors
+                WHERE user_id != (SELECT created_by FROM words WHERE id = $1)
+            "#,
+            word_id
+        )
+        .fetch_one(&self.state.pool)
+        .await?;
+
+        Ok(result.unwrap_or(0))
+    }
+
+    pub async fn like_word(&self, word_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        let mut tx = self.state.pool.begin().await?;
+        let result = sqlx::query!(
+            r#"
+                INSERT INTO word_likes (word_id, user_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+            "#,
+            word_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let likes = if result.rows_affected() > 0 {
+            let likes = sqlx::query_scalar!(
+                r#"
+                    UPDATE words
+                    SET like_count = like_count + 1
+                    WHERE id = $1
+                    RETURNING like_count
+                "#,
+                word_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            Some(likes)
+        } else {
+            None
+        };
+
+        tx.commit().await?;
+        Ok(likes)
+    }
+
+    pub async fn unlike_word(&self, word_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        let mut tx = self.state.pool.begin().await?;
+        let result = sqlx::query!(
+            r#"
+                DELETE FROM word_likes
+                WHERE word_id = $1 AND user_id = $2
+            "#,
+            word_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let likes = if result.rows_affected() > 0 {
+            let likes = sqlx::query_scalar!(
+                r#"
+                    UPDATE words
+                    SET like_count = GREATEST(like_count - 1, 0)
+                    WHERE id = $1
+                    RETURNING like_count
+                "#,
+                word_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            Some(likes)
+        } else {
+            None
+        };
+
+        tx.commit().await?;
+        Ok(likes)
+    }
+
+    pub async fn is_liked(&self, word_id: &Uuid, user_id: &Uuid) -> AppResult<bool> {
+        let result = sqlx::query!(
+            r#"
+                SELECT 1 as exists FROM word_likes
+                WHERE word_id = $1 AND user_id = $2
+            "#,
+            word_id,
+            user_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result.is_some())
     }
 }
 

@@ -1,11 +1,11 @@
 use askama::Template;
 use axum::{
-    Form, Router, extract::Path, http::StatusCode, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}
+    Form, Router, extract::Path, http::StatusCode, response::{IntoResponse, Redirect, Response}, routing::{get, post}
 };
 use serde::Deserialize;
 
 use crate::{
-    attempt, controller::html::{okay, render_generic_error, render_template}, err::AppError, get_user, model::{
+    attempt, controller::html::{okay, render_template, TranslatableWithLiked}, err::AppError, get_user, model::{
         languages::Language,
         translatable::{CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch, UpdateTranslatable},
         translations::TranslationRepository,
@@ -103,7 +103,7 @@ struct SearchTranslatablesTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
     previous_query: String,
-    results: Option<Vec<Translatable>>,
+    results: Option<Vec<TranslatableWithLiked>>,
 }
 
 async fn search_translatables(
@@ -113,22 +113,41 @@ async fn search_translatables(
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
 
-    if query.q.as_ref().is_none_or(|q| q.is_empty()) {
-        let template = SearchTranslatablesTemplate {
-            current_user,
-            error: None,
-            previous_query: query.q.clone().unwrap_or_default(),
-            results: None,
-        };
-        let body = render_template(template);
-        return okay(body);
-    }
+    // Clean up query: trim and convert empty strings to None
+    let query = TranslatableSearch {
+        q: query.q.and_then(|q| {
+            let trimmed = q.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        source_language: query.source_language,
+        created_by: query.created_by,
+        created_before: query.created_before,
+        created_after: query.created_after,
+    };
 
     let results = match translatables
         .search(PaginatedRequest::default(), query.clone())
         .await
     {
-        Ok(res) => Some(res.items),
+        Ok(res) => {
+            let mut translatables_with_liked = Vec::with_capacity(res.items.len());
+            for translatable in res.items {
+                let is_liked = if let Some(ref cu) = current_user {
+                    translatables.is_liked(&translatable.id, &cu.id).await.unwrap_or(false)
+                } else {
+                    false
+                };
+                translatables_with_liked.push(TranslatableWithLiked {
+                    translatable,
+                    is_liked,
+                });
+            }
+            Some(translatables_with_liked)
+        }
         Err(e) => {
             let status_code = e.status_code;
             let template = SearchTranslatablesTemplate {
@@ -155,8 +174,10 @@ async fn search_translatables(
 
 #[derive(Clone)]
 struct TranslationWithLanguageAndContributor {
+    translation: crate::model::translations::Translation,
+    translatable: Translatable,
     language: Language,
-    contributor: Option<User>,
+    author: User,
 }
 
 #[derive(Template)]
@@ -166,6 +187,8 @@ struct ViewTranslatableTemplate {
     translatable: Translatable,
     creator: User,
     translations: Vec<TranslationWithLanguageAndContributor>,
+    is_liked: bool,
+    can_edit_translatable: bool,
 }
 
 async fn view_translatable(
@@ -181,9 +204,9 @@ async fn view_translatable(
     println!("Found translatable: {:?}", translatable);
     let creator = attempt!(s, users.find_by_id(translatable.created_by).await);
 
-    // Fetch all translations for this translatable
+    // Fetch the 3 most recent translations for this translatable
     let translations_list = attempt!(s, translations
-        .list_by_translatable(translatable.id, PaginatedRequest { limit: 100, offset: 0 })
+        .list_by_translatable(translatable.id, PaginatedRequest { limit: 3, offset: 0 })
         .await);
 
     println!("Found translations: {:?}", translations_list);
@@ -192,19 +215,35 @@ async fn view_translatable(
     let mut translations_with_info = Vec::new();
     for translation in translations_list.items {
         let language = attempt!(s, languages.find_by_id(translation.language).await);
-        let contributor = users.find_by_id(translation.created_by).await.ok();
+        let contributor = attempt!(s, users.find_by_id(translation.created_by).await);
 
         translations_with_info.push(TranslationWithLanguageAndContributor {
+            translation,
+            translatable: translatable.clone(),
             language,
-            contributor,
+            author: contributor,
         });
     }
+
+    // Check if the user has liked this translatable
+    let is_liked = if let Some(user) = s.user() {
+        translatables.is_liked(&translatable.id, &user.id).await.unwrap_or(false)
+    } else {
+        false
+    };
+
+    // Check if the user can edit this translatable (only creator can edit)
+    let can_edit_translatable = s.user()
+        .map(|u| u.id == translatable.created_by)
+        .unwrap_or(false);
 
     let template = ViewTranslatableTemplate {
         current_user: s.user().cloned(),
         translatable,
         creator,
         translations: translations_with_info,
+        is_liked,
+        can_edit_translatable,
     };
     okay(render_template(template))
 }

@@ -101,6 +101,7 @@ struct ViewLanguageTemplate {
     rendered_description: String,
     can_edit_language: bool,
     can_delete_language: bool,
+    is_liked: bool,
 }
 
 #[axum::debug_handler(state=AppState)]
@@ -139,6 +140,12 @@ async fn view_language(s: Session, languages: LanguageRepository, definitions: D
         false
     };
 
+    let is_liked = if let Some(user) = s.user() {
+        languages.is_liked(&language.id, &user.id).await.unwrap_or(false)
+    } else {
+        false
+    };
+
     // Fetch authors for each word
     let mut words_with_meta = Vec::new();
     for word in recent_words.items {
@@ -169,6 +176,7 @@ async fn view_language(s: Session, languages: LanguageRepository, definitions: D
         rendered_description,
         can_edit_language,
         can_delete_language,
+        is_liked,
     };
 
     let body = render_template(template);

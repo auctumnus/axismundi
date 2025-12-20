@@ -316,8 +316,10 @@ main {
     margin-bottom: 1rem;
   }
 
-  p {
+  p:not(:last-child) {
     margin-bottom: 1rem;
+  }
+  p {
     line-height: 1.5;
     max-width: 70ch;
   }
@@ -394,7 +396,6 @@ a.button-secondary, form.default button[type="reset"], button.clear {
 
 .badge {
   display: inline-flex;
-  padding: .25rem .375rem;
   flex-direction: row;
   gap: .375rem;
   align-items: center;
@@ -461,15 +462,91 @@ footer {
   }
 }
 
+.likes {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        color: var(--foreground-secondary);
+        font-size: .875rem;
+        margin-right: .25rem;
+
+        cursor: pointer;
+
+        svg {
+            transition: transform var(--duration-fast) ease-in-out;
+        }
+
+        .when-liked {
+            display: none;
+            transition: color var(--duration-very-fast) ease-in-out;
+        }
+
+
+        .like-count {
+            /* we don't actually ship berkeley mono; this only uses it if you have it installed,
+                but i like that font too much to not use it */
+            font-family: 'Berkeley Mono', 'Roboto Mono', monospace;
+        }
+
+        &.liked {
+            svg {
+                animation-duration: 400ms;
+                animation-name: like;
+            }
+            .when-liked {
+                display: inline;
+                color: var(--color-amber-400);
+            }
+            .when-unliked {
+                display: none;
+            }
+        }
+    }
+
+@keyframes like {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
 .card {
   background-color: var(--background-panel);
   border: var(--border);
   border-radius: var(--rounding);
   padding: 1rem;
   margin-bottom: 1rem;
+
+  &:has(.contributors) .header-with-actions {
+    margin-bottom: 0rem;
+  }
+
+  .contributors {
+    margin-bottom: .5rem;
+  }
+
   &:first-child {
     margin-top: 1rem;
   }
+}
+
+.contributors {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  color: var(--foreground-secondary);
+  gap: 0.25rem;
+}
+
+.empty-description {
+  color: var(--foreground-secondary);
+  font-style: italic;
 }
 
 .header-with-actions {
@@ -478,6 +555,8 @@ footer {
     align-items: center;
     justify-content: space-between;
     margin-bottom: .5rem;
+
+    max-height: 2lh;
 
 
     h1, h2 {
@@ -524,9 +603,10 @@ footer {
     }
 }
 
-a.icon.button {
+a.icon.button, .icon-button-container {
   min-width: 32px;
   min-height: 32px;
+  padding: .75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -541,6 +621,10 @@ a.icon.button {
 
   &:hover.gray {
     background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+  }
+
+  &:hover.yellow {
+    background-color: color-mix(in oklab, var(--color-amber-400) 15%, transparent);
   }
 }
 

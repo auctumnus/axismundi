@@ -1,12 +1,12 @@
 document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll('#language-list .likes').forEach((likeButton) => {
-        console.log(likeButton)
+    document.querySelectorAll('#translation-list .likes').forEach((likeButton) => {
         likeButton.addEventListener('click', async (event) => {
             event.preventDefault();
             event.stopPropagation();
             const target = likeButton.getAttribute('data-target');
+            const [translatableSlug, languageCode] = target!.split('/');
             const shouldLike = !likeButton.classList.contains('liked');
-            const response = await fetch(`/api/languages/${target}/${shouldLike ? 'like' : 'unlike'}`, {
+            const response = await fetch(`/api/translatable/${translatableSlug}/translations/${languageCode}/${shouldLike ? 'like' : 'unlike'}`, {
                 method: 'POST',
             });
             if (response.ok) {

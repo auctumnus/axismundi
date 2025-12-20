@@ -85,41 +85,6 @@ ul#language-list {
         margin-bottom: 0;
     }
 
-    .likes {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: .25rem;
-        color: var(--foreground-secondary);
-        font-size: .875rem;
-        margin-right: .25rem;
-
-        svg {
-            transition: transform var(--duration-fast) ease-in-out;
-        }
-
-        .when-liked {
-            display: none;
-            transition: color var(--duration-very-fast) ease-in-out;
-        }
-
-        &.liked {
-            svg {
-                animation-duration: 400ms;
-                animation-name: like;
-            }
-            .when-liked {
-                display: inline;
-                color: var(--color-amber-400);
-            }
-            .when-unliked {
-                display: none;
-            }
-        }
-    }
-
-
     .contributor-list {
         padding: 0;
         margin: 0;

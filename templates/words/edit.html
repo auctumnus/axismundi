@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 
-{% block title %}new word - {{ language.name }} - axismundi{% endblock %}
+{% block title %}edit {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/slate-editor.css">
@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<h1>new word</h1>
+<h1>edit word</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -19,7 +19,7 @@
     </div>
 {% endif %}
 
-<form id="new-word-form" class="default" method="post" action="/languages/{{ language.code }}/new-word">
+<form id="edit-word-form" class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit">
     <section>
         <label for="word">Word</label>
         {% call u::field_error(name="word") %}
@@ -50,25 +50,25 @@
         </div>
         {% call u::field_error(name="definitions") %}
         <div id="definitions-container">
-            <div class="definition-item">
-                <input type="text" name="definitions[]" required placeholder="Definition" value="{{previous_definition}}" class="definition-input">
-                <input type="text" name="contexts[]" placeholder="Context (optional)" value="{{previous_context}}">
-            </div>
+            {% for i in 0..previous_definitions.len() %}
+                <div class="definition-item">
+                    <input type="hidden" name="definition_ids[]" value="{{ previous_definition_ids[i] }}">
+                    <input type="text" name="definitions[]" required placeholder="Definition" value="{{ previous_definitions[i] }}" class="definition-input">
+                    <input type="text" name="contexts[]" placeholder="Context (optional)" value="{{ previous_contexts[i] }}">
+                    {% if previous_definitions.len() > 1 %}
+                        <button type="button" class="remove-definition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
+                        </button>
+                    {% endif %}
+                </div>
+            {% endfor %}
         </div>
-        {% for (def, ctx) in previous_definitions.iter().zip(previous_contexts.iter()) %}
-            <div class="definition-item">
-                <input type="text" name="definitions[]" required placeholder="Definition" value="{{def}}" class="definition-input">
-                <input type="text" name="contexts[]" placeholder="Context (optional)" value="{{ctx}}">
-                <button type="button" class="remove-definition">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
-                </button>
-            </div>
-        {% endfor %}
     </section>
 
     <template id="definition-template">
         <div class="definition-item">
-            <input type="text" name="definitions[]" placeholder="Definition" class="definition-input">
+            <input type="hidden" name="definition_ids[]" value="">
+            <input type="text" name="definitions[]" placeholder="Definition" required class="definition-input">
             <input type="text" name="contexts[]" placeholder="Context (optional)">
             <button type="button" class="remove-definition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
@@ -88,17 +88,20 @@
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
-    <button type="submit">Create word</button>
+    <button type="submit">Save changes</button>
 </form>
 {% endblock %}
 
 {% block breadcrumb %}
 <span class="separator">/</span>
 <a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
 {% endblock %}
 
 {% block footer %}
 {% call u::language_section(&language, true) %}
+{% call u::word_section(&word, &language, true) %}
 {% endblock %}
 
 {% block scripts %}
@@ -129,6 +132,14 @@
 
     document.querySelectorAll('.remove-definition').forEach(function(button) {
         button.addEventListener('click', function() {
+            const container = document.getElementById('definitions-container');
+            const currentCount = container.querySelectorAll('.definition-item').length;
+
+            if (currentCount <= 1) {
+                alert('At least one definition is required');
+                return;
+            }
+
             this.parentElement.remove();
         });
     });
@@ -145,7 +156,7 @@
       window.mountFormEditor('notes', {
         initialValue: initialValue,
         inputName: 'notes',
-        formId: 'new-word-form'
+        formId: 'edit-word-form'
       });
     }
   });

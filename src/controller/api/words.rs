@@ -21,6 +21,8 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
         .route("/languages/{code}/words/{slug}/{lemma}", get(get_word))
         .route("/languages/{code}/words/{slug}/{lemma}", put(edit_word))
         .route("/languages/{code}/words/{slug}/{lemma}", delete(delete_word))
+        .route("/languages/{code}/words/{slug}/{lemma}/like", post(like_word))
+        .route("/languages/{code}/words/{slug}/{lemma}/unlike", post(unlike_word))
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -99,6 +101,54 @@ pub async fn delete_word(
     words.delete_by_lemma(requestor, language.id, &slug, lemma).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(serde::Serialize)]
+pub struct LikeWordResponse {
+    pub liked: bool,
+    pub like_count: i64,
+}
+
+pub async fn like_word(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
+) -> ApiResponse<Json<LikeWordResponse>> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let language = languages.find_by_code(&code).await?;
+    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+
+    let like_count = words.like_word(word.id, requestor.id).await?;
+    let response = LikeWordResponse {
+        liked: true,
+        like_count: like_count.unwrap_or(word.like_count),
+    };
+    Ok(Json(response))
+}
+
+pub async fn unlike_word(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
+) -> ApiResponse<Json<LikeWordResponse>> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let language = languages.find_by_code(&code).await?;
+    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+
+    let like_count = words.unlike_word(word.id, requestor.id).await?;
+    let response = LikeWordResponse {
+        liked: false,
+        like_count: like_count.unwrap_or(word.like_count),
+    };
+    Ok(Json(response))
 }
 
 #[cfg(test)]

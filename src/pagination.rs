@@ -32,6 +32,26 @@ impl<T> PaginatedResponse<T> {
             offset: last_offset as PaginationSize,
         }
     }
+
+    pub fn total_pages(&self) -> i32 {
+        ((self.total + self.limit as i64 - 1) / self.limit as i64) as i32
+    }
+
+    pub fn current_page(&self) -> i32 {
+        (self.offset / self.limit) + 1
+    }
+
+    pub fn is_singular(&self) -> bool {
+        self.total == 1
+    }
+
+    pub fn results_text(&self) -> String {
+        if self.total == 1 {
+            format!("{} result found", self.total)
+        } else {
+            format!("{} results found", self.total)
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]

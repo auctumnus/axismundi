@@ -9,5 +9,4 @@ things left to do:
 - real mail with resend
 - really need to standardize how to handle the way form fields are submitted from html;
   atm i think its basically confusing Option<String> for Option<Option<String>>
-
-  
+- rss for recent activity  

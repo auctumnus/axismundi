@@ -47,6 +47,7 @@ struct LemmataTemplate {
     parts_of_speech: Vec<String>,
     words_definitions: Vec<Vec<Definition>>,
     user_has_permission: bool,
+    rendered_notes: Vec<String>,
 }
 
 #[derive(Template)]
@@ -60,6 +61,10 @@ struct LemmaTemplate {
     other_lemmata: bool,
     previous_search: String,
     user_has_permission: bool,
+    rendered_notes: String,
+    creator: User,
+    contributor_count: i64,
+    is_liked: bool,
 }
 
 #[derive(Template)]
@@ -81,43 +86,29 @@ struct NewWordTemplate {
     user_has_permission: bool,
 }
 
+
 #[derive(Template)]
-#[template(path = "words/new_definition.html")]
+#[template(path = "words/edit.html")]
 #[allow(dead_code)]
-struct NewDefinitionTemplate {
+struct EditWordTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
     language: Language,
     word: Word,
-    previous_definition: String,
-    previous_context: String,
+    word_classes: Vec<WordClass>,
+    previous_word: String,
+    previous_word_class: String,
+    previous_definitions: Vec<String>,
+    previous_contexts: Vec<String>,
+    previous_definition_ids: Vec<String>,
+    previous_ipa: String,
+    previous_notes: String,
     user_has_permission: bool,
 }
 
-#[derive(Template)]
-#[template(path = "words/edit_definition.html")]
-#[allow(dead_code)]
-struct EditDefinitionTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    language: Language,
-    word: Word,
-    definition: Definition,
-    previous_definition: String,
-    previous_context: String,
-    user_has_permission: bool,
-}
-
-#[derive(Template)]
-#[template(path = "words/delete_definition.html")]
-#[allow(dead_code)]
-struct DeleteDefinitionTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    language: Language,
-    word: Word,
-    definition: Definition,
-    user_has_permission: bool,
+#[derive(Deserialize)]
+struct PreviousSearchQuery {
+    previous_search: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -133,9 +124,17 @@ struct NewWordFormData {
 }
 
 #[derive(Deserialize)]
-struct DefinitionFormData {
-    definition: String,
-    context: Option<String>,
+struct EditWordFormData {
+    word: String,
+    word_class: String,
+    #[serde(default, rename = "definitions[]")]
+    definitions: Vec<String>,
+    #[serde(default, rename = "contexts[]")]
+    contexts: Vec<String>,
+    #[serde(default, rename = "definition_ids[]")]
+    definition_ids: Vec<String>,
+    ipa: Option<String>,
+    notes: Option<String>,
 }
 
 struct WordWithMeta {
@@ -294,6 +293,7 @@ async fn view_lemmata(
     // Fetch the word class names and definitions for each lemma
     let mut parts_of_speech = Vec::new();
     let mut words_definitions = Vec::new();
+    let mut rendered_notes = Vec::new();
 
     for lemma in &lemmata {
         let pos_name = if let Some(word_class_id) = lemma.word_class {
@@ -316,6 +316,10 @@ async fn view_lemmata(
         };
         words_definitions.push(definitions);
 
+        // Render notes for this lemma
+        let notes = attempt!(s, words.render_notes(lemma).await);
+        rendered_notes.push(notes);
+
         println!("Lemma ID: {}, Definitions: {:?}", lemma.id, words_definitions.last());
     }
 
@@ -327,6 +331,7 @@ async fn view_lemmata(
         parts_of_speech,
         words_definitions,
         user_has_permission,
+        rendered_notes,
     };
 
     let body = render_template(template);
@@ -503,6 +508,7 @@ async fn view_lemma(
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Query(params): Query<PreviousSearchQuery>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -533,8 +539,23 @@ async fn view_lemma(
 
     let other_lemmata = definitions.len() > 1;
 
-    // Construct the previous search URL (default to search page)
-    let previous_search = format!("/languages/{}/words", language_code);
+    // Construct the previous search URL
+    let previous_search = if let Some(search_params) = params.previous_search {
+        format!("/languages/{}/words?{}", language_code, search_params)
+    } else {
+        format!("/languages/{}/words", language_code)
+    };
+
+    let rendered_notes = attempt!(s, words.render_notes(&word).await);
+
+    let creator = attempt!(s, words.find_creator(&word.id).await);
+    let contributor_count = attempt!(s, words.count_contributors(word.id).await);
+
+    let is_liked = if let Some(user) = &current_user {
+        words.is_liked(&word.id, &user.id).await.unwrap_or(false)
+    } else {
+        false
+    };
 
     let template = LemmaTemplate {
         current_user,
@@ -544,22 +565,28 @@ async fn view_lemma(
         other_lemmata,
         previous_search,
         user_has_permission,
+        rendered_notes,
+        creator,
+        contributor_count,
+        is_liked,
     };
 
     let body = render_template(template);
     okay(body)
 }
 
-async fn new_definition(
+async fn edit_word(
     s: Session,
     languages: LanguageRepository,
     words: WordRepository,
+    word_classes: WordClassRepository,
+    definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
-    Path((language_code, word_id)): Path<(String, Uuid)>,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_id(word_id).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma).await);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -570,95 +597,44 @@ async fn new_definition(
         false
     };
 
-    let template = NewDefinitionTemplate {
-        current_user,
-        error: None,
-        language,
-        word,
-        previous_definition: String::new(),
-        previous_context: String::new(),
-        user_has_permission,
-    };
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
-    let body = render_template(template);
-    okay(body)
-}
-
-async fn new_definition_submit(
-    s: Session,
-    languages: LanguageRepository,
-    words: WordRepository,
-    definitions_repo: DefinitionRepository,
-    permissions: LanguagePermissionRepository,
-    Path((language_code, word_id)): Path<(String, Uuid)>,
-    axum_extra::extract::Form(form): axum_extra::extract::Form<DefinitionFormData>,
-) -> (StatusCode, Response) {
-    let user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_id(word_id).await);
-
-    let user_has_permission = permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
-
-    let create_def = CreateDefinition {
-        definition: form.definition.clone(),
-        context: form.context.clone(),
-    };
-
-    match definitions_repo.create(&user, word_id, create_def).await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
-            "/languages/{}/words/{}/{}",
-            language_code, word.slug, word.lemma
-        )).into_response()),
-        Err(e) => {
-            let template = NewDefinitionTemplate {
-                current_user: Some(user),
-                error: Some(e),
-                language,
-                word,
-                previous_definition: form.definition,
-                previous_context: form.context.unwrap_or_default(),
-                user_has_permission,
-            };
-
-            let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body)
+    // Get current word class abbreviation
+    let word_class_abbr = if let Some(wc_id) = word.word_class {
+        match word_classes.find_by_id(wc_id).await {
+            Ok(wc) => wc.abbreviation,
+            Err(_) => String::new(),
         }
-    }
-}
-
-async fn edit_definition(
-    s: Session,
-    languages: LanguageRepository,
-    words: WordRepository,
-    definitions_repo: DefinitionRepository,
-    permissions: LanguagePermissionRepository,
-    Path((language_code, definition_id)): Path<(String, Uuid)>,
-) -> (StatusCode, Response) {
-    let current_user = s.user().cloned();
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
-    let word = attempt!(s, words.find_by_id(definition.word).await);
-
-    let user_has_permission = if let Some(user) = &current_user {
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
     } else {
-        false
+        String::new()
     };
 
-    let template = EditDefinitionTemplate {
+    // Fetch existing definitions
+    let definitions_result = match definitions_repo
+        .list_by_word(word.id, PaginatedRequest { limit: 100, offset: 0 })
+        .await
+    {
+        Ok(res) => res.items,
+        Err(_) => vec![],
+    };
+
+    let previous_definitions: Vec<String> = definitions_result.iter().map(|d| d.definition.clone()).collect();
+    let previous_contexts: Vec<String> = definitions_result.iter().map(|d| d.context.clone().unwrap_or_default()).collect();
+    let previous_definition_ids: Vec<String> = definitions_result.iter().map(|d| d.id.to_string()).collect();
+
+    let template = EditWordTemplate {
         current_user,
         error: None,
         language,
-        word,
-        definition: definition.clone(),
-        previous_definition: definition.definition,
-        previous_context: definition.context.unwrap_or_default(),
+        word: word.clone(),
+        word_classes: word_classes_list,
+        previous_word: word.word.clone(),
+        previous_word_class: word_class_abbr,
+        previous_definitions,
+        previous_contexts,
+        previous_definition_ids,
+        previous_ipa: word.ipa.unwrap_or_default(),
+        previous_notes: word.notes.unwrap_or_default(),
         user_has_permission,
     };
 
@@ -666,118 +642,158 @@ async fn edit_definition(
     okay(body)
 }
 
-async fn edit_definition_submit(
+async fn edit_word_submit(
     s: Session,
     languages: LanguageRepository,
     words: WordRepository,
+    word_classes: WordClassRepository,
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
-    Path((language_code, definition_id)): Path<(String, Uuid)>,
-    axum_extra::extract::Form(form): axum_extra::extract::Form<DefinitionFormData>,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<EditWordFormData>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
-    let word = attempt!(s, words.find_by_id(definition.word).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma).await);
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
 
-    let update = UpdateDefinition {
-        definition: Some(form.definition.clone()),
-        context: form.context.clone(),
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+
+    // Filter out empty definitions and limit to 10
+    const MAX_DEFINITIONS: usize = 10;
+    let definitions_text: Vec<String> = form
+        .definitions
+        .iter()
+        .filter_map(|d| {
+            let trimmed = d.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .take(MAX_DEFINITIONS)
+        .collect();
+
+    // Require at least one definition
+    if definitions_text.is_empty() {
+        let template = EditWordTemplate {
+            current_user: Some(user),
+            error: Some(crate::err::bad_request("At least one definition is required")),
+            language,
+            word,
+            word_classes: word_classes_list,
+            previous_word: form.word.clone(),
+            previous_word_class: form.word_class.clone(),
+            previous_definitions: form.definitions.clone(),
+            previous_contexts: form.contexts.clone(),
+            previous_definition_ids: form.definition_ids.clone(),
+            previous_ipa: form.ipa.clone().unwrap_or_default(),
+            previous_notes: form.notes.clone().unwrap_or_default(),
+            user_has_permission,
+        };
+
+        let body = render_template(template);
+        return (StatusCode::BAD_REQUEST, body);
+    }
+
+    // Update the word
+    let update_word = crate::model::words::UpdateWord {
+        word: Some(form.word.clone()),
+        word_class: Some(form.word_class.clone()),
+        ipa: form.ipa.clone(),
+        notes: form.notes.clone(),
+        extra: None,
     };
 
-    match definitions_repo.update(&user, definition_id, update).await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
-            "/languages/{}/words/{}/{}",
-            language_code, word.slug, word.lemma
-        )).into_response()),
-        Err(e) => {
-            let template = EditDefinitionTemplate {
-                current_user: Some(user),
-                error: Some(e),
-                language,
-                word,
-                definition,
-                previous_definition: form.definition,
-                previous_context: form.context.unwrap_or_default(),
-                user_has_permission,
-            };
+    let result = async {
+        let updated_word = words.update_by_lemma(&user, language.id, &slug, lemma, update_word).await?;
 
-            let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body)
+        // Handle definitions: update existing, create new, delete removed
+        let existing_defs = definitions_repo
+            .list_by_word(updated_word.id, PaginatedRequest { limit: 100, offset: 0 })
+            .await?
+            .items;
+
+        // Parse definition IDs
+        let definition_ids: Vec<Option<Uuid>> = form
+            .definition_ids
+            .iter()
+            .map(|id| {
+                if id.is_empty() {
+                    None
+                } else {
+                    id.parse::<Uuid>().ok()
+                }
+            })
+            .collect();
+
+        // Track which existing definitions are being kept
+        let mut kept_ids = std::collections::HashSet::new();
+
+        // Update or create definitions
+        for (i, def_text) in definitions_text.iter().enumerate() {
+            let context = form.contexts.get(i).and_then(|c| {
+                let trimmed = c.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            });
+
+            if let Some(Some(def_id)) = definition_ids.get(i) {
+                // Update existing definition
+                kept_ids.insert(*def_id);
+                let update = UpdateDefinition {
+                    definition: Some(def_text.clone()),
+                    context: context.clone(),
+                };
+                definitions_repo.update(&user, *def_id, update).await?;
+            } else {
+                // Create new definition
+                let create_def = CreateDefinition {
+                    definition: def_text.clone(),
+                    context,
+                };
+                definitions_repo.create(&user, updated_word.id, create_def).await?;
+            }
         }
+
+        // Delete definitions that were removed
+        for existing_def in existing_defs {
+            if !kept_ids.contains(&existing_def.id) {
+                definitions_repo.delete(&user, existing_def.id).await?;
+            }
+        }
+
+        Ok::<_, crate::err::AppError>(updated_word)
     }
-}
+    .await;
 
-async fn delete_definition(
-    s: Session,
-    languages: LanguageRepository,
-    words: WordRepository,
-    definitions_repo: DefinitionRepository,
-    permissions: LanguagePermissionRepository,
-    Path((language_code, definition_id)): Path<(String, Uuid)>,
-) -> (StatusCode, Response) {
-    let current_user = s.user().cloned();
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
-    let word = attempt!(s, words.find_by_id(definition.word).await);
-
-    let user_has_permission = if let Some(user) = &current_user {
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
-    let template = DeleteDefinitionTemplate {
-        current_user,
-        error: None,
-        language,
-        word,
-        definition,
-        user_has_permission,
-    };
-
-    let body = render_template(template);
-    okay(body)
-}
-
-async fn delete_definition_submit(
-    s: Session,
-    languages: LanguageRepository,
-    words: WordRepository,
-    definitions_repo: DefinitionRepository,
-    permissions: LanguagePermissionRepository,
-    Path((language_code, definition_id)): Path<(String, Uuid)>,
-) -> (StatusCode, Response) {
-    let user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let definition = attempt!(s, definitions_repo.find_by_id(definition_id).await);
-    let word = attempt!(s, words.find_by_id(definition.word).await);
-
-    let user_has_permission = permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
-
-    match definitions_repo.delete(&user, definition_id).await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
+    match result {
+        Ok(updated_word) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
             "/languages/{}/words/{}/{}",
-            language_code, word.slug, word.lemma
+            language_code, updated_word.slug, updated_word.lemma
         )).into_response()),
         Err(e) => {
-            let template = DeleteDefinitionTemplate {
+            let template = EditWordTemplate {
                 current_user: Some(user),
                 error: Some(e),
                 language,
                 word,
-                definition,
+                word_classes: word_classes_list,
+                previous_word: form.word.clone(),
+                previous_word_class: form.word_class.clone(),
+                previous_definitions: definitions_text,
+                previous_contexts: form.contexts.clone(),
+                previous_definition_ids: form.definition_ids.clone(),
+                previous_ipa: form.ipa.clone().unwrap_or_default(),
+                previous_notes: form.notes.clone().unwrap_or_default(),
                 user_has_permission,
             };
 
@@ -791,12 +807,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/languages/{language}/new-word", axum::routing::get(new_word))
         .route("/languages/{language}/new-word", axum::routing::post(new_word_submit))
-        .route("/languages/{language}/words/{word_id}/new-definition", axum::routing::get(new_definition))
-        .route("/languages/{language}/words/{word_id}/new-definition", axum::routing::post(new_definition_submit))
-        .route("/languages/{language}/definitions/{definition_id}/edit", axum::routing::get(edit_definition))
-        .route("/languages/{language}/definitions/{definition_id}/edit", axum::routing::post(edit_definition_submit))
-        .route("/languages/{language}/definitions/{definition_id}/delete", axum::routing::get(delete_definition))
-        .route("/languages/{language}/definitions/{definition_id}/delete", axum::routing::post(delete_definition_submit));
+        .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::get(edit_word))
+        .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::post(edit_word_submit));
 
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{language}/words", axum::routing::get(word_search))

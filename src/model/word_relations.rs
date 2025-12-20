@@ -594,12 +594,14 @@ impl WordRelationRepository {
                     words.ipa,
                     words.notes,
                     words.extra,
+                    words.like_count,
                     words.created_at,
                     words.updated_at,
                     words.created_by as "_created_by",
                     words.updated_by as "_updated_by",
                     bookmarks.slug as "bookmark: String",
                     languages.code as "language_code: Option<String>",
+                    word_classes.abbreviation as "word_class_abbreviation: Option<String>",
                     created.username as "created_by: Option<String>",
                     updated.username as "updated_by: Option<String>",
                     word_relations.kind as "kind: WordRelationType",
@@ -616,6 +618,7 @@ impl WordRelationRepository {
                     END)
                 JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language
+                LEFT JOIN word_classes ON word_classes.id = words.word_class
                 LEFT JOIN users AS created ON created.id = words.created_by
                 LEFT JOIN users AS updated ON updated.id = words.updated_by
                 WHERE
@@ -675,12 +678,14 @@ impl WordRelationRepository {
                 ipa: record.ipa,
                 notes: record.notes,
                 extra: record.extra,
+                like_count: record.like_count,
                 created_at: record.created_at,
                 updated_at: record.updated_at,
                 _created_by: record._created_by,
                 _updated_by: record._updated_by,
                 bookmark: record.bookmark,
                 language_code: record.language_code,
+                word_class_abbreviation: record.word_class_abbreviation,
                 created_by: record.created_by,
                 updated_by: record.updated_by,
             };
@@ -736,17 +741,20 @@ impl WordRelationRepository {
                         words.ipa,
                         words.notes,
                         words.extra,
+                        words.like_count,
                         words.created_at,
                         words.updated_at,
                         words.created_by as "_created_by!",
                         words.updated_by as "_updated_by!",
                         bookmarks.slug as "bookmark!",
                         languages.code as language_code,
+                        word_classes.abbreviation as word_class_abbreviation,
                         created.username as created_by,
                         updated.username as updated_by
                     FROM words
                     JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                     LEFT JOIN languages ON languages.id = words.language
+                    LEFT JOIN word_classes ON word_classes.id = words.word_class
                     LEFT JOIN users AS created ON created.id = words.created_by
                     LEFT JOIN users AS updated ON updated.id = words.updated_by
                     WHERE words.id = ANY($1)

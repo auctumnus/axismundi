@@ -1,4 +1,4 @@
-{% macro make_lemma(word, definitions, language_code, user_has_permission) %}
+{% macro make_lemma(word, definitions, language_code, user_has_permission, rendered_notes) %}
 {% if let Some(ipa) = word.ipa %}
     {% if !ipa.is_empty() %}<p class="ipa">/{{ ipa }}/</p>{%endif%}
 {% endif %}
@@ -28,10 +28,8 @@
     <p>No definition set.</p>
 {% endif %}
 
-{% if let Some(notes) = word.notes %}
-{% if !notes.is_empty() %}
+{% if !rendered_notes.is_empty() %}
 <h3>notes</h3>
-<p>{{ notes }}</p>
-{% endif %}
+<div class="markdown-content">{{ rendered_notes|safe }}</div>
 {% endif %}
 {% endmacro %}

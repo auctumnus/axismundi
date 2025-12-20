@@ -1,16 +1,3 @@
-.contributors {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    color: var(--foreground-secondary);
-    gap: 0.25rem;
-}
-
-.empty-description {
-    color: var(--foreground-secondary);
-    font-style: italic;
-}
-
 .translation-card .aside {
     font-size: .875rem;
 }

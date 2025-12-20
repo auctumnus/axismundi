@@ -78,17 +78,5 @@
 {% endblock %}
 
 {% block footer %}
-<li>
-    <h2>{{ language.name }}</h2>
-    <ul>
-    <li><a href="/languages/{{ language.code }}">main page</a></li>
-    <li><a href="/languages/{{ language.code }}/words">dictionary</a></li>
-    <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
-    <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
-    {% if can_edit_language %}
-        <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
-        <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
-    {% endif %}
-    </ul>
-</li>
+{% call u::language_section(&language, can_edit_language) %}
 {% endblock %}

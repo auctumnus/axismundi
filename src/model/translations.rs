@@ -635,4 +635,204 @@ impl TranslationRepository {
     }
 }
 
+#[derive(Default, Debug, Deserialize, Clone, Serialize)]
+pub struct TranslationSearch {
+    pub q: Option<String>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub created_after: Option<DateTime<Utc>>,
+}
+
+impl TranslationRepository {
+    pub async fn search(
+        &self,
+        language_id: &Uuid,
+        pagination: PaginatedRequest,
+        search: TranslationSearch,
+    ) -> AppResult<PaginatedResponse<Translation>> {
+        // Start with language filter
+        let mut param_count = 1;
+
+        // Build items query
+        let mut items_query = String::from(
+            r#"
+                SELECT
+                    t.id,
+                    t.translatable,
+                    t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
+                    t.translated_text,
+                    t.translator_name,
+                    t.translator_url,
+                    t.created_at,
+                    t.updated_at,
+                    t.like_count,
+                    t.created_by,
+                    t.updated_by,
+                    tr.slug as translatable_slug,
+                    tr.title as translatable_title
+                FROM translation t
+                JOIN translatable tr ON t.translatable = tr.id
+                WHERE t.language = $1
+            "#,
+        );
+
+        let mut count_query = String::from("SELECT COUNT(*) FROM translation t JOIN translatable tr ON t.translatable = tr.id WHERE t.language = $1");
+
+        if let Some(q) = &search.q {
+            param_count += 1;
+            let condition = format!(" AND (tr.title ILIKE ${} OR t.translated_text ILIKE ${})", param_count, param_count);
+            items_query.push_str(&condition);
+            count_query.push_str(&condition);
+        }
+
+        if let Some(_created_before) = &search.created_before {
+            param_count += 1;
+            let condition = format!(" AND t.created_at < ${}", param_count);
+            items_query.push_str(&condition);
+            count_query.push_str(&condition);
+        }
+
+        if let Some(_created_after) = &search.created_after {
+            param_count += 1;
+            let condition = format!(" AND t.created_at > ${}", param_count);
+            items_query.push_str(&condition);
+            count_query.push_str(&condition);
+        }
+
+        items_query.push_str(&format!(" ORDER BY t.created_at DESC LIMIT ${} OFFSET ${}", param_count + 1, param_count + 2));
+
+        // Execute queries based on search parameters
+        let (items, total): (Vec<Translation>, i64) = if let Some(q) = &search.q {
+            let search_pattern = format!("%{q}%");
+            if let (Some(created_before), Some(created_after)) = (&search.created_before, &search.created_after) {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(created_before)
+                        .bind(created_after)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(created_before)
+                        .bind(created_after)
+                        .fetch_one(&self.state.pool)
+                )?
+            } else if let Some(created_before) = &search.created_before {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(created_before)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(created_before)
+                        .fetch_one(&self.state.pool)
+                )?
+            } else if let Some(created_after) = &search.created_after {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(created_after)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(created_after)
+                        .fetch_one(&self.state.pool)
+                )?
+            } else {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(&search_pattern)
+                        .fetch_one(&self.state.pool)
+                )?
+            }
+        } else {
+            if let (Some(created_before), Some(created_after)) = (&search.created_before, &search.created_after) {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(created_before)
+                        .bind(created_after)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(created_before)
+                        .bind(created_after)
+                        .fetch_one(&self.state.pool)
+                )?
+            } else if let Some(created_before) = &search.created_before {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(created_before)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(created_before)
+                        .fetch_one(&self.state.pool)
+                )?
+            } else if let Some(created_after) = &search.created_after {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(created_after)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .bind(created_after)
+                        .fetch_one(&self.state.pool)
+                )?
+            } else {
+                tokio::try_join!(
+                    sqlx::query_as::<_, Translation>(&items_query)
+                        .bind(language_id)
+                        .bind(i64::from(pagination.limit))
+                        .bind(i64::from(pagination.offset))
+                        .fetch_all(&self.state.pool),
+                    sqlx::query_scalar::<_, i64>(&count_query)
+                        .bind(language_id)
+                        .fetch_one(&self.state.pool)
+                )?
+            }
+        };
+
+        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+
+        Ok(PaginatedResponse {
+            items,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
+        })
+    }
+}
+
 crate::util::repo_from_parts!(TranslationRepository);

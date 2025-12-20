@@ -237,24 +237,64 @@ div.warning {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: .5rem;
 
   label {
     margin: 0;
   }
 
-  .button-small {
-    font-size: .85rem;
-    padding: .25rem .5rem;
-    background-color: var(--input-background);
-    border: 1px solid var(--input-border);
-    border-radius: var(--rounding);
+  ul {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .5rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  li {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+  }
+
+  li:not(:last-child)::after {
+    content: "·";
+    user-select: none;
+    pointer-events: none;
+    color: var(--foreground-secondary);
+    margin-left: .5rem;
+  }
+
+  a, .button-small {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .25rem;
+    text-decoration: none;
+    color: var(--foreground-secondary);
+    background: none;
+    border: none;
     cursor: pointer;
-    color: var(--foreground-primary);
+    padding: 0;
     font-family: var(--font-normal);
 
+    transition: color var(--duration-very-fast) ease-in-out;
+
     &:hover {
-      background-color: var(--input-background-focus);
-      border-color: var(--input-border-focus);
+      text-decoration: underline;
+      color: var(--foreground-primary);
+    }
+
+    svg.icon {
+      position: relative;
+      top: .5px;
+    }
+
+    &:hover svg.icon {
+      color: var(--foreground-primary);
     }
   }
 }
@@ -268,33 +308,48 @@ div.warning {
 .definition-item {
   position: relative;
 
+  display: flex;
+  flex-direction: row;
+  gap: .5rem;
+
+  &:not(:has(.remove-definition)) {
+    padding-right: calc(44px + .5rem);
+  }
+
+  .definition-input {
+    flex: 1;
+  }
+
   textarea {
     width: 100%;
     box-sizing: border-box;
   }
 
   .remove-definition {
-    position: absolute;
-    top: .5rem;
-    right: .5rem;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 50%;
-    border: 1px solid var(--error-border);
-    background-color: var(--error-background);
-    color: var(--error-foreground);
-    font-size: 1.25rem;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
+    justify-self: flex-end;
+    min-width: 32px;
+    min-height: 32px;
+    padding: .75rem;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
-    font-family: var(--font-normal);
+    border: 0px solid transparent;
+    border-radius: 100%;
+    background-color: transparent;
+    color: var(--foreground-secondary);
+    cursor: pointer;
+
+    transition: background-color var(--duration-fast) ease-in-out,
+                color var(--duration-fast) ease-in-out;
 
     &:hover {
-      background-color: var(--error-foreground);
-      color: var(--error-background);
+      background-color: color-mix(in oklab, var(--color-red-500) 15%, transparent);
+      color: var(--color-red-500);
+    }
+
+    svg {
+      width: 1.25rem;
+      height: 1.25rem;
     }
   }
 }

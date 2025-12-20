@@ -2,15 +2,15 @@ use std::thread::current;
 
 use askama::Template;
 use axum::{
-    Form, Router, extract::Path, http::StatusCode, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}
+    Form, Router, extract::{Path, Query}, http::StatusCode, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}
 };
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, bad_request, not_found}, get_user, model::{
-        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, UpdateTranslation}, users::{User, UserRepository}
-    }, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
+        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, TranslationSearch, UpdateTranslation}, users::{User, UserRepository}
+    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -19,11 +19,115 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/translatable/{slug}/edit-translation", post(edit_translation_submit));
 
     let normal_routes = Router::<AppState>::new()
+        .route("/languages/{code}/translations", get(translation_search))
         .route("/translatable/{slug}/new-translation", get(new_translation_step_1_form))
         .route("/translatable/{slug}/translation/{code}", get(view_translation))
         .route("/translatable/{slug}/edit-translation/{code}", get(edit_translation_form));
 
     (secure_routes, normal_routes)
+}
+
+struct TranslationWithMeta {
+    translation: Translation,
+    creator: User,
+}
+
+#[derive(Template)]
+#[template(path = "translations/search.html")]
+#[allow(dead_code)]
+struct TranslationSearchTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+    language: Language,
+    previous_query: TranslationSearch,
+    previous_pagination: PaginatedRequest,
+    results: Option<PaginatedResponse<TranslationWithMeta>>,
+    user_has_permission: bool,
+}
+
+async fn translation_search(
+    s: Session,
+    languages: LanguageRepository,
+    translations: TranslationRepository,
+    users: UserRepository,
+    permissions: LanguagePermissionRepository,
+    Path(language_code): Path<String>,
+    Query(query): Query<TranslationSearch>,
+    Query(pagination): Query<PaginatedRequest>,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+
+    let user_has_permission = if let Some(user) = &current_user {
+        permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let query = TranslationSearch {
+        q: query.q.and_then(|q| {
+            let trimmed = q.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        ..query
+    };
+
+    let results = match translations
+            .search(&language.id, pagination.clone(), query.clone())
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                let template = TranslationSearchTemplate {
+                    current_user,
+                    error: Some(e),
+                    language,
+                    previous_query: query,
+                    previous_pagination: pagination,
+                    results: None,
+                    user_has_permission,
+                };
+                let body = render_template(template);
+                return (StatusCode::BAD_REQUEST, body);
+            }
+        };
+
+    let mut results_with_meta = vec![];
+    for translation in results.items {
+        let creator = attempt!(s, users.find_by_id(translation.created_by).await);
+        results_with_meta.push(TranslationWithMeta {
+            translation,
+            creator,
+        });
+    }
+
+    let results_with_meta = Some(PaginatedResponse {
+        items: results_with_meta,
+        total: results.total,
+        limit: results.limit,
+        offset: results.offset,
+        has_more: results.has_more,
+    });
+
+    let template = TranslationSearchTemplate {
+        current_user,
+        error: None,
+        language,
+        previous_query: query,
+        previous_pagination: pagination,
+        results: results_with_meta,
+        user_has_permission,
+    };
+
+    let body = render_template(template);
+    okay(body)
 }
 
 // Step 1: Select language
