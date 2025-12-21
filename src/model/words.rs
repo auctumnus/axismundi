@@ -234,10 +234,10 @@ impl WordRepository {
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
-                    languages.code as language_code,
-                    word_classes.abbreviation as word_class_abbreviation,
-                    created.username as created_by,
-                    updated.username as updated_by
+                    languages.code as "language_code: Option<String>",
+                    word_classes.abbreviation as "word_class_abbreviation: Option<String>",
+                    created.username as "created_by: Option<String>",
+                    updated.username as "updated_by: Option<String>"
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language
@@ -281,10 +281,10 @@ impl WordRepository {
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
-                    languages.code as language_code,
-                    word_classes.abbreviation as word_class_abbreviation,
-                    created.username as created_by,
-                    updated.username as updated_by
+                    languages.code as "language_code: Option<String>",
+                    word_classes.abbreviation as "word_class_abbreviation: Option<String>",
+                    created.username as "created_by: Option<String>",
+                    updated.username as "updated_by: Option<String>"
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language
@@ -395,7 +395,7 @@ impl WordRepository {
                     words.updated_at,
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
-                    (SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma') as "bookmark!",
+                    COALESCE((SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma'), '') as "bookmark!",
                     (SELECT code FROM languages WHERE id = words.language) as language_code,
                     (SELECT abbreviation FROM word_classes WHERE id = words.word_class) as word_class_abbreviation,
                     (SELECT username FROM users WHERE id = words.created_by) as created_by,
@@ -506,10 +506,10 @@ impl WordRepository {
                     words.created_by as "_created_by!",
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
-                    languages.code as language_code,
-                    word_classes.abbreviation as word_class_abbreviation,
-                    created.username as created_by,
-                    updated.username as updated_by
+                    languages.code as "language_code: Option<String>",
+                    word_classes.abbreviation as "word_class_abbreviation: Option<String>",
+                    created.username as "created_by: Option<String>",
+                    updated.username as "updated_by: Option<String>"
                 FROM words
                 LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                 LEFT JOIN languages ON languages.id = words.language

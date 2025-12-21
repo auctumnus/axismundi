@@ -169,6 +169,42 @@ impl LanguageRepository {
             )
             .await?;
 
+        // Create default word classes
+        let default_word_classes = [
+            ("Adjective", "adj"),
+            ("Adverb", "adv"),
+            ("Adposition", "adp"),
+            ("Noun", "n"),
+            ("Numeral", "num"),
+            ("Pronoun", "pron"),
+            ("Verb", "v"),
+        ];
+
+        for (name, abbreviation) in default_word_classes {
+            let wc_result = sqlx::query!(
+                r#"
+                    INSERT INTO word_classes (language, name, abbreviation, created_by, updated_by)
+                    VALUES ($1, $2, $3, $4, $4)
+                    RETURNING id
+                "#,
+                result.id,
+                name,
+                abbreviation,
+                requestor.id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            let wc_slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
+            sqlx::query!(
+                "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'word_class')",
+                wc_slug,
+                wc_result.id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
         tx.commit().await?;
 
         // Create activity if language is public

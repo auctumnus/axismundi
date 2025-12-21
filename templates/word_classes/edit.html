@@ -28,6 +28,13 @@
         <span class="hint">full name (e.g., "noun", "verb", "adjective")</span>
     </section>
 
+    <section>
+        <label for="notes">Notes (optional)</label>
+        {% call u::field_error(name="notes") %}
+        <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
+        <span class="hint">additional information about this word class (supports Markdown)</span>
+    </section>
+
     <button type="submit">Update word class</button>
 </form>
 
@@ -36,7 +43,10 @@
 {% block breadcrumb %}
 <span class="separator">/</span>
 <a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}" class="breadcrumb">{{ word_class.name }}</a>
 {% endblock %}
+
 
 
 {% block footer %}

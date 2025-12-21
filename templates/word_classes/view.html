@@ -3,36 +3,59 @@
 
 {% block title %}{{ word_class.name }} - {{ language.name }} - axismundi{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/word-class-view.css">
+{% endblock %}
+
 {% block content %}
-<h1>{{ language.name }} - {{ word_class.name }}</h1>
 
-{% if let Some(_user) = current_user %}
-    <a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/edit" class="button">edit</a>
-    <form method="post" action="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/delete" style="display: inline;">
-        <button type="submit" onclick="return confirm('Are you sure you want to delete this word class?');">delete</button>
-    </form>
-{% endif %}
+<div class="card">
+    <div class="header-with-actions">
+        <h1>
+            <span>{{ word_class.name }}</span>
+            <span class="word-class-abbreviation-header">({{ word_class.abbreviation }})</span>
+        </h1>
+        {% if let Some(_user) = current_user %}
+        <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+            <a class="icon button gray" href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/edit" data-tooltip="Edit word class">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
+            </a>
+            <a class="icon button gray" href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/delete" data-tooltip="Delete word class">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
+            </a>
+        </div>
+        {% endif %}
+    </div>
 
-<dl>
-    <dt>Abbreviation</dt>
-    <dd>{{ word_class.abbreviation }}</dd>
+    <div class="word-class-meta">
+        <span class="meta-item">
+            <span class="meta-label">created by</span>
+            {% call u::badge(&creator, "small") %}
+            {% call u::relative(&word_class.created_at) %}
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">updated</span>
+            {% call u::relative(&word_class.updated_at) %}
+        </span>
+    </div>
 
-    <dt>Name</dt>
-    <dd>{{ word_class.name }}</dd>
-
-    <dt>Created</dt>
-    <dd>{{ word_class.created_at }}</dd>
-
-    <dt>Updated</dt>
-    <dd>{{ word_class.updated_at }}</dd>
-</dl>
+    {% if !rendered_notes.is_empty() %}
+    <div class="word-class-notes">
+        <h3>Notes</h3>
+        <div class="markdown-content">{{ rendered_notes|safe }}</div>
+    </div>
+    {% endif %}
+</div>
 
 {% endblock %}
 
 {% block breadcrumb %}
 <span class="separator">/</span>
 <a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}" class="breadcrumb">{{ word_class.name }}</a>
 {% endblock %}
+
 
 {% block footer %}
 {% call u::language_section(&language, can_edit_language) %}

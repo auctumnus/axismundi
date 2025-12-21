@@ -746,13 +746,13 @@ impl WordRelationRepository {
                         words.updated_at,
                         words.created_by as "_created_by!",
                         words.updated_by as "_updated_by!",
-                        bookmarks.slug as "bookmark!",
+                        COALESCE(bookmarks.slug, '') as "bookmark!",
                         languages.code as language_code,
                         word_classes.abbreviation as word_class_abbreviation,
                         created.username as created_by,
                         updated.username as updated_by
                     FROM words
-                    JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                    LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
                     LEFT JOIN languages ON languages.id = words.language
                     LEFT JOIN word_classes ON word_classes.id = words.word_class
                     LEFT JOIN users AS created ON created.id = words.created_by

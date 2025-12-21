@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete {{ word_class.name }}? - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - delete word class</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/delete">
+    <section>
+        <p>Are you sure you want to delete the word class <strong>{{ word_class.name }}</strong> ({{ word_class.abbreviation }})?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete word class</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}" class="breadcrumb">{{ word_class.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, can_edit_language) %}
+{% endblock %}

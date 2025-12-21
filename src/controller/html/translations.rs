@@ -8,8 +8,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, bad_request, not_found}, get_user, model::{
-        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, TranslationSearch, UpdateTranslation}, users::{User, UserRepository}
+    attempt, controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors}, err::{AppError, bad_request, not_found}, get_user, model::{
+        contribution_stats::ContributionStatsRepository, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, TranslationSearch, UpdateTranslation}, users::{User, UserRepository}
     }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}
 };
 
@@ -184,6 +184,7 @@ struct NewTranslationStep2Template {
     error: Option<AppError>,
     translatable: Translatable,
     language: Language,
+    language_with_contributors: LanguagesWithContributors,
     previous_translated_text: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
@@ -205,6 +206,7 @@ async fn new_translation_submit(
     languages: LanguageRepository,
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
+    contribution_stats: ContributionStatsRepository,
     Path(slug): Path<String>,
     Form(form): Form<NewTranslationFormData>,
 ) -> (StatusCode, Response) {
@@ -263,11 +265,20 @@ async fn new_translation_submit(
             .await
             .unwrap_or(false);
 
+        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language.id, 5).await);
+        let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+        let language_with_contributors = LanguagesWithContributors {
+            language: language.clone(),
+            top_contributors,
+            is_liked,
+        };
+
         let template = NewTranslationStep2Template {
             current_user: Some(user),
             error: None,
             translatable,
             language,
+            language_with_contributors,
             previous_translated_text: String::new(),
             can_edit_translatable,
             can_edit_language,
@@ -288,18 +299,24 @@ async fn new_translation_submit(
             .await
             .unwrap_or(false);
 
+        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language.id, 5).await);
+        let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+
         let Some(translated_text) = form.translated_text.clone() else {
             let error = bad_request("Translated text is required");
 
-            let language = attempt!(s, languages
-                .find_by_id(form.language_id.unwrap())
-                .await);
+            let language_with_contributors = LanguagesWithContributors {
+                language: language.clone(),
+                top_contributors,
+                is_liked,
+            };
 
             let template = NewTranslationStep2Template {
                 current_user: Some(user),
                 error: Some(error),
                 translatable,
                 language,
+                language_with_contributors,
                 previous_translated_text: String::new(),
                 can_edit_translatable,
                 can_edit_language,
@@ -334,11 +351,18 @@ async fn new_translation_submit(
                 (StatusCode::SEE_OTHER, Redirect::to(&redirect_url).into_response())
             }
             Err(e) => {
+                let language_with_contributors = LanguagesWithContributors {
+                    language: language.clone(),
+                    top_contributors,
+                    is_liked,
+                };
+
                 let template = NewTranslationStep2Template {
                     current_user: Some(user),
                     error: Some(e),
                     translatable,
                     language,
+                    language_with_contributors,
                     previous_translated_text: translated_text,
                     can_edit_translatable,
                     can_edit_language,

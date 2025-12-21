@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>{{ word.word }}</span>
             {% if let Some(abbreviation) = word.word_class_abbreviation %}
             <span class="word-class-container">
-                (<a href="/languages/{{ language.code }}/word-classes/{{ abbreviation }}" class="word-class">{{ abbreviation }}</a>)
+                (<a href="/languages/{{ language.code }}/word-classes/{{ abbreviation }}" class="word-class">{{ abbreviation }}</a>.)
             </span>
             {% endif %}
         </h1>

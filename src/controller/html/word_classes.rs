@@ -8,7 +8,7 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
-        users::User,
+        users::{User, UserRepository},
         word_classes::{CreateWordClass, UpdateWordClass, WordClass, WordClassRepository},
     },
     util::{AppState, extract_session::Session},
@@ -24,9 +24,15 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/languages/{code}/word-classes", get(list_word_classes))
         .route("/languages/{code}/new-word-class", get(new_word_class_form))
         .route("/languages/{code}/word-classes/{abbreviation}", get(view_word_class))
-        .route("/languages/{code}/word-classes/{abbreviation}/edit", get(edit_word_class_form));
+        .route("/languages/{code}/word-classes/{abbreviation}/edit", get(edit_word_class_form))
+        .route("/languages/{code}/word-classes/{abbreviation}/delete", get(delete_word_class_form));
 
     (secure_routes, normal_routes)
+}
+
+struct WordClassWithCreator {
+    word_class: WordClass,
+    creator: User,
 }
 
 #[derive(Template)]
@@ -34,7 +40,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 struct ListWordClassesTemplate {
     current_user: Option<User>,
     language: Language,
-    word_classes: Vec<WordClass>,
+    word_classes: Vec<WordClassWithCreator>,
     user_has_permission: bool,
     can_edit_language: bool,
 }
@@ -44,6 +50,7 @@ async fn list_word_classes(
     languages: LanguageRepository,
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
+    users: UserRepository,
     Path(code): Path<String>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -58,10 +65,19 @@ async fn list_word_classes(
         false
     };
 
+    let mut classes_with_creators = Vec::with_capacity(classes.len());
+    for wc in classes {
+        let creator = attempt!(s, users.find_by_id(wc.created_by).await);
+        classes_with_creators.push(WordClassWithCreator {
+            word_class: wc,
+            creator,
+        });
+    }
+
     let template = ListWordClassesTemplate {
         current_user: s.user().cloned(),
         language,
-        word_classes: classes,
+        word_classes: classes_with_creators,
         user_has_permission,
         can_edit_language: user_has_permission,
     };
@@ -79,6 +95,7 @@ struct NewWordClassFormTemplate {
     error: Option<AppError>,
     previous_name: String,
     previous_abbreviation: String,
+    previous_notes: String,
     user_has_permission: bool,
     can_edit_language: bool,
 }
@@ -103,6 +120,7 @@ async fn new_word_class_form(
         error: None,
         previous_name: String::new(),
         previous_abbreviation: String::new(),
+        previous_notes: String::new(),
         user_has_permission,
         can_edit_language: user_has_permission,
     };
@@ -114,6 +132,7 @@ async fn new_word_class_form(
 struct NewWordClassFormData {
     name: String,
     abbreviation: String,
+    notes: String,
 }
 
 async fn new_word_class_submit(
@@ -132,6 +151,13 @@ async fn new_word_class_submit(
         .await
         .unwrap_or(false);
 
+    // Treat empty notes as None
+    let notes = if form.notes.trim().is_empty() {
+        None
+    } else {
+        Some(form.notes.clone())
+    };
+
     match word_classes
         .create(
             &user,
@@ -139,6 +165,7 @@ async fn new_word_class_submit(
             CreateWordClass {
                 name: form.name.clone(),
                 abbreviation: form.abbreviation.clone(),
+                notes,
             },
         )
         .await
@@ -151,6 +178,7 @@ async fn new_word_class_submit(
                 error: Some(e),
                 previous_name: form.name.clone(),
                 previous_abbreviation: form.abbreviation.clone(),
+                previous_notes: form.notes.clone(),
                 user_has_permission,
                 can_edit_language: user_has_permission,
             };
@@ -167,6 +195,8 @@ struct ViewWordClassTemplate {
     current_user: Option<User>,
     language: Language,
     word_class: WordClass,
+    rendered_notes: String,
+    creator: User,
     user_has_permission: bool,
     can_edit_language: bool,
 }
@@ -176,10 +206,13 @@ async fn view_word_class(
     languages: LanguageRepository,
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
+    users: UserRepository,
     Path((code, abbreviation)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let word_class = attempt!(s, word_classes.find_by_abbreviation(&language.id, &abbreviation).await);
+    let rendered_notes = attempt!(s, word_classes.render_notes(&word_class));
+    let creator = attempt!(s, users.find_by_id(word_class.created_by).await);
 
     let user_has_permission = if let Some(user) = s.user() {
         permissions
@@ -194,6 +227,8 @@ async fn view_word_class(
         current_user: s.user().cloned(),
         language,
         word_class,
+        rendered_notes,
+        creator,
         user_has_permission,
         can_edit_language: user_has_permission,
     };
@@ -212,6 +247,7 @@ struct EditWordClassFormTemplate {
     error: Option<AppError>,
     previous_name: String,
     previous_abbreviation: String,
+    previous_notes: String,
     user_has_permission: bool,
     can_edit_language: bool,
 }
@@ -239,6 +275,7 @@ async fn edit_word_class_form(
         language,
         previous_name: word_class.name.clone(),
         previous_abbreviation: word_class.abbreviation.clone(),
+        previous_notes: word_class.notes.clone().unwrap_or_default(),
         word_class,
         error: None,
         user_has_permission,
@@ -252,6 +289,7 @@ async fn edit_word_class_form(
 struct EditWordClassFormData {
     name: String,
     abbreviation: String,
+    notes: String,
 }
 
 async fn edit_word_class_submit(
@@ -273,6 +311,13 @@ async fn edit_word_class_submit(
         .await
         .unwrap_or(false);
 
+    // Treat empty notes as None for comparison
+    let form_notes = if form.notes.trim().is_empty() {
+        None
+    } else {
+        Some(form.notes.clone())
+    };
+
     let updates = UpdateWordClass {
         name: if form.name != word_class.name {
             Some(form.name.clone())
@@ -281,6 +326,11 @@ async fn edit_word_class_submit(
         },
         abbreviation: if form.abbreviation != word_class.abbreviation {
             Some(form.abbreviation.clone())
+        } else {
+            None
+        },
+        notes: if form_notes != word_class.notes {
+            form_notes
         } else {
             None
         },
@@ -299,6 +349,7 @@ async fn edit_word_class_submit(
                 error: Some(e),
                 previous_name: form.name.clone(),
                 previous_abbreviation: form.abbreviation.clone(),
+                previous_notes: form.notes.clone(),
                 user_has_permission,
                 can_edit_language: user_has_permission,
             };
@@ -307,6 +358,43 @@ async fn edit_word_class_submit(
             (StatusCode::BAD_REQUEST, body)
         }
     }
+}
+
+#[derive(Template)]
+#[template(path = "word_classes/delete.html")]
+struct DeleteWordClassTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word_class: WordClass,
+    can_edit_language: bool,
+}
+
+async fn delete_word_class_form(
+    s: Session,
+    languages: LanguageRepository,
+    word_classes: WordClassRepository,
+    permissions: LanguagePermissionRepository,
+    Path((code, abbreviation)): Path<(String, String)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let word_class = attempt!(s, word_classes
+        .find_by_abbreviation(&language.id, &abbreviation)
+        .await);
+
+    let user_has_permission = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let template = DeleteWordClassTemplate {
+        current_user: Some(user),
+        language,
+        word_class,
+        can_edit_language: user_has_permission,
+    };
+
+    okay(render_template(template))
 }
 
 async fn delete_word_class_submit(

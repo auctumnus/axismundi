@@ -17,6 +17,7 @@ pub struct WordClass {
     pub language: Uuid,
     pub name: String,
     pub abbreviation: String,
+    pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
@@ -31,6 +32,9 @@ pub struct CreateWordClass {
 
     #[validate(length(min = 1, max = 10))]
     pub abbreviation: String,
+
+    #[validate(length(max = 10000))]
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -40,6 +44,9 @@ pub struct UpdateWordClass {
 
     #[validate(length(min = 1, max = 10))]
     pub abbreviation: Option<String>,
+
+    #[validate(length(max = 10000))]
+    pub notes: Option<String>,
 }
 
 pub struct WordClassRepository {
@@ -107,13 +114,14 @@ impl WordClassRepository {
 
         let wc_result = sqlx::query!(
             r#"
-                INSERT INTO word_classes (language, name, abbreviation, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $4)
-                RETURNING id, language, name, abbreviation, created_by, updated_by, created_at, updated_at
+                INSERT INTO word_classes (language, name, abbreviation, notes, created_by, updated_by)
+                VALUES ($1, $2, $3, $4, $5, $5)
+                RETURNING id, language, name, abbreviation, notes, created_by, updated_by, created_at, updated_at
             "#,
             language.id,
             word_class.name,
             word_class.abbreviation,
+            word_class.notes,
             requestor.id
         )
         .fetch_one(&mut *tx)
@@ -136,6 +144,7 @@ impl WordClassRepository {
             language: wc_result.language,
             name: wc_result.name,
             abbreviation: wc_result.abbreviation,
+            notes: wc_result.notes,
             created_at: wc_result.created_at,
             updated_at: wc_result.updated_at,
             created_by: wc_result.created_by,
@@ -155,6 +164,7 @@ impl WordClassRepository {
                     word_classes.language,
                     word_classes.name,
                     word_classes.abbreviation,
+                    word_classes.notes,
                     word_classes.created_at,
                     word_classes.updated_at,
                     word_classes.created_by,
@@ -181,6 +191,7 @@ impl WordClassRepository {
                     word_classes.language,
                     word_classes.name,
                     word_classes.abbreviation,
+                    word_classes.notes,
                     word_classes.created_at,
                     word_classes.updated_at,
                     word_classes.created_by,
@@ -212,6 +223,7 @@ impl WordClassRepository {
                     word_classes.language,
                     word_classes.name,
                     word_classes.abbreviation,
+                    word_classes.notes,
                     word_classes.created_at,
                     word_classes.updated_at,
                     word_classes.created_by,
@@ -290,7 +302,8 @@ impl WordClassRepository {
                 UPDATE word_classes
                 SET name = COALESCE($2, name),
                     abbreviation = COALESCE($3, abbreviation),
-                    updated_by = $4,
+                    notes = COALESCE($4, notes),
+                    updated_by = $5,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
                 RETURNING word_classes.*, (SELECT bookmarks.slug FROM bookmarks WHERE bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class') as "bookmark!"
@@ -298,12 +311,23 @@ impl WordClassRepository {
             id,
             updates.name,
             updates.abbreviation,
+            updates.notes,
             requestor.id
         )
         .fetch_optional(&self.state.pool)
         .await?;
 
         result.ok_or_else(|| not_found(format!("word class with id '{id}'")))
+    }
+
+    pub fn render_notes(&self, word_class: &WordClass) -> AppResult<String> {
+        let rendered = word_class
+            .notes
+            .as_ref()
+            .map(|notes| crate::md::render_md(notes))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(rendered)
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {

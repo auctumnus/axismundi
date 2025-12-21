@@ -1,0 +1,22 @@
+.word-class-abbreviation-header {
+    color: var(--foreground-secondary);
+    font-weight: 400;
+}
+
+.word-class-meta {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    color: var(--foreground-secondary);
+    font-size: 0.875rem;
+}
+
+.word-class-meta .meta-item {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.word-class-meta .meta-label {
+    color: var(--foreground-tertiary);
+}

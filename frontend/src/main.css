@@ -603,7 +603,7 @@ footer {
     }
 }
 
-a.icon.button, .icon-button-container {
+a.icon.button, button.icon, .icon-button-container {
   min-width: 32px;
   min-height: 32px;
   padding: .75rem;
@@ -612,6 +612,7 @@ a.icon.button, .icon-button-container {
   justify-content: center;
   border: 0px solid transparent;
   border-radius: 100%;
+  cursor: pointer;
 
   background-color: transparent;
   color: var(--foreground-secondary);
@@ -625,6 +626,10 @@ a.icon.button, .icon-button-container {
 
   &:hover.yellow {
     background-color: color-mix(in oklab, var(--color-amber-400) 15%, transparent);
+    &, svg.icon {
+      transition: color var(--duration-fast) ease-in-out;
+      color: light-dark(var(--color-amber-600), var(--color-amber-800));
+    }
   }
 }
 
@@ -681,5 +686,73 @@ a.with-icon {
     text-align: center;
     line-height: 32px;
     user-select: none;
+  }
+}
+
+.context-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.context-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.context-label {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--foreground-secondary);
+  font-weight: 600;
+}
+
+.context-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  border: var(--border);
+  border-radius: var(--rounding);
+  background-color: var(--background-panel);
+  padding: 1rem;
+  text-decoration: none;
+  transition: border-color var(--duration-very-fast) ease-in-out;
+
+  &a:hover {
+    border-color: var(--foreground-secondary);
+  }
+}
+
+.context-title {
+  font-weight: 600;
+  color: var(--foreground-primary);
+}
+
+.context-text {
+  font-size: .875rem;
+  color: var(--foreground-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.context-card .language-summary {
+  font-size: .875rem;
+  color: var(--foreground-secondary);
+}
+
+.standalone-card {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li {
+    list-style: none;
+    margin: 0;
   }
 }
