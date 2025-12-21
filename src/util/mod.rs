@@ -143,7 +143,7 @@ pub fn first_sentence(text: &str) -> &str {
     if let Some(pos) = text.find('.') {
         &text[..=pos]
     } else {
-        text.split_at(100).0
+        text.split_at(100.min(text.len())).0
     }
 }
 
