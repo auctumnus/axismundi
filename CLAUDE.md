@@ -978,3 +978,40 @@ This codebase follows these patterns:
 5. **Simplicity** - Avoid over-engineering, keep things straightforward
 
 Following these patterns will make your code fit naturally into the existing codebase.
+
+## Template patterns
+
+generally:
+- headings and titles are lowercase
+- full buttons are Title Case, smaller buttons (e.g. in a header-with-actions) are lowercase
+- 
+
+### Lists
+
+there are 2 kinds of lists: lists on search pages, and preview lists. preview lists are introduced by a `header-with-actions`
+which has a [+ new $RESOURCE ] action and a [= view all ] action, then have 3 cards. search lists are
+introduced by a search bar and have pagination after them
+
+### Cards
+
+resources are represented by cards. there are generally 3 patterns to cards: either it's a clickable card
+(points to a full resource page), or it's a card with actions (has an edit and delete button usually), or
+it's a full card (on its own resource page). clickable cards and cards with actions appear in lists, and
+can be referred to as "preview cards"
+
+#### Preview cards
+
+preview cards have a structure of information on the left and actions on the right. the information on
+the left is 3 lines: the main identifying piece of information (a user's name, a word's normal form),
+a summary (the first line of a language's description, the word's first definition), and a "created by / at"
+section. the right side will either have a like button, edit/delete actions, or nothing
+
+#### Full cards
+
+full cards are a bit more idiosyncratic and ill avoid noting too many general patterns. the language card is a good reference
+
+### User badges
+
+user badges can be small, medium, or large. they are either clickable or not
+
+

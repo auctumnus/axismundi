@@ -5,11 +5,8 @@ ul#word-class-list {
 
     li {
         list-style: none;
+        margin-bottom: .5rem;
     }
-}
-
-.word-class-card {
-    margin-bottom: .5rem;
 }
 
 .word-class-card a {

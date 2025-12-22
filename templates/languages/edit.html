@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<h1>edit {{ language.name }}</h1>
+<h1>edit language</h1>
 
 
 {% if let Some(error) = error %}
@@ -35,16 +35,16 @@
     </section>
 
     <section>
-        <label for="description">Description</label>
+        <label for="description">Description (optional)</label>
         {% call u::field_error(name="description") %}
         <textarea id="description" name="description">{{previous_description}}</textarea>
     </section>
 
-    <button type="submit">Update language</button>
+    <button type="submit">Save changes</button>
 </form>
 
 {% if can_delete_language %}
-<h2>Delete language</h2>
+<h2>delete language</h2>
 
 <p>This action is irreversible and cannot be undone.</p>
 

@@ -4,7 +4,7 @@
 {% block title %}edit {{ word_class.name }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block content %}
-<h1>{{ language.name }} - edit word class</h1>
+<h1>edit word class</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -35,7 +35,7 @@
         <span class="hint">additional information about this word class (supports Markdown)</span>
     </section>
 
-    <button type="submit">Update word class</button>
+    <button type="submit">Save changes</button>
 </form>
 
 {% endblock %}

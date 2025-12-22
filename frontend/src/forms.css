@@ -170,6 +170,10 @@ form.default {
       transition: background-color 250ms ease-in-out,
                   border-color 250ms ease-in-out;
 
+      &:invalid {
+        color: var(--foreground-secondary);
+      }
+
       &:focus-visible, &:focus {
         outline: 2px solid var(--focus-ring);
         border: 1px solid var(--input-border-focus);

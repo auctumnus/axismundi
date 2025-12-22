@@ -4,7 +4,7 @@
 {% block title %}delete relation? - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block content %}
-<h1>{{ language.name }} - delete relation</h1>
+<h1>delete relation</h1>
 
 <form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations/{{ related_word_language_code }}/{{ related_word.slug }}/{{ related_word.lemma }}/delete">
     <section>

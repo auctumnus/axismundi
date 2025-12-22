@@ -94,7 +94,12 @@
 {% endmacro %}
 
 {% macro language_summary(language) %}
-<span class="ellipse language-summary">{{ crate::util::first_sentence(language.description) }}</span>
+{% set description = crate::util::first_sentence(&language.description) %}
+{% if description == "" %}
+    <span class="ellipse language-summary empty-description">no description yet</span>
+{% else %}
+    <span class="ellipse language-summary">{{ description }}</span>
+{% endif %}
 {% endmacro %}
 
 {% macro translatable_card(translatable_with_liked) %}
@@ -111,8 +116,8 @@
         </span>
         <span class="likes {% if translatable_with_liked.is_liked %}liked{% endif %}" data-target="{{ translatable_with_liked.translatable.slug }}" data-tooltip="Like this translatable" role="button">
             <span class="icon-button-container yellow">
-                <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
+                <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
             </span>
             <span class="like-count">{{ translatable_with_liked.translatable.like_count }}</span>
         </span>
@@ -170,8 +175,8 @@
             </span>
             <span class="likes {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
                 <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                    <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
+                    <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
                 </span>
                 <span class="like-count">{{ language_with_contributors.language.like_count }}</span>
             </span>
@@ -192,8 +197,8 @@
         </span>
         <span class="likes {% if translation_with_author.translation.like_count > 0 %}liked{% endif %}" data-target="{{ translation_with_author.translation.translatable_slug }}/{{ language_code }}" data-tooltip="Like this translation" role="button">
             <span class="icon-button-container yellow">
-                <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
+                <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
             </span>
             <span class="like-count">{{ translation_with_author.translation.like_count }}</span>
         </span>
@@ -217,8 +222,8 @@
         </span>
         <span class="likes {% if word_with_meta.word.like_count > 0 %}liked{% endif %}" data-target="{{ word_with_meta.word.language_code.as_ref().unwrap() }}/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}" data-tooltip="Like this word" role="button">
             <span class="icon-button-container yellow">
-                <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
+                <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
             </span>
             <span class="like-count">{{ word_with_meta.word.like_count }}</span>
         </span>
@@ -285,36 +290,36 @@
 </li>
 {% endmacro %}
 
-{% macro pagination_controls(page_link, current_page, total_pages, results_text, has_more, previous_pagination, last_page_request, previous_query) %}
+{% macro pagination(base_url, results, previous_pagination, previous_query) %}
 <nav class="pagination">
     <div class="pages">
-        <a class="button icon gray" aria-label="First page" data-tooltip="First page" href="{{ page_link }}?{{ crate::util::serialize_search(&previous_pagination, previous_query) }}">
+        <a class="button icon gray" aria-label="First page" data-tooltip="First page" href="{{ base_url }}?{{ crate::util::serialize_search(&previous_pagination, previous_query) }}">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.825 12l3.875 3.9q.275.275.288.688t-.288.712q-.275.275-.7.275t-.7-.275l-4.6-4.6q-.15-.15-.213-.325T5.426 12t.063-.375t.212-.325l4.6-4.6q.275-.275.688-.287t.712.287q.275.275.275.7t-.275.7zm6.6 0l3.875 3.9q.275.275.288.688t-.288.712q-.275.275-.7.275t-.7-.275l-4.6-4.6q-.15-.15-.213-.325T12.026 12t.063-.375t.212-.325l4.6-4.6q-.275-.275.688-.287t.712.287q.275.275.275.7t-.275.7z"/></svg>
         </a>
         {% if previous_pagination.offset == 0 %}
             <span class="empty-pagination-button">·</span>
         {% else %}
-            <a class="button icon gray" aria-label="Previous page" data-tooltip="Previous page" href="{{ page_link }}?{{ crate::util::serialize_search(&previous_pagination.with_previous_page(), previous_query) }}">
+            <a class="button icon gray" aria-label="Previous page" data-tooltip="Previous page" href="{{ base_url }}?{{ crate::util::serialize_search(&previous_pagination.with_previous_page(), previous_query) }}">
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m10.8 12l3.9 3.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275l-4.6-4.6q-.15-.15-.212-.325T8.425 12t.063-.375t.212-.325l4.6-4.6q.275-.275.7-.275t.7.275t.275.7t-.275.7z"/></svg>
             </a>
         {% endif %}
 
-        <span class="page-info">Page {{ current_page }} of {{ total_pages }}</span>
+        <span class="page-info">Page {{ results.current_page() }} of {{ results.total_pages() }}</span>
 
-        {% if has_more %}
-            <a class="button icon gray" aria-label="Next page" data-tooltip="Next page" href="{{ page_link }}?{{ crate::util::serialize_search(&previous_pagination.with_next_page(), previous_query) }}">
+        {% if results.has_more %}
+            <a class="button icon gray" aria-label="Next page" data-tooltip="Next page" href="{{ base_url }}?{{ crate::util::serialize_search(&previous_pagination.with_next_page(), previous_query) }}">
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
             </a>
         {% else %}
             <span class="empty-pagination-button">·</span>
         {% endif %}
 
-        <a class="button icon gray" aria-label="Last page" data-tooltip="Last page" href="{{ page_link }}?{{ crate::util::serialize_search(last_page_request, previous_query) }}">
+        <a class="button icon gray" aria-label="Last page" data-tooltip="Last page" href="{{ base_url }}?{{ crate::util::serialize_search(&results.request_last_page(), previous_query) }}">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9.575 12L5.7 8.1q-.275-.275-.288-.687T5.7 6.7q.275-.275.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.687.288T5.7 17.3q-.275-.275-.275-.7t.275-.7zm6.6 0L12.3 8.1q-.275-.275-.288-.687T12.3 6.7q.275-.275.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.687.288T12.3 17.3q-.275-.275-.275-.7t.275-.7z"/></svg>
         </a>
     </div>
     <div class="meta">
-        <span class="total-results">{{ results_text }}</span>
+        <span class="total-results">{{ results.results_text() }}</span>
     </div>
 </nav>
 {% endmacro %}

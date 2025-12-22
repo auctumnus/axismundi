@@ -19,7 +19,7 @@
         {% call u::field_error(name="language_code") %}
         <div class="select-container">
             <select id="language_code" name="language_code" required>
-                <option value="" disabled selected>Select a language</option>
+                <option value="" disabled selected>-- select a language --</option>
                 {% for language in available_languages %}
                     <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
                 {% endfor %}

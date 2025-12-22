@@ -13,7 +13,7 @@ ul.contributor-list {
 
 .contributor-card {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     border: var(--border);
     border-radius: var(--rounding);
     background-color: var(--background-panel);
@@ -96,17 +96,13 @@ ul.contributor-list {
         padding-top: 0.75rem;
         border-top: 1px solid var(--foreground-quaternary);
 
-        .icon-button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        .icon-button-container {
+            /* Override sizing and border-radius for this context */
             width: 2rem;
             height: 2rem;
+            min-width: 2rem;
+            min-height: 2rem;
             border-radius: var(--rounding);
-            color: var(--foreground-secondary);
-            background-color: transparent;
-            transition: background-color var(--duration-very-fast) ease-in-out, color var(--duration-very-fast) ease-in-out;
-            cursor: pointer;
             text-decoration: none;
 
             svg {

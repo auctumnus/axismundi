@@ -13,6 +13,8 @@
 
   --foreground-primary: light-dark(var(--light-foreground-primary), var(--dark-foreground-primary));
   --foreground-secondary: light-dark(var(--color-slate-500), var(--color-slate-400));
+  --foreground-tertiary: light-dark(var(--color-slate-400), var(--color-slate-600));
+  --foreground-quaternary: light-dark(var(--color-slate-300), var(--color-slate-700));
   --foreground-accent: var(--color-sky-500);
 
   --error-background: light-dark(color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel)), oklch(7.8% 0.092 26.042));
@@ -604,32 +606,38 @@ footer {
 }
 
 a.icon.button, button.icon, .icon-button-container {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-width: 32px;
   min-height: 32px;
   padding: .75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0px solid transparent;
+  border: 1px solid transparent;
   border-radius: 100%;
   cursor: pointer;
 
   background-color: transparent;
   color: var(--foreground-secondary);
+  font-size: .875rem;
 
-  transition: background-color var(--duration-fast) ease-in-out,
-              color var(--duration-fast) ease-in-out;
+  transition: background-color var(--duration-very-fast) ease-in-out,
+              color var(--duration-very-fast) ease-in-out;
 
-  &:hover.gray {
-    background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+  svg {
+    width: 24px;
+    height: 24px;
+    color: inherit;
   }
 
-  &:hover.yellow {
-    background-color: color-mix(in oklab, var(--color-amber-400) 15%, transparent);
-    &, svg.icon {
-      transition: color var(--duration-fast) ease-in-out;
-      color: light-dark(var(--color-amber-600), var(--color-amber-800));
-    }
+  &.yellow:hover {
+    background-color: color-mix(in oklab, var(--color-amber-400) 10%, transparent 90%);
+    color: var(--color-amber-400);
+  }
+
+  &.gray:hover {
+    background-color: color-mix(in oklab, var(--foreground-secondary) 10%, transparent 90%);
+    color: var(--foreground-secondary);
   }
 }
 
