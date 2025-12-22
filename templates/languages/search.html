@@ -22,6 +22,7 @@
         margin-bottom: .5rem;
     }
 </style>
+<link rel="stylesheet" href="/static/language-card.css">
 {% endblock %}
 
 {% block content %}
@@ -75,19 +76,9 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul class="language-list">
+        <ul id="language-list">
             {% for item in results.items %}
-                <li>
-                    <div class="card clickable">
-                        <a href="/languages/{{ item.language.code }}">
-                            <div class="info">
-                                <div class="title">{{ item.language.name }}</div>
-                                <div class="summary">{% call u::language_summary(&item.language) %}</div>
-                                <div class="meta">created by {% call u::badge(&item.owner, 20) %} · {% call u::relative(item.language.created_at) %}</div>
-                            </div>
-                        </a>
-                    </div>
-                </li>
+                {% call u::render_language_card(&item) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

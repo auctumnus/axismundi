@@ -290,6 +290,28 @@
 </li>
 {% endmacro %}
 
+{% macro render_user_card(user, previous_search) %}
+<li class="user-card">
+    <a href="/users/{{ user.username}}{% if previous_search != "" %}?previous_search={{ previous_search | urlencode }}{% endif %}">
+        <span class="left">
+            {% call pfp(&user, "large") %}
+            <span class="user-info">
+                {% if let Some(gender) = &user.gender %}
+                    <span class="display-name gendered" style="--color: #{{gender}}">{% call name(user) %}</span>
+                {% else %}
+                    <span class="display-name">{% call name(user) %}</span>
+                {% endif %}
+                {% if let Some(bio) = &user.description %}
+                    <span class="user-bio ellipse">{{ crate::util::first_sentence(bio) }}</span>
+                {% else %}
+                    <span class="user-bio ellipse empty-bio">no bio yet</span>
+                {% endif %}
+            </span>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
 {% macro pagination(base_url, results, previous_pagination, previous_query) %}
 <nav class="pagination">
     <div class="pages">

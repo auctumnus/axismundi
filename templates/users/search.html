@@ -3,6 +3,28 @@
 
 {% block title %}search users - axismundi{% endblock %}
 
+{% block head %}
+<script type="importmap">
+    {
+        "imports": {
+            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
+        }
+    }
+</script>
+<script src="/static/tooltip.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/tooltip.css">
+<style>
+    form.default {
+        margin-bottom: 0;
+    }
+
+    div.card {
+        margin-bottom: .5rem;
+    }
+</style>
+<link rel="stylesheet" href="/static/user-card.css">
+{% endblock %}
+
 {% block content %}
 <h1>search users</h1>
 
@@ -31,24 +53,7 @@
     {% else %}
         <ul class="user-list">
             {% for user in results.items %}
-                <li>
-                    <div class="card clickable">
-                        <a href="/users/{{ user.username }}">
-                            <div class="info">
-                                <div class="title">{% call u::name(user) %}</div>
-                                <div class="summary">@{{ user.username }}</div>
-                                <div class="meta">
-                                    {% if let Some(desc) = &user.description %}
-                                        {{ desc.lines().next().unwrap_or("") }}
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="actions">
-                                {% call u::pfp(user, 50) %}
-                            </div>
-                        </a>
-                    </div>
-                </li>
+                {% call u::render_user_card(&user, previous_search) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

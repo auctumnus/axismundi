@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{attempt, controller::html::{okay, render_generic_error, render_template}, err::AppError, get_user, model::{contribution_stats::{ContributionsSearch, ContributionStatsRepository}, definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}};
+use crate::{attempt, controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors}, err::AppError, get_user, model::{contribution_stats::{ContributionsSearch, ContributionStatsRepository}, definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -34,17 +34,13 @@ struct SearchLanguagesTemplate {
     error: Option<AppError>,
     previous_query: LanguageSearch,
     previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<LanguageWithMeta>>,
-}
-
-struct LanguageWithMeta {
-    language: Language,
-    owner: User,
+    results: Option<PaginatedResponse<LanguagesWithContributors>>,
 }
 
 async fn search_languages(
     s: Session,
     languages: LanguageRepository,
+    contribution_stats: ContributionStatsRepository,
     Query(query): Query<LanguageSearch>,
     Query(pagination): Query<PaginatedRequest>,
 ) -> (StatusCode, Response) {
@@ -87,10 +83,16 @@ async fn search_languages(
 
     let mut results_with_meta = vec![];
     for language in results.items {
-        let owner = attempt!(s, languages.find_owner(language.id).await);
-        results_with_meta.push(LanguageWithMeta {
+        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language.id, 5).await);
+        let is_liked = if let Some(user) = &current_user {
+            languages.is_liked(&language.id, &user.id).await.unwrap_or(false)
+        } else {
+            false
+        };
+        results_with_meta.push(LanguagesWithContributors {
             language,
-            owner,
+            top_contributors,
+            is_liked,
         });
     }
 
