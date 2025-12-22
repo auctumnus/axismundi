@@ -27,8 +27,8 @@
   --color-shadow: light-dark(color-mix(in oklab,var(--color-slate-900) 10%,transparent), color-mix(in oklab, black 30%, transparent));
   --shadow-hover: 0 10px 15px -3px var(--color-shadow), 0 4px 6px -4px var(--color-shadow);
 
-  --font-normal: 'Roboto', Arial, sans-serif;
-  --font-heading: 'Roboto Slab', 'Roboto', Arial, sans-serif;
+  --font-normal: 'Roboto', 'Noto Sans', Arial, sans-serif;
+  --font-heading: 'Roboto Slab', 'Roboto', 'Noto Sans', Arial, sans-serif;
 
   --duration-very-fast: 75ms;
   --duration-fast: 150ms;
@@ -395,6 +395,7 @@ a.button, form.default button[type="submit"] {
 
 a.button {
   display: inline-block;
+  margin-bottom: .5rem;
 }
 
 a.button-secondary, form.default button[type="reset"], button.clear {
@@ -670,16 +671,23 @@ a.icon.button, button.icon, .icon-button-container {
   max-width: calc(var(--page-width) - 8rem);
 }
 
-a.with-icon {
+a.with-icon, button.with-icon {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
   gap: .25rem;
+  color: var(--foreground-secondary);
+  cursor: pointer;
 
   svg.icon {
     position: relative;
     top: .5px;
     z-index: 0;
+  }
+
+  &:hover {
+    text-decoration: underline;
+    color: var(--foreground-primary);
   }
 
   &:hover svg.icon {
