@@ -24,6 +24,7 @@
         height: var(--pfp-size);
 
         outline: 4px solid var(--background-panel);
+        background-color: var(--background-panel);
 
         &:dir(rtl) {
             right: var(--padding);
