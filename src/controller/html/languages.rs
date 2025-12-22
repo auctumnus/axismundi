@@ -1,21 +1,24 @@
 use askama::Template;
-use axum::{Router, extract::Path, response::{IntoResponse, Redirect, Response}, routing::{get, post}, Form};
+use axum::{Router, extract::{Path, Query}, response::{IntoResponse, Redirect, Response}, routing::{get, post}, Form};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{attempt, controller::html::{okay, render_template}, err::AppError, get_user, model::{contribution_stats::{ContributionsSearch, ContributionStatsRepository}, definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::PaginatedRequest, util::{AppState, extract_session::Session}};
+use crate::{attempt, controller::html::{okay, render_generic_error, render_template}, err::AppError, get_user, model::{contribution_stats::{ContributionsSearch, ContributionStatsRepository}, definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/new-language", post(new_language_submit))
         .route("/languages/{code}/edit", post(edit_language_submit))
+        .route("/languages/{code}/delete", post(delete_language_submit))
         .route("/languages/{code}/permissions/{id}/delete", post(delete_permission_submit))
         .route("/languages/{code}/permissions/{id}/edit", post(edit_permission_submit));
     let normal_routes = Router::<AppState>::new()
         .route("/new-language", get(new_language_form))
+        .route("/languages", get(search_languages))
         .route("/languages/{code}", get(view_language))
         .route("/languages/{code}/edit", get(edit_language_form))
+        .route("/languages/{code}/delete", get(delete_language_form))
         .route("/languages/{code}/contributors", get(search_contributors))
         .route("/languages/{code}/permissions/{id}/delete", get(delete_permission_form))
         .route("/languages/{code}/permissions/{id}/edit", get(edit_permission_form));
@@ -23,6 +26,93 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     (secure_routes, normal_routes)
 }
 
+
+#[derive(Template)]
+#[template(path = "languages/search.html")]
+struct SearchLanguagesTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+    previous_query: LanguageSearch,
+    previous_pagination: PaginatedRequest,
+    results: Option<PaginatedResponse<LanguageWithMeta>>,
+}
+
+struct LanguageWithMeta {
+    language: Language,
+    owner: User,
+}
+
+async fn search_languages(
+    s: Session,
+    languages: LanguageRepository,
+    Query(query): Query<LanguageSearch>,
+    Query(pagination): Query<PaginatedRequest>,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+
+    let query = LanguageSearch {
+        text_query: query.text_query.and_then(|q| {
+            let trimmed = q.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        owned_by: query.owned_by.and_then(|o| {
+            let trimmed = o.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        ..query
+    };
+
+    let results = match languages.search(pagination.clone(), query.clone()).await {
+        Ok(res) => res,
+        Err(e) => {
+            let template = SearchLanguagesTemplate {
+                current_user,
+                error: Some(e),
+                previous_query: query,
+                previous_pagination: pagination,
+                results: None,
+            };
+            let body = render_template(template);
+            return (StatusCode::BAD_REQUEST, body);
+        }
+    };
+
+    let mut results_with_meta = vec![];
+    for language in results.items {
+        let owner = attempt!(s, languages.find_owner(language.id).await);
+        results_with_meta.push(LanguageWithMeta {
+            language,
+            owner,
+        });
+    }
+
+    let results_with_meta = Some(PaginatedResponse {
+        items: results_with_meta,
+        total: results.total,
+        limit: results.limit,
+        offset: results.offset,
+        has_more: results.has_more,
+    });
+
+    let template = SearchLanguagesTemplate {
+        current_user,
+        error: None,
+        previous_query: query,
+        previous_pagination: pagination,
+        results: results_with_meta,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
 
 #[derive(Template)]
 #[template(path = "languages/new.html")]
@@ -590,5 +680,53 @@ async fn edit_permission_submit(
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
+    }
+}
+
+// Delete language handlers
+
+#[derive(Template)]
+#[template(path = "languages/delete.html")]
+#[allow(dead_code)]
+struct DeleteLanguageTemplate {
+    current_user: Option<User>,
+    language: Language,
+    can_delete_language: bool,
+}
+
+async fn delete_language_form(
+    s: Session,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+
+    let can_delete_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Owner)
+        .await
+        .unwrap_or(false);
+
+    let template = DeleteLanguageTemplate {
+        current_user: Some(user),
+        language,
+        can_delete_language,
+    };
+
+    okay(render_template(template))
+}
+
+async fn delete_language_submit(
+    s: Session,
+    languages: LanguageRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+
+    match languages.delete(&user, language.id).await {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/languages").into_response()),
+        Err(e) => render_generic_error(s, e).await
     }
 }

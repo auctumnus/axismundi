@@ -117,7 +117,7 @@ pub struct UpdateUser {
     pub new_password: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UserSearch {
     pub text_query: Option<String>,
     pub created_before: Option<DateTime<Utc>>,

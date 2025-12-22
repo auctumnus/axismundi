@@ -69,6 +69,10 @@ body {
     max-width: var(--page-width);
     margin: 0 auto;
   }
+
+  &:has(#sitewide-banner) {
+    padding-bottom: 2.5rem;
+  }
 }
 
 @media (max-width: 616px) {
@@ -340,6 +344,24 @@ main {
       margin-bottom: .5rem;
       list-style: disc;
     }
+  }
+}
+
+#sitewide-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: .5rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: .9rem;
+  z-index: 9999;
+
+  &.error {
+    background-color: var(--error-background);
+    color: var(--error-foreground);
+    border-bottom: 1px solid var(--error-border);
   }
 }
 

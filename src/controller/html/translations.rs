@@ -405,6 +405,8 @@ struct ViewTranslationTemplate {
     can_edit_translatable: bool,
     can_edit_language: bool,
     can_edit_translation: bool,
+    translatable_is_liked: bool,
+    translation_is_liked: bool,
 }
 
 async fn view_translation(
@@ -448,6 +450,18 @@ async fn view_translation(
         false
     };
 
+    let translatable_is_liked = if let Some(current_user) = s.user() {
+        attempt!(s, translatables.is_liked(&current_user.id, &translatable.id).await)
+    } else {
+        false
+    };
+
+    let translation_is_liked = if let Some(current_user) = s.user() {
+        attempt!(s, translations.is_liked(&current_user.id, &translation.id).await)
+    } else {
+        false
+    };
+
     let can_edit_translation = current_user_has_permission;
 
     let template = ViewTranslationTemplate {
@@ -461,6 +475,8 @@ async fn view_translation(
         can_edit_translatable,
         can_edit_language,
         can_edit_translation,
+        translatable_is_liked,
+        translation_is_liked,
     };
 
     let body = render_template(template);

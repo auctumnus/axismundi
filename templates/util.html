@@ -136,7 +136,7 @@
             {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
                 <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
             {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
+                <a href="/languages/{{ language.code }}">{{ language.name }}</a>
             {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
                 <a href="/translatable/{{ translatable.slug }}">{{ translatable.title }}</a>
             {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
@@ -149,7 +149,7 @@
             <span>in</span>
             {% match entity %}
                 {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                    <a href="/languages/{{ language.code }}/">{{ language.name }}</a>
+                    <a href="/languages/{{ language.code }}">{{ language.name }}</a>
                 {% else %}
                     <span>an unknown entity</span>
             {% endmatch %}

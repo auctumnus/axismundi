@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors, TranslatableWithLiked}, err::{AppError, bad_request}, model::{contribution_stats::ContributionStatsRepository, email_verification_tokens::EmailVerificationTokenRepository, languages::{LanguageRepository, LanguageSearch}, sessions::SessionRepository, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}, s3::S3}};
+use crate::{controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors, TranslatableWithLiked}, err::{AppError, bad_request}, model::{contribution_stats::ContributionStatsRepository, email_verification_tokens::EmailVerificationTokenRepository, languages::{LanguageRepository, LanguageSearch}, sessions::SessionRepository, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository, UserSearch}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}, s3::S3}};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -17,6 +17,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/settings", get(settings_form).post(settings_submit))
         .route("/change-profile-picture", post(change_profile_picture))
         .route("/logout", get(logout_form).post(logout_submit))
+        .route("/users", get(search_users))
         .route("/users/{username}", get(profile));
 
     (secure_routes, normal_routes)
@@ -453,6 +454,63 @@ async fn logout_submit(jar: CookieJar, s: Session, sessions: SessionRepository) 
     let jar = jar.remove(Cookie::from(SESSION_COOKIE_NAME));
 
     (jar, (StatusCode::SEE_OTHER, Redirect::to("/").into_response()))
+}
+
+#[derive(Template)]
+#[template(path = "users/search.html")]
+struct SearchUsersTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+    previous_query: UserSearch,
+    previous_pagination: PaginatedRequest,
+    results: Option<PaginatedResponse<User>>,
+}
+
+async fn search_users(
+    s: Session,
+    users: UserRepository,
+    Query(query): Query<UserSearch>,
+    Query(pagination): Query<PaginatedRequest>,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+
+    let query = UserSearch {
+        text_query: query.text_query.and_then(|q| {
+            let trimmed = q.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }),
+        ..query
+    };
+
+    let results = match users.search(pagination.clone(), query.clone()).await {
+        Ok(res) => Some(res),
+        Err(e) => {
+            let template = SearchUsersTemplate {
+                current_user,
+                error: Some(e),
+                previous_query: query,
+                previous_pagination: pagination,
+                results: None,
+            };
+            let body = render_template(template);
+            return (StatusCode::BAD_REQUEST, body);
+        }
+    };
+
+    let template = SearchUsersTemplate {
+        current_user,
+        error: None,
+        previous_query: query,
+        previous_pagination: pagination,
+        results,
+    };
+
+    let body = render_template(template);
+    okay(body)
 }
 
 #[derive(Template)]

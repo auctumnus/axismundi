@@ -712,7 +712,7 @@ impl LanguageRepository {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LanguageSearch {
     pub text_query: Option<String>,
     pub owned_by: Option<String>,

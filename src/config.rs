@@ -70,6 +70,12 @@ const fn default_wait_between_tasks_ms() -> u64 {
 const fn default_task_timeout_ms() -> u64 {
     15_000
 }
+#[derive(Clone, Deserialize, Debug, Default)]
+pub struct BannerConfig {
+    pub message: String,
+    pub kind: String,
+    pub enabled: bool,
+}
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct AppConfig {
@@ -84,6 +90,8 @@ pub struct AppConfig {
     pub port: u16,
     #[serde(default = "default_environment")]
     pub environment: Environment,
+    #[serde(default)]
+    pub banner: BannerConfig,
 }
 
 
@@ -117,6 +125,11 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
             },
             file_upload_limit_bytes: default_file_upload_limit(),
             port: 3001,
+            banner: BannerConfig {
+                message: "This is a test banner".to_string(),
+                kind: "info".to_string(),
+                enabled: false,
+            },
             // TODO: seems bad!
             environment: Environment::Dev,
         }
