@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit permission - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - edit permission</h1>
+
+{% call u::top_level_error() %}
+
+<div class="context-cards">
+    <span class="context-label">for user</span>
+    <div class="context-card">
+        <div class="context-card-content">
+            {% call u::badge(&target_user, "small") %}
+        </div>
+    </div>
+</div>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/permissions/{{ permission.id }}/edit">
+
+    <section>
+        <label for="permission">Permission level</label>
+        {% call u::field_error("permission") %}
+        <div class="select-container">
+            <select name="permission" id="permission" required>
+                <option value="viewer" {% if permission.permission == crate::model::language_invites::PermissionLevel::Viewer %}selected{% endif %}>Viewer</option>
+                <option value="editor" {% if permission.permission == crate::model::language_invites::PermissionLevel::Editor %}selected{% endif %}>Editor</option>
+                <option value="admin" {% if permission.permission == crate::model::language_invites::PermissionLevel::Admin %}selected{% endif %}>Admin</option>
+                {% if can_grant_owner %}
+                    <option value="owner" {% if permission.permission == crate::model::language_invites::PermissionLevel::Owner %}selected{% endif %}>Owner</option>
+                {% endif %}
+            </select>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+        </div>
+    </section>
+    
+    {% call u::permission_level_helptext() %}
+
+    <section class="button-row">
+        <button type="submit">Update permission</button>
+    </section>
+</form>
+
+
+<style>
+.context-cards {
+    margin-bottom: 2rem;
+}
+
+.context-card {
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.context-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+</style>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, user_has_permission) %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete permission - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - delete permission</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/permissions/{{ permission.id }}/delete">
+    <section>
+        <p>Are you sure you want to remove <strong>{% call u::name(&target_user) %}</strong>'s <strong>{{ permission.permission.display_name() }}</strong> permission?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete permission</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/contributors" class="breadcrumb">contributors</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, user_has_permission) %}
+{% endblock %}

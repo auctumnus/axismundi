@@ -1,16 +1,23 @@
+use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{err::AppResult, model::{languages::LanguageRepository, users::User}, util::{AppState, repo_from_parts}};
+use crate::{err::AppResult, model::{language_invites::PermissionLevel, languages::LanguageRepository, users::User}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, repo_from_parts}};
 
 pub struct ContributionStats {
-    language_id: Uuid,
-    user_id: Uuid,
-    word_count: i64,
-    translation_count: i64
+    pub language_id: Uuid,
+    pub user_id: Uuid,
+    pub word_count: i64,
+    pub translation_count: i64
 }
 
 pub struct ContributionStatsRepository {
     state: AppState,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContributionsSearch {
+    pub q: Option<String>,
+    pub permission_level: Option<PermissionLevel>,
 }
 
 impl ContributionStatsRepository {
@@ -102,7 +109,7 @@ impl ContributionStatsRepository {
         let contributors = sqlx::query_as!(
             User,
             r#"
-                SELECT 
+                SELECT
                     u.id,
                     u.username,
                     u.email,
@@ -117,10 +124,11 @@ impl ContributionStatsRepository {
                     u.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM users u
-                JOIN contribution_stats cs ON u.id = cs.user_id
+                LEFT JOIN contribution_stats cs ON u.id = cs.user_id AND cs.language_id = $1
                 LEFT JOIN bookmarks ON bookmarks.item = u.id AND bookmarks.resource = 'user'
-                WHERE cs.language_id = $1
-                ORDER BY (cs.word_count + (10 * cs.translation_count)) DESC
+                LEFT JOIN language_permissions lp ON lp."user" = u.id AND lp.language = $1
+                WHERE cs.language_id = $1 OR lp.permission >= 'editor'
+                ORDER BY (COALESCE(cs.word_count, 0) + (10 * COALESCE(cs.translation_count, 0))) DESC
                 LIMIT $2
             "#,
             language,
@@ -139,8 +147,112 @@ impl ContributionStatsRepository {
         }
 
         Ok(c)
+    }
 
-        
+    pub async fn search_top_contributors(&self, language: &Uuid, query: &ContributionsSearch, paginated_request: &PaginatedRequest) -> AppResult<PaginatedResponse<(User, ContributionStats, PermissionLevel, Option<Uuid>)>> {
+        let offset = paginated_request.offset;
+        let limit = paginated_request.limit;
+
+        let like_query = match &query.q {
+            Some(q) => format!("%{}%", q),
+            None => "%".to_string(),
+        };
+
+        let min_permission = query.permission_level.unwrap_or(PermissionLevel::Viewer);
+
+        let items_future = sqlx::query!(
+            r#"
+                SELECT
+                    u.id as u_id,
+                    u.username as u_username,
+                    u.email as u_email,
+                    u.password_hash as u_password_hash,
+                    u.display_name as u_display_name,
+                    u.description as u_description,
+                    u.pronouns as u_pronouns,
+                    u.gender as u_gender,
+                    u.profile_picture_object_id as u_profile_picture_object_id,
+                    u.verified_at as u_verified_at,
+                    u.created_at as u_created_at,
+                    u.updated_at as u_updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!",
+                    lp.id as "permission_id?",
+                    COALESCE(lp.permission, 'viewer') as "permission!: PermissionLevel",
+                    cs.language_id as "cs_language_id?",
+                    cs.user_id as "cs_user_id?",
+                    COALESCE(cs.word_count, 0) as "cs_word_count!",
+                    COALESCE(cs.translation_count, 0) as "cs_translation_count!"
+                FROM users u
+                LEFT JOIN contribution_stats cs ON u.id = cs.user_id AND cs.language_id = $1
+                LEFT JOIN bookmarks ON bookmarks.item = u.id AND bookmarks.resource = 'user'
+                LEFT JOIN language_permissions lp ON lp."user" = u.id AND lp.language = $1
+                WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)
+                AND (lp.permission IS NULL OR lp.permission >= $4)
+                ORDER BY (COALESCE(cs.word_count, 0) + (10 * COALESCE(cs.translation_count, 0))) DESC
+                LIMIT $3 OFFSET $5
+            "#,
+            language,
+            like_query,
+            limit as i64,
+            min_permission as PermissionLevel,
+            offset as i64,
+        )
+        .fetch_all(&self.state.pool);
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*) as "count!"
+                FROM users u
+                LEFT JOIN contribution_stats cs ON u.id = cs.user_id AND cs.language_id = $1
+                LEFT JOIN language_permissions lp ON lp.user = u.id AND lp.language = $1
+                WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)
+                AND (lp.permission IS NULL OR lp.permission >= $3)
+
+            "#,
+            language,
+            like_query,
+            min_permission as PermissionLevel,
+        )
+        .fetch_one(&self.state.pool);
+
+
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
+
+        let total = total_count;
+        let has_more = (i64::from(paginated_request.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+
+        let mut results = Vec::new();
+        for record in items {
+            let user = User {
+                id: record.u_id,
+                username: record.u_username,
+                email: record.u_email,
+                password_hash: record.u_password_hash,
+                display_name: record.u_display_name,
+                description: record.u_description,
+                pronouns: record.u_pronouns,
+                gender: record.u_gender,
+                profile_picture_object_id: record.u_profile_picture_object_id,
+                verified_at: record.u_verified_at,
+                created_at: record.u_created_at,
+                updated_at: record.u_updated_at,
+                bookmark: record.bookmark,
+            };
+
+            let stats = ContributionStats {
+                language_id: record.cs_language_id.unwrap_or(*language),
+                user_id: record.cs_user_id.unwrap_or(record.u_id),
+                word_count: record.cs_word_count,
+                translation_count: record.cs_translation_count,
+            };
+            results.push((user, stats, record.permission, record.permission_id));
+        }
+
+        Ok(PaginatedResponse { items: results,
+            total,
+            offset,
+            limit,
+            has_more,
+        })
     }
 }
 

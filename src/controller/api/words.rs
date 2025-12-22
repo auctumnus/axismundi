@@ -1,10 +1,10 @@
 use crate::{
     err::{unauthorized_no_session, AppResult},
     model::{
-        languages::LanguageRepository, words::{WordRepository, CreateWord, Word, WordSearch, UpdateWord}
+        languages::LanguageRepository, words::{WordRepository, CreateWord, Word, WordSearch, UpdateWord, CrossLanguageSearchResponse}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::extract_session::Session,
+    util::{extract_session::Session, ensure_verified},
 };
 use axum::{
     Json,
@@ -16,6 +16,7 @@ use validator::Validate;
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
+        .route("/words/search", get(search_words_across_languages))
         .route("/languages/{code}/words", post(create_word))
         .route("/languages/{code}/words", get(search_words))
         .route("/languages/{code}/words/{slug}/{lemma}", get(get_word))
@@ -68,6 +69,38 @@ pub async fn search_words(
     let language = languages.find_by_code(&code).await?;
 
     words.search(&language.id, pagination, query).await
+}
+
+#[derive(serde::Deserialize)]
+pub struct CrossLanguageSearchQuery {
+    pub q: String,
+    pub exclude_id: Option<uuid::Uuid>,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+}
+
+fn default_limit() -> i64 {
+    10
+}
+
+pub async fn search_words_across_languages(
+    s: Session,
+    words: WordRepository,
+    axum::extract::Query(query): axum::extract::Query<CrossLanguageSearchQuery>,
+) -> ApiResponse<Json<CrossLanguageSearchResponse>> {
+    let Some(user) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+    ensure_verified(user)?;
+
+    // Clamp limit to reasonable range
+    let limit = query.limit.clamp(1, 50);
+
+    let results = words
+        .search_across_languages(user, &query.q, query.exclude_id, limit)
+        .await?;
+
+    Ok(Json(results))
 }
 
 pub async fn edit_word(

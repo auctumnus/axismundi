@@ -37,8 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // on Drop
     let pool = PgPool::connect(&CONFIG.database_url).await?;
 
-    sqlx::migrate!("./migrations").run(&pool).await?;
-
     let email_service = std::sync::Arc::new(MockEmailService::new());
 
     let app_state = AppState {

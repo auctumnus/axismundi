@@ -66,10 +66,14 @@ async function processJS(inputPath: string, outputPath: string) {
   console.log(`Processed JS: ${relative(process.cwd(), inputPath)} → ${relative(process.cwd(), outputPath)}`);
 }
 
-// Entry points that need bundling (React components)
+// Entry points that need bundling (React components and main entry)
 const BUNDLE_ENTRY_POINTS = [
+  'src/main.ts',
   'src/form-editor.tsx',
   'src/annotation.tsx',
+  'src/etymology-modal.tsx',
+  'src/word-combobox.tsx',
+  'src/user-combobox.tsx',
 ];
 
 async function bundleReactFiles() {
@@ -112,6 +116,12 @@ async function processFile(filePath: string) {
 
   // Skip TypeScript declaration files
   if (filePath.endsWith('.d.ts')) {
+    return;
+  }
+
+  // Skip files that are in the bundle entry points
+  const relativeFromRoot = relative(import.meta.dir, filePath);
+  if (BUNDLE_ENTRY_POINTS.includes(relativeFromRoot)) {
     return;
   }
 

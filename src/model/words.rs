@@ -99,6 +99,21 @@ impl WordRepository {
         nfkc(word)
     }
 
+    pub async fn count_by_slug(&self, language: Uuid, slug: &str) -> AppResult<i64> {
+        let count = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*) FROM words
+                WHERE language = $1 AND slug = $2
+            "#,
+            language,
+            slug
+        )
+        .fetch_one(&self.state.pool)
+        .await?;
+
+        Ok(count.unwrap_or(0))
+    }
+
     pub async fn make_slug_and_lemma(&self, language: Uuid, word: &str) -> AppResult<(String, i32)> {
         let slug = nfkc(word);
         let number_slugs = sqlx::query_scalar!(
@@ -705,6 +720,104 @@ impl WordRepository {
 
         Ok(result.is_some())
     }
+
+    pub async fn search_across_languages(
+        &self,
+        user: &User,
+        query: &str,
+        exclude_id: Option<Uuid>,
+        limit_per_language: i64,
+    ) -> AppResult<CrossLanguageSearchResponse> {
+        // Get languages where user has Editor+ permissions
+        let editable_languages = sqlx::query!(
+            r#"
+                SELECT language, languages.code as "language_code!", languages.name as "language_name!"
+                FROM language_permissions
+                JOIN languages ON languages.id = language_permissions.language
+                WHERE language_permissions."user" = $1
+                  AND language_permissions.permission IN ('editor', 'admin', 'owner')
+            "#,
+            user.id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        if editable_languages.is_empty() {
+            return Ok(CrossLanguageSearchResponse {
+                languages: vec![],
+            });
+        }
+
+        // Search words in each language
+        let mut language_groups = Vec::new();
+
+        for lang in editable_languages {
+            let words = sqlx::query!(
+                r#"
+                    SELECT
+                        words.id,
+                        words.word,
+                        words.slug,
+                        words.lemma,
+                        COALESCE(bookmarks.slug, '')::text as "bookmark!",
+                        languages.code as "language_code!",
+                        word_classes.abbreviation as "word_class_abbreviation?",
+                        words.ipa as "ipa?"
+                    FROM words
+                    LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
+                    LEFT JOIN languages ON languages.id = words.language
+                    LEFT JOIN word_classes ON word_classes.id = words.word_class
+                    WHERE words.language = $1
+                      AND ($2::UUID IS NULL OR words.id != $2)
+                      AND (
+                          words.word ILIKE '%' || $3 || '%'
+                          OR similarity(words.word, $3) > 0.3
+                      )
+                    ORDER BY
+                        CASE WHEN words.word ILIKE $3 || '%' THEN 0 ELSE 1 END,
+                        similarity(words.word, $3) DESC,
+                        words.word
+                    LIMIT $4
+                "#,
+                lang.language,
+                exclude_id,
+                query,
+                limit_per_language
+            )
+            .fetch_all(&self.state.pool)
+            .await?;
+
+            if !words.is_empty() {
+                let word_results = words
+                    .into_iter()
+                    .map(|w| WordSearchResult {
+                        id: w.id,
+                        word: w.word,
+                        slug: w.slug,
+                        lemma: w.lemma,
+                        bookmark: w.bookmark,
+                        language_code: w.language_code,
+                        word_class_abbreviation: w.word_class_abbreviation,
+                        ipa: w.ipa,
+                    })
+                    .collect();
+
+                language_groups.push(LanguageWordsGroup {
+                    language_id: lang.language,
+                    language_code: lang.language_code,
+                    language_name: lang.language_name,
+                    words: word_results,
+                });
+            }
+        }
+
+        // Sort language groups by number of matches (descending)
+        language_groups.sort_by(|a, b| b.words.len().cmp(&a.words.len()));
+
+        Ok(CrossLanguageSearchResponse {
+            languages: language_groups,
+        })
+    }
 }
 
 #[derive(Default, Debug, Deserialize, Clone, Serialize)]
@@ -714,6 +827,31 @@ pub struct WordSearch {
     pub word_class: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WordSearchResult {
+    pub id: Uuid,
+    pub word: String,
+    pub slug: String,
+    pub lemma: i32,
+    pub bookmark: String,
+    pub language_code: String,
+    pub word_class_abbreviation: Option<String>,
+    pub ipa: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LanguageWordsGroup {
+    pub language_id: Uuid,
+    pub language_code: String,
+    pub language_name: String,
+    pub words: Vec<WordSearchResult>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CrossLanguageSearchResponse {
+    pub languages: Vec<LanguageWordsGroup>,
 }
 
 crate::util::repo_from_parts!(WordRepository);

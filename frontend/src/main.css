@@ -703,7 +703,7 @@ a.with-icon {
   gap: .5rem;
 }
 
-.context-label {
+.context-label, label.small {
   font-size: .75rem;
   text-transform: uppercase;
   letter-spacing: .05em;

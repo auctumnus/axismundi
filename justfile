@@ -13,9 +13,13 @@ dev-frontend:
   cd frontend && bun run dev
 
 make-test-user:
-    @echo "Creating test user ..."
+    @echo "Creating test users ..."
     curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"aaa@aaa.com","password":"kitty paw fuzzy socks","username":"autumn"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'aaa@aaa.com'"
+
+    @echo "Creating test users ..."
+    curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"bbb@bbb.com","password":"kitty paw fuzzy socks","username":"winter"}'
+    docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'bbb@bbb.com'"
 
 # Start only the database
 db:

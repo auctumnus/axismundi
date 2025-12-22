@@ -21,6 +21,17 @@ pub enum PermissionLevel {
     Owner,
 }
 
+impl PermissionLevel {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            PermissionLevel::Viewer => "viewer",
+            PermissionLevel::Editor => "editor",
+            PermissionLevel::Admin => "admin",
+            PermissionLevel::Owner => "owner",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct LanguageInvite {
     pub id: Uuid,
@@ -129,7 +140,7 @@ impl LanguageInviteRepository {
         Ok(result)
     }
 
-    async fn find_by_language_and_recipient_unchecked(
+    pub async fn find_by_language_and_recipient_unchecked(
         &self,
         language: Uuid,
         recipient: Uuid,

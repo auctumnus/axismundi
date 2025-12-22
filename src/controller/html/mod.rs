@@ -17,6 +17,8 @@ mod words;
 mod word_classes;
 mod translatables;
 mod translations;
+mod bookmarks;
+mod language_invites;
 
 pub fn create_html_controller() -> Router<AppState> {
     let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
@@ -40,6 +42,8 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
     let (secure_translation_routes, normal_translation_routes) = translations::create_router();
+    let (secure_bookmark_routes, normal_bookmark_routes) = bookmarks::create_router();
+    let (secure_invite_routes, normal_invite_routes) = language_invites::create_router();
 
     let secure_routes = Router::<AppState>::new()
         .merge(secure_user_routes)
@@ -47,7 +51,9 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_word_routes)
         .merge(secure_word_class_routes)
         .merge(secure_translatable_routes)
-        .merge(secure_translation_routes);
+        .merge(secure_translation_routes)
+        .merge(secure_bookmark_routes)
+        .merge(secure_invite_routes);
 
     let normal_routes = Router::<AppState>::new()
         .route("/", get(landing))
@@ -59,7 +65,9 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_word_routes)
         .merge(normal_word_class_routes)
         .merge(normal_translatable_routes)
-        .merge(normal_translation_routes);
+        .merge(normal_translation_routes)
+        .merge(normal_bookmark_routes)
+        .merge(normal_invite_routes);
 
     Router::<AppState>::new()
         .merge(secure_routes)

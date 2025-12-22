@@ -51,26 +51,28 @@
         </div>
         {% call u::field_error(name="definitions") %}
         <div id="definitions-container">
-            <div class="definition-item">
-                <input type="text" name="definitions[]" required placeholder="Definition" value="{{previous_definition}}" class="definition-input">
-                <input type="text" name="contexts[]" placeholder="Context (optional)" value="{{previous_context}}">
+            <div class="first-definition">
+                <label class="small" id="definition-label" for="definition-0-def">Definition</label>
+                <label class="small" id="context-label" for="definition-0-ctx">Context (optional)</label>
+                <input type="text" id="definition-0-def" name="definitions[]" required aria-label="Definition" value="{{previous_definition}}" class="definition-input">
+                <input type="text" id="definition-0-ctx" name="contexts[]" aria-label="Context (optional)" value="{{previous_context}}">
             </div>
-        </div>
         {% for (def, ctx) in previous_definitions.iter().zip(previous_contexts.iter()) %}
             <div class="definition-item">
-                <input type="text" name="definitions[]" required placeholder="Definition" value="{{def}}" class="definition-input">
-                <input type="text" name="contexts[]" placeholder="Context (optional)" value="{{ctx}}">
+                <input type="text" name="definitions[]" required aria-label="Definition" value="{{def}}" class="definition-input">
+                <input type="text" name="contexts[]" aria-label="Context (optional)" value="{{ctx}}">
                 <button type="button" class="remove-definition">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
                 </button>
             </div>
         {% endfor %}
+        </div>
     </section>
 
     <template id="definition-template">
         <div class="definition-item">
-            <input type="text" name="definitions[]" placeholder="Definition" class="definition-input">
-            <input type="text" name="contexts[]" placeholder="Context (optional)">
+            <input type="text" name="definitions[]" aria-label="Definition" class="definition-input">
+            <input type="text" name="contexts[]" aria-label="Context (optional)">
             <button type="button" class="remove-definition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
             </button>

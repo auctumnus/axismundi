@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit relation - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>edit relation</h1>
+
+{% if let Some(_) = error %}
+    {% call u::top_level_error() %}
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations/{{ related_word_language_code }}/{{ related_word.slug }}/{{ related_word.lemma }}/edit">
+    <section>
+        <p>Editing relation between <strong>{{ word.word }}</strong> and <strong>{{ related_word.word }}</strong></p>
+
+        <div class="form-group">
+            <label for="kind">Relation Type</label>
+            {% call u::field_error(name="kind") %}
+            <div class="select-container">
+                <select id="kind" name="kind" required>
+                    <option value="borrowed" {% if relation_kind == "borrowed" %}selected{% endif %}>Borrowed - Borrowed from another language</option>
+                    <option value="derived" {% if relation_kind == "derived" %}selected{% endif %}>Derived - Derived from another word</option>
+                    <option value="descendant" {% if relation_kind == "descendant" %}selected{% endif %}>Descendant - Historical descendant</option>
+                    <option value="compound" {% if relation_kind == "compound" %}selected{% endif %}>Compound - Compound word formation</option>
+                    <option value="calque" {% if relation_kind == "calque" %}selected{% endif %}>Calque - Loan translation</option>
+                    <option value="related" {% if relation_kind == "related" %}selected{% endif %}>Related - Related word (no etymological connection)</option>
+                    <option value="see_also" {% if relation_kind == "see_also" %}selected{% endif %}>See Also - See also (reference)</option>
+                </select>
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            </div>
+        </div>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Save changes</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, user_has_permission) %}
+{% call u::word_section(&word, &language, user_has_permission) %}
+{% call u::word_section(&related_word, &related_language, user_has_permission_on_related) %}
+
+{% endblock %}

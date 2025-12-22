@@ -205,7 +205,7 @@
 <li class="word-card">
     <a href="/languages/{{ word_with_meta.word.language_code.as_ref().unwrap() }}/words/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}{% if previous_search != "" %}?previous_search={{ previous_search | urlencode }}{% endif %}">
         <span class="left">
-            <span class="word-text">{{ word_with_meta.word.word }}{% if let Some(abbreviation) = word_with_meta.word.word_class_abbreviation %} (<span class="word-class-abbreviation">{{ abbreviation }}</span>.){% endif %}</span>
+            <span class="word-text">{{ word_with_meta.word.word }}{% if let Some(abbreviation) = word_with_meta.word.word_class_abbreviation %} <span class="word-class-abbreviation-container">(<span class="word-class-abbreviation">{{ abbreviation }}</span>.)</span>{% endif %}</span>
             {% if let Some(definition) = &word_with_meta.first_definition %}
                 <span class="word-definition">{{ definition.definition }}</span>
             {% else %}
@@ -223,6 +223,65 @@
             <span class="like-count">{{ word_with_meta.word.like_count }}</span>
         </span>
     </a>
+</li>
+{% endmacro %}
+
+{% macro render_relation_card(relation, previous_search, current_word_language_code, current_word_slug, current_word_lemma, user_has_permission) %}
+<li class="relation-card">
+    <a href="/languages/{{ relation.language }}/words/{{ relation.word.slug }}/{{ relation.word.lemma }}{% if previous_search != "" %}?previous_search={{ previous_search | urlencode }}{% endif %}">
+        <span class="left">
+            <span class="word-text">{{ relation.word.word }} {% if relation.into_other_language %}<span class="relation-language-code">{{ relation.language_code }}</span>{% endif %}</span>
+            <span class="relation-kind-container"><span class="relation-kind">{{ relation.relation.kind }}</span> <span class="relation-direction">{{ relation.direction.preposition() }}</span></span>
+            <span class="creator">
+                relation created by {% call user_display(&relation.creator, "small") %} {% call relative(&relation.created_at) %}
+            </span>
+        </span>
+    </a>
+    {% if user_has_permission %}
+    <div class="relation-actions">
+        <a class="icon button gray" href="/languages/{{ current_word_language_code }}/words/{{ current_word_slug }}/{{ current_word_lemma }}/relations/{{ relation.language_code }}/{{ relation.word.slug }}/{{ relation.word.lemma }}/edit" data-tooltip="Edit relation">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
+        </a>
+        <a class="icon button gray" href="/languages/{{ current_word_language_code }}/words/{{ current_word_slug }}/{{ current_word_lemma }}/relations/{{ relation.language_code }}/{{ relation.word.slug }}/{{ relation.word.lemma }}/delete" data-tooltip="Delete relation">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
+        </a>
+    </div>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% macro render_invite_card(invite, inviting_user, invited_user, permission_level, language, can_revoke) %}
+<li class="invite-card">
+    <span class="left">
+        <span class="invite-info">
+            {% call badge(&inviting_user, "small") %}
+            <span>invited</span>
+            {% call badge(&invited_user, "small") %}
+        </span>
+        <span class="invite-permissions">
+            as {{ permission_level.display_name() }}
+        </span>
+        <span class="invite-meta">
+            <span class="invite-timestamp">
+                {% call relative(&invite.sent_at) %}
+            </span>
+            {% if let Some(accepted_at) = &invite.accepted_at %}
+                <span class="invite-accepted">
+                    Accepted {% call relative(accepted_at) %}
+                </span>
+            {% else %}
+                <span class="invite-pending">Pending
+                </span>
+            {% endif %}
+
+        </span>
+    </span>
+
+    {% if can_revoke %}
+        <span class="right invite-actions">
+            <a href="/languages/{{ language.code }}/invites/{{ invite.id }}/revoke" class="button gray invite-revoke-button">Revoke</a>
+        </span>
+    {% endif %}
 </li>
 {% endmacro %}
 
@@ -294,14 +353,19 @@
 </li>
 {% endmacro %}
 
-{% macro word_section(word, language, can_edit) %}
+{% macro word_section(word, language, can_edit, other_lemmata=false) %}
 <li>
     <h2>{{ word.word }}</h2>
     <ul>
         <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}">view word</a></li>
-        <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}">view all lemmata</a></li>
+        <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">view relations</a></li>
+        <li><a href="/bookmarks/{{ word.bookmark }}">bookmark link</a></li>
+        {% if other_lemmata %}
+            <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}">view all lemmata</a></li>
+        {% endif %}
         {% if can_edit %}
             <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit">edit word</a></li>
+            <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">delete word</a></li>
         {% endif %}
     </ul>
 </li>
@@ -329,4 +393,29 @@
         {% endif %}
     </ul>
 </li>
+{% endmacro %}
+
+{% macro permission_level_helptext() %}
+<div class="permission-level-helptext-container">
+    <details class="permission-level-helptext">
+        <summary>
+            <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
+            <span role="term" aria-details="permission-levels-info">Permission Levels</span>
+        </summary>
+    </details>
+    <div role="definition" id="permission-levels-info" class="permission-level-helptext-content">
+        <dl>
+            <dt>Viewer</dt>
+            <dd>Can view the language and its contents.</dd>
+            <dt>Editor</dt>
+            <dd>Can add and edit words, translations, and relations.</dd>
+            <dt>Admin</dt>
+            <dd>Can manage contributors and invites.</dd>
+            <dt>Owner</dt>
+            <dd>Can appoint admins and delete the language.</dd>
+        </dl>
+        <p>Only one user can own a language at a time. Appointing a new owner will transfer ownership.</p>
+    </div>
+</div>
+
 {% endmacro %}

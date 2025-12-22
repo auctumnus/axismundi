@@ -1,0 +1,109 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/contributor-card.css">
+{% endblock %}
+
+{% block title %}contributors - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<div class="header-with-actions">
+    <h2 class="with-action">contributors</h2>
+</div>
+
+<form class="default" method="get" action="/languages/{{ language.code }}/contributors">
+    <div class="search-bar">
+        <section class="search-controls">
+            <label for="q">Search query</label>
+            <div class="search-bar-container">
+                <input type="search" id="q" name="q" value="{{ previous_query.q.as_ref().unwrap_or(&"".to_string()) }}">
+                <button class="search button" type="submit" data-tooltip="Search" aria-label="Search"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9.5 16q-2.725 0-4.612-1.888T3 9.5t1.888-4.612T9.5 3t4.613 1.888T16 9.5q0 1.1-.35 2.075T14.7 13.3l5.6 5.6q.275.275.275.7t-.275.7t-.7.275t-.7-.275l-5.6-5.6q-.75.6-1.725.95T9.5 16m0-2q1.875 0 3.188-1.312T14 9.5t-1.312-3.187T9.5 5T6.313 6.313T5 9.5t1.313 3.188T9.5 14"/></svg></button>
+                
+                <input type="checkbox" id="advanced-search-toggle" aria-label="Advanced search" >
+                <label id="advanced-search-toggle-label" for="advanced-search-toggle" data-tooltip="Advanced search"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 18q-.425 0-.712-.288T10 17t.288-.712T11 16h2q.425 0 .713.288T14 17t-.288.713T13 18zm-4-5q-.425 0-.712-.288T6 12t.288-.712T7 11h10q.425 0 .713.288T18 12t-.288.713T17 13zM4 8q-.425 0-.712-.288T3 7t.288-.712T4 6h16q.425 0 .713.288T21 7t-.288.713T20 8z"/></svg></label>
+                    
+                
+            </div>
+            <section class="advanced-search-panel">
+                <div class="inner">
+                    <div class="card">
+                        <h2>options</h2>
+
+                        <section>
+                            <label for="permission_level">Permission level</label>
+                            <div class="select-container">
+                                <select id="permission_level" name="permission_level">
+                                    <option value="viewer">any</option>
+                                    <option value="owner" {% if previous_query.permission_level.as_ref() == Some(&PermissionLevel::Owner) %}selected{% endif %}>owner</option>
+                                    <option value="admin" {% if previous_query.permission_level.as_ref() == Some(&PermissionLevel::Admin) %}selected{% endif %}>admin</option>
+                                    <option value="editor" {% if previous_query.permission_level.as_ref() == Some(&PermissionLevel::Editor) %}selected{% endif %}>editor</option>
+                                    <option value="viewer" {% if previous_query.permission_level.as_ref() == Some(&PermissionLevel::Viewer) %}selected{% endif %}>viewer</option>
+                                </select>
+                                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </section>
+
+    </div>
+</form>
+
+
+{% if contributors.is_empty() %}
+    <p>No contributors found.</p>
+{% else %}
+    <ul class="contributor-list">
+        {% for contributor in contributors %}
+            <li class="contributor-card">
+                <div class="contributor-info">
+                    {% call u::badge(&contributor.user, size="medium") %}
+                    <div class="contributor-details">
+                        <div class="permission-badge">
+                            {% match contributor.permission %}
+                                {% when crate::model::language_invites::PermissionLevel::Owner %}
+                                    <span class="badge owner">owner</span>
+                                {% when crate::model::language_invites::PermissionLevel::Admin %}
+                                    <span class="badge admin">admin</span>
+                                {% when crate::model::language_invites::PermissionLevel::Editor %}
+                                    <span class="badge editor">editor</span>
+                                {% when crate::model::language_invites::PermissionLevel::Viewer %}
+                                    <span class="badge viewer">viewer</span>
+                            {% endmatch %}
+                        </div>
+                    </div>
+                </div>
+                <div class="contribution-stats">
+                    <span>{{ contributor.word_count }} word{% if contributor.word_count != 1 %}s{% endif %}</span>
+                    <span class="separator">·</span>
+                    <span>{{ contributor.translation_count }} translation{% if contributor.translation_count != 1 %}s{% endif %}</span>
+                </div>
+                <div class="permission-actions">
+                    {% if contributor.can_edit %}
+                        <a href="/languages/{{ language.code }}/permissions/{{ contributor.permission_id.unwrap() }}/edit" class="icon-button" data-tooltip="Edit permission" aria-label="Edit permission">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.438.65T21 6.4q0 .4-.137.763t-.438.662L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
+                        </a>
+                    {% endif %}
+                    {% if contributor.can_delete %}
+                        <a href="/languages/{{ language.code }}/permissions/{{ contributor.permission_id.unwrap() }}/delete" class="icon-button delete" data-tooltip="Delete permission" aria-label="Delete permission">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M19.075 21.9L17.15 20H6q-.825 0-1.412-.587T4 18v-.8q0-.85.438-1.562T5.6 14.55q1.125-.575 2.288-.925t2.362-.525L2.075 4.925q-.3-.3-.287-.712T2.1 3.5t.713-.3t.712.3l16.975 17q.3.3.3.7t-.3.7t-.712.3t-.713-.3M6 18h9.15l-3-3H12q-1.4 0-2.775.338T6.5 16.35q-.225.125-.363.35T6 17.2zm12.4-3.45q.725.35 1.15 1.063T20 17.15l-3.35-3.35q.45.175.888.35t.862.4m-4.2-3.2l-1.475-1.475q.575-.225.925-.737T14 8q0-.825-.587-1.412T12 6q-.625 0-1.137.35t-.738.925L8.65 5.8q.575-.85 1.45-1.325T12 4q1.65 0 2.825 1.175T16 8q0 1.025-.475 1.9T14.2 11.35m.95 6.65H6zm-3.725-9.425"/></svg>
+                        </a>
+                    {% endif %}
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, user_has_permission) %}
+{% endblock %}

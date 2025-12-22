@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}revoke invitation - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>{{ language.name }} - revoke invitation</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/invites/{{ invite.id }}/revoke">
+    <section>
+        <p>Are you sure you want to revoke the invitation for <strong>{% call u::name(&invited_user) %}</strong>?</p>
+        {% if invite.accepted_at.is_some() %}
+            <p><strong>Note:</strong> This invitation has already been accepted. Revoking it will not remove their existing permissions.</p>
+        {% endif %}
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Revoke invitation</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/invites" class="breadcrumb">invites</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, user_has_permission) %}
+{% endblock %}

@@ -21,6 +21,20 @@ pub enum WordRelationType {
     SeeAlso,
 }
 
+impl std::fmt::Display for WordRelationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WordRelationType::Derived => write!(f, "derived"),
+            WordRelationType::Descendant => write!(f, "descendant"),
+            WordRelationType::Compound => write!(f, "compound"),
+            WordRelationType::Calque => write!(f, "calque"),
+            WordRelationType::Borrowed => write!(f, "borrowed"),
+            WordRelationType::Related => write!(f, "related"),
+            WordRelationType::SeeAlso => write!(f, "see_also"),
+        }
+    }
+}
+
 impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
     type Error = AppError;
 
@@ -152,6 +166,18 @@ pub enum CognacyRelationKindV1 {
     Borrowed
 }
 
+impl std::fmt::Display for CognacyRelationKindV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CognacyRelationKindV1::Derived => write!(f, "Derived"),
+            CognacyRelationKindV1::Descendant => write!(f, "Descendant"),
+            CognacyRelationKindV1::Compound => write!(f, "Compound"),
+            CognacyRelationKindV1::Calque => write!(f, "Calque"),
+            CognacyRelationKindV1::Borrowed => write!(f, "Borrowed"),
+        }
+    }
+}
+
 pub struct WordRelationRepository {
     state: AppState,
 }
@@ -171,22 +197,49 @@ pub enum RelationDirection {
     Consequent,
 }
 
+impl RelationDirection {
+    pub fn preposition(&self) -> &str {
+        match self {
+            RelationDirection::Antecedent => "from",
+            RelationDirection::Consequent => "into",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchWordRelations {
+    pub q: Option<String>,
     pub kind: Option<WordRelationType>,
     pub direction: Option<RelationDirection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WordRelationSearchResult {
-    pub kind: WordRelationType,
-    pub related_word: Word,
+    pub word: Word,
+    pub language: String,
+    pub language_code: String,
+    pub into_other_language: bool,
+    pub relation: WordRelationForDisplay,
     pub direction: RelationDirection,
+    pub creator: User,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordRelationForDisplay {
+    pub kind: WordRelationType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CognacyFull {
     pub cognacy: Cognacy,
+    pub words: HashMap<Uuid, Word>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LeveledCognacy {
+    pub levels: Vec<Vec<Uuid>>,  // word IDs grouped by level
+    pub edges: Vec<CognacyEdgeV1>,
     pub words: HashMap<Uuid, Word>,
 }
 
@@ -254,6 +307,19 @@ impl WordRelationRepository {
                     let id = cognacy.id;
                     let CognacyInner::V1(schema) = cognacy.inner;
                     self.merge_v1(&mut tx, (id, schema), None, edge).await?;
+
+                    // update both words to point to the cognacy
+                    sqlx::query!(
+                        r#"
+                            UPDATE words
+                            SET cognacy = $1
+                            WHERE id = $2 OR id = $3
+                        "#,
+                        id,
+                        antecedent.id,
+                        consequent.id,
+                    ).execute(&mut *tx)
+                    .await?;
                 }
                 (None, None) => {
                     // neither word is in a cognacy graph, create a new one
@@ -579,6 +645,102 @@ impl WordRelationRepository {
         components
     }
 
+    pub async fn find_relation(&self, antecedent: &Word, consequent: &Word) -> AppResult<WordRelation> {
+        let relation = sqlx::query_as!(
+            WordRelation,
+            r#"
+                SELECT id, antecedent, consequent, kind as "kind: WordRelationType", created_at, updated_at, created_by, updated_by
+                FROM word_relations
+                WHERE antecedent = $1 AND consequent = $2
+            "#,
+            antecedent.id,
+            consequent.id,
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        relation.ok_or_else(|| bad_request("no relation exists between these words"))
+    }
+
+    pub async fn update(&self, requestor: &User, antecedent: &Word, consequent: &Word, new_kind: WordRelationType) -> AppResult<WordRelation> {
+        ensure_verified(requestor)?;
+
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        if !permissions.has_permission(requestor.id, antecedent.language, PermissionLevel::Editor).await? {
+            return Err(bad_request("you don't have permission to edit word relations for this language"));
+        }
+
+        if !permissions.has_permission(requestor.id, consequent.language, PermissionLevel::Editor).await? {
+            return Err(bad_request("you don't have permission to edit word relations for this language"));
+        }
+
+        // Get the existing relation to check if we can update it
+        let existing_relation = self.find_relation(antecedent, consequent).await?;
+
+        // Check if both old and new types affect cognacy
+        let old_affects_cognacy = CognacyRelationKindV1::try_from(existing_relation.kind).is_ok();
+        let new_affects_cognacy = CognacyRelationKindV1::try_from(new_kind).is_ok();
+
+        // If cognacy status changes, we need to rebuild the cognacy graph, which is complex
+        // For now, just handle the simple case where both affect cognacy or neither does
+        if old_affects_cognacy != new_affects_cognacy {
+            return Err(bad_request(
+                "Cannot change relation type between etymological and non-etymological. Please delete and recreate the relation."
+            ));
+        }
+
+        // Simple case: just update the kind field
+        let updated_relation = sqlx::query_as!(
+            WordRelation,
+            r#"
+                UPDATE word_relations
+                SET kind = $1 :: word_relation_type, updated_by = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE antecedent = $3 AND consequent = $4
+                RETURNING id, antecedent, consequent, kind as "kind: WordRelationType", created_at, updated_at, created_by, updated_by
+            "#,
+            new_kind as WordRelationType,
+            requestor.id,
+            antecedent.id,
+            consequent.id,
+        )
+        .fetch_one(&self.state.pool)
+        .await?;
+
+        // If both types affect cognacy, we need to update the cognacy graph edge
+        if old_affects_cognacy && new_affects_cognacy {
+            if let Some(cognacy) = self.find_cognacy(antecedent).await? {
+                let new_cognacy_kind = CognacyRelationKindV1::try_from(new_kind)?;
+                let CognacyInner::V1(mut schema) = cognacy.inner;
+
+                // Find and update the edge in the cognacy graph
+                for edge in &mut schema.edges {
+                    if edge.id == updated_relation.id {
+                        edge.kind = new_cognacy_kind;
+                        break;
+                    }
+                }
+
+                // Update the cognacy in the database
+                sqlx::query!(
+                    r#"
+                        UPDATE cognacies
+                        SET tree = $1, schema_version = $2
+                        WHERE id = $3
+                    "#,
+                    serde_json::to_value(&schema)
+                        .map_err(|e| bad_request(format!("failed to serialize cognacy schema: {e}")))?,
+                    schema.schema_version,
+                    cognacy.id,
+                )
+                .execute(&self.state.pool)
+                .await?;
+            }
+        }
+
+        Ok(updated_relation)
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn search(&self, pagination: PaginatedRequest, search: SearchWordRelations, word: &Word) -> AppResult<PaginatedResponse<WordRelationSearchResult>> {
         let items = query!(
@@ -600,11 +762,27 @@ impl WordRelationRepository {
                     words.created_by as "_created_by",
                     words.updated_by as "_updated_by",
                     bookmarks.slug as "bookmark: String",
-                    languages.code as "language_code: Option<String>",
+                    languages.code as "word_language_code!: String",
+                    languages.name as "word_language_name!: String",
                     word_classes.abbreviation as "word_class_abbreviation: Option<String>",
-                    created.username as "created_by: Option<String>",
-                    updated.username as "updated_by: Option<String>",
-                    word_relations.kind as "kind: WordRelationType",
+                    word_created.username as "word_created_by: Option<String>",
+                    word_updated.username as "word_updated_by: Option<String>",
+                    word_relations.kind as "kind!: WordRelationType",
+                    word_relations.created_at as "relation_created_at!",
+                    word_relations.created_by as "relation_created_by!",
+                    relation_creator.id as "creator_id!",
+                    relation_creator.username as "creator_username!",
+                    relation_creator.display_name as "creator_display_name",
+                    relation_creator.email as "creator_email!",
+                    relation_creator.password_hash as "creator_password_hash!",
+                    relation_creator.verified_at as "creator_verified_at",
+                    relation_creator.description as "creator_description",
+                    relation_creator.pronouns as "creator_pronouns",
+                    relation_creator.gender as "creator_gender",
+                    relation_creator.profile_picture_object_id as "creator_profile_picture_object_id",
+                    creator_bookmarks.slug as "creator_bookmark!",
+                    relation_creator.created_at as "creator_created_at!",
+                    relation_creator.updated_at as "creator_updated_at!",
                     (CASE
                         WHEN word_relations.antecedent = $2 THEN 'consequent'
                         ELSE 'antecedent'
@@ -617,10 +795,12 @@ impl WordRelationRepository {
                         ELSE word_relations.consequent = words.id OR word_relations.antecedent = words.id
                     END)
                 JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'
-                LEFT JOIN languages ON languages.id = words.language
+                JOIN languages ON languages.id = words.language
+                JOIN users AS relation_creator ON relation_creator.id = word_relations.created_by
+                LEFT JOIN bookmarks AS creator_bookmarks ON creator_bookmarks.item = relation_creator.id AND creator_bookmarks.resource = 'user'
                 LEFT JOIN word_classes ON word_classes.id = words.word_class
-                LEFT JOIN users AS created ON created.id = words.created_by
-                LEFT JOIN users AS updated ON updated.id = words.updated_by
+                LEFT JOIN users AS word_created ON word_created.id = words.created_by
+                LEFT JOIN users AS word_updated ON word_updated.id = words.updated_by
                 WHERE
                     (CASE
                         WHEN $1 = 'antecedent' THEN word_relations.antecedent = $2
@@ -664,7 +844,7 @@ impl WordRelationRepository {
         )
         .fetch_one(&self.state.pool);
 
-        let (items, count) = tokio::try_join!(items, count)?;
+        let (items, count): (Vec<_>, Option<i64>) = tokio::try_join!(items, count)?;
 
         let items: Vec<_> = items.into_iter().map(|record| {
             let related_word = Word {
@@ -684,16 +864,42 @@ impl WordRelationRepository {
                 _created_by: record._created_by,
                 _updated_by: record._updated_by,
                 bookmark: record.bookmark,
-                language_code: record.language_code,
+                language_code: Some(record.word_language_code.clone()),
                 word_class_abbreviation: record.word_class_abbreviation,
-                created_by: record.created_by,
-                updated_by: record.updated_by,
+                created_by: record.word_created_by,
+                updated_by: record.word_updated_by,
             };
+
+            let creator = User {
+                id: record.creator_id,
+                username: record.creator_username,
+                display_name: record.creator_display_name,
+                email: record.creator_email,
+                password_hash: record.creator_password_hash,
+                verified_at: record.creator_verified_at,
+                description: record.creator_description,
+                pronouns: record.creator_pronouns,
+                gender: record.creator_gender,
+                profile_picture_object_id: record.creator_profile_picture_object_id,
+                bookmark: record.creator_bookmark,
+                created_at: record.creator_created_at,
+                updated_at: record.creator_updated_at,
+            };
+
             let direction = RelationDirection::from_str(&record.direction).unwrap();
+            let into_other_language = related_word.language != word.language;
+
             WordRelationSearchResult {
-                kind: record.kind,
-                related_word,
+                word: related_word,
+                language: record.word_language_code.clone(),
+                language_code: record.word_language_code,
+                into_other_language,
+                relation: WordRelationForDisplay {
+                    kind: record.kind,
+                },
                 direction,
+                creator,
+                created_at: record.relation_created_at,
             }
         }).collect();
 
@@ -773,6 +979,93 @@ impl WordRelationRepository {
         } else {
             Ok(None)
         }
+    }
+
+    /// Compute topological levels for cognacy graph using Kahn's algorithm
+    /// with maximum depth strategy (words placed at deepest reachable level)
+    pub async fn get_leveled_cognacy(&self, word: &Word) -> AppResult<Option<LeveledCognacy>> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        let cognacy_full = self.get_cognacy(word).await?;
+
+        let Some(cognacy_full) = cognacy_full else {
+            return Ok(None);
+        };
+
+        let edges = match &cognacy_full.cognacy.inner {
+            CognacyInner::V1(schema) => schema.edges.clone(),
+        };
+
+        if edges.is_empty() {
+            // no edges, just return the single word at level 0
+            return Ok(Some(LeveledCognacy {
+                levels: vec![vec![word.id]],
+                edges: vec![],
+                words: cognacy_full.words,
+            }));
+        }
+
+        // Build adjacency list and in-degree map
+        let mut adjacency: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        let mut in_degree: HashMap<Uuid, usize> = HashMap::new();
+        let mut all_nodes: HashSet<Uuid> = HashSet::new();
+
+        for edge in &edges {
+            adjacency.entry(edge.antecedent).or_default().push(edge.consequent);
+            all_nodes.insert(edge.antecedent);
+            all_nodes.insert(edge.consequent);
+            *in_degree.entry(edge.consequent).or_default() += 1;
+            in_degree.entry(edge.antecedent).or_default();
+        }
+
+        // Track node levels (maximum depth strategy)
+        let mut node_level: HashMap<Uuid, usize> = HashMap::new();
+        let mut queue: VecDeque<Uuid> = VecDeque::new();
+
+        // Start with nodes that have in-degree 0 (roots)
+        for &node in &all_nodes {
+            if in_degree.get(&node).copied().unwrap_or(0) == 0 {
+                queue.push_back(node);
+                node_level.insert(node, 0);
+            }
+        }
+
+        // Process queue using Kahn's algorithm
+        let mut processed_in_degree = in_degree.clone();
+        while let Some(node) = queue.pop_front() {
+            let current_level = node_level.get(&node).copied().unwrap_or(0);
+
+            if let Some(neighbors) = adjacency.get(&node) {
+                for &neighbor in neighbors {
+                    // Update neighbor's level to max(current, parent_level + 1)
+                    let new_level = current_level + 1;
+                    let existing_level = node_level.get(&neighbor).copied().unwrap_or(0);
+                    node_level.insert(neighbor, existing_level.max(new_level));
+
+                    // Decrease in-degree and add to queue when all parents processed
+                    if let Some(degree) = processed_in_degree.get_mut(&neighbor) {
+                        *degree -= 1;
+                        if *degree == 0 {
+                            queue.push_back(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Group nodes by level
+        let max_level = node_level.values().max().copied().unwrap_or(0);
+        let mut levels: Vec<Vec<Uuid>> = vec![Vec::new(); max_level + 1];
+
+        for (node, level) in node_level {
+            levels[level].push(node);
+        }
+
+        Ok(Some(LeveledCognacy {
+            levels,
+            edges,
+            words: cognacy_full.words,
+        }))
     }
 }
 

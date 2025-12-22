@@ -152,7 +152,6 @@ form.default {
   .select-container {
     position: relative;
     z-index: 0;
-    max-width: max-content;
 
     select {
       appearance: none;
@@ -305,16 +304,19 @@ div.warning {
   gap: .75rem;
 }
 
+.first-definition {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .5rem;
+  padding-right: calc(44px + .5rem);
+}
+
 .definition-item {
   position: relative;
 
   display: flex;
   flex-direction: row;
   gap: .5rem;
-
-  &:not(:has(.remove-definition)) {
-    padding-right: calc(44px + .5rem);
-  }
 
   .definition-input {
     flex: 1;
@@ -435,3 +437,90 @@ section.search-controls {
 .search-bar-container:has(#advanced-search-toggle:checked) ~ .advanced-search-panel {
   grid-template-rows: 1fr;
 }
+
+details.permission-level-helptext {
+  overflow: hidden; /* Prevents odd blue outline in Safari */
+  width: 100%;
+  font-size: .9rem;
+}
+
+details.permission-level-helptext summary {
+  display: flex;
+  align-items: center;
+  padding-left: 1rem;
+  background-color: var(--background-panel);
+  color: var(--foreground-primary);
+  height: 4rem;
+  border: 1px solid var(--foreground-secondary);
+  border-radius: var(--rounding);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+details.permission-level-helptext summary::-webkit-details-marker {
+  display: none;
+}
+
+details.permission-level-helptext summary svg.chevron-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+  transition: rotate 200ms ease-out;
+}
+
+div.permission-level-helptext-content {
+  box-sizing: border-box;
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 1rem;
+  border: 1px solid transparent;
+  border-top: 0px;
+  transition: max-height 400ms ease-out, border 0ms 400ms linear;
+  border-bottom-left-radius: var(--rounding);
+  border-bottom-right-radius: var(--rounding);
+  padding-bottom: 1rem;
+  font-size: .9rem;
+}
+
+details.permission-level-helptext[open] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+
+  summary {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+
+details.permission-level-helptext[open] + div.permission-level-helptext-content {
+  max-height: 800px; /* Set high enough to show all content */
+  border-color: var(--foreground-secondary);
+  transition: max-height 400ms ease-out, border 0ms linear;
+}
+
+details.permission-level-helptext[open] summary svg.chevron-icon {
+  rotate: 90deg;
+  transition: rotate 200ms ease-out;
+}
+
+div.permission-level-helptext-container {
+  display: flex;
+  flex-direction: column;
+
+}
+
+#permission-levels-info {
+  width: 100%;
+}
+
+#permission-levels-info dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .5rem 1rem;
+    margin: 1rem 0;
+
+    dt {
+      font-weight: bold;
+    }
+  }

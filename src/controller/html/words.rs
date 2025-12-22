@@ -3,18 +3,21 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
+    Form,
     Router,
 };
 use serde::Deserialize;
 
 use crate::{
-    attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, not_found}, get_user, model::{
+    attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, bad_request, not_found}, get_user, model::{
+        bookmarks::BookmarkRepository,
         definitions::{CreateDefinition, Definition, DefinitionRepository, UpdateDefinition},
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         users::User,
         word_classes::{WordClass, WordClassRepository},
+        word_relations::{CreateWordRelation, LeveledCognacy, RelationDirection, SearchWordRelations, WordRelationRepository, WordRelationSearchResult, WordRelationType},
         words::{CreateWord, Word, WordRepository, WordSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
@@ -48,6 +51,9 @@ struct LemmataTemplate {
     words_definitions: Vec<Vec<Definition>>,
     user_has_permission: bool,
     rendered_notes: Vec<String>,
+    creators: Vec<User>,
+    contributor_counts: Vec<i64>,
+    is_liked_list: Vec<bool>,
 }
 
 #[derive(Template)]
@@ -65,6 +71,8 @@ struct LemmaTemplate {
     creator: User,
     contributor_count: i64,
     is_liked: bool,
+    recent_relations: Vec<WordRelationSearchResult>,
+    total_relations: i64,
 }
 
 #[derive(Template)]
@@ -294,6 +302,9 @@ async fn view_lemmata(
     let mut parts_of_speech = Vec::new();
     let mut words_definitions = Vec::new();
     let mut rendered_notes = Vec::new();
+    let mut creators = Vec::new();
+    let mut contributor_counts = Vec::new();
+    let mut is_liked_list = Vec::new();
 
     for lemma in &lemmata {
         let pos_name = if let Some(word_class_id) = lemma.word_class {
@@ -320,6 +331,22 @@ async fn view_lemmata(
         let notes = attempt!(s, words.render_notes(lemma).await);
         rendered_notes.push(notes);
 
+        // Fetch creator
+        let creator = attempt!(s, words.find_creator(&lemma.id).await);
+        creators.push(creator);
+
+        // Fetch contributor count
+        let contributor_count = attempt!(s, words.count_contributors(lemma.id).await);
+        contributor_counts.push(contributor_count);
+
+        // Check if liked by current user
+        let is_liked = if let Some(user) = &current_user {
+            words.is_liked(&lemma.id, &user.id).await.unwrap_or(false)
+        } else {
+            false
+        };
+        is_liked_list.push(is_liked);
+
         println!("Lemma ID: {}, Definitions: {:?}", lemma.id, words_definitions.last());
     }
 
@@ -332,6 +359,9 @@ async fn view_lemmata(
         words_definitions,
         user_has_permission,
         rendered_notes,
+        creators,
+        contributor_counts,
+        is_liked_list,
     };
 
     let body = render_template(template);
@@ -506,6 +536,7 @@ async fn view_lemma(
     languages: LanguageRepository,
     words: WordRepository,
     definitions_repo: DefinitionRepository,
+    word_relations: WordRelationRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     Query(params): Query<PreviousSearchQuery>,
@@ -537,7 +568,7 @@ async fn view_lemma(
         Err(_) => (vec![], false),
     };
 
-    let other_lemmata = definitions.len() > 1;
+    let other_lemmata = attempt!(s, words.count_by_slug(language.id, &slug).await) > 1;
 
     // Construct the previous search URL
     let previous_search = if let Some(search_params) = params.previous_search {
@@ -557,6 +588,19 @@ async fn view_lemma(
         false
     };
 
+    // Fetch recent word relations (3 most recent, with cognacy relations first)
+    let relations_pagination = PaginatedRequest { limit: 3, offset: 0 };
+    let relations_search = SearchWordRelations {
+        q: None,
+        kind: None,
+        direction: None,
+    };
+    let relations_result = word_relations.search(relations_pagination, relations_search, &word).await;
+    let (recent_relations, total_relations) = match relations_result {
+        Ok(res) => (res.items, res.total),
+        Err(_) => (vec![], 0),
+    };
+
     let template = LemmaTemplate {
         current_user,
         language,
@@ -569,6 +613,8 @@ async fn view_lemma(
         creator,
         contributor_count,
         is_liked,
+        recent_relations,
+        total_relations,
     };
 
     let body = render_template(template);
@@ -803,17 +849,593 @@ async fn edit_word_submit(
     }
 }
 
+#[derive(Template)]
+#[template(path = "words/add_relation.html")]
+#[allow(dead_code)]
+struct AddRelationTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: Word,
+    error: Option<AppError>,
+}
+
+async fn add_relation_form(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    language_permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+
+    // Check permission
+    let has_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+    if !has_permission {
+        return render_generic_error(s, bad_request("You don't have permission to add relations")).await;
+    }
+
+    let template = AddRelationTemplate {
+        current_user: Some(current_user.clone()),
+        language,
+        word,
+        error: None,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
+async fn add_relation_submit(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    language_permissions: LanguagePermissionRepository,
+    bookmarks: BookmarkRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Form(form): Form<AddRelationForm>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+
+    // Check permission on source language
+    let has_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+    if !has_permission {
+        let template = AddRelationTemplate {
+            current_user: Some(current_user.clone()),
+            language,
+            word,
+            error: Some(bad_request("You don't have permission to add relations")),
+        };
+        let body = render_template(template);
+        return okay(body);
+    }
+
+    // Look up the target word by bookmark
+    let bookmark_result = bookmarks.get_by_slug(&form.target_bookmark).await;
+
+    let target_word = match bookmark_result {
+        Ok(bookmark) => {
+            // Get the target word using the bookmark's item UUID
+            match words.find_by_id(bookmark.item).await {
+                Ok(w) => w,
+                Err(e) => {
+                    let template = AddRelationTemplate {
+                        current_user: Some(current_user.clone()),
+                        language,
+                        word,
+                        error: Some(e),
+                    };
+                    let body = render_template(template);
+                    return okay(body);
+                }
+            }
+        }
+        Err(e) => {
+            let template = AddRelationTemplate {
+                current_user: Some(current_user.clone()),
+                language,
+                word,
+                error: Some(e),
+            };
+            let body = render_template(template);
+            return okay(body);
+        }
+    };
+
+    // Check permission on target language
+    let has_target_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, target_word.language, PermissionLevel::Editor)
+            .await
+    );
+    if !has_target_permission {
+        let template = AddRelationTemplate {
+            current_user: Some(current_user.clone()),
+            language,
+            word,
+            error: Some(bad_request("You don't have permission to edit the target word's language")),
+        };
+        let body = render_template(template);
+        return okay(body);
+    }
+
+    // Create the relation
+    let relation = CreateWordRelation {
+        antecedent: word.clone(),
+        consequent: target_word.clone(),
+        kind: form.kind,
+    };
+
+    let relation_result = word_relations.create(&current_user, relation).await;
+
+    match relation_result {
+        Ok(_) => {
+            // Redirect to etymology page
+            (
+                StatusCode::SEE_OTHER,
+                axum::response::Redirect::to(&format!(
+                    "/languages/{}/words/{}/{}",
+                    language.code, word.slug, word.lemma
+                ))
+                .into_response(),
+            )
+        }
+        Err(e) => {
+            let template = AddRelationTemplate {
+                current_user: Some(current_user.clone()),
+                language,
+                word,
+                error: Some(e),
+            };
+            let body = render_template(template);
+            okay(body)
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct AddRelationForm {
+    kind: WordRelationType,
+    target_bookmark: String,
+}
+
+#[derive(Template)]
+#[template(path = "words/relations.html")]
+#[allow(dead_code)]
+struct WordRelationsTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: Word,
+    results: Option<PaginatedResponse<WordRelationSearchResult>>,
+    previous_query: SearchWordRelations,
+    previous_pagination: PaginatedRequest,
+    error: Option<AppError>,
+    user_has_permission: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RelationsFilterQuery {
+    kind: Option<String>,
+    direction: Option<String>,
+}
+
+async fn view_word_relations(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    language_permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Query(filter): Query<RelationsFilterQuery>,
+    Query(pagination): Query<PaginatedRequest>,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma).await);
+
+    let user_has_permission = if let Some(user) = &current_user {
+        language_permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    // Parse filter parameters
+    let kind: Option<WordRelationType> = filter.kind.as_ref().and_then(|k| {
+        if k.is_empty() {
+            None
+        } else {
+            serde_json::from_value(serde_json::Value::String(k.clone())).ok()
+        }
+    });
+
+    let direction: Option<RelationDirection> = filter.direction.as_ref().and_then(|d| {
+        if d.is_empty() {
+            None
+        } else {
+            use std::str::FromStr;
+            RelationDirection::from_str(d).ok()
+        }
+    });
+
+    let search = SearchWordRelations { q: None, kind, direction };
+
+    let results = match word_relations.search(pagination.clone(), search.clone(), &word).await {
+        Ok(res) => Some(res),
+        Err(e) => {
+            let template = WordRelationsTemplate {
+                current_user,
+                language,
+                word,
+                results: None,
+                previous_query: search,
+                previous_pagination: pagination,
+                error: Some(e),
+                user_has_permission,
+            };
+            let body = render_template(template);
+            return (StatusCode::BAD_REQUEST, body);
+        }
+    };
+
+    let template = WordRelationsTemplate {
+        current_user,
+        language,
+        word,
+        results,
+        previous_query: search,
+        previous_pagination: pagination,
+        error: None,
+        user_has_permission,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
+#[derive(Template)]
+#[template(path = "words/delete_relation.html")]
+#[allow(dead_code)]
+struct DeleteRelationTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: Word,
+    related_word: Word,
+    related_word_language_code: String,
+    user_has_permission: bool,
+}
+
+async fn delete_relation_form(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    language_permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
+        Path<(String, String, i32, String, String, i32)>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+
+    let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
+    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+
+    // Check permission
+    let has_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+    if !has_permission {
+        return render_generic_error(s, bad_request("You don't have permission to delete relations")).await;
+    }
+
+    let template = DeleteRelationTemplate {
+        current_user: Some(current_user.clone()),
+        language,
+        word,
+        related_word,
+        related_word_language_code: related_language_code.clone(),
+        user_has_permission: has_permission,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
+async fn delete_relation_submit(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    language_permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
+        Path<(String, String, i32, String, String, i32)>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+
+    let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
+    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+
+    // Check permission
+    let has_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+    if !has_permission {
+        return render_generic_error(s, bad_request("You don't have permission to delete relations")).await;
+    }
+
+    // Delete the relation
+    match word_relations.delete(&current_user, &word, &related_word).await {
+        Ok(_) => {
+            // Redirect back to the word page
+            (
+                StatusCode::SEE_OTHER,
+                axum::response::Redirect::to(&format!(
+                    "/languages/{}/words/{}/{}",
+                    language.code, word.slug, word.lemma
+                ))
+                .into_response(),
+            )
+        }
+        Err(e) => render_generic_error(s, e).await,
+    }
+}
+
+#[derive(Template)]
+#[template(path = "words/edit_relation.html")]
+#[allow(dead_code)]
+struct EditRelationTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: Word,
+    related_word: Word,
+    related_language: Language,
+    related_word_language_code: String,
+    relation_kind: String,
+    error: Option<AppError>,
+    user_has_permission: bool,
+    user_has_permission_on_related: bool,
+}
+
+async fn edit_relation_form(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    language_permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
+        Path<(String, String, i32, String, String, i32)>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+
+    let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
+    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+
+    // Check permission
+    let has_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+    if !has_permission {
+        return render_generic_error(s, bad_request("You don't have permission to edit relations")).await;
+    }
+
+    let has_permission_on_related = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, related_language.id, PermissionLevel::Editor)
+            .await
+    );
+
+    // Find the existing relation to get its current kind
+    let relation_kind = match word_relations.find_relation(&word, &related_word).await {
+        Ok(relation) => relation.kind.to_string(),
+        Err(e) => return render_generic_error(s, e).await,
+    };
+
+    let template = EditRelationTemplate {
+        current_user: Some(current_user.clone()),
+        language,
+        word,
+        related_word,
+        related_language,
+        related_word_language_code: related_language_code.clone(),
+        relation_kind,
+        error: None,
+        user_has_permission: has_permission,
+        user_has_permission_on_related: has_permission_on_related,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct EditRelationForm {
+    kind: WordRelationType,
+}
+
+async fn edit_relation_submit(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    language_permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
+        Path<(String, String, i32, String, String, i32)>,
+    Form(form): Form<EditRelationForm>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+
+    let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
+    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+
+    // Check permission
+    let has_permission = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+    let has_permission_on_related = attempt!(
+        s,
+        language_permissions
+            .has_permission(current_user.id, related_language.id, PermissionLevel::Editor)
+            .await
+    );
+    if !has_permission {
+        let template = EditRelationTemplate {
+            current_user: Some(current_user.clone()),
+            language,
+            word,
+            related_word,
+            related_language,
+            related_word_language_code: related_language_code.clone(),
+            relation_kind: form.kind.to_string(),
+            error: Some(bad_request("You don't have permission to edit relations")),
+            user_has_permission: has_permission,
+            user_has_permission_on_related: has_permission_on_related,
+        };
+        let body = render_template(template);
+        return okay(body);
+    }
+
+    // Update the relation
+    match word_relations.update(&current_user, &word, &related_word, form.kind).await {
+        Ok(_) => {
+            // Redirect back to the word page
+            (
+                StatusCode::SEE_OTHER,
+                axum::response::Redirect::to(&format!(
+                    "/languages/{}/words/{}/{}",
+                    language.code, word.slug, word.lemma
+                ))
+                .into_response(),
+            )
+        }
+        Err(e) => {
+            let template = EditRelationTemplate {
+                current_user: Some(current_user.clone()),
+                language,
+                word,
+                related_word,
+                related_language,
+                related_word_language_code: related_language_code.clone(),
+                relation_kind: form.kind.to_string(),
+                error: Some(e),
+                user_has_permission: has_permission,
+                user_has_permission_on_related: has_permission_on_related,
+            };
+            let body = render_template(template);
+            okay(body)
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "words/delete.html")]
+#[allow(dead_code)]
+struct DeleteWordTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: Word,
+    user_has_permission: bool,
+}
+
+async fn delete_word_form(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    permissions: LanguagePermissionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma).await);
+
+    let user_has_permission = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let template = DeleteWordTemplate {
+        current_user: Some(user),
+        language,
+        word,
+        user_has_permission,
+    };
+
+    okay(render_template(template))
+}
+
+async fn delete_word_submit(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+
+    match words
+        .delete_by_lemma(&user, language.id, &slug, lemma)
+        .await
+    {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/words", language_code)).into_response()),
+        Err(e) => render_generic_error(s, e).await
+    }
+}
+
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/languages/{language}/new-word", axum::routing::get(new_word))
+        .route("/languages/{language}/words/{slug}/{lemma}/add-relation", axum::routing::post(add_relation_submit))
         .route("/languages/{language}/new-word", axum::routing::post(new_word_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::get(edit_word))
-        .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::post(edit_word_submit));
+        .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::post(edit_word_submit))
+        .route("/languages/{language}/words/{slug}/{lemma}/delete", axum::routing::post(delete_word_submit))
+        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/delete", axum::routing::post(delete_relation_submit))
+        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::post(edit_relation_submit));
 
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{language}/words", axum::routing::get(word_search))
         .route("/languages/{language}/words/{slug}", axum::routing::get(view_lemmata))
-        .route("/languages/{language}/words/{slug}/{lemma}", axum::routing::get(view_lemma));
+        .route("/languages/{language}/words/{slug}/{lemma}", axum::routing::get(view_lemma))
+        .route("/languages/{language}/words/{slug}/{lemma}/relations", axum::routing::get(view_word_relations))
+        .route("/languages/{language}/words/{slug}/{lemma}/add-relation", axum::routing::get(add_relation_form))
+        .route("/languages/{language}/words/{slug}/{lemma}/delete", axum::routing::get(delete_word_form))
+        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/delete", axum::routing::get(delete_relation_form))
+        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::get(edit_relation_form));
 
     (secure_routes, normal_routes)
 }

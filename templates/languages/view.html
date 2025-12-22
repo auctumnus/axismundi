@@ -14,6 +14,26 @@
 
 {% block content %}
 
+{% if let Some((invite, sender)) = &pending_invite %}
+<div class="invite-banner card" style="background-color: var(--accent-bg); border-left: 4px solid var(--accent); padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; justify-content: space-between;">
+    <div style="flex: 1;">
+        <p style="margin: 0;">
+            You've been invited by
+            {% call u::badge(sender, size="small") %}
+            to collaborate as a <strong>{{ invite.permissions.display_name() }}</strong>!
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <form method="post" action="/languages/{{ language.code }}/invites/accept" style="margin: 0;">
+            <button type="submit" class="button primary">Accept</button>
+        </form>
+        <form method="post" action="/languages/{{ language.code }}/invites/dismiss" style="margin: 0;">
+            <button type="submit" class="button secondary">Dismiss</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <div class="language-card-full full-card card">
     <div class="header-with-actions">
         <h1>{{ language.name }}</h1>
