@@ -192,12 +192,18 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete_without_auth, get, make_authed_user, post, put_without_auth,
+        create_test_language, delete_without_auth, get, make_authed_user, post, put_without_auth
     };
     use crate::email::MockEmailService;
 
-    #[tokio::test]
-    async fn test_create_word() {
+    struct TestContext {
+        token: String,
+        username: String,
+        app: axum::routing::RouterIntoService<axum::body::Body>,
+        language: serde_json::Value
+    }
+
+    async fn create_test_context() -> TestContext {
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
         let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
@@ -205,26 +211,22 @@ mod tests {
             .unwrap();
 
         let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
+        let token = make_authed_user(&username, &mut app, email_service.clone()).await;
 
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
+        let language = create_test_language(&token, &mut app).await;
 
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        TestContext {
+            token,
+            username,
+            app,
+            language,
+        }
+    }
 
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+    #[tokio::test]
+    async fn test_create_word() {
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         let body = json!({
             "slug": "test",
@@ -232,8 +234,8 @@ mod tests {
             "word": "test",
         });
 
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -258,33 +260,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_words() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         // create a few words
         for i in 0..3 {
@@ -294,13 +271,13 @@ mod tests {
                 "word": format!("test{}", i),
             });
 
-            let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-            let response = app.call(request).await.unwrap();
+            let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+            let response = ctx.app.call(request).await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
         }
 
         let request = get(&format!("languages/{lang_code}/words")).await;
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -310,33 +287,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_words_with_search() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         // create words
         let body = json!({
@@ -345,12 +297,12 @@ mod tests {
             "word": "unique",
         });
 
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let request = get(&format!("languages/{lang_code}/words?q=unique")).await;
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -359,43 +311,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_words_filter_by_class() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        let status = response.status();
-        assert_eq!(status, StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "v",
-            "name": "Verb",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         // create noun
         let body = json!({
@@ -403,8 +320,8 @@ mod tests {
             "word_class": "n",
             "word": "noun1",
         });
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         // create verb
@@ -413,13 +330,13 @@ mod tests {
             "word_class": "v",
             "word": "verb1",
         });
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         // filter by noun
         let request = get(&format!("languages/{lang_code}/words?word_class=n")).await;
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -430,99 +347,50 @@ mod tests {
 
     #[tokio::test]
     async fn test_edit_word() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         let body = json!({
             "word_class": "n",
             "word": "test",
         });
 
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert!(body["bookmark"].is_string());
-        let bookmark = body["bookmark"].as_str().unwrap().to_string();
+        let create_body = crate::tests::response_to_value(response.into_body()).await;
+        assert!(create_body["bookmark"].is_string());
+        let bookmark = create_body["bookmark"].as_str().unwrap().to_string();
 
         let update_body = json!({
             "word": "test123",
         });
 
         let request = crate::controller::api::tests::put(
-            &token,
+            &ctx.token,
             &format!("languages/{lang_code}/words/test/1"),
             &update_body,
         );
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["bookmark"], bookmark);
+        let update_response = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(update_response["bookmark"], bookmark);
     }
 
     #[tokio::test]
     async fn test_edit_word_unauthorized() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
         let body = json!({
             "slug": "test",
             "word_class": "n",
             "word": "test",
         });
 
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let update_body = json!({
@@ -530,39 +398,14 @@ mod tests {
         });
 
         let request = put_without_auth(&format!("languages/{lang_code}/words/test/1"), &update_body);
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
     async fn test_delete_word() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         let body = json!({
             "slug": "test",
@@ -570,47 +413,22 @@ mod tests {
             "word": "test",
         });
 
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let request = crate::controller::api::tests::delete(
-            &token,
+            &ctx.token,
             &format!("languages/{lang_code}/words/test/1"),
         );
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]
     async fn test_delete_word_unauthorized() {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
-            .await
-            .unwrap();
-
-        let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &app, email_service.clone()).await;
-
-        let lang_code = crate::tests::random_code();
-        let body = json!({
-            "code": lang_code,
-            "name": "Test Language",
-        });
-
-        let request = post(&token, "languages", body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap();
 
         let body = json!({
             "slug": "test",
@@ -618,12 +436,12 @@ mod tests {
             "word": "test",
         });
 
-        let request = post(&token, &format!("languages/{lang_code}/words"), body).await;
-        let response = app.call(request).await.unwrap();
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let request = delete_without_auth(&format!("languages/{lang_code}/words/test/1"));
-        let response = app.call(request).await.unwrap();
+        let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

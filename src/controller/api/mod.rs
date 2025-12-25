@@ -305,15 +305,6 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let language = crate::tests::response_to_value(response.into_body()).await;
 
-        // add noun word class
-        let body = json!({
-            "name": "noun",
-            "abbreviation": "n",
-        });
-        let request = crate::controller::api::tests::post(token, &format!("languages/{code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
         language
     }
 

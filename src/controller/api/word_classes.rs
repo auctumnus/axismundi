@@ -145,8 +145,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "pn",
+            "name": "proper noun",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
@@ -154,8 +154,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["abbreviation"], "n");
-        assert_eq!(body["name"], "noun");
+        assert_eq!(body["abbreviation"], "pn");
+        assert_eq!(body["name"], "proper noun");
     }
 
     #[tokio::test]
@@ -163,8 +163,8 @@ mod tests {
         let mut app = crate::tests::test_app().await.unwrap();
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "pn",
+            "name": "proper noun",
         });
 
         let request =
@@ -186,8 +186,8 @@ mod tests {
         let token = make_authed_user(&username, &app, email_service.clone()).await;
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "conj",
+            "name": "conjunction",
         });
 
         let request = post(&token, "languages/nonexistent/word-classes", body).await;
@@ -217,7 +217,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // create a few word classes
-        for (abbr, name) in [("n", "noun"), ("v", "verb"), ("adj", "adjective")] {
+        for (abbr, name) in [("conj", "conjunction"), ("part", "particle"), ("interj", "interjection")] {
             let body = json!({
                 "abbreviation": abbr,
                 "name": name,
@@ -234,7 +234,8 @@ mod tests {
         let body = crate::tests::response_to_value(response.into_body()).await;
         println!("List word classes body: {body}");
         assert!(body["items"].is_array());
-        assert_eq!(body["items"].as_array().unwrap().len(), 3);
+        // Should have 3 custom + 7 default = 10 total
+        assert_eq!(body["items"].as_array().unwrap().len(), 10);
     }
 
     #[tokio::test]
@@ -259,7 +260,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // create word classes
-        for (abbr, name) in [("n", "noun"), ("v", "verb")] {
+        for (abbr, name) in [("conj", "conjunction"), ("part", "particle")] {
             let body = json!({
                 "abbreviation": abbr,
                 "name": name,
@@ -270,7 +271,7 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
         }
 
-        let request = get(&format!("languages/{lang_code}/word-classes?q=nou")).await;
+        let request = get(&format!("languages/{lang_code}/word-classes?q=conj")).await;
         let response = app.call(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -279,7 +280,7 @@ mod tests {
         assert!(body["items"].is_array());
         let items = body["items"].as_array().unwrap();
         assert!(!items.is_empty());
-        assert!(items.iter().any(|item| item["name"] == "noun"));
+        assert!(items.iter().any(|item| item["name"] == "conjunction"));
     }
 
     #[tokio::test]
@@ -304,21 +305,21 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "det",
+            "name": "determiner",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let request = get(&format!("languages/{lang_code}/word-classes/n")).await;
+        let request = get(&format!("languages/{lang_code}/word-classes/det")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["abbreviation"], "n");
-        assert_eq!(body["name"], "noun");
+        assert_eq!(body["abbreviation"], "det");
+        assert_eq!(body["name"], "determiner");
     }
 
     #[tokio::test]
@@ -369,8 +370,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "art",
+            "name": "article",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
@@ -381,19 +382,19 @@ mod tests {
         let bookmark = body["bookmark"].as_str().unwrap().to_string();
 
         let update_body = json!({
-            "name": "Noun",
+            "name": "Article",
         });
 
         let request = crate::controller::api::tests::put(
             &token,
-            &format!("languages/{lang_code}/word-classes/n"),
+            &format!("languages/{lang_code}/word-classes/art"),
             &update_body,
         );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        assert_eq!(body["name"], "Noun");
+        assert_eq!(body["name"], "Article");
         assert_eq!(body["bookmark"], bookmark);
     }
 
@@ -419,8 +420,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "aux",
+            "name": "auxiliary",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
@@ -428,11 +429,11 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let update_body = json!({
-            "name": "Noun",
+            "name": "Auxiliary",
         });
 
         let request = put_without_auth(
-            &format!("languages/{lang_code}/word-classes/n"),
+            &format!("languages/{lang_code}/word-classes/aux"),
             &update_body,
         );
         let response = app.call(request).await.unwrap();
@@ -495,8 +496,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "clf",
+            "name": "classifier",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
@@ -505,13 +506,13 @@ mod tests {
 
         let request = crate::controller::api::tests::delete(
             &token,
-            &format!("languages/{lang_code}/word-classes/n"),
+            &format!("languages/{lang_code}/word-classes/clf"),
         );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
         // verify it's deleted
-        let request = get(&format!("languages/{lang_code}/word-classes/n")).await;
+        let request = get(&format!("languages/{lang_code}/word-classes/clf")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
@@ -538,15 +539,15 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "noun",
+            "abbreviation": "cop",
+            "name": "copula",
         });
 
         let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let request = delete_without_auth(&format!("languages/{lang_code}/word-classes/n"));
+        let request = delete_without_auth(&format!("languages/{lang_code}/word-classes/cop"));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }

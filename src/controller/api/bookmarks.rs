@@ -154,15 +154,6 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(&token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = json!({
             "word_class": "n",
             "word": "test",
             "definition": "test definition",
@@ -224,7 +215,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = json!({
-            "abbreviation": "n",
+            "abbreviation": "n2",
             "name": "noun",
         });
 
@@ -236,12 +227,12 @@ mod tests {
         let bookmark = body["bookmark"].as_str().unwrap().to_string();
 
         let update_body = json!({
-            "abbreviation": "n2",
+            "abbreviation": "n3",
         });
 
         let request = crate::controller::api::tests::put(
             &token,
-            &format!("languages/{lang_code}/word-classes/n"),
+            &format!("languages/{lang_code}/word-classes/n2"),
             &update_body,
         );
         let response = app.call(request).await.unwrap();
@@ -257,7 +248,7 @@ mod tests {
             .unwrap()
             .to_str()
             .unwrap();
-        assert!(location.ends_with(&format!("languages/{lang_code}/word-classes/n2")));
+        assert!(location.ends_with(&format!("languages/{lang_code}/word-classes/n3")));
     }
 
 }

@@ -141,15 +141,6 @@ mod tests {
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = json!({
-            "abbreviation": "n",
-            "name": "Noun",
-        });
-
-        let request = post(token, &format!("languages/{lang_code}/word-classes"), body).await;
-        let response = app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
         // Create first word
         let body = json!({
             "slug": "test1",
@@ -306,7 +297,8 @@ mod tests {
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert!(body["items"].is_array());
         let items = body["items"].as_array().unwrap();
-        assert!(items.iter().all(|item| item["kind"] == "borrowed"));
+        println!("Items: {:#?}", items);
+        assert!(items.iter().all(|item| item["relation"]["kind"] == "borrowed"));
     }
 
     #[tokio::test]
@@ -499,6 +491,7 @@ mod tests {
         let request = get(&format!("languages/{lang_code}/words/test3/1/etymology")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND); // no cognacy graph
+        
     }
 
     #[tokio::test]

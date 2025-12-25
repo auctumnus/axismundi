@@ -515,6 +515,26 @@ impl WordRelationRepository {
                     )
                     .execute(&mut *tx)
                     .await?;
+
+                    // Find all words that should be in this cognacy
+                    let word_ids_in_graph: Vec<Uuid> = schema.edges.iter()
+                        .flat_map(|e| vec![e.antecedent, e.consequent])
+                        .collect::<std::collections::HashSet<_>>()
+                        .into_iter()
+                        .collect();
+
+                    // Clear cognacy for words that were in the old cognacy but are no longer in the graph
+                    sqlx::query!(
+                        r#"
+                            UPDATE words
+                            SET cognacy = NULL
+                            WHERE cognacy = $1 AND id <> ALL($2)
+                        "#,
+                        cognacy.id,
+                        &word_ids_in_graph,
+                    )
+                    .execute(&mut *tx)
+                    .await?;
                 } else if components.is_empty() {
                     // no edges left, delete the cognacy and clear word references
                     sqlx::query!(
