@@ -120,6 +120,7 @@ impl ContributionStatsRepository {
                     u.gender,
                     u.profile_picture_object_id,
                     u.verified_at,
+                    u.tags,
                     u.created_at,
                     u.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
@@ -173,6 +174,7 @@ impl ContributionStatsRepository {
                     u.gender as u_gender,
                     u.profile_picture_object_id as u_profile_picture_object_id,
                     u.verified_at as u_verified_at,
+                    u.tags as u_tags,
                     u.created_at as u_created_at,
                     u.updated_at as u_updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
@@ -233,6 +235,7 @@ impl ContributionStatsRepository {
                 gender: record.u_gender,
                 profile_picture_object_id: record.u_profile_picture_object_id,
                 verified_at: record.u_verified_at,
+                tags: record.u_tags,
                 created_at: record.u_created_at,
                 updated_at: record.u_updated_at,
                 bookmark: record.bookmark,

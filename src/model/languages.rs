@@ -508,6 +508,7 @@ impl LanguageRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
@@ -595,6 +596,7 @@ impl LanguageRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"

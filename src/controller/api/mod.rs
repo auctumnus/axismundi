@@ -15,6 +15,7 @@ mod language_permissions;
 mod languages;
 mod sessions;
 mod users;
+mod user_tags;
 mod word_classes;
 mod words;
 mod bookmarks;
@@ -30,13 +31,16 @@ mod user_activities;
 #[allow(clippy::needless_return)]
 pub fn create_api_controller() -> Router<AppState> {
     let (secure_user_routes, normal_user_routes) = users::create_users_router();
+    let (secure_user_tag_routes, normal_user_tag_routes) = user_tags::create_router();
 
     let secure_routes = Router::<AppState>::new()
         .merge(sessions::create_router())
-        .merge(secure_user_routes);
+        .merge(secure_user_routes)
+        .merge(secure_user_tag_routes);
 
     let normal_routes = Router::<AppState>::new()
         .merge(normal_user_routes)
+        .merge(normal_user_tag_routes)
         .merge(bookmarks::create_router())
         .merge(languages::create_router())
         .merge(language_permissions::create_router())
@@ -84,7 +88,7 @@ pub fn create_api_controller() -> Router<AppState> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use axum::{body::Body, http::Request, routing::RouterIntoService};
     use reqwest::StatusCode;
     use serde_json::json;
@@ -209,7 +213,7 @@ mod tests {
     }
 
     /// create user and log in
-    pub(crate) async fn make_authed_user(
+    pub async fn make_authed_user(
         username: &str,
         app: &RouterIntoService<Body>,
         email_service: Arc<MockEmailService>,
@@ -329,7 +333,7 @@ mod tests {
        crate::tests::response_to_value(response.into_body()).await
     }
 
-    pub(crate) async fn create_test_translatable(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str) -> serde_json::Value {
+    pub(crate) async fn create_test_translatable(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, _language_code: &str) -> serde_json::Value {
         let body = json!({
             "title": "A test translatable",
             "english": "test"

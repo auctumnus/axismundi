@@ -47,6 +47,7 @@ pub struct User {
         serialize_with = "serialize_object_key"
     )]
     pub profile_picture_object_id: Option<String>,
+    pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -216,6 +217,7 @@ impl UserRepository {
             gender: user_result.gender,
             profile_picture_object_id: user_result.profile_picture_object_id,
             verified_at: user_result.verified_at,
+            tags: vec![],
             created_at: user_result.created_at,
             updated_at: user_result.updated_at,
             bookmark: slug,
@@ -258,6 +260,7 @@ impl UserRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
@@ -292,6 +295,7 @@ impl UserRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
@@ -326,6 +330,7 @@ impl UserRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
@@ -539,6 +544,7 @@ impl UserRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
@@ -619,6 +625,7 @@ impl UserRepository {
                     users.gender,
                     users.profile_picture_object_id,
                     users.verified_at,
+                    users.tags,
                     users.created_at,
                     users.updated_at,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"

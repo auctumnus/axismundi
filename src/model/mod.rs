@@ -16,3 +16,4 @@ pub mod translations;
 pub mod quotations;
 pub mod quotation_suggestions;
 pub mod user_activities;
+pub mod user_tags;
