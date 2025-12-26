@@ -41,6 +41,10 @@ impl UserTagRepository {
     pub async fn create(&self, requestor: &User, user_id: Uuid, req: CreateUserTag) -> AppResult<UserTag> {
         req.validate()?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let is_admin = self.is_admin(requestor.id).await?;
         let is_moderator = self.is_moderator(requestor.id).await?;
 
@@ -99,6 +103,10 @@ impl UserTagRepository {
     }
 
     pub async fn delete(&self, requestor: &User, user: &User, tag: String) -> AppResult<()> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let is_admin = self.is_admin(requestor.id).await?;
         let is_moderator = self.is_moderator(requestor.id).await?;
 

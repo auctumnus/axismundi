@@ -76,6 +76,10 @@ impl LanguageInviteRepository {
     ) -> AppResult<LanguageInvite> {
         invite.validate()?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(sender)
+            .await?;
+
         let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
         let language = languages.find_by_code(&invite.language).await?;
 
@@ -325,6 +329,10 @@ impl LanguageInviteRepository {
     }
 
     pub async fn accept(&self, requestor: &User, language: Uuid) -> AppResult<LanguageInvite> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
 
         let result = sqlx::query_as!(
@@ -359,6 +367,10 @@ impl LanguageInviteRepository {
     }
 
     pub async fn delete(&self, requestor: &User, language: Uuid, recipient: Uuid) -> AppResult<()> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );

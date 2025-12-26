@@ -264,6 +264,10 @@ impl LanguagePermissionRepository {
     ) -> AppResult<LanguagePermission> {
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let target = self.find_by_id(target_perm_id).await?;
         let requestor_perm = self
             .find_by_user_and_language(requestor.id, target.language)
@@ -293,6 +297,10 @@ impl LanguagePermissionRepository {
     #[allow(clippy::match_same_arms)] // it's more readable this way
     pub async fn delete_checked(&self, requestor: &User, target_perm_id: Uuid) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         let target = self.find_by_id(target_perm_id).await?;
         let requestor_perm = self

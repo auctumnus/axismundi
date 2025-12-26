@@ -171,6 +171,10 @@ impl TranslatableRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let slug = slug::slugify(&translatable.title);
         let slug = format!("{slug}-{}", nanoid!(6));
 
@@ -216,6 +220,10 @@ impl TranslatableRepository {
         updates.validate()?;
 
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         let existing = self.find_by_id(id).await?;
         // Only allow creator to update
@@ -281,6 +289,10 @@ impl TranslatableRepository {
 
     pub async fn delete(&self, requestor: &User, translatable: Translatable) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // Only allow creator to delete
         if translatable.created_by != requestor.id {
@@ -408,6 +420,10 @@ impl TranslatableRepository {
     }
 
     pub async fn like_translatable(&self, translatable_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(user_id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"
@@ -444,6 +460,10 @@ impl TranslatableRepository {
     }
 
     pub async fn unlike_translatable(&self, translatable_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(user_id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"

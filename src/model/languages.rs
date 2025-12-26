@@ -7,8 +7,7 @@ use validator::Validate;
 use crate::{
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
-        language_invites::PermissionLevel,
-        users::{User, UserSearch},
+        language_invites::PermissionLevel, user_bans::UserBanRepository, users::{User, UserSearch}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -106,6 +105,11 @@ impl LanguageRepository {
         language.validate()?;
 
         ensure_verified(requestor)?;
+
+        UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
 
         if self.code_exists(&language.code).await? {
             return Err(bad_request("language code is already in use"));

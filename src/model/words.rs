@@ -152,6 +152,10 @@ impl WordRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
@@ -323,6 +327,10 @@ impl WordRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // get the word to find its language
         let word = self.find_by_slug_and_lemma(Some(requestor), language, slug, lemma).await?;
 
@@ -453,6 +461,10 @@ impl WordRepository {
 
     pub async fn delete_by_lemma(&self, requestor: &User, language: Uuid, slug: &str, lemma: i32) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // get the word to find its language
         let word = self.find_by_slug_and_lemma(Some(requestor), language, slug, lemma).await?;
@@ -638,6 +650,10 @@ impl WordRepository {
     }
 
     pub async fn like_word(&self, word_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(user_id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"
@@ -673,6 +689,10 @@ impl WordRepository {
     }
 
     pub async fn unlike_word(&self, word_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(user_id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"

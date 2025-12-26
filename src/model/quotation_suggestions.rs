@@ -112,6 +112,10 @@ impl QuotationSuggestionRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Verify the definition exists and get its word
         let definition = crate::model::definitions::DefinitionRepository::new(self.state.clone())
             .find_by_id(definition_id)
@@ -169,6 +173,10 @@ impl QuotationSuggestionRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Get the suggestion and check language permissions
         let existing = self.find_by_id(id).await?;
 
@@ -210,6 +218,10 @@ impl QuotationSuggestionRepository {
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // Get the suggestion and check language permissions
         let existing = self.find_by_id(id).await?;

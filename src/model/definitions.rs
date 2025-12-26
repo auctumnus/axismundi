@@ -87,6 +87,10 @@ impl DefinitionRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Get the word to find its language
         let word = crate::model::words::WordRepository::new(self.state.clone())
             .find_by_id(word_id)
@@ -136,6 +140,10 @@ impl DefinitionRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Get the definition to find its word and language
         let existing = self.find_by_id(id).await?;
         let word = crate::model::words::WordRepository::new(self.state.clone())
@@ -182,6 +190,10 @@ impl DefinitionRepository {
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // Get the definition to find its word and language
         let existing = self.find_by_id(id).await?;

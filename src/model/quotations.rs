@@ -91,6 +91,10 @@ impl QuotationRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Get the translation to find its language
         let translation = crate::model::translations::TranslationRepository::new(self.state.clone())
             .find_by_id(translation_id)
@@ -173,6 +177,10 @@ impl QuotationRepository {
         updates.validate()?;
 
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // Get the quotation and check language permissions
         let existing = self.find_by_id(id).await?;
@@ -258,6 +266,10 @@ impl QuotationRepository {
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // Get the quotation and check language permissions
         let existing = self.find_by_id(id).await?;

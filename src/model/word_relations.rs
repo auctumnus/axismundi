@@ -253,6 +253,10 @@ impl WordRelationRepository {
     pub async fn create(&self, requestor: &User, relation: CreateWordRelation) -> AppResult<WordRelation> {
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         let antecedent = relation.antecedent;
         let consequent = relation.consequent;
         
@@ -459,6 +463,10 @@ impl WordRelationRepository {
     #[allow(clippy::too_many_lines)]
     pub async fn delete(&self, requestor: &User, antecedent: &Word, consequent: &Word) -> AppResult<()> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         let permissions = LanguagePermissionRepository::new(self.state.clone());
 
@@ -684,6 +692,10 @@ impl WordRelationRepository {
 
     pub async fn update(&self, requestor: &User, antecedent: &Word, consequent: &Word, new_kind: WordRelationType) -> AppResult<WordRelation> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         let permissions = LanguagePermissionRepository::new(self.state.clone());
 

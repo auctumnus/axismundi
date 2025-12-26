@@ -206,6 +206,10 @@ impl TranslationRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Check permissions for the language
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
@@ -308,6 +312,10 @@ impl TranslationRepository {
 
         ensure_verified(requestor)?;
 
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
 
@@ -397,6 +405,10 @@ impl TranslationRepository {
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
 
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
@@ -564,6 +576,10 @@ impl TranslationRepository {
     }
 
     pub async fn like_translation(&self, translation_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(user_id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"
@@ -600,6 +616,10 @@ impl TranslationRepository {
     }
 
     pub async fn unlike_translation(&self, translation_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(user_id)
+            .await?;
+
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"
