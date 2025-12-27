@@ -15,6 +15,7 @@ pub mod translatable;
 pub mod translations;
 pub mod quotations;
 pub mod quotation_suggestions;
+pub mod reports;
 pub mod user_activities;
 pub mod user_tags;
 pub mod user_bans;

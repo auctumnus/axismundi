@@ -26,6 +26,7 @@ mod translatable;
 mod translations;
 mod quotations;
 mod quotation_suggestions;
+mod reports;
 mod user_activities;
 
 // pretty sure i need that there, actually...
@@ -34,17 +35,20 @@ pub fn create_api_controller() -> Router<AppState> {
     let (secure_user_routes, normal_user_routes) = users::create_users_router();
     let (secure_user_tag_routes, normal_user_tag_routes) = user_tags::create_router();
     let (secure_user_ban_routes, normal_user_ban_routes) = user_bans::create_router();
+    let (secure_report_routes, normal_report_routes) = reports::create_router();
 
     let secure_routes = Router::<AppState>::new()
         .merge(sessions::create_router())
         .merge(secure_user_routes)
         .merge(secure_user_tag_routes)
-        .merge(secure_user_ban_routes);
+        .merge(secure_user_ban_routes)
+        .merge(secure_report_routes);
 
     let normal_routes = Router::<AppState>::new()
         .merge(normal_user_routes)
         .merge(normal_user_tag_routes)
         .merge(normal_user_ban_routes)
+        .merge(normal_report_routes)
         .merge(bookmarks::create_router())
         .merge(languages::create_router())
         .merge(language_permissions::create_router())
