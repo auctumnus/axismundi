@@ -1,16 +1,29 @@
 use askama::Template;
 use axum::{
-    Form, Router, extract::Path, http::StatusCode, response::{IntoResponse, Redirect, Response}, routing::{get, post}
+    Form, Router,
+    extract::Path,
+    http::StatusCode,
+    response::{IntoResponse, Redirect, Response},
+    routing::{get, post},
 };
 use serde::Deserialize;
 
 use crate::{
-    attempt, controller::html::{okay, render_template, TranslatableWithLiked}, err::AppError, get_user, model::{
+    attempt,
+    controller::html::{TranslatableWithLiked, okay, render_template},
+    err::AppError,
+    get_user,
+    model::{
         languages::Language,
-        translatable::{CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch, UpdateTranslatable},
+        translatable::{
+            CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch,
+            UpdateTranslatable,
+        },
         translations::TranslationRepository,
         users::{User, UserRepository},
-    }, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
+    },
+    pagination::PaginatedRequest,
+    util::{AppState, extract_session::Session},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -39,7 +52,10 @@ struct NewTranslatableTemplate {
 
 async fn new_translatable_form(s: Session) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return (StatusCode::UNAUTHORIZED, Redirect::to("/login").into_response());
+        return (
+            StatusCode::UNAUTHORIZED,
+            Redirect::to("/login").into_response(),
+        );
     };
 
     let template = NewTranslatableTemplate {
@@ -80,7 +96,10 @@ async fn new_translatable_submit(
         .await;
 
     match translatable {
-        Ok(translatable) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response()),
+        Ok(translatable) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response(),
+        ),
         Err(e) => {
             let status_code = e.status_code;
             let template = NewTranslatableTemplate {
@@ -137,7 +156,10 @@ async fn search_translatables(
             let mut translatables_with_liked = Vec::with_capacity(res.items.len());
             for translatable in res.items {
                 let is_liked = if let Some(ref cu) = current_user {
-                    translatables.is_liked(&translatable.id, &cu.id).await.unwrap_or(false)
+                    translatables
+                        .is_liked(&translatable.id, &cu.id)
+                        .await
+                        .unwrap_or(false)
                 } else {
                     false
                 };
@@ -205,9 +227,18 @@ async fn view_translatable(
     let creator = attempt!(s, users.find_by_id(translatable.created_by).await);
 
     // Fetch the 3 most recent translations for this translatable
-    let translations_list = attempt!(s, translations
-        .list_by_translatable(translatable.id, PaginatedRequest { limit: 3, offset: 0 })
-        .await);
+    let translations_list = attempt!(
+        s,
+        translations
+            .list_by_translatable(
+                translatable.id,
+                PaginatedRequest {
+                    limit: 3,
+                    offset: 0
+                }
+            )
+            .await
+    );
 
     println!("Found translations: {:?}", translations_list);
 
@@ -227,13 +258,17 @@ async fn view_translatable(
 
     // Check if the user has liked this translatable
     let is_liked = if let Some(user) = s.user() {
-        translatables.is_liked(&translatable.id, &user.id).await.unwrap_or(false)
+        translatables
+            .is_liked(&translatable.id, &user.id)
+            .await
+            .unwrap_or(false)
     } else {
         false
     };
 
     // Check if the user can edit this translatable (only creator can edit)
-    let can_edit_translatable = s.user()
+    let can_edit_translatable = s
+        .user()
         .map(|u| u.id == translatable.created_by)
         .unwrap_or(false);
 
@@ -313,7 +348,10 @@ async fn edit_translatable_submit(
     };
 
     match translatables.update(&user, translatable.id, updates).await {
-        Ok(updated) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/translatable/{}", updated.slug)).into_response()),
+        Ok(updated) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/translatable/{}", updated.slug)).into_response(),
+        ),
         Err(e) => {
             let template = EditTranslatableTemplate {
                 current_user: Some(user),

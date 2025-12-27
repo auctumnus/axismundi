@@ -198,15 +198,18 @@ impl TranslatableRepository {
         .await?;
 
         // Create activity (translatables are always public)
-        let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-        let _activity = activity_repo.create(
-            requestor.id,
-            crate::model::user_activities::ActivityType::CreateTranslatable,
-            result.id,
-            "translatable",
-            None,
-            None,
-        ).await?;
+        let activity_repo =
+            crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+        let _activity = activity_repo
+            .create(
+                requestor.id,
+                crate::model::user_activities::ActivityType::CreateTranslatable,
+                result.id,
+                "translatable",
+                None,
+                None,
+            )
+            .await?;
 
         Ok(result)
     }
@@ -228,7 +231,9 @@ impl TranslatableRepository {
         let existing = self.find_by_id(id).await?;
         // Only allow creator to update
         if existing.created_by != requestor.id {
-            return Err(crate::err::forbidden("only the creator can update this translatable"));
+            return Err(crate::err::forbidden(
+                "only the creator can update this translatable",
+            ));
         }
 
         let slug = if let Some(ref new_title) = updates.title {
@@ -271,18 +276,22 @@ impl TranslatableRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        let updated_translatable = result.ok_or_else(|| not_found(format!("translatable with id '{id}'")))?;
+        let updated_translatable =
+            result.ok_or_else(|| not_found(format!("translatable with id '{id}'")))?;
 
         // Create activity (translatables are always public)
-        let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-        let _activity = activity_repo.create(
-            requestor.id,
-            crate::model::user_activities::ActivityType::UpdateTranslatable,
-            updated_translatable.id,
-            "translatable",
-            None,
-            None,
-        ).await?;
+        let activity_repo =
+            crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+        let _activity = activity_repo
+            .create(
+                requestor.id,
+                crate::model::user_activities::ActivityType::UpdateTranslatable,
+                updated_translatable.id,
+                "translatable",
+                None,
+                None,
+            )
+            .await?;
 
         Ok(updated_translatable)
     }
@@ -296,7 +305,9 @@ impl TranslatableRepository {
 
         // Only allow creator to delete
         if translatable.created_by != requestor.id {
-            return Err(crate::err::forbidden("only the creator can delete this translatable"));
+            return Err(crate::err::forbidden(
+                "only the creator can delete this translatable",
+            ));
         }
 
         let result = sqlx::query!("DELETE FROM translatable WHERE id = $1", translatable.id)
@@ -311,7 +322,6 @@ impl TranslatableRepository {
         pagination: PaginatedRequest,
         search: TranslatableSearch,
     ) -> AppResult<PaginatedResponse<Translatable>> {
-
         let owner = if let Some(ref username) = search.created_by {
             let user_repo = crate::model::users::UserRepository::new(self.state.clone());
             let user = user_repo.find_by_username(username).await?;
@@ -393,7 +403,8 @@ impl TranslatableRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -419,7 +430,11 @@ impl TranslatableRepository {
         Ok(result.is_some())
     }
 
-    pub async fn like_translatable(&self, translatable_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+    pub async fn like_translatable(
+        &self,
+        translatable_id: Uuid,
+        user_id: Uuid,
+    ) -> AppResult<Option<i64>> {
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(user_id)
             .await?;
@@ -459,7 +474,11 @@ impl TranslatableRepository {
         Ok(likes)
     }
 
-    pub async fn unlike_translatable(&self, translatable_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+    pub async fn unlike_translatable(
+        &self,
+        translatable_id: Uuid,
+        user_id: Uuid,
+    ) -> AppResult<Option<i64>> {
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(user_id)
             .await?;

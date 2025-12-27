@@ -1,15 +1,13 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
-    model::reports::{
-        CreateReport, Report, ReportRepository, ReportSearch, UpdateReportModerator,
-    },
+    model::reports::{CreateReport, Report, ReportRepository, ReportSearch, UpdateReportModerator},
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{extract_session::Session, ensure_verified, AppState},
+    util::{AppState, ensure_verified, extract_session::Session},
 };
 use axum::{
+    Json, Router,
     extract::{Path, Query},
     routing::{delete, get, patch, post},
-    Json, Router,
 };
 use uuid::Uuid;
 
@@ -129,22 +127,26 @@ mod tests {
     use reqwest::StatusCode;
     use serde_json::json;
 
+    use crate::CONFIG;
     use crate::{
+        AppState,
         controller::api::tests::{delete, get, get_with_auth, make_authed_user, post},
         email::MockEmailService,
         model::reports::{ReportPriority, ResolutionStatus},
         tests::{random_name, response_to_value},
-        AppState,
     };
     use sqlx::PgPool;
     use tower::{Service, ServiceExt};
-    use crate::CONFIG;
     use uuid::Uuid;
 
     /// Helper to create a patch request
-    fn patch(token: &str, uri: &str, body: serde_json::Value) -> axum::http::Request<axum::body::Body> {
-        use axum::http::Request;
+    fn patch(
+        token: &str,
+        uri: &str,
+        body: serde_json::Value,
+    ) -> axum::http::Request<axum::body::Body> {
         use axum::body::Body;
+        use axum::http::Request;
 
         Request::builder()
             .uri(format!("/api/{uri}"))
@@ -156,45 +158,51 @@ mod tests {
     }
 
     /// Helper to create a moderator user for testing
-    async fn make_moderator_user(app: &axum::routing::RouterIntoService<axum::body::Body>, email_service: Arc<MockEmailService>, pool: &PgPool) -> (String, Uuid) {
+    async fn make_moderator_user(
+        app: &axum::routing::RouterIntoService<axum::body::Body>,
+        email_service: Arc<MockEmailService>,
+        pool: &PgPool,
+    ) -> (String, Uuid) {
         let username = random_name();
         let token = make_authed_user(&username, app, email_service).await;
 
-        let id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            username
-        )
-        .fetch_one(pool)
-        .await.unwrap();
+        let id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'moderator', false)",
             id
         )
         .execute(pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         (token, id)
     }
 
     /// Helper to create an admin user for testing
-    async fn make_admin_user(app: &axum::routing::RouterIntoService<axum::body::Body>, email_service: Arc<MockEmailService>, pool: &PgPool) -> (String, Uuid) {
+    async fn make_admin_user(
+        app: &axum::routing::RouterIntoService<axum::body::Body>,
+        email_service: Arc<MockEmailService>,
+        pool: &PgPool,
+    ) -> (String, Uuid) {
         let username = random_name();
         let token = make_authed_user(&username, app, email_service).await;
 
-        let id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            username
-        )
-        .fetch_one(pool)
-        .await.unwrap();
+        let id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
             id
         )
         .execute(pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         (token, id)
     }
@@ -212,13 +220,15 @@ mod tests {
 
         // Create a user
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         // Create a report
         let create_report_request = post(
@@ -229,8 +239,15 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "This is a test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         assert_eq!(create_report_response.status(), StatusCode::OK);
 
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
@@ -246,7 +263,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_report_validation() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, _) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, _) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let user_token = make_authed_user(&random_name(), &app, email_service.clone()).await;
 
@@ -259,8 +277,15 @@ mod tests {
                 "resource_id": Uuid::new_v4(),
                 "reason": ""
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         assert_eq!(create_report_response.status(), StatusCode::BAD_REQUEST);
 
         // Test reason too long (>5000 chars)
@@ -273,7 +298,8 @@ mod tests {
                 "resource_id": Uuid::new_v4(),
                 "reason": long_reason
             }),
-        ).await;
+        )
+        .await;
         let create_report_response = app.call(create_report_request).await.unwrap();
         assert_eq!(create_report_response.status(), StatusCode::BAD_REQUEST);
     }
@@ -291,13 +317,15 @@ mod tests {
 
         // Create a user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -307,17 +335,26 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
         // Get the report
-        let get_report_request = get_with_auth(&reporter_token, &format!("reports/{}", report_id)).await;
+        let get_report_request =
+            get_with_auth(&reporter_token, &format!("reports/{}", report_id)).await;
         let get_report_response = app.call(get_report_request).await.unwrap();
         assert_eq!(get_report_response.status(), StatusCode::OK);
 
-        let fetched_report: serde_json::Value = response_to_value(get_report_response.into_body()).await;
+        let fetched_report: serde_json::Value =
+            response_to_value(get_report_response.into_body()).await;
         assert_eq!(fetched_report["id"], report["id"]);
 
         // Verify sanitization
@@ -338,13 +375,15 @@ mod tests {
 
         // Create user 1 and a report
         let reporter1_username = random_name();
-        let reporter1_token = make_authed_user(&reporter1_username, &app, email_service.clone()).await;
+        let reporter1_token =
+            make_authed_user(&reporter1_username, &app, email_service.clone()).await;
         let reporter1_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter1_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter1_token,
@@ -354,8 +393,15 @@ mod tests {
                 "resource_id": reporter1_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
@@ -364,7 +410,8 @@ mod tests {
         let reporter2_token = make_authed_user(&reporter2_username, &app, email_service).await;
 
         // Try to get user 1's report as user 2
-        let get_report_request = get_with_auth(&reporter2_token, &format!("reports/{}", report_id)).await;
+        let get_report_request =
+            get_with_auth(&reporter2_token, &format!("reports/{}", report_id)).await;
         let get_report_response = app.call(get_report_request).await.unwrap();
         assert_eq!(get_report_response.status(), StatusCode::FORBIDDEN);
     }
@@ -382,13 +429,15 @@ mod tests {
 
         // Create a regular user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -398,8 +447,15 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
@@ -407,11 +463,13 @@ mod tests {
         let (moderator_token, _) = make_moderator_user(&app, email_service, &pool).await;
 
         // Moderator can get the report
-        let get_report_request = get_with_auth(&moderator_token, &format!("reports/{}", report_id)).await;
+        let get_report_request =
+            get_with_auth(&moderator_token, &format!("reports/{}", report_id)).await;
         let get_report_response = app.call(get_report_request).await.unwrap();
         assert_eq!(get_report_response.status(), StatusCode::OK);
 
-        let fetched_report: serde_json::Value = response_to_value(get_report_response.into_body()).await;
+        let fetched_report: serde_json::Value =
+            response_to_value(get_report_response.into_body()).await;
 
         // Moderators see all fields including priority
         assert!(!fetched_report["priority"].is_null());
@@ -438,7 +496,13 @@ mod tests {
 
         // Moderator can search all reports
         let search_request = get_with_auth(&moderator_token, "reports").await;
-        let search_response = app.ready().await.unwrap().call(search_request).await.unwrap();
+        let search_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(search_request)
+            .await
+            .unwrap();
         assert_eq!(search_response.status(), StatusCode::OK);
 
         // Regular user cannot search all reports
@@ -460,13 +524,15 @@ mod tests {
 
         // Create a user and multiple reports
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         // Create 3 reports
         for i in 0..3 {
@@ -478,8 +544,14 @@ mod tests {
                     "resource_id": reporter_id,
                     "reason": format!("Test report {}", i)
                 }),
-            ).await;
-            app.ready().await.unwrap().call(create_report_request).await.unwrap();
+            )
+            .await;
+            app.ready()
+                .await
+                .unwrap()
+                .call(create_report_request)
+                .await
+                .unwrap();
         }
 
         // Search own reports
@@ -487,7 +559,8 @@ mod tests {
         let search_response = app.call(search_request).await.unwrap();
         assert_eq!(search_response.status(), StatusCode::OK);
 
-        let search_results: serde_json::Value = response_to_value(search_response.into_body()).await;
+        let search_results: serde_json::Value =
+            response_to_value(search_response.into_body()).await;
         let items = search_results["items"].as_array().unwrap();
         assert_eq!(items.len(), 3);
 
@@ -511,13 +584,15 @@ mod tests {
 
         // Create a user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -527,8 +602,15 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
@@ -545,12 +627,22 @@ mod tests {
                 "resolution_note": "Looking into this"
             }),
         );
-        let update_response = app.ready().await.unwrap().call(update_request).await.unwrap();
+        let update_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(update_request)
+            .await
+            .unwrap();
         assert_eq!(update_response.status(), StatusCode::OK);
 
-        let updated_report: serde_json::Value = response_to_value(update_response.into_body()).await;
+        let updated_report: serde_json::Value =
+            response_to_value(update_response.into_body()).await;
         assert_eq!(updated_report["priority"].as_str().unwrap(), "high");
-        assert_eq!(updated_report["resolution_status"].as_str().unwrap(), "in_progress");
+        assert_eq!(
+            updated_report["resolution_status"].as_str().unwrap(),
+            "in_progress"
+        );
 
         // Regular user cannot update
         let update_request = patch(
@@ -577,13 +669,15 @@ mod tests {
 
         // Create a user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -593,13 +687,21 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
         // Create a moderator
-        let (moderator_token, moderator_id) = make_moderator_user(&app, email_service.clone(), &pool).await;
+        let (moderator_token, moderator_id) =
+            make_moderator_user(&app, email_service.clone(), &pool).await;
 
         // Mark report as dismissed
         let update_request = patch(
@@ -612,13 +714,17 @@ mod tests {
         let update_response = app.call(update_request).await.unwrap();
         assert_eq!(update_response.status(), StatusCode::OK);
 
-        let updated_report: serde_json::Value = response_to_value(update_response.into_body()).await;
+        let updated_report: serde_json::Value =
+            response_to_value(update_response.into_body()).await;
 
         // resolved_at should be set
         assert!(!updated_report["resolved_at"].is_null());
 
         // resolved_by should be set to the moderator
-        assert_eq!(updated_report["resolved_by"].as_str().unwrap(), moderator_id.to_string());
+        assert_eq!(
+            updated_report["resolved_by"].as_str().unwrap(),
+            moderator_id.to_string()
+        );
     }
 
     #[tokio::test]
@@ -634,13 +740,15 @@ mod tests {
 
         // Create a user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -650,8 +758,15 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
@@ -685,13 +800,15 @@ mod tests {
 
         // Create a user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -701,26 +818,51 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
         // Regular user cannot delete
         let delete_request = delete(&reporter_token, &format!("reports/{}", report_id));
-        let delete_response = app.ready().await.unwrap().call(delete_request).await.unwrap();
+        let delete_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(delete_request)
+            .await
+            .unwrap();
         assert_eq!(delete_response.status(), StatusCode::FORBIDDEN);
 
         // Moderator cannot delete (only admins)
         let (moderator_token, _) = make_moderator_user(&app, email_service.clone(), &pool).await;
         let delete_request = delete(&moderator_token, &format!("reports/{}", report_id));
-        let delete_response = app.ready().await.unwrap().call(delete_request).await.unwrap();
+        let delete_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(delete_request)
+            .await
+            .unwrap();
         assert_eq!(delete_response.status(), StatusCode::FORBIDDEN);
 
         // Admin can delete
         let (admin_token, _) = make_admin_user(&app, email_service, &pool).await;
         let delete_request = delete(&admin_token, &format!("reports/{}", report_id));
-        let delete_response = app.ready().await.unwrap().call(delete_request).await.unwrap();
+        let delete_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(delete_request)
+            .await
+            .unwrap();
         assert_eq!(delete_response.status(), StatusCode::OK);
 
         // Verify report was deleted
@@ -742,13 +884,15 @@ mod tests {
 
         // Create a user and a report
         let reporter_username = random_name();
-        let reporter_token = make_authed_user(&reporter_username, &app, email_service.clone()).await;
+        let reporter_token =
+            make_authed_user(&reporter_username, &app, email_service.clone()).await;
         let reporter_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let create_report_request = post(
             &reporter_token,
@@ -758,8 +902,15 @@ mod tests {
                 "resource_id": reporter_id,
                 "reason": "Test report"
             }),
-        ).await;
-        let create_report_response = app.ready().await.unwrap().call(create_report_request).await.unwrap();
+        )
+        .await;
+        let create_report_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_report_request)
+            .await
+            .unwrap();
         let report: serde_json::Value = response_to_value(create_report_response.into_body()).await;
         let report_id = report["id"].as_str().unwrap();
 
@@ -777,14 +928,22 @@ mod tests {
                 "resolution_note_hidden": true
             }),
         );
-        app.ready().await.unwrap().call(update_request).await.unwrap();
+        app.ready()
+            .await
+            .unwrap()
+            .call(update_request)
+            .await
+            .unwrap();
 
         // Regular user should see resolution_status but not resolution_note
         let get_request = get_with_auth(&reporter_token, &format!("reports/{}", report_id)).await;
         let get_response = app.call(get_request).await.unwrap();
         let fetched_report: serde_json::Value = response_to_value(get_response.into_body()).await;
 
-        assert_eq!(fetched_report["resolution_status"].as_str().unwrap(), "in_progress");
+        assert_eq!(
+            fetched_report["resolution_status"].as_str().unwrap(),
+            "in_progress"
+        );
         assert!(fetched_report["resolution_note"].is_null()); // Hidden
         assert!(fetched_report["priority"].is_null()); // Always hidden for regular users
     }
@@ -802,13 +961,15 @@ mod tests {
 
         // Create two users and reports
         let reporter1_username = random_name();
-        let reporter1_token = make_authed_user(&reporter1_username, &app, email_service.clone()).await;
+        let reporter1_token =
+            make_authed_user(&reporter1_username, &app, email_service.clone()).await;
         let reporter1_id = sqlx::query_scalar!(
             "select id from users where username = $1",
             reporter1_username
         )
         .fetch_one(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         // Create reports with different resource types
         let create_report1 = post(
@@ -819,8 +980,14 @@ mod tests {
                 "resource_id": reporter1_id,
                 "reason": "spam user"
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_report1).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_report1)
+            .await
+            .unwrap();
 
         let create_report2 = post(
             &reporter1_token,
@@ -830,8 +997,14 @@ mod tests {
                 "resource_id": Uuid::new_v4(),
                 "reason": "inappropriate language"
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_report2).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_report2)
+            .await
+            .unwrap();
 
         // Create a moderator
         let (moderator_token, _) = make_moderator_user(&app, email_service.clone(), &pool).await;
@@ -841,7 +1014,8 @@ mod tests {
         let search_response = app.call(search_request).await.unwrap();
         assert_eq!(search_response.status(), StatusCode::OK);
 
-        let search_results: serde_json::Value = response_to_value(search_response.into_body()).await;
+        let search_results: serde_json::Value =
+            response_to_value(search_response.into_body()).await;
         let items = search_results["items"].as_array().unwrap();
 
         // Should only get User reports

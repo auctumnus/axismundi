@@ -8,7 +8,14 @@ use uuid::Uuid;
 use validator::{Validate, ValidateArgs, ValidationErrors};
 
 use crate::{
-    err::{AppResult, bad_request, internal_error, not_found}, model::{email_verification_tokens::EmailVerificationToken, languages::Language, password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password}
+    err::{AppResult, bad_request, internal_error, not_found},
+    model::{
+        email_verification_tokens::EmailVerificationToken,
+        languages::Language,
+        password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository},
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password},
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -77,7 +84,10 @@ pub struct CreateUser {
     pub email: String,
 
     #[serde(skip_serializing)]
-    #[validate(length(min = 8, max = 100), custom(function = "crate::util::validate_password", use_context))]
+    #[validate(
+        length(min = 8, max = 100),
+        custom(function = "crate::util::validate_password", use_context)
+    )]
     pub password: String,
 
     #[validate(length(max = 30))]
@@ -113,7 +123,10 @@ pub struct UpdateUser {
     #[serde(skip_serializing)]
     pub current_password: Option<String>,
 
-    #[validate(length(min = 8, max = 100), custom(function = "crate::util::validate_password", use_context))]
+    #[validate(
+        length(min = 8, max = 100),
+        custom(function = "crate::util::validate_password", use_context)
+    )]
     #[serde(skip_serializing)]
     pub new_password: Option<String>,
 }
@@ -137,7 +150,9 @@ impl UserRepository {
     }
 
     pub async fn render_description(&self, user: &User) -> AppResult<String> {
-        let rendered = user.description.as_ref()
+        let rendered = user
+            .description
+            .as_ref()
             .map(|desc| crate::md::render_md(desc))
             .transpose()?
             .unwrap_or_default();
@@ -165,15 +180,19 @@ impl UserRepository {
             .map_err(|_| internal_error("password hash failed"))?;
 
         // select a random default profile picture
-        let default_pfps = ["default-pfps/1.webp", "default-pfps/2.webp", "default-pfps/3.webp"];
+        let default_pfps = [
+            "default-pfps/1.webp",
+            "default-pfps/2.webp",
+            "default-pfps/3.webp",
+        ];
         let random_pfp = default_pfps[rand::random::<usize>() % default_pfps.len()];
 
         // Begin transaction: create user + verification token + bookmark atomically
         let mut tx = self.state.pool.begin().await?;
 
-        let gender = user.gender.map(|g| {
-            g.strip_prefix("#").unwrap_or(&g).to_lowercase()
-        });
+        let gender = user
+            .gender
+            .map(|g| g.strip_prefix("#").unwrap_or(&g).to_lowercase());
 
         let user_result = sqlx::query!(
             r#"
@@ -232,7 +251,10 @@ impl UserRepository {
         tx.commit().await?;
 
         // Send email outside transaction - if this fails, token exists for retry/resend
-        if let Err(e) = token_repo.send(result.id, &result.email, &token.token).await {
+        if let Err(e) = token_repo
+            .send(result.id, &result.email, &token.token)
+            .await
+        {
             // Log the error but don't fail the registration
             // User exists with token, can implement resend endpoint later
             tracing::error!(
@@ -360,7 +382,10 @@ impl UserRepository {
         let user_inputs = vec![
             updates.username.as_deref().unwrap_or(&requestor.username),
             updates.email.as_deref().unwrap_or(&requestor.email),
-            updates.display_name.as_deref().unwrap_or(&requestor.display_name.as_deref().unwrap_or("")),
+            updates
+                .display_name
+                .as_deref()
+                .unwrap_or(&requestor.display_name.as_deref().unwrap_or("")),
         ];
 
         updates.validate_with_args(&user_inputs.as_ref())?;
@@ -375,7 +400,9 @@ impl UserRepository {
 
         // disallow changing email and password at the same time
         if updates.email.is_some() && updates.new_password.is_some() {
-            return Err(bad_request("Cannot change email and password at the same time"));
+            return Err(bad_request(
+                "Cannot change email and password at the same time",
+            ));
         }
 
         let tokens = EmailVerificationTokenRepository::new(self.state.clone());
@@ -414,23 +441,30 @@ impl UserRepository {
                     return Err(bad_request("Current password is incorrect"));
                 }
             } else {
-                return Err(bad_request("Current password is required to change password"));
+                return Err(bad_request(
+                    "Current password is required to change password",
+                ));
             }
 
-            &crate::util::hash(new_password)
-                .map_err(|_| internal_error("password hash failed"))?
+            &crate::util::hash(new_password).map_err(|_| internal_error("password hash failed"))?
         } else {
             &requestor.password_hash
         };
 
         // Convert empty strings to None (clearing the field), or use the original value if not updating
-        let display_name_final = updates.display_name.as_ref()
+        let display_name_final = updates
+            .display_name
+            .as_ref()
             .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
             .unwrap_or_else(|| requestor.display_name.clone());
-        let description_final = updates.description.as_ref()
+        let description_final = updates
+            .description
+            .as_ref()
             .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
             .unwrap_or_else(|| requestor.description.clone());
-        let pronouns_final = updates.pronouns.as_ref()
+        let pronouns_final = updates
+            .pronouns
+            .as_ref()
             .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
             .unwrap_or_else(|| requestor.pronouns.clone());
 
@@ -477,17 +511,14 @@ impl UserRepository {
             if let Err(e) = tokens.send(id, &email, &token.token).await {
                 // Log the error but don't fail the update
                 // User exists with token, can implement resend endpoint later
-                tracing::error!(
-                    "Failed to send verification email to {}: {}",
-                    email,
-                    e
-                );
+                tracing::error!("Failed to send verification email to {}: {}", email, e);
             }
-            if let Err(e) = self.state.email_service.send_email_change_notification(
-                id,
-                &requestor.email,
-                &email,
-            ).await {
+            if let Err(e) = self
+                .state
+                .email_service
+                .send_email_change_notification(id, &requestor.email, &email)
+                .await
+            {
                 tracing::error!(
                     "Failed to send email change notification to {}: {}",
                     &requestor.email,
@@ -598,7 +629,8 @@ impl UserRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -755,15 +787,28 @@ impl UserRepository {
         Ok(result)
     }
 
-    pub async fn reset_password(&self, user_id: Uuid, token: PasswordResetToken, new_password: &str) -> AppResult<()> {
+    pub async fn reset_password(
+        &self,
+        user_id: Uuid,
+        token: PasswordResetToken,
+        new_password: &str,
+    ) -> AppResult<()> {
         let user = self.find_by_id(user_id).await?;
-        validate_password(new_password, &[&user.username, &user.email, user.display_name.as_deref().unwrap_or("")]).map_err(|e| {
+        validate_password(
+            new_password,
+            &[
+                &user.username,
+                &user.email,
+                user.display_name.as_deref().unwrap_or(""),
+            ],
+        )
+        .map_err(|e| {
             let mut errors = ValidationErrors::new();
             errors.add("new_password", e);
             errors
         })?;
-        let password_hash = crate::util::hash(new_password)
-            .map_err(|_| internal_error("password hash failed"))?;
+        let password_hash =
+            crate::util::hash(new_password).map_err(|_| internal_error("password hash failed"))?;
 
         let mut tx = self.state.pool.begin().await?;
 
@@ -830,7 +875,11 @@ crate::util::repo_from_parts!(UserRepository);
 
 #[async_trait::async_trait]
 impl crate::model::bookmarks::ResolveBookmark for UserRepository {
-    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+    async fn resolve_bookmark(
+        &self,
+        item: Uuid,
+        link_type: crate::model::bookmarks::LinkType,
+    ) -> AppResult<String> {
         // api: /api/users/{username}
         // web: /users/{username}
         let user = self.find_by_id(item).await?;

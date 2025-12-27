@@ -1,18 +1,47 @@
 use askama::Template;
-use axum::{Router, extract::{Path, Query}, response::{IntoResponse, Redirect, Response}, routing::{get, post}, Form};
+use axum::{
+    Form, Router,
+    extract::{Path, Query},
+    response::{IntoResponse, Redirect, Response},
+    routing::{get, post},
+};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{attempt, controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors}, err::AppError, get_user, model::{contribution_stats::{ContributionsSearch, ContributionStatsRepository}, definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}};
+use crate::{
+    attempt,
+    controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
+    err::AppError,
+    get_user,
+    model::{
+        contribution_stats::{ContributionStatsRepository, ContributionsSearch},
+        definitions::{Definition, DefinitionRepository},
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch},
+        translatable::TranslatableRepository,
+        translations::TranslationRepository,
+        users::{User, UserRepository},
+        words::{Word, WordRepository, WordSearch},
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, extract_session::Session},
+};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/new-language", post(new_language_submit))
         .route("/languages/{code}/edit", post(edit_language_submit))
         .route("/languages/{code}/delete", post(delete_language_submit))
-        .route("/languages/{code}/permissions/{id}/delete", post(delete_permission_submit))
-        .route("/languages/{code}/permissions/{id}/edit", post(edit_permission_submit));
+        .route(
+            "/languages/{code}/permissions/{id}/delete",
+            post(delete_permission_submit),
+        )
+        .route(
+            "/languages/{code}/permissions/{id}/edit",
+            post(edit_permission_submit),
+        );
     let normal_routes = Router::<AppState>::new()
         .route("/new-language", get(new_language_form))
         .route("/languages", get(search_languages))
@@ -20,12 +49,17 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/languages/{code}/edit", get(edit_language_form))
         .route("/languages/{code}/delete", get(delete_language_form))
         .route("/languages/{code}/contributors", get(search_contributors))
-        .route("/languages/{code}/permissions/{id}/delete", get(delete_permission_form))
-        .route("/languages/{code}/permissions/{id}/edit", get(edit_permission_form));
+        .route(
+            "/languages/{code}/permissions/{id}/delete",
+            get(delete_permission_form),
+        )
+        .route(
+            "/languages/{code}/permissions/{id}/edit",
+            get(edit_permission_form),
+        );
 
     (secure_routes, normal_routes)
 }
-
 
 #[derive(Template)]
 #[template(path = "languages/search.html")]
@@ -83,9 +117,17 @@ async fn search_languages(
 
     let mut results_with_meta = vec![];
     for language in results.items {
-        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language.id, 5).await);
+        let top_contributors = attempt!(
+            s,
+            contribution_stats
+                .get_top_contributors(&language.id, 5)
+                .await
+        );
         let is_liked = if let Some(user) = &current_user {
-            languages.is_liked(&language.id, &user.id).await.unwrap_or(false)
+            languages
+                .is_liked(&language.id, &user.id)
+                .await
+                .unwrap_or(false)
         } else {
             false
         };
@@ -148,16 +190,29 @@ struct NewLanguageFormData {
     description: String,
 }
 
-async fn new_language_submit(s: Session, languages: LanguageRepository, form: axum::Form<NewLanguageFormData>) -> (StatusCode, Response) {
+async fn new_language_submit(
+    s: Session,
+    languages: LanguageRepository,
+    form: axum::Form<NewLanguageFormData>,
+) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    match languages.create(&user, CreateLanguage {
-        code: form.code.clone(),
-        name: form.name.clone(),
-        description: form.description.clone(),
-        private: false,
-    }).await {
-        Ok(lang) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}", lang.code)).into_response()),
+    match languages
+        .create(
+            &user,
+            CreateLanguage {
+                code: form.code.clone(),
+                name: form.name.clone(),
+                description: form.description.clone(),
+                private: false,
+            },
+        )
+        .await
+    {
+        Ok(lang) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{}", lang.code)).into_response(),
+        ),
         Err(e) => {
             let template = NewLanguageFormTemplate {
                 current_user: Some(user),
@@ -202,22 +257,50 @@ struct ViewLanguageTemplate {
 }
 
 #[axum::debug_handler(state=AppState)]
-async fn view_language(s: Session, languages: LanguageRepository, definitions: DefinitionRepository, users: UserRepository, words: WordRepository, translations: TranslationRepository, translatables: TranslatableRepository, permissions: LanguagePermissionRepository, invites: crate::model::language_invites::LanguageInviteRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+async fn view_language(
+    s: Session,
+    languages: LanguageRepository,
+    definitions: DefinitionRepository,
+    users: UserRepository,
+    words: WordRepository,
+    translations: TranslationRepository,
+    translatables: TranslatableRepository,
+    permissions: LanguagePermissionRepository,
+    invites: crate::model::language_invites::LanguageInviteRepository,
+    axum::extract::Path(code): axum::extract::Path<String>,
+) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
     let rendered_description = attempt!(s, languages.render_description(&language).await);
-    let recent_words = attempt!(s, words.search(&language.id, PaginatedRequest {
-        limit: 5,
-        offset: 0,
-    }, WordSearch {
-        ..Default::default()
-    }).await);
+    let recent_words = attempt!(
+        s,
+        words
+            .search(
+                &language.id,
+                PaginatedRequest {
+                    limit: 5,
+                    offset: 0,
+                },
+                WordSearch {
+                    ..Default::default()
+                }
+            )
+            .await
+    );
 
-    let recent_translations = attempt!(s, translations.list_by_language(language.id, PaginatedRequest {
-        limit: 5,
-        offset: 0,
-    }).await);
+    let recent_translations = attempt!(
+        s,
+        translations
+            .list_by_language(
+                language.id,
+                PaginatedRequest {
+                    limit: 5,
+                    offset: 0,
+                }
+            )
+            .await
+    );
 
     let can_edit_language = if let Some(user) = s.user() {
         permissions
@@ -238,7 +321,10 @@ async fn view_language(s: Session, languages: LanguageRepository, definitions: D
     };
 
     let is_liked = if let Some(user) = s.user() {
-        languages.is_liked(&language.id, &user.id).await.unwrap_or(false)
+        languages
+            .is_liked(&language.id, &user.id)
+            .await
+            .unwrap_or(false)
     } else {
         false
     };
@@ -248,7 +334,11 @@ async fn view_language(s: Session, languages: LanguageRepository, definitions: D
     for word in recent_words.items {
         let creator = attempt!(s, words.find_creator(&word.id).await);
         let first_definition = attempt!(s, definitions.get_first_by_word(&word.id).await);
-        words_with_meta.push(WordWithMeta { word, first_definition, creator });
+        words_with_meta.push(WordWithMeta {
+            word,
+            first_definition,
+            creator,
+        });
     }
 
     // Fetch authors and translatables for each translation
@@ -259,20 +349,23 @@ async fn view_language(s: Session, languages: LanguageRepository, definitions: D
         translations_with_authors.push(TranslationWithAuthor {
             translation,
             translatable,
-            author
+            author,
         });
     }
 
     // Check for pending invites
     let pending_invite = if let Some(user) = s.user() {
-        match invites.find_by_language_and_recipient_unchecked(language.id, user.id).await {
+        match invites
+            .find_by_language_and_recipient_unchecked(language.id, user.id)
+            .await
+        {
             Ok(Some(invite)) if invite.accepted_at.is_none() => {
                 // Fetch the sender
                 match users.find_by_id(invite.sender).await {
                     Ok(sender) => Some((invite, sender)),
                     Err(_) => None,
                 }
-            },
+            }
             _ => None,
         }
     } else {
@@ -311,7 +404,12 @@ struct EditLanguageFormTemplate {
     can_delete_language: bool,
 }
 
-async fn edit_language_form(s: Session, languages: LanguageRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>) -> (StatusCode, Response) {
+async fn edit_language_form(
+    s: Session,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    axum::extract::Path(code): axum::extract::Path<String>,
+) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
@@ -346,7 +444,13 @@ struct EditLanguageFormData {
     description: String,
 }
 
-async fn edit_language_submit(s: Session, languages: LanguageRepository, permissions: LanguagePermissionRepository, axum::extract::Path(code): axum::extract::Path<String>, form: axum::Form<EditLanguageFormData>) -> (StatusCode, Response) {
+async fn edit_language_submit(
+    s: Session,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    axum::extract::Path(code): axum::extract::Path<String>,
+    form: axum::Form<EditLanguageFormData>,
+) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
@@ -356,14 +460,29 @@ async fn edit_language_submit(s: Session, languages: LanguageRepository, permiss
         .unwrap_or(false);
 
     let updates = crate::model::languages::UpdateLanguage {
-        code: if form.code != language.code { Some(form.code.clone()) } else { None },
-        name: if form.name != language.name { Some(form.name.clone()) } else { None },
-        description: if form.description != language.description { Some(form.description.clone()) } else { None },
+        code: if form.code != language.code {
+            Some(form.code.clone())
+        } else {
+            None
+        },
+        name: if form.name != language.name {
+            Some(form.name.clone())
+        } else {
+            None
+        },
+        description: if form.description != language.description {
+            Some(form.description.clone())
+        } else {
+            None
+        },
         private: None,
     };
 
     match languages.update(&user, language.id, updates).await {
-        Ok(lang) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}", lang.code)).into_response()),
+        Ok(lang) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{}", lang.code)).into_response(),
+        ),
         Err(e) => {
             let template = EditLanguageFormTemplate {
                 can_delete_language: permissions
@@ -406,7 +525,6 @@ struct SearchContributorsTemplate {
     previous_pagination: PaginatedRequest,
 }
 
-
 async fn search_contributors(
     s: Session,
     languages: LanguageRepository,
@@ -439,11 +557,12 @@ async fn search_contributors(
         false
     };
 
-    let contributor_records = attempt!(s, contribution_stats.search_top_contributors(
-        &language.id,
-        &search,
-        &pagination,
-    ).await);
+    let contributor_records = attempt!(
+        s,
+        contribution_stats
+            .search_top_contributors(&language.id, &search, &pagination,)
+            .await
+    );
 
     let current_user_id = s.user().map(|u| u.id);
     let mut contributors = Vec::new();
@@ -499,7 +618,6 @@ async fn search_contributors(
 
     let body = render_template(template);
     okay(body)
-
 }
 
 // Delete permission handlers
@@ -526,7 +644,11 @@ async fn delete_permission_form(
     let permission = attempt!(s, permissions.find_by_id(id).await);
 
     if permission.language != language.id {
-        return crate::controller::html::render_generic_error(s, crate::err::not_found("Permission not found")).await;
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::not_found("Permission not found"),
+        )
+        .await;
     }
 
     let target_user = attempt!(s, users.find_by_id(permission.user).await);
@@ -560,7 +682,11 @@ async fn delete_permission_submit(
     let permission = attempt!(s, permissions.find_by_id(id).await);
 
     if permission.language != language.id {
-        return crate::controller::html::render_generic_error(s, crate::err::not_found("Permission not found")).await;
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::not_found("Permission not found"),
+        )
+        .await;
     }
 
     attempt!(s, permissions.delete_checked(&user, id).await);
@@ -597,7 +723,11 @@ async fn edit_permission_form(
     let permission = attempt!(s, permissions.find_by_id(id).await);
 
     if permission.language != language.id {
-        return crate::controller::html::render_generic_error(s, crate::err::not_found("Permission not found")).await;
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::not_found("Permission not found"),
+        )
+        .await;
     }
 
     let target_user = attempt!(s, users.find_by_id(permission.user).await);
@@ -647,7 +777,11 @@ async fn edit_permission_submit(
     let permission = attempt!(s, permissions.find_by_id(id).await);
 
     if permission.language != language.id {
-        return crate::controller::html::render_generic_error(s, crate::err::not_found("Permission not found")).await;
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::not_found("Permission not found"),
+        )
+        .await;
     }
 
     let can_grant_owner = attempt!(
@@ -664,7 +798,10 @@ async fn edit_permission_submit(
             .await
     );
 
-    match permissions.update_permission_checked(&user, id, form.permission).await {
+    match permissions
+        .update_permission_checked(&user, id, form.permission)
+        .await
+    {
         Ok(_) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/languages/{}/contributors", code)).into_response(),
@@ -728,7 +865,10 @@ async fn delete_language_submit(
     let language = attempt!(s, languages.find_by_code(&code).await);
 
     match languages.delete(&user, language.id).await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/languages").into_response()),
-        Err(e) => render_generic_error(s, e).await
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/languages").into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
     }
 }

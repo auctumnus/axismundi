@@ -1,11 +1,11 @@
-use sqlx::FromRow;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use validator::Validate;
-use crate::err::{AppResult, forbidden};
 use crate::AppState;
+use crate::err::{AppResult, forbidden};
 use crate::model::users::User;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use uuid::Uuid;
+use validator::Validate;
 
 // Main data struct - matches database table
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -38,7 +38,12 @@ impl UserTagRepository {
         Self { state }
     }
 
-    pub async fn create(&self, requestor: &User, user_id: Uuid, req: CreateUserTag) -> AppResult<UserTag> {
+    pub async fn create(
+        &self,
+        requestor: &User,
+        user_id: Uuid,
+        req: CreateUserTag,
+    ) -> AppResult<UserTag> {
         req.validate()?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
@@ -49,11 +54,15 @@ impl UserTagRepository {
         let is_moderator = self.is_moderator(requestor.id).await?;
 
         if !(is_admin || is_moderator) {
-            return Err(forbidden("You do not have permission to add tags to users."));
+            return Err(forbidden(
+                "You do not have permission to add tags to users.",
+            ));
         }
 
         if req.tag == "admin" {
-            return Err(forbidden("Admins can only be created via the database. Please contact your system administrator."));
+            return Err(forbidden(
+                "Admins can only be created via the database. Please contact your system administrator.",
+            ));
         }
 
         if req.tag == "moderator" && !is_admin {
@@ -111,22 +120,26 @@ impl UserTagRepository {
         let is_moderator = self.is_moderator(requestor.id).await?;
 
         if !(is_admin || is_moderator) {
-            return Err(forbidden("You do not have permission to remove tags from users."));
+            return Err(forbidden(
+                "You do not have permission to remove tags from users.",
+            ));
         }
 
         let Some(tag) = self.find(user, &tag).await? else {
-            return Ok(())
+            return Ok(());
         };
         let id = tag.id;
 
         if tag.tag == "admin" {
-            return Err(forbidden("Admins can only be removed via the database. Please contact your system administrator."));
+            return Err(forbidden(
+                "Admins can only be removed via the database. Please contact your system administrator.",
+            ));
         }
 
         if tag.tag == "moderator" && !is_admin {
             return Err(forbidden("Only admins can remove moderators."));
         }
-        
+
         sqlx::query!("delete from user_tags where id = $1", id)
             .execute(&self.state.pool)
             .await?;

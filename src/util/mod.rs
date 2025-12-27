@@ -1,6 +1,7 @@
 use crate::{
     err::{AppError, AppResult, internal_error},
-    model::users::User, pagination::PaginatedRequest,
+    model::users::User,
+    pagination::PaginatedRequest,
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -81,9 +82,23 @@ pub fn ensure_verified(user: &User) -> AppResult<()> {
     Ok(())
 }
 
+/// Check if a user is an admin or moderator
+pub async fn is_admin_or_mod(state: &AppState, user_id: uuid::Uuid) -> AppResult<bool> {
+    use crate::model::user_tags::UserTagRepository;
+
+    let user_tags = UserTagRepository::new(state.clone());
+    let is_admin = user_tags.is_admin(user_id).await?;
+    let is_moderator = user_tags.is_moderator(user_id).await?;
+
+    Ok(is_admin || is_moderator)
+}
+
 pub type PasswordValidationContext<'v_a> = &'v_a [&'v_a str];
 
-pub fn validate_password(value: &str, user_inputs: PasswordValidationContext) -> Result<(), ValidationError> {
+pub fn validate_password(
+    value: &str,
+    user_inputs: PasswordValidationContext,
+) -> Result<(), ValidationError> {
     let password_strength = zxcvbn::zxcvbn(value, user_inputs);
     if password_strength.score() < zxcvbn::Score::Three {
         let message = password_strength

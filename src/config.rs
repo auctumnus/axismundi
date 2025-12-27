@@ -94,7 +94,6 @@ pub struct AppConfig {
     pub banner: BannerConfig,
 }
 
-
 pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
     #[cfg(test)]
     {

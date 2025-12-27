@@ -1,16 +1,20 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
-        definitions::DefinitionRepository, languages::LanguageRepository, quotations::{CreateQuotation, Quotation, QuotationRepository, UpdateQuotation}, translatable::TranslatableRepository, translations::TranslationRepository
+        definitions::DefinitionRepository,
+        languages::LanguageRepository,
+        quotations::{CreateQuotation, Quotation, QuotationRepository, UpdateQuotation},
+        translatable::TranslatableRepository,
+        translations::TranslationRepository,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
 };
 use axum::{
+    Json,
     extract::Path,
     http::StatusCode,
     routing::{delete, get, post, put},
-    Json,
 };
 use uuid::Uuid;
 use validator::Validate;
@@ -29,9 +33,18 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
             "/languages/{language_code}/words/{word_slug}/definitions/{definition_id}/quotations",
             get(list_quotations_by_definition),
         )
-        .route("/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}", get(get_quotation_from_translation))
-        .route("/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}", put(edit_quotation_from_translation))
-        .route("/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}", delete(delete_quotation_from_translation))
+        .route(
+            "/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}",
+            get(get_quotation_from_translation),
+        )
+        .route(
+            "/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}",
+            put(edit_quotation_from_translation),
+        )
+        .route(
+            "/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}",
+            delete(delete_quotation_from_translation),
+        )
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -57,17 +70,13 @@ pub async fn create_quotation(
         return Err(crate::err::not_found("Language not found"));
     };
 
-    let translatable = translatables
-        .find_by_slug(&translatable_slug)
-        .await?;
+    let translatable = translatables.find_by_slug(&translatable_slug).await?;
 
     let translation = translations
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
 
-    let definition = definitions
-        .find_by_id(req.definition)
-        .await?;
+    let definition = definitions.find_by_id(req.definition).await?;
     let translation_id = translation.id;
     let definition_id = definition.id;
     quotations
@@ -83,7 +92,9 @@ pub async fn get_quotation_from_translation(
     languages: LanguageRepository,
     quotations: QuotationRepository,
 ) -> ApiResponse<Json<Quotation>> {
-    let language = languages.find_by_code(&language_code).await
+    let language = languages
+        .find_by_code(&language_code)
+        .await
         .map_err(|_| crate::err::not_found("Language not found"))?;
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
@@ -110,7 +121,9 @@ pub async fn list_quotations_by_translation(
     quotations: QuotationRepository,
     pagination: PaginatedRequest,
 ) -> PaginatedApiResponse<Quotation> {
-    let language = languages.find_by_code(&language_code).await
+    let language = languages
+        .find_by_code(&language_code)
+        .await
         .map_err(|_| crate::err::not_found("Language not found"))?;
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
@@ -119,7 +132,9 @@ pub async fn list_quotations_by_translation(
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
 
-    quotations.list_by_translation(translation.id, pagination).await
+    quotations
+        .list_by_translation(translation.id, pagination)
+        .await
 }
 
 pub async fn list_quotations_by_definition(
@@ -129,7 +144,9 @@ pub async fn list_quotations_by_definition(
     quotations: QuotationRepository,
     pagination: PaginatedRequest,
 ) -> PaginatedApiResponse<Quotation> {
-    let language = languages.find_by_code(&language_code).await
+    let language = languages
+        .find_by_code(&language_code)
+        .await
         .map_err(|_| crate::err::not_found("Language not found"))?;
 
     // Verify definition exists and belongs to the word
@@ -138,7 +155,9 @@ pub async fn list_quotations_by_definition(
     // Note: We have language_code and word_slug in the path but aren't strictly validating them
     // The definition_id is already unique and verifies the definition exists
 
-    quotations.list_by_definition(definition_id, pagination).await
+    quotations
+        .list_by_definition(definition_id, pagination)
+        .await
 }
 
 pub async fn edit_quotation_from_translation(
@@ -154,7 +173,9 @@ pub async fn edit_quotation_from_translation(
         return Err(unauthorized_no_session());
     };
 
-    let language = languages.find_by_code(&language_code).await
+    let language = languages
+        .find_by_code(&language_code)
+        .await
         .map_err(|_| crate::err::not_found("Language not found"))?;
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
@@ -184,7 +205,9 @@ pub async fn delete_quotation_from_translation(
         return Err(unauthorized_no_session());
     };
 
-    let language = languages.find_by_code(&language_code).await
+    let language = languages
+        .find_by_code(&language_code)
+        .await
         .map_err(|_| crate::err::not_found("Language not found"))?;
 
     let translatable = translatables.find_by_slug(&translatable_slug).await?;
@@ -211,7 +234,11 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{create_test_definition, create_test_language, create_test_translatable, create_test_translation, create_test_word, delete, delete_without_auth, get, make_authed_user, post, post_without_auth, print_response_body};
+    use crate::controller::api::tests::{
+        create_test_definition, create_test_language, create_test_translatable,
+        create_test_translation, create_test_word, delete, delete_without_auth, get,
+        make_authed_user, post, post_without_auth, print_response_body,
+    };
     use crate::email::MockEmailService;
     use tower::ServiceExt;
 
@@ -247,7 +274,8 @@ mod tests {
         let translatable = create_test_translatable(&token, &mut app, language_code).await;
         let translatable_slug = translatable["slug"].as_str().unwrap();
 
-        let translation = create_test_translation(&token,  &mut app, translatable_slug, language_code).await;
+        let translation =
+            create_test_translation(&token, &mut app, translatable_slug, language_code).await;
 
         TestContext {
             token,
@@ -275,10 +303,7 @@ mod tests {
 
         let request = post(
             token,
-            &format!(
-                "translatables/{translatable_slug}/translations/{language_code}/quotations",
-                
-            ),
+            &format!("translatables/{translatable_slug}/translations/{language_code}/quotations",),
             body,
         )
         .await;
@@ -294,11 +319,26 @@ mod tests {
     #[tokio::test]
     async fn test_create_quotation() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translation, translatable, language, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translation,
+            translatable,
+            language,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition_id).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition_id,
+        )
+        .await;
         assert_eq!(quotation["span_start"], 0);
         assert_eq!(quotation["span_end"], 10);
         assert!(quotation["id"].is_string());
@@ -307,7 +347,13 @@ mod tests {
     #[tokio::test]
     async fn test_create_quotation_unauthorized() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translation, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translation,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translation["translatable_slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
@@ -318,11 +364,10 @@ mod tests {
         });
 
         let request = post_without_auth(
-            &format!(
-                "translatables/{translatable_slug}/translations/{language_code}/quotations",
-            ),
+            &format!("translatables/{translatable_slug}/translations/{language_code}/quotations",),
             body,
-        ).await;
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -330,14 +375,33 @@ mod tests {
     #[tokio::test]
     async fn test_get_quotation() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, language, translation, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            language,
+            translation,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition_id).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition_id,
+        )
+        .await;
         let quotation_id = quotation["id"].as_str().unwrap();
 
-        let request = get(&format!("translatables/{}/translations/{}/quotations/{}", translatable_slug, language_code, quotation_id)).await;
+        let request = get(&format!(
+            "translatables/{}/translations/{}/quotations/{}",
+            translatable_slug, language_code, quotation_id
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -359,14 +423,33 @@ mod tests {
     #[tokio::test]
     async fn test_list_quotations_by_translation() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, translation, definition, language, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            translation,
+            definition,
+            language,
+            ..
+        } = ctx;
 
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
 
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition["id"].as_str().unwrap()).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition["id"].as_str().unwrap(),
+        )
+        .await;
 
-        let request = get(&format!("translatables/{}/translations/{}/quotations", translatable_slug, language_code)).await;
+        let request = get(&format!(
+            "translatables/{}/translations/{}/quotations",
+            translatable_slug, language_code
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -377,15 +460,37 @@ mod tests {
     #[tokio::test]
     async fn test_list_quotations_by_definition() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, translation, definition, language, word, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            translation,
+            definition,
+            language,
+            word,
+            ..
+        } = ctx;
 
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let word_slug = word["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
 
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition["id"].as_str().unwrap()).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition["id"].as_str().unwrap(),
+        )
+        .await;
 
-        let request = get(&format!("languages/{}/words/{}/definitions/{}/quotations", language_code, word_slug, definition["id"].as_str().unwrap())).await;
+        let request = get(&format!(
+            "languages/{}/words/{}/definitions/{}/quotations",
+            language_code,
+            word_slug,
+            definition["id"].as_str().unwrap()
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -396,18 +501,40 @@ mod tests {
     #[tokio::test]
     async fn test_edit_quotation() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, language, translation, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            language,
+            translation,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition_id).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition_id,
+        )
+        .await;
         let quotation_id = quotation["id"].as_str().unwrap();
 
         let update_body = json!({
             "span_start": 5,
         });
 
-        let request = crate::controller::api::tests::put(&token, &format!("translatables/{}/translations/{}/quotations/{}", translatable_slug, language_code, quotation_id), &update_body);
+        let request = crate::controller::api::tests::put(
+            &token,
+            &format!(
+                "translatables/{}/translations/{}/quotations/{}",
+                translatable_slug, language_code, quotation_id
+            ),
+            &update_body,
+        );
         let response = app.call(request).await.unwrap();
         if response.status() != StatusCode::OK {
             print_response_body(response).await;
@@ -424,7 +551,15 @@ mod tests {
     #[tokio::test]
     async fn test_edit_quotation_unauthorized() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, language, translation, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            language,
+            translation,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
@@ -432,9 +567,15 @@ mod tests {
             "span_start": 5,
         });
 
-
-
-        let request = crate::controller::api::tests::put_without_auth(&format!("translatables/{}/translations/{}/quotations/{}", translatable_slug, language_code, uuid::Uuid::nil()), &update_body);
+        let request = crate::controller::api::tests::put_without_auth(
+            &format!(
+                "translatables/{}/translations/{}/quotations/{}",
+                translatable_slug,
+                language_code,
+                uuid::Uuid::nil()
+            ),
+            &update_body,
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -442,14 +583,35 @@ mod tests {
     #[tokio::test]
     async fn test_delete_quotation() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, language, translation, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            language,
+            translation,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition_id).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition_id,
+        )
+        .await;
         let quotation_id = quotation["id"].as_str().unwrap();
 
-        let request = delete(&token, &format!("translatables/{}/translations/{}/quotations/{}", translatable_slug, language_code, quotation_id));
+        let request = delete(
+            &token,
+            &format!(
+                "translatables/{}/translations/{}/quotations/{}",
+                translatable_slug, language_code, quotation_id
+            ),
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
@@ -457,14 +619,32 @@ mod tests {
     #[tokio::test]
     async fn test_delete_quotation_unauthorized() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, translatable, language, translation, definition, .. } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            translatable,
+            language,
+            translation,
+            definition,
+            ..
+        } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
         let definition_id = definition["id"].as_str().unwrap();
-        let quotation = create_test_quotation(&token, &mut app, translatable_slug, language_code, definition_id).await;
+        let quotation = create_test_quotation(
+            &token,
+            &mut app,
+            translatable_slug,
+            language_code,
+            definition_id,
+        )
+        .await;
         let quotation_id = quotation["id"].as_str().unwrap();
 
-        let request = delete_without_auth(&format!("translatables/{}/translations/{}/quotations/{}", translatable_slug, language_code, quotation_id));
+        let request = delete_without_auth(&format!(
+            "translatables/{}/translations/{}/quotations/{}",
+            translatable_slug, language_code, quotation_id
+        ));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }

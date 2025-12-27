@@ -1,6 +1,4 @@
-use axum::{
-    Router,
-};
+use axum::Router;
 #[cfg(not(test))]
 use governor::middleware::NoOpMiddleware;
 
@@ -10,24 +8,25 @@ use std::sync::Arc;
 #[cfg(not(test))]
 use tower_governor::governor::GovernorConfig;
 
+mod audit_logs;
+mod bookmarks;
+mod definitions;
 mod language_invites;
 mod language_permissions;
 mod languages;
+mod quotation_suggestions;
+mod quotations;
+mod reports;
 mod sessions;
-mod users;
-mod user_tags;
-mod user_bans;
-mod word_classes;
-mod words;
-mod bookmarks;
-mod word_relations;
-mod definitions;
 mod translatable;
 mod translations;
-mod quotations;
-mod quotation_suggestions;
-mod reports;
 mod user_activities;
+mod user_bans;
+mod user_tags;
+mod users;
+mod word_classes;
+mod word_relations;
+mod words;
 
 // pretty sure i need that there, actually...
 #[allow(clippy::needless_return)]
@@ -36,19 +35,22 @@ pub fn create_api_controller() -> Router<AppState> {
     let (secure_user_tag_routes, normal_user_tag_routes) = user_tags::create_router();
     let (secure_user_ban_routes, normal_user_ban_routes) = user_bans::create_router();
     let (secure_report_routes, normal_report_routes) = reports::create_router();
+    let (secure_audit_log_routes, normal_audit_log_routes) = audit_logs::create_router();
 
     let secure_routes = Router::<AppState>::new()
         .merge(sessions::create_router())
         .merge(secure_user_routes)
         .merge(secure_user_tag_routes)
         .merge(secure_user_ban_routes)
-        .merge(secure_report_routes);
+        .merge(secure_report_routes)
+        .merge(secure_audit_log_routes);
 
     let normal_routes = Router::<AppState>::new()
         .merge(normal_user_routes)
         .merge(normal_user_tag_routes)
         .merge(normal_user_ban_routes)
         .merge(normal_report_routes)
+        .merge(normal_audit_log_routes)
         .merge(bookmarks::create_router())
         .merge(languages::create_router())
         .merge(language_permissions::create_router())
@@ -100,8 +102,8 @@ pub(crate) mod tests {
     use axum::{body::Body, http::Request, routing::RouterIntoService};
     use reqwest::StatusCode;
     use serde_json::json;
-    use tower::Service as _;
     use std::sync::Arc;
+    use tower::Service as _;
 
     use crate::email::MockEmailService;
 
@@ -299,14 +301,16 @@ pub(crate) mod tests {
     ) -> axum::response::Response<Body> {
         let status = response.status();
         if status != expected_status {
-            
             print_response_body(response).await;
             panic!("Expected status {expected_status}, got {status}");
         }
         response
     }
 
-    pub(crate) async fn create_test_language(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>) -> serde_json::Value {
+    pub(crate) async fn create_test_language(
+        token: &str,
+        app: &mut axum::routing::RouterIntoService<axum::body::Body>,
+    ) -> serde_json::Value {
         let code = crate::tests::random_code();
         let body = json!({
             "code": code,
@@ -320,7 +324,11 @@ pub(crate) mod tests {
         language
     }
 
-    pub(crate) async fn create_test_word(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str) -> serde_json::Value {
+    pub(crate) async fn create_test_word(
+        token: &str,
+        app: &mut axum::routing::RouterIntoService<axum::body::Body>,
+        language_code: &str,
+    ) -> serde_json::Value {
         let body = json!({
             "word": crate::tests::random_name(),
             "word_class": "n",
@@ -328,20 +336,35 @@ pub(crate) mod tests {
         let request = post(token, &format!("languages/{language_code}/words"), body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-       crate::tests::response_to_value(response.into_body()).await
+        crate::tests::response_to_value(response.into_body()).await
     }
 
-    pub(crate) async fn create_test_definition(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, language_code: &str, word_slug: &str, word_lemma: i64) -> serde_json::Value {
+    pub(crate) async fn create_test_definition(
+        token: &str,
+        app: &mut axum::routing::RouterIntoService<axum::body::Body>,
+        language_code: &str,
+        word_slug: &str,
+        word_lemma: i64,
+    ) -> serde_json::Value {
         let body = json!({
             "definition": "A test definition",
         });
-        let request = post(token, &format!("languages/{language_code}/words/{word_slug}/{word_lemma}/definitions"), body).await;
+        let request = post(
+            token,
+            &format!("languages/{language_code}/words/{word_slug}/{word_lemma}/definitions"),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-       crate::tests::response_to_value(response.into_body()).await
+        crate::tests::response_to_value(response.into_body()).await
     }
 
-    pub(crate) async fn create_test_translatable(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, _language_code: &str) -> serde_json::Value {
+    pub(crate) async fn create_test_translatable(
+        token: &str,
+        app: &mut axum::routing::RouterIntoService<axum::body::Body>,
+        _language_code: &str,
+    ) -> serde_json::Value {
         let body = json!({
             "title": "A test translatable",
             "english": "test"
@@ -356,13 +379,23 @@ pub(crate) mod tests {
         crate::tests::response_to_value(response.into_body()).await
     }
 
-    pub(crate) async fn create_test_translation(token: &str, app: &mut axum::routing::RouterIntoService<axum::body::Body>, translatable_id: &str, language_code: &str) -> serde_json::Value {
+    pub(crate) async fn create_test_translation(
+        token: &str,
+        app: &mut axum::routing::RouterIntoService<axum::body::Body>,
+        translatable_id: &str,
+        language_code: &str,
+    ) -> serde_json::Value {
         let body = json!({
             "translated_text": "A test translation",
         });
-        let request = post(token, &format!("translatable/{translatable_id}/translations/{language_code}"), body).await;
+        let request = post(
+            token,
+            &format!("translatable/{translatable_id}/translations/{language_code}"),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-       crate::tests::response_to_value(response.into_body()).await
+        crate::tests::response_to_value(response.into_body()).await
     }
 }

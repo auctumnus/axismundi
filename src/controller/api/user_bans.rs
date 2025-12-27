@@ -5,12 +5,12 @@ use crate::{
         users::UserRepository,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{extract_session::Session, ensure_verified, AppState},
+    util::{AppState, ensure_verified, extract_session::Session},
 };
 use axum::{
+    Json, Router,
     extract::{Path, Query},
     routing::{delete, get, post},
-    Json, Router,
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -87,36 +87,39 @@ mod tests {
     use reqwest::StatusCode;
     use serde_json::json;
 
+    use crate::CONFIG;
     use crate::{
+        AppState,
         controller::api::tests::{delete, get, get_with_auth, make_authed_user, post},
         email::MockEmailService,
         tests::random_name,
-        AppState,
     };
     use sqlx::PgPool;
-    use tower::ServiceExt;
-    use crate::CONFIG;
-    use uuid::Uuid;
     use tower::Service;
+    use tower::ServiceExt;
+    use uuid::Uuid;
 
     /// Helper to create a moderator user for testing
-    async fn make_moderator_user(app: &axum::routing::RouterIntoService<axum::body::Body>, email_service: Arc<MockEmailService>, pool: &PgPool) -> (String, Uuid) {
+    async fn make_moderator_user(
+        app: &axum::routing::RouterIntoService<axum::body::Body>,
+        email_service: Arc<MockEmailService>,
+        pool: &PgPool,
+    ) -> (String, Uuid) {
         let username = random_name();
         let token = make_authed_user(&username, app, email_service).await;
 
-        let id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            username
-        )
-        .fetch_one(pool)
-        .await.unwrap();
+        let id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'moderator', false)",
             id
         )
         .execute(pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         (token, id)
     }
@@ -138,12 +141,11 @@ mod tests {
         // Create a regular user to ban
         let target_username = random_name();
         let _ = make_authed_user(&target_username, &app, email_service).await;
-        let target_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            target_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let target_id =
+            sqlx::query_scalar!("select id from users where username = $1", target_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
 
         // Ban the user
         let create_ban_request = post(
@@ -153,8 +155,15 @@ mod tests {
                 "user_id": target_id,
                 "reason": "Testing ban functionality"
             }),
-        ).await;
-        let create_ban_response = app.ready().await.unwrap().call(create_ban_request).await.unwrap();
+        )
+        .await;
+        let create_ban_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(create_ban_request)
+            .await
+            .unwrap();
         assert_eq!(create_ban_response.status(), StatusCode::OK);
 
         // Verify the ban exists
@@ -181,12 +190,11 @@ mod tests {
         // Create a target user
         let target_username = random_name();
         let _ = make_authed_user(&target_username, &app, email_service).await;
-        let target_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            target_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let target_id =
+            sqlx::query_scalar!("select id from users where username = $1", target_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
 
         // Try to ban as regular user (should fail)
         let create_ban_request = post(
@@ -196,7 +204,8 @@ mod tests {
                 "user_id": target_id,
                 "reason": "Testing ban functionality"
             }),
-        ).await;
+        )
+        .await;
         let create_ban_response = app.call(create_ban_request).await.unwrap();
         assert_eq!(create_ban_response.status(), StatusCode::FORBIDDEN);
     }
@@ -226,7 +235,8 @@ mod tests {
                 "user_id": target_mod_id,
                 "reason": "Testing ban functionality"
             }),
-        ).await;
+        )
+        .await;
         let create_ban_response = app.call(create_ban_request).await.unwrap();
         assert_eq!(create_ban_response.status(), StatusCode::FORBIDDEN);
     }
@@ -248,18 +258,18 @@ mod tests {
         // Create an admin user
         let admin_username = random_name();
         let _ = make_authed_user(&admin_username, &app, email_service).await;
-        let admin_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            admin_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let admin_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
             admin_id
         )
         .execute(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         // Try to ban the admin (should fail)
         let create_ban_request = post(
@@ -269,7 +279,8 @@ mod tests {
                 "user_id": admin_id,
                 "reason": "Testing ban functionality"
             }),
-        ).await;
+        )
+        .await;
         let create_ban_response = app.call(create_ban_request).await.unwrap();
         assert_eq!(create_ban_response.status(), StatusCode::FORBIDDEN);
     }
@@ -291,12 +302,11 @@ mod tests {
         // Create a regular user to ban
         let target_username = random_name();
         let _ = make_authed_user(&target_username, &app, email_service).await;
-        let target_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            target_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let target_id =
+            sqlx::query_scalar!("select id from users where username = $1", target_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
 
         // Ban the user
         let create_ban_request = post(
@@ -306,12 +316,24 @@ mod tests {
                 "user_id": target_id,
                 "reason": "Testing ban functionality"
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_ban_request).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_ban_request)
+            .await
+            .unwrap();
 
         // Unban the user
         let delete_ban_request = delete(&moderator_token, &format!("bans/{}", target_username));
-        let delete_ban_response = app.ready().await.unwrap().call(delete_ban_request).await.unwrap();
+        let delete_ban_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(delete_ban_request)
+            .await
+            .unwrap();
         assert_eq!(delete_ban_response.status(), StatusCode::OK);
 
         // Verify the ban is gone
@@ -320,7 +342,9 @@ mod tests {
         assert_eq!(get_ban_response.status(), StatusCode::OK);
 
         // Response should be null/None
-        let body = axum::body::to_bytes(get_ban_response.into_body(), 10_000).await.unwrap();
+        let body = axum::body::to_bytes(get_ban_response.into_body(), 10_000)
+            .await
+            .unwrap();
         let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(value.is_null());
     }
@@ -343,12 +367,11 @@ mod tests {
         for _ in 0..3 {
             let target_username = random_name();
             let _ = make_authed_user(&target_username, &app, email_service.clone()).await;
-            let target_id = sqlx::query_scalar!(
-                "select id from users where username = $1",
-                target_username
-            )
-            .fetch_one(&pool)
-            .await.unwrap();
+            let target_id =
+                sqlx::query_scalar!("select id from users where username = $1", target_username)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
 
             let create_ban_request = post(
                 &moderator_token,
@@ -357,8 +380,14 @@ mod tests {
                     "user_id": target_id,
                     "reason": "Testing ban functionality"
                 }),
-            ).await;
-            app.ready().await.unwrap().call(create_ban_request).await.unwrap();
+            )
+            .await;
+            app.ready()
+                .await
+                .unwrap()
+                .call(create_ban_request)
+                .await
+                .unwrap();
         }
 
         // List all bans
@@ -366,7 +395,9 @@ mod tests {
         let list_response = app.call(list_request).await.unwrap();
         assert_eq!(list_response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(list_response.into_body(), 10_000).await.unwrap();
+        let body = axum::body::to_bytes(list_response.into_body(), 10_000)
+            .await
+            .unwrap();
         let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(value["items"].is_array());
         assert!(value["items"].as_array().unwrap().len() >= 3);

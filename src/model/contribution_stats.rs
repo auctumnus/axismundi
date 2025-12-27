@@ -1,13 +1,18 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{err::AppResult, model::{language_invites::PermissionLevel, languages::LanguageRepository, users::User}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, repo_from_parts}};
+use crate::{
+    err::AppResult,
+    model::{language_invites::PermissionLevel, languages::LanguageRepository, users::User},
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, repo_from_parts},
+};
 
 pub struct ContributionStats {
     pub language_id: Uuid,
     pub user_id: Uuid,
     pub word_count: i64,
-    pub translation_count: i64
+    pub translation_count: i64,
 }
 
 pub struct ContributionStatsRepository {
@@ -25,8 +30,12 @@ impl ContributionStatsRepository {
         Self { state }
     }
 
-    pub async fn increment_word_count(&self, language: &Uuid, user: &Uuid,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,) -> AppResult<ContributionStats> {
+    pub async fn increment_word_count(
+        &self,
+        language: &Uuid,
+        user: &Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<ContributionStats> {
         sqlx::query_as!(
             ContributionStats,
             r#"
@@ -45,8 +54,12 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
-    pub async fn decrement_word_count(&self, language: &Uuid, user: &Uuid,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,) -> AppResult<ContributionStats> {
+    pub async fn decrement_word_count(
+        &self,
+        language: &Uuid,
+        user: &Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<ContributionStats> {
         sqlx::query_as!(
             ContributionStats,
             r#"
@@ -65,8 +78,12 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
-    pub async fn increment_translation_count(&self, language: &Uuid, user: &Uuid,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,) -> AppResult<ContributionStats> {
+    pub async fn increment_translation_count(
+        &self,
+        language: &Uuid,
+        user: &Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<ContributionStats> {
         sqlx::query_as!(
             ContributionStats,
             r#"
@@ -84,9 +101,13 @@ impl ContributionStatsRepository {
         .await
         .map_err(Into::into)
     }
-    
-    pub async fn decrement_translation_count(&self, language: &Uuid, user: &Uuid, 
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,) -> AppResult<ContributionStats> {
+
+    pub async fn decrement_translation_count(
+        &self,
+        language: &Uuid,
+        user: &Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<ContributionStats> {
         sqlx::query_as!(
             ContributionStats,
             r#"
@@ -138,11 +159,13 @@ impl ContributionStatsRepository {
         .fetch_all(&self.state.pool)
         .await?;
 
-        let owner = LanguageRepository::new(self.state.clone()).find_owner(*language).await?;
-        
+        let owner = LanguageRepository::new(self.state.clone())
+            .find_owner(*language)
+            .await?;
+
         let mut c = vec![owner];
         for user in &contributors {
-            if(!c.iter().any(|u| u.id == user.id)) {
+            if (!c.iter().any(|u| u.id == user.id)) {
                 c.push(user.clone());
             }
         }
@@ -150,7 +173,13 @@ impl ContributionStatsRepository {
         Ok(c)
     }
 
-    pub async fn search_top_contributors(&self, language: &Uuid, query: &ContributionsSearch, paginated_request: &PaginatedRequest) -> AppResult<PaginatedResponse<(User, ContributionStats, PermissionLevel, Option<Uuid>)>> {
+    pub async fn search_top_contributors(
+        &self,
+        language: &Uuid,
+        query: &ContributionsSearch,
+        paginated_request: &PaginatedRequest,
+    ) -> AppResult<PaginatedResponse<(User, ContributionStats, PermissionLevel, Option<Uuid>)>>
+    {
         let offset = paginated_request.offset;
         let limit = paginated_request.limit;
 
@@ -216,11 +245,12 @@ impl ContributionStatsRepository {
         )
         .fetch_one(&self.state.pool);
 
-
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count;
-        let has_more = (i64::from(paginated_request.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more = (i64::from(paginated_request.offset)
+            + i64::try_from(items.len()).unwrap_or(i64::MAX))
+            < total;
 
         let mut results = Vec::new();
         for record in items {
@@ -250,7 +280,8 @@ impl ContributionStatsRepository {
             results.push((user, stats, record.permission, record.permission_id));
         }
 
-        Ok(PaginatedResponse { items: results,
+        Ok(PaginatedResponse {
+            items: results,
             total,
             offset,
             limit,

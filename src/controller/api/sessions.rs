@@ -102,8 +102,7 @@ mod tests {
         let verification_email = sent_emails
             .iter()
             .find(|e| {
-                e.to == email_lowercase
-                    && e.email_type == crate::email::EmailType::Verification
+                e.to == email_lowercase && e.email_type == crate::email::EmailType::Verification
             })
             .unwrap();
 

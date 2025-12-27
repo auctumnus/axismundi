@@ -1,10 +1,19 @@
 use askama::Template;
-use axum::{Router, extract::Path, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
+use axum::{
+    Router,
+    extract::Path,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::{get, post},
+};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
-    attempt, controller::html::{okay, render_generic_error, render_template}, err::AppError, get_user, model::{
+    attempt,
+    controller::html::{okay, render_generic_error, render_template},
+    err::AppError,
+    get_user,
+    model::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
@@ -16,16 +25,34 @@ use crate::{
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
-        .route("/languages/{code}/new-word-class", post(new_word_class_submit))
-        .route("/languages/{code}/word-classes/{abbreviation}/edit", post(edit_word_class_submit))
-        .route("/languages/{code}/word-classes/{abbreviation}/delete", post(delete_word_class_submit));
+        .route(
+            "/languages/{code}/new-word-class",
+            post(new_word_class_submit),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}/edit",
+            post(edit_word_class_submit),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}/delete",
+            post(delete_word_class_submit),
+        );
 
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{code}/word-classes", get(list_word_classes))
         .route("/languages/{code}/new-word-class", get(new_word_class_form))
-        .route("/languages/{code}/word-classes/{abbreviation}", get(view_word_class))
-        .route("/languages/{code}/word-classes/{abbreviation}/edit", get(edit_word_class_form))
-        .route("/languages/{code}/word-classes/{abbreviation}/delete", get(delete_word_class_form));
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}",
+            get(view_word_class),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}/edit",
+            get(edit_word_class_form),
+        )
+        .route(
+            "/languages/{code}/word-classes/{abbreviation}/delete",
+            get(delete_word_class_form),
+        );
 
     (secure_routes, normal_routes)
 }
@@ -170,7 +197,10 @@ async fn new_word_class_submit(
         )
         .await
     {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/word-classes", code)).into_response()),
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{}/word-classes", code)).into_response(),
+        ),
         Err(e) => {
             let template = NewWordClassFormTemplate {
                 current_user: Some(user),
@@ -210,7 +240,12 @@ async fn view_word_class(
     Path((code, abbreviation)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let word_class = attempt!(s, word_classes.find_by_abbreviation(&language.id, &abbreviation).await);
+    let word_class = attempt!(
+        s,
+        word_classes
+            .find_by_abbreviation(&language.id, &abbreviation)
+            .await
+    );
     let rendered_notes = attempt!(s, word_classes.render_notes(&word_class));
     let creator = attempt!(s, users.find_by_id(word_class.created_by).await);
 
@@ -261,9 +296,12 @@ async fn edit_word_class_form(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(&language.id, &abbreviation)
-        .await);
+    let word_class = attempt!(
+        s,
+        word_classes
+            .find_by_abbreviation(&language.id, &abbreviation)
+            .await
+    );
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -302,9 +340,12 @@ async fn edit_word_class_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(&language.id, &abbreviation)
-        .await);
+    let word_class = attempt!(
+        s,
+        word_classes
+            .find_by_abbreviation(&language.id, &abbreviation)
+            .await
+    );
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -336,11 +377,15 @@ async fn edit_word_class_submit(
         },
     };
 
-    match word_classes
-        .update(&user, word_class.id, updates)
-        .await
-    {
-        Ok(updated) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/word-classes/{}", code, updated.abbreviation)).into_response()),
+    match word_classes.update(&user, word_class.id, updates).await {
+        Ok(updated) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/languages/{}/word-classes/{}",
+                code, updated.abbreviation
+            ))
+            .into_response(),
+        ),
         Err(e) => {
             let template = EditWordClassFormTemplate {
                 current_user: Some(user),
@@ -378,9 +423,12 @@ async fn delete_word_class_form(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(&language.id, &abbreviation)
-        .await);
+    let word_class = attempt!(
+        s,
+        word_classes
+            .find_by_abbreviation(&language.id, &abbreviation)
+            .await
+    );
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -405,15 +453,18 @@ async fn delete_word_class_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let word_class = attempt!(s, word_classes
-        .find_by_abbreviation(&language.id, &abbreviation)
-        .await);
+    let word_class = attempt!(
+        s,
+        word_classes
+            .find_by_abbreviation(&language.id, &abbreviation)
+            .await
+    );
 
-    match word_classes
-        .delete(&user, word_class.id)
-        .await
-    {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/word-classes", code)).into_response()),
-        Err(e) => render_generic_error(s, e).await
+    match word_classes.delete(&user, word_class.id).await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{}/word-classes", code)).into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
     }
 }

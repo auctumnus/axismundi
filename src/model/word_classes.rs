@@ -394,7 +394,6 @@ impl WordClassRepository {
         pagination: PaginatedRequest,
         search: WordClassSearch,
     ) -> AppResult<PaginatedResponse<WordClass>> {
-
         let users = crate::model::users::UserRepository::new(self.state.clone());
         let created_by = match &search.created_by {
             Some(username) => {
@@ -473,7 +472,8 @@ impl WordClassRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -498,7 +498,11 @@ crate::util::repo_from_parts!(WordClassRepository);
 
 #[async_trait::async_trait]
 impl crate::model::bookmarks::ResolveBookmark for WordClassRepository {
-    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+    async fn resolve_bookmark(
+        &self,
+        item: Uuid,
+        link_type: crate::model::bookmarks::LinkType,
+    ) -> AppResult<String> {
         // api: /api/languages/{code}/word-classes/{abbreviation}
         // web: /languages/{code}/word-classes/{abbreviation}
         let word_class = self.find_by_id(item).await?;

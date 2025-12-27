@@ -142,11 +142,14 @@ impl EmailVerificationTokenRepository {
         .execute(&mut *tx)
         .await?;
 
-        let new_token = self.create(&mut tx, original.user_id, original.email.clone()).await?;
+        let new_token = self
+            .create(&mut tx, original.user_id, original.email.clone())
+            .await?;
 
         tx.commit().await?;
 
-        self.send(original.user_id, &original.email, &new_token.token).await?;
+        self.send(original.user_id, &original.email, &new_token.token)
+            .await?;
 
         Ok(new_token)
     }

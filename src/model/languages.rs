@@ -7,7 +7,9 @@ use validator::Validate;
 use crate::{
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
-        language_invites::PermissionLevel, user_bans::UserBanRepository, users::{User, UserSearch}
+        language_invites::PermissionLevel,
+        user_bans::UserBanRepository,
+        users::{User, UserSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -109,7 +111,6 @@ impl LanguageRepository {
         UserBanRepository::new(self.state.clone())
             .ensure_not_banned(requestor.id)
             .await?;
-
 
         if self.code_exists(&language.code).await? {
             return Err(bad_request("language code is already in use"));
@@ -213,15 +214,18 @@ impl LanguageRepository {
 
         // Create activity if language is public
         if !result.private {
-            let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo.create(
-                requestor.id,
-                crate::model::user_activities::ActivityType::CreateLanguage,
-                result.id,
-                "language",
-                None,
-                None,
-            ).await?;
+            let activity_repo =
+                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo
+                .create(
+                    requestor.id,
+                    crate::model::user_activities::ActivityType::CreateLanguage,
+                    result.id,
+                    "language",
+                    None,
+                    None,
+                )
+                .await?;
         }
 
         Ok(result)
@@ -265,28 +269,33 @@ impl LanguageRepository {
 
         ensure_verified(requestor)?;
 
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, id)
-            .await?;
-        let Some(perm) = user_perm else {
-            return Err(forbidden("you don't have permission to edit this language"));
-        };
+        // Check if requestor is admin/mod - if so, allow with audit log
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
 
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(forbidden("viewers cannot edit language"));
+        if !is_admin_or_mod {
+            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+                self.state.clone(),
+            );
+            let user_perm = permissions
+                .find_by_user_and_language(requestor.id, id)
+                .await?;
+            let Some(perm) = user_perm else {
+                return Err(forbidden("you don't have permission to edit this language"));
+            };
+
+            if perm.permission == PermissionLevel::Viewer {
+                return Err(forbidden("viewers cannot edit language"));
+            }
+
+            if updates.private.is_some() && perm.permission != PermissionLevel::Owner {
+                return Err(forbidden("only owners can change language privacy"));
+            }
         }
 
         if let Some(code) = &updates.code {
             if code == "search" {
                 return Err(bad_request("cannot use 'search' as language code"));
             }
-        }
-
-        if updates.private.is_some() && perm.permission != PermissionLevel::Owner {
-            return Err(forbidden("only owners can change language privacy"));
         }
 
         if let Some(code) = &updates.code {
@@ -318,17 +327,35 @@ impl LanguageRepository {
 
         let updated_lang = result.ok_or_else(|| not_found(format!("language with id '{id}'")))?;
 
+        // Create audit log if admin/mod override
+        if is_admin_or_mod {
+            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+            let log_req = crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::Updated,
+                resource_type: crate::model::audit_log::AuditableResource::Language,
+                resource_id: id,
+                details: serde_json::json!({
+                    "updates": updates
+                }),
+            };
+            let _ = audit_logs.create_internal(log_req).await;
+        }
+
         // Create activity if language is public
         if !updated_lang.private {
-            let activity_repo = crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo.create(
-                requestor.id,
-                crate::model::user_activities::ActivityType::UpdateLanguage,
-                updated_lang.id,
-                "language",
-                None,
-                None,
-            ).await?;
+            let activity_repo =
+                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo
+                .create(
+                    requestor.id,
+                    crate::model::user_activities::ActivityType::UpdateLanguage,
+                    updated_lang.id,
+                    "language",
+                    None,
+                    None,
+                )
+                .await?;
         }
 
         Ok(updated_lang)
@@ -338,24 +365,48 @@ impl LanguageRepository {
         tracing::debug!("Deleting language {id}");
         ensure_verified(requestor)?;
 
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, id)
-            .await?;
-        let Some(perm) = user_perm else {
-            return Err(forbidden(
-                "you don't have permission to delete this language",
-            ));
-        };
-        if perm.permission != PermissionLevel::Owner {
-            return Err(forbidden("only owners can delete languages"));
+        // Check if requestor is admin/mod - if so, allow with audit log
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+
+        if !is_admin_or_mod {
+            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+                self.state.clone(),
+            );
+            let user_perm = permissions
+                .find_by_user_and_language(requestor.id, id)
+                .await?;
+            let Some(perm) = user_perm else {
+                return Err(forbidden(
+                    "you don't have permission to delete this language",
+                ));
+            };
+            if perm.permission != PermissionLevel::Owner {
+                return Err(forbidden("only owners can delete languages"));
+            }
         }
+
+        // Get language details before deleting for audit log
+        let language = self.find_by_id(id).await?;
 
         let result = sqlx::query!("DELETE FROM languages WHERE id = $1", id)
             .execute(&self.state.pool)
             .await?;
+
+        // Create audit log if admin/mod override
+        if is_admin_or_mod && result.rows_affected() > 0 {
+            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+            let log_req = crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::Deleted,
+                resource_type: crate::model::audit_log::AuditableResource::Language,
+                resource_id: id,
+                details: serde_json::json!({
+                    "language_code": language.code,
+                    "language_name": language.name
+                }),
+            };
+            let _ = audit_logs.create_internal(log_req).await;
+        }
 
         Ok(result.rows_affected() > 0)
     }
@@ -475,7 +526,8 @@ impl LanguageRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -574,7 +626,8 @@ impl LanguageRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -625,7 +678,8 @@ impl LanguageRepository {
             "#,
             language_id
         )
-        .fetch_one(&self.state.pool).await?;
+        .fetch_one(&self.state.pool)
+        .await?;
 
         Ok(result.unwrap_or(0))
     }
@@ -681,7 +735,11 @@ impl LanguageRepository {
         Ok(likes)
     }
 
-    pub async fn unlike_language(&self, language_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+    pub async fn unlike_language(
+        &self,
+        language_id: Uuid,
+        user_id: Uuid,
+    ) -> AppResult<Option<i64>> {
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"
@@ -732,7 +790,11 @@ crate::util::repo_from_parts!(LanguageRepository);
 
 #[async_trait::async_trait]
 impl crate::model::bookmarks::ResolveBookmark for LanguageRepository {
-    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+    async fn resolve_bookmark(
+        &self,
+        item: Uuid,
+        link_type: crate::model::bookmarks::LinkType,
+    ) -> AppResult<String> {
         // api: /api/languages/{code}
         // web: /languages/{code}
         let language = self.find_by_id(item).await?;
@@ -743,5 +805,197 @@ impl crate::model::bookmarks::ResolveBookmark for LanguageRepository {
         };
 
         Ok(slug)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::audit_log::{
+        AuditActionType, AuditLogFilter, AuditLogRepository, AuditableResource,
+    };
+    use crate::model::users::UserRepository;
+    use crate::pagination::PaginatedRequest;
+    use crate::{config::CONFIG, create_router, email};
+    use sqlx::PgPool;
+
+    #[tokio::test]
+    async fn test_update_language_as_admin_creates_audit_log() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = crate::util::AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        // Create an admin user
+        let admin_username = crate::tests::random_name();
+        let _admin_token =
+            crate::tests::make_authed_user(&admin_username, &app, email_service.clone()).await;
+        let admin_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        sqlx::query!(
+            "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
+            admin_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let user_repo = UserRepository::new(app_state.clone());
+        let admin = user_repo.find_by_id(admin_id).await.unwrap();
+
+        // Create a language by another user
+        let owner_username = crate::tests::random_name();
+        let _owner_token =
+            crate::tests::make_authed_user(&owner_username, &app, email_service.clone()).await;
+        let owner_id =
+            sqlx::query_scalar!("select id from users where username = $1", owner_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let owner = user_repo.find_by_id(owner_id).await.unwrap();
+
+        let lang_repo = LanguageRepository::new(app_state.clone());
+        let lang = lang_repo
+            .create(
+                &owner,
+                CreateLanguage {
+                    name: "Test Language".to_string(),
+                    code: crate::tests::random_code(),
+                    description: "A test language".to_string(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Admin updates the language (without permission)
+        let updated = lang_repo
+            .update(
+                &admin,
+                lang.id,
+                UpdateLanguage {
+                    name: Some("Updated Language".to_string()),
+                    description: Some("Updated description".to_string()),
+                    code: None,
+                    private: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.name, "Updated Language");
+
+        // Check audit log was created
+        let audit_repo = AuditLogRepository::new(app_state.clone());
+        let logs = audit_repo
+            .search(
+                &admin,
+                PaginatedRequest::default(),
+                AuditLogFilter {
+                    user_id: Some(admin.id),
+                    action: Some(AuditActionType::Updated),
+                    resource_type: Some(AuditableResource::Language),
+                    resource_id: Some(lang.id),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(logs.items.len(), 1);
+        let log = &logs.items[0];
+        assert_eq!(log.user_id, Some(admin.id));
+        assert_eq!(log.action, AuditActionType::Updated);
+        assert_eq!(log.resource_type, AuditableResource::Language);
+        assert_eq!(log.resource_id, lang.id);
+    }
+
+    #[tokio::test]
+    async fn test_delete_language_as_moderator_creates_audit_log() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = crate::util::AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        // Create a moderator user
+        let mod_username = crate::tests::random_name();
+        let _mod_token =
+            crate::tests::make_authed_user(&mod_username, &app, email_service.clone()).await;
+        let mod_id = sqlx::query_scalar!("select id from users where username = $1", mod_username)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "insert into user_tags (user_id, tag, hidden) values ($1, 'moderator', false)",
+            mod_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let user_repo = UserRepository::new(app_state.clone());
+        let moderator = user_repo.find_by_id(mod_id).await.unwrap();
+
+        // Create a language by another user
+        let owner_username = crate::tests::random_name();
+        let _owner_token =
+            crate::tests::make_authed_user(&owner_username, &app, email_service.clone()).await;
+        let owner_id =
+            sqlx::query_scalar!("select id from users where username = $1", owner_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let owner = user_repo.find_by_id(owner_id).await.unwrap();
+
+        let lang_repo = LanguageRepository::new(app_state.clone());
+        let lang = lang_repo
+            .create(
+                &owner,
+                CreateLanguage {
+                    name: "Test Language".to_string(),
+                    code: crate::tests::random_code(),
+                    description: "A test language".to_string(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+
+        let lang_id = lang.id;
+
+        // Moderator deletes the language (without permission)
+        let deleted = lang_repo.delete(&moderator, lang_id).await.unwrap();
+        assert!(deleted);
+
+        // Check audit log was created
+        let audit_repo = AuditLogRepository::new(app_state.clone());
+        let logs = audit_repo
+            .search(
+                &moderator,
+                PaginatedRequest::default(),
+                AuditLogFilter {
+                    user_id: Some(moderator.id),
+                    action: Some(AuditActionType::Deleted),
+                    resource_type: Some(AuditableResource::Language),
+                    resource_id: Some(lang_id),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(logs.items.len(), 1);
+        let log = &logs.items[0];
+        assert_eq!(log.user_id, Some(moderator.id));
+        assert_eq!(log.action, AuditActionType::Deleted);
+        assert_eq!(log.resource_type, AuditableResource::Language);
+        assert_eq!(log.resource_id, lang_id);
     }
 }

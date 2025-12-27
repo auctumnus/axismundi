@@ -1,5 +1,5 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
         definitions::DefinitionRepository,
         languages::LanguageRepository,
@@ -12,7 +12,10 @@ use crate::{
     util::extract_session::Session,
 };
 use axum::{
-    Json, extract::{Path, Query}, http::StatusCode, routing::{delete, get, post, put}
+    Json,
+    extract::{Path, Query},
+    http::StatusCode,
+    routing::{delete, get, post, put},
 };
 use uuid::Uuid;
 use validator::Validate;
@@ -53,7 +56,7 @@ pub async fn create_quotation_suggestion(
     let language = languages.find_by_code(&code).await?;
 
     quotation_suggestions
-        .create(requestor, language.id,req)
+        .create(requestor, language.id, req)
         .await
         .map(Json)
 }
@@ -68,7 +71,9 @@ pub async fn list_quotation_suggestions_by_language(
     languages: LanguageRepository,
     quotation_suggestions: QuotationSuggestionRepository,
     Path(code): Path<String>,
-    Query(ListQuotationSuggestionsQuery { content }): axum::extract::Query<ListQuotationSuggestionsQuery>,
+    Query(ListQuotationSuggestionsQuery { content }): axum::extract::Query<
+        ListQuotationSuggestionsQuery,
+    >,
     pagination: PaginatedRequest,
 ) -> PaginatedApiResponse<QuotationSuggestion> {
     let language = languages.find_by_code(&code).await?;
@@ -99,7 +104,11 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{create_test_definition, create_test_language, create_test_translatable, create_test_translation, create_test_word, delete, delete_without_auth, get_with_auth, make_authed_user, post, print_response_body};
+    use crate::controller::api::tests::{
+        create_test_definition, create_test_language, create_test_translatable,
+        create_test_translation, create_test_word, delete, delete_without_auth, get_with_auth,
+        make_authed_user, post, print_response_body,
+    };
     use crate::email::MockEmailService;
     use tower::ServiceExt;
 
@@ -135,7 +144,8 @@ mod tests {
         let translatable = create_test_translatable(&token, &mut app, language_code).await;
         let translatable_slug = translatable["slug"].as_str().unwrap();
 
-        let translation = create_test_translation(&token,  &mut app, translatable_slug, language_code).await;
+        let translation =
+            create_test_translation(&token, &mut app, translatable_slug, language_code).await;
 
         TestContext {
             token,
@@ -156,7 +166,12 @@ mod tests {
             "definition": definition_id,
         });
 
-        let request = post(&ctx.token, &format!("languages/{}/quotation-suggestions", language_code), body).await;
+        let request = post(
+            &ctx.token,
+            &format!("languages/{}/quotation-suggestions", language_code),
+            body,
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -182,11 +197,14 @@ mod tests {
             "span_content": "test",
             "definition": definition_id,
         });
-        let request = crate::controller::api::tests::post_without_auth(&format!("languages/{}/quotation-suggestions", language_code), body).await;
+        let request = crate::controller::api::tests::post_without_auth(
+            &format!("languages/{}/quotation-suggestions", language_code),
+            body,
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
-
 
     #[tokio::test]
     async fn test_list_quotation_suggestions_by_language() {
@@ -195,7 +213,14 @@ mod tests {
         let suggestion = create_test_quotation_suggestion(&mut ctx).await;
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let request = get_with_auth(&ctx.token, &format!("languages/{}/quotation-suggestions?content=test", language_code)).await;
+        let request = get_with_auth(
+            &ctx.token,
+            &format!(
+                "languages/{}/quotation-suggestions?content=test",
+                language_code
+            ),
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -212,7 +237,13 @@ mod tests {
         let language_code = ctx.language["code"].as_str().unwrap();
         let suggestion_id = suggestion["id"].as_str().unwrap();
 
-        let request = delete(&ctx.token, &format!("languages/{}/quotation-suggestions/{}", language_code, suggestion_id));
+        let request = delete(
+            &ctx.token,
+            &format!(
+                "languages/{}/quotation-suggestions/{}",
+                language_code, suggestion_id
+            ),
+        );
         let response = ctx.app.call(request).await.unwrap();
         if response.status() != StatusCode::NO_CONTENT {
             print_response_body(response).await;
@@ -228,7 +259,10 @@ mod tests {
         let language_code = ctx.language["code"].as_str().unwrap();
         let suggestion_id = suggestion["id"].as_str().unwrap();
 
-        let request = delete_without_auth(&format!("languages/{}/quotation-suggestions/{}", language_code, suggestion_id));
+        let request = delete_without_auth(&format!(
+            "languages/{}/quotation-suggestions/{}",
+            language_code, suggestion_id
+        ));
         let response = ctx.app.call(request).await.unwrap();
         if response.status() != StatusCode::UNAUTHORIZED {
             print_response_body(response).await;

@@ -1,5 +1,5 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
         definitions::{CreateDefinition, Definition, DefinitionRepository, UpdateDefinition},
         languages::LanguageRepository,
@@ -9,21 +9,36 @@ use crate::{
     util::extract_session::Session,
 };
 use axum::{
+    Json,
     extract::Path,
     http::StatusCode,
     routing::{delete, get, post, put},
-    Json,
 };
 use uuid::Uuid;
 use validator::Validate;
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
-        .route("/languages/{code}/words/{slug}/{lemma}/definitions", post(create_definition))
-        .route("/languages/{code}/words/{slug}/{lemma}/definitions", get(list_definitions))
-        .route("/languages/{code}/words/{slug}/{lemma}/definitions/{id}", get(get_definition))
-        .route("/languages/{code}/words/{slug}/{lemma}/definitions/{id}", put(edit_definition))
-        .route("/languages/{code}/words/{slug}/{lemma}/definitions/{id}", delete(delete_definition))
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/definitions",
+            post(create_definition),
+        )
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/definitions",
+            get(list_definitions),
+        )
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/definitions/{id}",
+            get(get_definition),
+        )
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/definitions/{id}",
+            put(edit_definition),
+        )
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/definitions/{id}",
+            delete(delete_definition),
+        )
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -45,7 +60,9 @@ pub async fn create_definition(
 
     // Look up language and word
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma)
+        .await?;
 
     definitions.create(requestor, word.id, req).await.map(Json)
 }
@@ -67,7 +84,9 @@ pub async fn list_definitions(
 ) -> PaginatedApiResponse<Definition> {
     // Look up language and word
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(None, language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(None, language.id, &slug, lemma)
+        .await?;
 
     definitions.list_by_word(word.id, pagination).await
 }
@@ -87,14 +106,18 @@ pub async fn edit_definition(
 
 pub async fn delete_definition(
     s: Session,
-    Path((_code, _slug, _lemma, id)): Path<(String, String, i32, Uuid)>,
-    definitions: DefinitionRepository,
+    Path((code, slug, lemma, _id)): Path<(String, String, i32, Uuid)>,
+    languages: LanguageRepository,
+    words: WordRepository,
 ) -> ApiResponse<StatusCode> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
-    definitions.delete(requestor, id).await?;
+    let language = languages.find_by_code(&code).await?;
+    words
+        .delete_by_lemma(requestor, language.id, &slug, lemma)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -106,7 +129,10 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{delete, delete_without_auth, get, make_authed_user, post, post_without_auth, create_test_language, create_test_word};
+    use crate::controller::api::tests::{
+        create_test_language, create_test_word, delete, delete_without_auth, get, make_authed_user,
+        post, post_without_auth,
+    };
     use crate::email::MockEmailService;
 
     struct TestContext {
@@ -145,7 +171,12 @@ mod tests {
     async fn test_create_definition() {
         let ctx = create_test_context().await;
 
-        let TestContext { token, mut app, language, word } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -156,7 +187,12 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -170,7 +206,12 @@ mod tests {
     async fn test_create_definition_unauthorized() {
         let ctx = create_test_context().await;
 
-        let TestContext { mut app, language, word, .. } = ctx;
+        let TestContext {
+            mut app,
+            language,
+            word,
+            ..
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -181,7 +222,11 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post_without_auth(&format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post_without_auth(
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -190,7 +235,12 @@ mod tests {
     async fn test_get_definition() {
         let ctx = create_test_context().await;
 
-        let TestContext { token, mut app, language, word } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -201,7 +251,12 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -211,7 +266,11 @@ mod tests {
         assert!(body["id"].is_string());
 
         let definition_id = body["id"].as_str().unwrap();
-        let request = get(&format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id)).await;
+        let request = get(&format!(
+            "languages/{}/words/{}/{}/definitions/{}",
+            code, slug, lemma, definition_id
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
@@ -223,12 +282,21 @@ mod tests {
     async fn test_get_definition_not_found() {
         let ctx = create_test_context().await;
 
-        let TestContext { mut app, language, word, .. } = ctx;
+        let TestContext {
+            mut app,
+            language,
+            word,
+            ..
+        } = ctx;
         let code = language["code"].as_str().unwrap();
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = get(&format!("languages/{}/words/{}/{}/definitions/00000000-0000-0000-0000-000000000000", code, slug, lemma)).await;
+        let request = get(&format!(
+            "languages/{}/words/{}/{}/definitions/00000000-0000-0000-0000-000000000000",
+            code, slug, lemma
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
@@ -237,8 +305,12 @@ mod tests {
     async fn test_list_definitions() {
         let ctx = create_test_context().await;
 
-        let TestContext { token, mut app, language, word } = ctx;
-
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let code = language["code"].as_str().unwrap();
         let slug = word.get("slug").unwrap().as_str().unwrap();
@@ -250,8 +322,13 @@ mod tests {
                 "definition": format!("A test definition {}", i),
                 "context": "Used in testing scenarios",
             });
-            
-            let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+
+            let request = post(
+                &token,
+                &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+                body,
+            )
+            .await;
             let response = app.call(request).await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
 
@@ -261,21 +338,29 @@ mod tests {
             assert!(body["id"].is_string());
         }
 
-        let request = get(&format!("languages/{}/words/{}/{}/definitions", code, slug, lemma)).await;
+        let request = get(&format!(
+            "languages/{}/words/{}/{}/definitions",
+            code, slug, lemma
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert!(body.get("items").is_some());
         let items = body.get("items").unwrap().as_array().unwrap();
         assert!(items.len() == 3);
-
     }
 
     #[tokio::test]
     async fn test_edit_definition() {
         let ctx = create_test_context().await;
 
-        let TestContext { token, mut app, language, word } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -286,7 +371,12 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -299,7 +389,14 @@ mod tests {
             "context": "New context",
         });
 
-        let request = crate::controller::api::tests::put(&token, &format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id), &update_body);
+        let request = crate::controller::api::tests::put(
+            &token,
+            &format!(
+                "languages/{}/words/{}/{}/definitions/{}",
+                code, slug, lemma, definition_id
+            ),
+            &update_body,
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -312,7 +409,12 @@ mod tests {
     async fn test_edit_definition_unauthorized() {
         let ctx = create_test_context().await;
 
-        let TestContext { token, mut app, language, word } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -323,7 +425,12 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -336,7 +443,13 @@ mod tests {
             "context": "New context",
         });
 
-        let request = crate::controller::api::tests::put_without_auth(&format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id), &update_body);
+        let request = crate::controller::api::tests::put_without_auth(
+            &format!(
+                "languages/{}/words/{}/{}/definitions/{}",
+                code, slug, lemma, definition_id
+            ),
+            &update_body,
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -344,7 +457,12 @@ mod tests {
     #[tokio::test]
     async fn test_delete_definition() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, language, word } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -355,7 +473,12 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -363,7 +486,13 @@ mod tests {
 
         let definition_id = body["id"].as_str().unwrap();
 
-        let request = delete(&token, &format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id));
+        let request = delete(
+            &token,
+            &format!(
+                "languages/{}/words/{}/{}/definitions/{}",
+                code, slug, lemma, definition_id
+            ),
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
@@ -371,7 +500,12 @@ mod tests {
     #[tokio::test]
     async fn test_delete_definition_unauthorized() {
         let ctx = create_test_context().await;
-        let TestContext { token, mut app, language, word } = ctx;
+        let TestContext {
+            token,
+            mut app,
+            language,
+            word,
+        } = ctx;
 
         let body = json!({
             "definition": "A test definition",
@@ -382,7 +516,12 @@ mod tests {
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
-        let request = post(&token, &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma), body).await;
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -390,9 +529,11 @@ mod tests {
 
         let definition_id = body["id"].as_str().unwrap();
 
-        let request = delete_without_auth(&format!("languages/{}/words/{}/{}/definitions/{}", code, slug, lemma, definition_id));
+        let request = delete_without_auth(&format!(
+            "languages/{}/words/{}/{}/definitions/{}",
+            code, slug, lemma, definition_id
+        ));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-
     }
 }

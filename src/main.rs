@@ -13,15 +13,17 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util::AppState;
 
-use crate::{config::CONFIG, email::MockEmailService, model::users::User, util::extract_session::Session};
+use crate::{
+    config::CONFIG, email::MockEmailService, model::users::User, util::extract_session::Session,
+};
 mod config;
 mod controller;
 mod email;
 mod err;
+mod md;
 mod model;
 mod pagination;
 mod util;
-mod md;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -135,7 +137,8 @@ pub(crate) mod tests {
         Ok(app)
     }
 
-    pub(crate) async fn test_app_with_admin_user() -> (RouterIntoService<axum::body::Body>, String) {
+    pub(crate) async fn test_app_with_admin_user() -> (RouterIntoService<axum::body::Body>, String)
+    {
         let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
         let email_service = std::sync::Arc::new(email::MockEmailService::new());
         let app_state = AppState {
@@ -147,51 +150,49 @@ pub(crate) mod tests {
         let username = crate::tests::random_name();
         let token = crate::tests::make_authed_user(&username, &app, email_service).await;
 
-        let id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
             id
         )
         .execute(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
         (app, token)
     }
-
 
     pub(crate) async fn test_app_with_admin_and_email_service(
         email_service: &std::sync::Arc<crate::email::MockEmailService>,
     ) -> (RouterIntoService<axum::body::Body>, String) {
         let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
         let email_service_clone = email_service.clone();
-        let email_service_trait: std::sync::Arc<dyn crate::email::EmailService> = email_service_clone.clone();
+        let email_service_trait: std::sync::Arc<dyn crate::email::EmailService> =
+            email_service_clone.clone();
         let app_state = AppState {
             pool: pool.clone(),
             email_service: email_service_trait,
         };
         let app = create_router(app_state).into_service();
 
-         let username = crate::tests::random_name();
+        let username = crate::tests::random_name();
         let token = crate::tests::make_authed_user(&username, &app, email_service_clone).await;
 
-        let id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
             id
         )
         .execute(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
         (app, token)
     }
 

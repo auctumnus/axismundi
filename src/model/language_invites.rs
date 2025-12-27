@@ -317,7 +317,9 @@ impl LanguageInviteRepository {
         let (invites, total_count) = tokio::try_join!(invites, total_count)?;
 
         let total_count = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(invites.len()).unwrap_or(i64::MAX)) < total_count;
+        let has_more = (i64::from(pagination.offset)
+            + i64::try_from(invites.len()).unwrap_or(i64::MAX))
+            < total_count;
 
         Ok(PaginatedResponse {
             items: invites,
@@ -462,7 +464,7 @@ impl ResolveBookmark for LanguageInviteRepository {
                 language.code, recipient.username
             ),
         };
-        
+
         Ok(slug)
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
         languages::LanguageRepository,
         translatable::TranslatableRepository,
@@ -9,10 +9,10 @@ use crate::{
     util::extract_session::Session,
 };
 use axum::{
+    Json,
     extract::Path,
     http::StatusCode,
     routing::{delete, get, post, put},
-    Json,
 };
 use validator::Validate;
 
@@ -30,11 +30,26 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
             "/languages/{code}/translations",
             get(list_translations_by_language),
         )
-        .route("/translatable/{translatable_slug}/translations/{code}", get(get_translation))
-        .route("/translatable/{translatable_slug}/translations/{code}", put(edit_translation))
-        .route("/translatable/{translatable_slug}/translations/{code}", delete(delete_translation))
-        .route("/translatable/{translatable_slug}/translations/{code}/like", post(like_translation))
-        .route("/translatable/{translatable_slug}/translations/{code}/unlike", post(unlike_translation))
+        .route(
+            "/translatable/{translatable_slug}/translations/{code}",
+            get(get_translation),
+        )
+        .route(
+            "/translatable/{translatable_slug}/translations/{code}",
+            put(edit_translation),
+        )
+        .route(
+            "/translatable/{translatable_slug}/translations/{code}",
+            delete(delete_translation),
+        )
+        .route(
+            "/translatable/{translatable_slug}/translations/{code}/like",
+            post(like_translation),
+        )
+        .route(
+            "/translatable/{translatable_slug}/translations/{code}/unlike",
+            post(unlike_translation),
+        )
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -194,7 +209,9 @@ pub async fn like_translation(
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
 
-    let like_count = translations.like_translation(translation.id, requestor.id).await?;
+    let like_count = translations
+        .like_translation(translation.id, requestor.id)
+        .await?;
     let response = LikeTranslationResponse {
         liked: true,
         like_count: like_count.unwrap_or(translation.like_count),
@@ -224,7 +241,9 @@ pub async fn unlike_translation(
         .find_by_translatable_and_language(translatable.id, language.id)
         .await?;
 
-    let like_count = translations.unlike_translation(translation.id, requestor.id).await?;
+    let like_count = translations
+        .unlike_translation(translation.id, requestor.id)
+        .await?;
     let response = LikeTranslationResponse {
         liked: false,
         like_count: like_count.unwrap_or(translation.like_count),
@@ -239,7 +258,9 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{delete, get, make_authed_user, post, post_without_auth, put, put_without_auth};
+    use crate::controller::api::tests::{
+        delete, get, make_authed_user, post, post_without_auth, put, put_without_auth,
+    };
     use crate::email::MockEmailService;
 
     struct TestContext {
@@ -261,8 +282,12 @@ mod tests {
 
         let language = crate::controller::api::tests::create_test_language(&token, &mut app).await;
         let language_code = language["code"].as_str().unwrap();
-        let translatable =
-            crate::controller::api::tests::create_test_translatable(&token, &mut app, language_code).await;
+        let translatable = crate::controller::api::tests::create_test_translatable(
+            &token,
+            &mut app,
+            language_code,
+        )
+        .await;
 
         TestContext {
             token,
@@ -281,8 +306,17 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let translation = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
-        assert_eq!(translation["translated_text"].as_str().unwrap(), "A test translation");
+        let translation = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
+        assert_eq!(
+            translation["translated_text"].as_str().unwrap(),
+            "A test translation"
+        );
     }
 
     #[tokio::test]
@@ -297,7 +331,11 @@ mod tests {
         let body = json!({
             "translated_text": "A test translation",
         });
-        let request = post_without_auth(&format!("translatable/{translatable_slug}/translations/{language_code}"), body).await;
+        let request = post_without_auth(
+            &format!("translatable/{translatable_slug}/translations/{language_code}"),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -311,9 +349,18 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let created = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
-        let request = get(&format!("translatable/{translatable_slug}/translations/{language_code}")).await;
+        let request = get(&format!(
+            "translatable/{translatable_slug}/translations/{language_code}"
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -336,9 +383,18 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _translation = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _translation = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
-        let request = get(&format!("translatable/{translatable_slug}/translations?limit=10&offset=0")).await;
+        let request = get(&format!(
+            "translatable/{translatable_slug}/translations?limit=10&offset=0"
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -352,9 +408,18 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _translation = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _translation = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
-        let request = get(&format!("languages/{language_code}/translations?limit=10&offset=0")).await;
+        let request = get(&format!(
+            "languages/{language_code}/translations?limit=10&offset=0"
+        ))
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -368,13 +433,23 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _created = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
         let update_body = json!({
             "translated_text": "Updated translation text.",
         });
 
-        let request = put(&ctx.token, &format!("translatable/{translatable_slug}/translations/{language_code}"), &update_body);
+        let request = put(
+            &ctx.token,
+            &format!("translatable/{translatable_slug}/translations/{language_code}"),
+            &update_body,
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -391,13 +466,22 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _created = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
         let update_body = json!({
             "translated_text": "Updated translation text.",
         });
 
-        let request = put_without_auth(&format!("translatable/{translatable_slug}/translations/{language_code}"), &update_body);
+        let request = put_without_auth(
+            &format!("translatable/{translatable_slug}/translations/{language_code}"),
+            &update_body,
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -411,9 +495,18 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _created = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
-        let request = delete(&ctx.token, &format!("translatable/{translatable_slug}/translations/{language_code}"));
+        let request = delete(
+            &ctx.token,
+            &format!("translatable/{translatable_slug}/translations/{language_code}"),
+        );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
@@ -427,9 +520,17 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _created = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
-        let request = crate::controller::api::tests::delete_without_auth(&format!("translatable/{translatable_slug}/translations/{language_code}"));
+        let request = crate::controller::api::tests::delete_without_auth(&format!(
+            "translatable/{translatable_slug}/translations/{language_code}"
+        ));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -443,16 +544,38 @@ mod tests {
         let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let _created = crate::controller::api::tests::create_test_translation(token, app, translatable_slug, language_code).await;
+        let _created = crate::controller::api::tests::create_test_translation(
+            token,
+            app,
+            translatable_slug,
+            language_code,
+        )
+        .await;
 
-        let request = crate::controller::api::tests::post(&ctx.token, &format!("translatable/{}/translations/{}/like", translatable_slug, language_code), json!({})).await;
+        let request = crate::controller::api::tests::post(
+            &ctx.token,
+            &format!(
+                "translatable/{}/translations/{}/like",
+                translatable_slug, language_code
+            ),
+            json!({}),
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["liked"], true);
         assert_eq!(body["like_count"], 1);
 
-        let request = crate::controller::api::tests::post(&ctx.token, &format!("translatable/{}/translations/{}/unlike", translatable_slug, language_code), json!({})).await;
+        let request = crate::controller::api::tests::post(
+            &ctx.token,
+            &format!(
+                "translatable/{}/translations/{}/unlike",
+                translatable_slug, language_code
+            ),
+            json!({}),
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;

@@ -96,20 +96,27 @@ impl DefinitionRepository {
             .find_by_id(word_id)
             .await?;
 
-        // Check permissions
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
-            .await?;
+        // Check if requestor is admin/mod - if so, allow with audit log
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
 
-        let Some(perm) = user_perm else {
-            return Err(bad_request("you don't have permission to create definitions"));
-        };
+        if !is_admin_or_mod {
+            // Check permissions
+            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+                self.state.clone(),
+            );
+            let user_perm = permissions
+                .find_by_user_and_language(requestor.id, word.language)
+                .await?;
 
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(bad_request("viewers cannot create definitions"));
+            let Some(perm) = user_perm else {
+                return Err(bad_request(
+                    "you don't have permission to create definitions",
+                ));
+            };
+
+            if perm.permission == PermissionLevel::Viewer {
+                return Err(bad_request("viewers cannot create definitions"));
+            }
         }
 
         let result = sqlx::query_as!(
@@ -126,6 +133,23 @@ impl DefinitionRepository {
         )
         .fetch_one(&self.state.pool)
         .await?;
+
+        // Create audit log if admin/mod override
+        if is_admin_or_mod {
+            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+            let log_req = crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::Created,
+                resource_type: crate::model::audit_log::AuditableResource::Definition,
+                resource_id: result.id,
+                details: serde_json::json!({
+                    "word_id": word_id,
+                    "language_id": word.language,
+                    "definition": definition.definition
+                }),
+            };
+            let _ = audit_logs.create_internal(log_req).await;
+        }
 
         Ok(result)
     }
@@ -150,20 +174,25 @@ impl DefinitionRepository {
             .find_by_id(existing.word)
             .await?;
 
-        // Check permissions
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
-            .await?;
+        // Check if requestor is admin/mod - if so, allow with audit log
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
 
-        let Some(perm) = user_perm else {
-            return Err(bad_request("you don't have permission to edit definitions"));
-        };
+        if !is_admin_or_mod {
+            // Check permissions
+            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+                self.state.clone(),
+            );
+            let user_perm = permissions
+                .find_by_user_and_language(requestor.id, word.language)
+                .await?;
 
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(bad_request("viewers cannot edit definitions"));
+            let Some(perm) = user_perm else {
+                return Err(bad_request("you don't have permission to edit definitions"));
+            };
+
+            if perm.permission == PermissionLevel::Viewer {
+                return Err(bad_request("viewers cannot edit definitions"));
+            }
         }
 
         let result = sqlx::query_as!(
@@ -185,7 +214,26 @@ impl DefinitionRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        result.ok_or_else(|| not_found(format!("definition with id '{id}'")))
+        let updated = result.ok_or_else(|| not_found(format!("definition with id '{id}'")))?;
+
+        // Create audit log if admin/mod override
+        if is_admin_or_mod {
+            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+            let log_req = crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::Updated,
+                resource_type: crate::model::audit_log::AuditableResource::Definition,
+                resource_id: id,
+                details: serde_json::json!({
+                    "word_id": existing.word,
+                    "language_id": word.language,
+                    "updates": updates
+                }),
+            };
+            let _ = audit_logs.create_internal(log_req).await;
+        }
+
+        Ok(updated)
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
@@ -201,25 +249,49 @@ impl DefinitionRepository {
             .find_by_id(existing.word)
             .await?;
 
-        // Check permissions
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
-            .await?;
+        // Check if requestor is admin/mod - if so, allow with audit log
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
 
-        let Some(perm) = user_perm else {
-            return Err(bad_request("you don't have permission to delete definitions"));
-        };
+        if !is_admin_or_mod {
+            // Check permissions
+            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+                self.state.clone(),
+            );
+            let user_perm = permissions
+                .find_by_user_and_language(requestor.id, word.language)
+                .await?;
 
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(bad_request("viewers cannot delete definitions"));
+            let Some(perm) = user_perm else {
+                return Err(bad_request(
+                    "you don't have permission to delete definitions",
+                ));
+            };
+
+            if perm.permission == PermissionLevel::Viewer {
+                return Err(bad_request("viewers cannot delete definitions"));
+            }
         }
 
         let result = sqlx::query!("DELETE FROM definitions WHERE id = $1", id)
             .execute(&self.state.pool)
             .await?;
+
+        // Create audit log if admin/mod override
+        if is_admin_or_mod && result.rows_affected() > 0 {
+            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+            let log_req = crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::Deleted,
+                resource_type: crate::model::audit_log::AuditableResource::Definition,
+                resource_id: id,
+                details: serde_json::json!({
+                    "word_id": existing.word,
+                    "language_id": word.language,
+                    "definition": existing.definition
+                }),
+            };
+            let _ = audit_logs.create_internal(log_req).await;
+        }
 
         Ok(result.rows_affected() > 0)
     }
@@ -266,7 +338,8 @@ impl DefinitionRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         println!("items: {:?}", items);
 
@@ -307,3 +380,382 @@ impl DefinitionRepository {
 }
 
 crate::util::repo_from_parts!(DefinitionRepository);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::audit_log::{
+        AuditActionType, AuditLogFilter, AuditLogRepository, AuditableResource,
+    };
+    use crate::model::languages::{CreateLanguage, LanguageRepository};
+    use crate::model::users::UserRepository;
+    use crate::model::words::{CreateWord, WordRepository};
+    use crate::pagination::PaginatedRequest;
+    use crate::{config::CONFIG, create_router, email};
+    use sqlx::PgPool;
+
+    #[tokio::test]
+    async fn test_create_definition_as_admin_creates_audit_log() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = crate::util::AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        // Create an admin user
+        let admin_username = crate::tests::random_name();
+        let _admin_token =
+            crate::tests::make_authed_user(&admin_username, &app, email_service.clone()).await;
+        let admin_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        sqlx::query!(
+            "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
+            admin_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let user_repo = UserRepository::new(app_state.clone());
+        let admin = user_repo.find_by_id(admin_id).await.unwrap();
+
+        // Create a language and word by another user
+        let owner_username = crate::tests::random_name();
+        let _owner_token =
+            crate::tests::make_authed_user(&owner_username, &app, email_service.clone()).await;
+        let owner_id =
+            sqlx::query_scalar!("select id from users where username = $1", owner_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let owner = user_repo.find_by_id(owner_id).await.unwrap();
+
+        let lang_repo = LanguageRepository::new(app_state.clone());
+        let lang = lang_repo
+            .create(
+                &owner,
+                CreateLanguage {
+                    name: "Test Language".to_string(),
+                    code: crate::tests::random_code(),
+                    description: "A test language".to_string(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+
+        
+
+        let word_repo = WordRepository::new(app_state.clone());
+        let word = word_repo
+            .create(
+                &owner,
+                lang.id,
+                CreateWord {
+                    word: "testword".to_string(),
+                    word_class: "n".to_string(),
+                    ipa: None,
+                    notes: Some("test notes".to_string()),
+                    extra: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Admin creates a definition (without permission)
+        let def_repo = DefinitionRepository::new(app_state.clone());
+        let definition = def_repo
+            .create(
+                &admin,
+                word.id,
+                CreateDefinition {
+                    definition: "test definition".to_string(),
+                    context: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Check audit log was created
+        let audit_repo = AuditLogRepository::new(app_state.clone());
+        let logs = audit_repo
+            .search(
+                &admin,
+                PaginatedRequest::default(),
+                AuditLogFilter {
+                    user_id: Some(admin.id),
+                    action: Some(AuditActionType::Created),
+                    resource_type: Some(AuditableResource::Definition),
+                    resource_id: Some(definition.id),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(logs.items.len(), 1);
+        let log = &logs.items[0];
+        assert_eq!(log.user_id, Some(admin.id));
+        assert_eq!(log.action, AuditActionType::Created);
+        assert_eq!(log.resource_type, AuditableResource::Definition);
+        assert_eq!(log.resource_id, definition.id);
+        assert_eq!(log.details["word_id"], serde_json::json!(word.id));
+        assert_eq!(log.details["language_id"], serde_json::json!(lang.id));
+        assert_eq!(
+            log.details["definition"],
+            serde_json::json!("test definition")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_definition_as_moderator_creates_audit_log() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = crate::util::AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        // Create a moderator user
+        let mod_username = crate::tests::random_name();
+        let _mod_token =
+            crate::tests::make_authed_user(&mod_username, &app, email_service.clone()).await;
+        let mod_id = sqlx::query_scalar!("select id from users where username = $1", mod_username)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "insert into user_tags (user_id, tag, hidden) values ($1, 'moderator', false)",
+            mod_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let user_repo = UserRepository::new(app_state.clone());
+        let moderator = user_repo.find_by_id(mod_id).await.unwrap();
+
+        // Create a language and word by another user
+        let owner_username = crate::tests::random_name();
+        let _owner_token =
+            crate::tests::make_authed_user(&owner_username, &app, email_service.clone()).await;
+        let owner_id =
+            sqlx::query_scalar!("select id from users where username = $1", owner_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let owner = user_repo.find_by_id(owner_id).await.unwrap();
+
+        let lang_repo = LanguageRepository::new(app_state.clone());
+        let lang = lang_repo
+            .create(
+                &owner,
+                CreateLanguage {
+                    name: "Test Language".to_string(),
+                    code: crate::tests::random_code(),
+                    description: "A test language".to_string(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+
+        
+
+        let word_repo = WordRepository::new(app_state.clone());
+        let word = word_repo
+            .create(
+                &owner,
+                lang.id,
+                CreateWord {
+                    word: "testword".to_string(),
+                    word_class: "n".to_string(),
+                    ipa: None,
+                    notes: Some("test notes".to_string()),
+                    extra: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let def_repo = DefinitionRepository::new(app_state.clone());
+        let definition = def_repo
+            .create(
+                &owner,
+                word.id,
+                CreateDefinition {
+                    definition: "test definition".to_string(),
+                    context: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Moderator updates the definition (without permission)
+        let updated = def_repo
+            .update(
+                &moderator,
+                definition.id,
+                UpdateDefinition {
+                    definition: Some("updated definition".to_string()),
+                    context: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.definition, "updated definition");
+
+        // Check audit log was created
+        let audit_repo = AuditLogRepository::new(app_state.clone());
+        let logs = audit_repo
+            .search(
+                &moderator,
+                PaginatedRequest::default(),
+                AuditLogFilter {
+                    user_id: Some(moderator.id),
+                    action: Some(AuditActionType::Updated),
+                    resource_type: Some(AuditableResource::Definition),
+                    resource_id: Some(definition.id),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(logs.items.len(), 1);
+        let log = &logs.items[0];
+        assert_eq!(log.user_id, Some(moderator.id));
+        assert_eq!(log.action, AuditActionType::Updated);
+        assert_eq!(log.resource_type, AuditableResource::Definition);
+        assert_eq!(log.resource_id, definition.id);
+        assert_eq!(log.details["word_id"], serde_json::json!(word.id));
+        assert_eq!(log.details["language_id"], serde_json::json!(lang.id));
+    }
+
+    #[tokio::test]
+    async fn test_delete_definition_as_admin_creates_audit_log() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = crate::util::AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        // Create an admin user
+        let admin_username = crate::tests::random_name();
+        let _admin_token =
+            crate::tests::make_authed_user(&admin_username, &app, email_service.clone()).await;
+        let admin_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        sqlx::query!(
+            "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
+            admin_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let user_repo = UserRepository::new(app_state.clone());
+        let admin = user_repo.find_by_id(admin_id).await.unwrap();
+
+        // Create a language and word by another user
+        let owner_username = crate::tests::random_name();
+        let _owner_token =
+            crate::tests::make_authed_user(&owner_username, &app, email_service.clone()).await;
+        let owner_id =
+            sqlx::query_scalar!("select id from users where username = $1", owner_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let owner = user_repo.find_by_id(owner_id).await.unwrap();
+
+        let lang_repo = LanguageRepository::new(app_state.clone());
+        let lang = lang_repo
+            .create(
+                &owner,
+                CreateLanguage {
+                    name: "Test Language".to_string(),
+                    code: crate::tests::random_code(),
+                    description: "A test language".to_string(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+
+        
+
+        let word_repo = WordRepository::new(app_state.clone());
+        let word = word_repo
+            .create(
+                &owner,
+                lang.id,
+                CreateWord {
+                    word: "testword".to_string(),
+                    word_class: "n".to_string(),
+                    ipa: None,
+                    notes: Some("test notes".to_string()),
+                    extra: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let def_repo = DefinitionRepository::new(app_state.clone());
+        let definition = def_repo
+            .create(
+                &owner,
+                word.id,
+                CreateDefinition {
+                    definition: "test definition".to_string(),
+                    context: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let def_id = definition.id;
+
+        // Admin deletes the definition (without permission)
+        let deleted = def_repo.delete(&admin, def_id).await.unwrap();
+        assert!(deleted);
+
+        // Check audit log was created
+        let audit_repo = AuditLogRepository::new(app_state.clone());
+        let logs = audit_repo
+            .search(
+                &admin,
+                PaginatedRequest::default(),
+                AuditLogFilter {
+                    user_id: Some(admin.id),
+                    action: Some(AuditActionType::Deleted),
+                    resource_type: Some(AuditableResource::Definition),
+                    resource_id: Some(def_id),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(logs.items.len(), 1);
+        let log = &logs.items[0];
+        assert_eq!(log.user_id, Some(admin.id));
+        assert_eq!(log.action, AuditActionType::Deleted);
+        assert_eq!(log.resource_type, AuditableResource::Definition);
+        assert_eq!(log.resource_id, def_id);
+        assert_eq!(log.details["word_id"], serde_json::json!(word.id));
+        assert_eq!(log.details["language_id"], serde_json::json!(lang.id));
+        assert_eq!(
+            log.details["definition"],
+            serde_json::json!("test definition")
+        );
+    }
+}

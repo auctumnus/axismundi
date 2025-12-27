@@ -1,10 +1,13 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
-        languages::LanguageRepository, words::{WordRepository, CreateWord, Word, WordSearch, UpdateWord, CrossLanguageSearchResponse}
+        languages::LanguageRepository,
+        words::{
+            CreateWord, CrossLanguageSearchResponse, UpdateWord, Word, WordRepository, WordSearch,
+        },
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{extract_session::Session, ensure_verified},
+    util::{ensure_verified, extract_session::Session},
 };
 use axum::{
     Json,
@@ -21,9 +24,18 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
         .route("/languages/{code}/words", get(search_words))
         .route("/languages/{code}/words/{slug}/{lemma}", get(get_word))
         .route("/languages/{code}/words/{slug}/{lemma}", put(edit_word))
-        .route("/languages/{code}/words/{slug}/{lemma}", delete(delete_word))
-        .route("/languages/{code}/words/{slug}/{lemma}/like", post(like_word))
-        .route("/languages/{code}/words/{slug}/{lemma}/unlike", post(unlike_word))
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}",
+            delete(delete_word),
+        )
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/like",
+            post(like_word),
+        )
+        .route(
+            "/languages/{code}/words/{slug}/{lemma}/unlike",
+            post(unlike_word),
+        )
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -54,7 +66,9 @@ pub async fn get_word(
     Path((code, slug, lemma)): Path<(String, String, i32)>,
 ) -> ApiResponse<Json<Word>> {
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
+        .await?;
 
     Ok(Json(word))
 }
@@ -116,7 +130,10 @@ pub async fn edit_word(
 
     let language = languages.find_by_code(&code).await?;
 
-    words.update_by_lemma(requestor, language.id, &slug, lemma, updates).await.map(Json)
+    words
+        .update_by_lemma(requestor, language.id, &slug, lemma, updates)
+        .await
+        .map(Json)
 }
 
 pub async fn delete_word(
@@ -131,7 +148,9 @@ pub async fn delete_word(
 
     let language = languages.find_by_code(&code).await?;
 
-    words.delete_by_lemma(requestor, language.id, &slug, lemma).await?;
+    words
+        .delete_by_lemma(requestor, language.id, &slug, lemma)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -153,7 +172,9 @@ pub async fn like_word(
     };
 
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
+        .await?;
 
     let like_count = words.like_word(word.id, requestor.id).await?;
     let response = LikeWordResponse {
@@ -174,7 +195,9 @@ pub async fn unlike_word(
     };
 
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
+        .await?;
 
     let like_count = words.unlike_word(word.id, requestor.id).await?;
     let response = LikeWordResponse {
@@ -192,7 +215,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        create_test_language, delete_without_auth, get, make_authed_user, post, put_without_auth
+        create_test_language, delete_without_auth, get, make_authed_user, post, put_without_auth,
     };
     use crate::email::MockEmailService;
 
@@ -200,7 +223,7 @@ mod tests {
         token: String,
         username: String,
         app: axum::routing::RouterIntoService<axum::body::Body>,
-        language: serde_json::Value
+        language: serde_json::Value,
     }
 
     async fn create_test_context() -> TestContext {
@@ -397,7 +420,8 @@ mod tests {
             "word": "test_new",
         });
 
-        let request = put_without_auth(&format!("languages/{lang_code}/words/test/1"), &update_body);
+        let request =
+            put_without_auth(&format!("languages/{lang_code}/words/test/1"), &update_body);
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }

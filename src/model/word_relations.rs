@@ -3,10 +3,18 @@ use std::{collections::HashMap, str::FromStr};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use sqlx::{query, FromRow, Postgres, Transaction};
+use sqlx::{FromRow, Postgres, Transaction, query};
 use uuid::Uuid;
 
-use crate::{err::{bad_request, AppError, AppResult}, model::{language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, users::User, words::Word}, pagination::{PaginatedRequest, PaginatedResponse}, util::{ensure_verified, repo_from_parts, AppState}};
+use crate::{
+    err::{AppError, AppResult, bad_request},
+    model::{
+        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository,
+        users::User, words::Word,
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, ensure_verified, repo_from_parts},
+};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "word_relation_type", rename_all = "snake_case")]
@@ -45,7 +53,9 @@ impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
             WordRelationType::Compound => Ok(CognacyRelationKindV1::Compound),
             WordRelationType::Calque => Ok(CognacyRelationKindV1::Calque),
             WordRelationType::Borrowed => Ok(CognacyRelationKindV1::Borrowed),
-            _ => Err(bad_request("word relation type cannot be converted to cognacy relation kind")),
+            _ => Err(bad_request(
+                "word relation type cannot be converted to cognacy relation kind",
+            )),
         }
     }
 }
@@ -98,8 +108,11 @@ pub struct CognacyEdgeV1 {
 impl CognacySchemaV1 {
     // todo: wow this is not a great api
     /// Merge another cognacy schema into this one by adding the given edge.
-    fn merge(mut self, other: Option<CognacySchemaV1>, edge: CognacyEdgeV1) -> AppResult<CognacySchemaV1> {
-
+    fn merge(
+        mut self,
+        other: Option<CognacySchemaV1>,
+        edge: CognacyEdgeV1,
+    ) -> AppResult<CognacySchemaV1> {
         // A cognacy is a DAG, so to merge two cognacies we need to ensure that adding the new edge does not create a cycle.
         // We can do this by performing a DFS from the consequent node and ensuring we do not reach the antecedent node.
 
@@ -129,27 +142,42 @@ impl CognacySchemaV1 {
             false
         }
 
-
         let mut adjacency_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
         for e in &self.edges {
-            adjacency_list.entry(e.antecedent).or_default().push(e.consequent);
+            adjacency_list
+                .entry(e.antecedent)
+                .or_default()
+                .push(e.consequent);
         }
         if let Some(other) = other {
-        for e in &other.edges {
-            // if we need to bail later, we don't do anything destructive to
-            // cognacy_a yet, so we can merge the edges as long as we have
-            // the edge in cache anyways
-            self.edges.push(*e);
-            adjacency_list.entry(e.antecedent).or_default().push(e.consequent);
+            for e in &other.edges {
+                // if we need to bail later, we don't do anything destructive to
+                // cognacy_a yet, so we can merge the edges as long as we have
+                // the edge in cache anyways
+                self.edges.push(*e);
+                adjacency_list
+                    .entry(e.antecedent)
+                    .or_default()
+                    .push(e.consequent);
+            }
         }
-    }
 
         self.edges.push(edge);
-        adjacency_list.entry(edge.antecedent).or_default().push(edge.consequent);
+        adjacency_list
+            .entry(edge.antecedent)
+            .or_default()
+            .push(edge.consequent);
 
         let mut visited = HashMap::new();
-        if dfs(&adjacency_list, edge.consequent, edge.antecedent, &mut visited) {
-            return Err(bad_request("adding this word relation would create a cycle in the cognacy graph"));
+        if dfs(
+            &adjacency_list,
+            edge.consequent,
+            edge.antecedent,
+            &mut visited,
+        ) {
+            return Err(bad_request(
+                "adding this word relation would create a cycle in the cognacy graph",
+            ));
         }
         // graph is acyclic still!
 
@@ -163,7 +191,7 @@ pub enum CognacyRelationKindV1 {
     Descendant,
     Compound,
     Calque,
-    Borrowed
+    Borrowed,
 }
 
 impl std::fmt::Display for CognacyRelationKindV1 {
@@ -186,11 +214,10 @@ pub struct WordRelationRepository {
 pub struct CreateWordRelation {
     pub antecedent: Word,
     pub consequent: Word,
-    pub kind: WordRelationType
+    pub kind: WordRelationType,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[derive(strum::Display, strum::EnumString)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, strum::Display, strum::EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum RelationDirection {
     Antecedent,
@@ -238,11 +265,10 @@ pub struct CognacyFull {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeveledCognacy {
-    pub levels: Vec<Vec<Uuid>>,  // word IDs grouped by level
+    pub levels: Vec<Vec<Uuid>>, // word IDs grouped by level
     pub edges: Vec<CognacyEdgeV1>,
     pub words: HashMap<Uuid, Word>,
 }
-
 
 impl WordRelationRepository {
     pub fn new(state: AppState) -> Self {
@@ -250,7 +276,11 @@ impl WordRelationRepository {
     }
 
     // TODO: might need a `create_with_tx`
-    pub async fn create(&self, requestor: &User, relation: CreateWordRelation) -> AppResult<WordRelation> {
+    pub async fn create(
+        &self,
+        requestor: &User,
+        relation: CreateWordRelation,
+    ) -> AppResult<WordRelation> {
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
@@ -259,15 +289,25 @@ impl WordRelationRepository {
 
         let antecedent = relation.antecedent;
         let consequent = relation.consequent;
-        
+
         let permissions = LanguagePermissionRepository::new(self.state.clone());
 
-        if !permissions.has_permission(requestor.id, antecedent.language, PermissionLevel::Editor).await? {
-            return Err(bad_request("you don't have permission to create word relations for this language"));
+        if !permissions
+            .has_permission(requestor.id, antecedent.language, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(bad_request(
+                "you don't have permission to create word relations for this language",
+            ));
         }
 
-        if !permissions.has_permission(requestor.id, consequent.language, PermissionLevel::Editor).await? {
-            return Err(bad_request("you don't have permission to create word relations for this language"));
+        if !permissions
+            .has_permission(requestor.id, consequent.language, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(bad_request(
+                "you don't have permission to create word relations for this language",
+            ));
         }
 
         let mut tx = self.state.pool.begin().await?;
@@ -305,7 +345,13 @@ impl WordRelationRepository {
                     let consequent_id = consequent_cognacy.id;
                     let CognacyInner::V1(antecedent_schema) = antecedent_cognacy.inner;
                     let CognacyInner::V1(consequent_schema) = consequent_cognacy.inner;
-                    self.merge_v1(&mut tx, (antecedent_id, antecedent_schema), Some((consequent_id, consequent_schema)), edge).await?;
+                    self.merge_v1(
+                        &mut tx,
+                        (antecedent_id, antecedent_schema),
+                        Some((consequent_id, consequent_schema)),
+                        edge,
+                    )
+                    .await?;
                 }
                 (Some(cognacy), None) | (None, Some(cognacy)) => {
                     let id = cognacy.id;
@@ -322,7 +368,8 @@ impl WordRelationRepository {
                         id,
                         antecedent.id,
                         consequent.id,
-                    ).execute(&mut *tx)
+                    )
+                    .execute(&mut *tx)
                     .await?;
                 }
                 (None, None) => {
@@ -340,9 +387,12 @@ impl WordRelationRepository {
                             VALUES ($1, $2)
                             RETURNING id
                         "#,
-                        serde_json::to_value(&new_cognacy).map_err(|e| bad_request(format!("failed to serialize cognacy schema: {e}")))?,
+                        serde_json::to_value(&new_cognacy).map_err(|e| bad_request(format!(
+                            "failed to serialize cognacy schema: {e}"
+                        )))?,
                         new_cognacy.schema_version,
-                    ).fetch_one(&mut *tx)
+                    )
+                    .fetch_one(&mut *tx)
                     .await?;
 
                     // update both words to point to the new cognacy
@@ -355,7 +405,8 @@ impl WordRelationRepository {
                         cognacy_id,
                         antecedent.id,
                         consequent.id,
-                    ).execute(&mut *tx)
+                    )
+                    .execute(&mut *tx)
                     .await?;
                 }
             }
@@ -368,18 +419,18 @@ impl WordRelationRepository {
 
     async fn find_cognacy(&self, word: &Word) -> AppResult<Option<Cognacy>> {
         if let Some(cognacy_id) = word.cognacy {
-            let cognacy = sqlx::query_as::<_, DBCognacy>(
-                "SELECT * FROM cognacies WHERE id = $1"
-            )
-            .bind(cognacy_id)
-            .fetch_optional(&self.state.pool)
-            .await?;
+            let cognacy = sqlx::query_as::<_, DBCognacy>("SELECT * FROM cognacies WHERE id = $1")
+                .bind(cognacy_id)
+                .fetch_optional(&self.state.pool)
+                .await?;
 
             if let Some(cognacy) = cognacy {
                 match cognacy.schema_version {
                     1 => {
                         let schema: CognacySchemaV1 = serde_json::from_value(cognacy.tree)
-                            .map_err(|e| bad_request(format!("failed to parse cognacy schema: {e}")))?;
+                            .map_err(|e| {
+                                bad_request(format!("failed to parse cognacy schema: {e}"))
+                            })?;
                         Ok(Some(Cognacy {
                             id: cognacy.id,
                             inner: CognacyInner::V1(schema),
@@ -405,10 +456,8 @@ impl WordRelationRepository {
         let (cognacy_a_id, cognacy_a_schema) = cognacy_a;
 
         // merge the schemas using the graph logic
-        let merged_schema = cognacy_a_schema.merge(
-            cognacy_b.as_ref().map(|(_, schema)| schema.clone()),
-            edge,
-        )?;
+        let merged_schema =
+            cognacy_a_schema.merge(cognacy_b.as_ref().map(|(_, schema)| schema.clone()), edge)?;
 
         // update cognacy_a with the merged schema
         sqlx::query!(
@@ -461,7 +510,12 @@ impl WordRelationRepository {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn delete(&self, requestor: &User, antecedent: &Word, consequent: &Word) -> AppResult<()> {
+    pub async fn delete(
+        &self,
+        requestor: &User,
+        antecedent: &Word,
+        consequent: &Word,
+    ) -> AppResult<()> {
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
@@ -470,12 +524,22 @@ impl WordRelationRepository {
 
         let permissions = LanguagePermissionRepository::new(self.state.clone());
 
-        if !permissions.has_permission(requestor.id, antecedent.language, PermissionLevel::Editor).await? {
-            return Err(bad_request("you don't have permission to delete word relations for this language"));
+        if !permissions
+            .has_permission(requestor.id, antecedent.language, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(bad_request(
+                "you don't have permission to delete word relations for this language",
+            ));
         }
 
-        if !permissions.has_permission(requestor.id, consequent.language, PermissionLevel::Editor).await? {
-            return Err(bad_request("you don't have permission to delete word relations for this language"));
+        if !permissions
+            .has_permission(requestor.id, consequent.language, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(bad_request(
+                "you don't have permission to delete word relations for this language",
+            ));
         }
 
         let mut tx = self.state.pool.begin().await?;
@@ -518,14 +582,18 @@ impl WordRelationRepository {
                             SET tree = $1
                             WHERE id = $2
                         "#,
-                        serde_json::to_value(&schema).map_err(|e| bad_request(format!("failed to serialize cognacy schema: {e}")))?,
+                        serde_json::to_value(&schema).map_err(|e| bad_request(format!(
+                            "failed to serialize cognacy schema: {e}"
+                        )))?,
                         cognacy.id,
                     )
                     .execute(&mut *tx)
                     .await?;
 
                     // Find all words that should be in this cognacy
-                    let word_ids_in_graph: Vec<Uuid> = schema.edges.iter()
+                    let word_ids_in_graph: Vec<Uuid> = schema
+                        .edges
+                        .iter()
                         .flat_map(|e| vec![e.antecedent, e.consequent])
                         .collect::<std::collections::HashSet<_>>()
                         .into_iter()
@@ -579,14 +647,17 @@ impl WordRelationRepository {
                                 VALUES ($1, $2)
                                 RETURNING id
                             "#,
-                            serde_json::to_value(&new_schema).map_err(|e| bad_request(format!("failed to serialize cognacy schema: {e}")))?,
+                            serde_json::to_value(&new_schema).map_err(|e| bad_request(format!(
+                                "failed to serialize cognacy schema: {e}"
+                            )))?,
                             new_schema.schema_version,
                         )
                         .fetch_one(&mut *tx)
                         .await?;
 
                         // collect all word IDs in this component
-                        let word_ids: Vec<Uuid> = component_edges.iter()
+                        let word_ids: Vec<Uuid> = component_edges
+                            .iter()
                             .flat_map(|e| vec![e.antecedent, e.consequent])
                             .collect::<std::collections::HashSet<_>>()
                             .into_iter()
@@ -634,8 +705,14 @@ impl WordRelationRepository {
         // build adjacency list (undirected graph for component finding)
         let mut adjacency: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
         for edge in &schema.edges {
-            adjacency.entry(edge.antecedent).or_default().push(edge.consequent);
-            adjacency.entry(edge.consequent).or_default().push(edge.antecedent);
+            adjacency
+                .entry(edge.antecedent)
+                .or_default()
+                .push(edge.consequent);
+            adjacency
+                .entry(edge.consequent)
+                .or_default()
+                .push(edge.antecedent);
         }
 
         let mut visited: HashSet<Uuid> = HashSet::new();
@@ -661,8 +738,13 @@ impl WordRelationRepository {
                 }
 
                 // collect all edges in this component (both endpoints must be in the component)
-                let component_edges: Vec<CognacyEdgeV1> = schema.edges.iter()
-                    .filter(|e| component_nodes.contains(&e.antecedent) && component_nodes.contains(&e.consequent))
+                let component_edges: Vec<CognacyEdgeV1> = schema
+                    .edges
+                    .iter()
+                    .filter(|e| {
+                        component_nodes.contains(&e.antecedent)
+                            && component_nodes.contains(&e.consequent)
+                    })
                     .copied()
                     .collect();
 
@@ -673,7 +755,11 @@ impl WordRelationRepository {
         components
     }
 
-    pub async fn find_relation(&self, antecedent: &Word, consequent: &Word) -> AppResult<WordRelation> {
+    pub async fn find_relation(
+        &self,
+        antecedent: &Word,
+        consequent: &Word,
+    ) -> AppResult<WordRelation> {
         let relation = sqlx::query_as!(
             WordRelation,
             r#"
@@ -690,7 +776,13 @@ impl WordRelationRepository {
         relation.ok_or_else(|| bad_request("no relation exists between these words"))
     }
 
-    pub async fn update(&self, requestor: &User, antecedent: &Word, consequent: &Word, new_kind: WordRelationType) -> AppResult<WordRelation> {
+    pub async fn update(
+        &self,
+        requestor: &User,
+        antecedent: &Word,
+        consequent: &Word,
+        new_kind: WordRelationType,
+    ) -> AppResult<WordRelation> {
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
@@ -699,12 +791,22 @@ impl WordRelationRepository {
 
         let permissions = LanguagePermissionRepository::new(self.state.clone());
 
-        if !permissions.has_permission(requestor.id, antecedent.language, PermissionLevel::Editor).await? {
-            return Err(bad_request("you don't have permission to edit word relations for this language"));
+        if !permissions
+            .has_permission(requestor.id, antecedent.language, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(bad_request(
+                "you don't have permission to edit word relations for this language",
+            ));
         }
 
-        if !permissions.has_permission(requestor.id, consequent.language, PermissionLevel::Editor).await? {
-            return Err(bad_request("you don't have permission to edit word relations for this language"));
+        if !permissions
+            .has_permission(requestor.id, consequent.language, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(bad_request(
+                "you don't have permission to edit word relations for this language",
+            ));
         }
 
         // Get the existing relation to check if we can update it
@@ -718,7 +820,7 @@ impl WordRelationRepository {
         // For now, just handle the simple case where both affect cognacy or neither does
         if old_affects_cognacy != new_affects_cognacy {
             return Err(bad_request(
-                "Cannot change relation type between etymological and non-etymological. Please delete and recreate the relation."
+                "Cannot change relation type between etymological and non-etymological. Please delete and recreate the relation.",
             ));
         }
 
@@ -760,8 +862,9 @@ impl WordRelationRepository {
                         SET tree = $1, schema_version = $2
                         WHERE id = $3
                     "#,
-                    serde_json::to_value(&schema)
-                        .map_err(|e| bad_request(format!("failed to serialize cognacy schema: {e}")))?,
+                    serde_json::to_value(&schema).map_err(|e| bad_request(format!(
+                        "failed to serialize cognacy schema: {e}"
+                    )))?,
                     schema.schema_version,
                     cognacy.id,
                 )
@@ -774,7 +877,12 @@ impl WordRelationRepository {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn search(&self, pagination: PaginatedRequest, search: SearchWordRelations, word: &Word) -> AppResult<PaginatedResponse<WordRelationSearchResult>> {
+    pub async fn search(
+        &self,
+        pagination: PaginatedRequest,
+        search: SearchWordRelations,
+        word: &Word,
+    ) -> AppResult<PaginatedResponse<WordRelationSearchResult>> {
         let items = query!(
             r#"
                 SELECT DISTINCT ON (words.id)
@@ -879,67 +987,68 @@ impl WordRelationRepository {
 
         let (items, count): (Vec<_>, Option<i64>) = tokio::try_join!(items, count)?;
 
-        let items: Vec<_> = items.into_iter().map(|record| {
-            let related_word = Word {
-                id: record.id,
-                language: record.language,
-                word_class: record.word_class,
-                cognacy: record.cognacy,
-                word: record.word,
-                slug: record.slug,
-                lemma: record.lemma,
-                ipa: record.ipa,
-                notes: record.notes,
-                extra: record.extra,
-                like_count: record.like_count,
-                created_at: record.created_at,
-                updated_at: record.updated_at,
-                _created_by: record._created_by,
-                _updated_by: record._updated_by,
-                bookmark: record.bookmark,
-                language_code: Some(record.word_language_code.clone()),
-                word_class_abbreviation: record.word_class_abbreviation,
-                created_by: record.word_created_by,
-                updated_by: record.word_updated_by,
-            };
+        let items: Vec<_> = items
+            .into_iter()
+            .map(|record| {
+                let related_word = Word {
+                    id: record.id,
+                    language: record.language,
+                    word_class: record.word_class,
+                    cognacy: record.cognacy,
+                    word: record.word,
+                    slug: record.slug,
+                    lemma: record.lemma,
+                    ipa: record.ipa,
+                    notes: record.notes,
+                    extra: record.extra,
+                    like_count: record.like_count,
+                    created_at: record.created_at,
+                    updated_at: record.updated_at,
+                    _created_by: record._created_by,
+                    _updated_by: record._updated_by,
+                    bookmark: record.bookmark,
+                    language_code: Some(record.word_language_code.clone()),
+                    word_class_abbreviation: record.word_class_abbreviation,
+                    created_by: record.word_created_by,
+                    updated_by: record.word_updated_by,
+                };
 
-            let creator = User {
-                id: record.creator_id,
-                username: record.creator_username,
-                display_name: record.creator_display_name,
-                email: record.creator_email,
-                password_hash: record.creator_password_hash,
-                verified_at: record.creator_verified_at,
-                description: record.creator_description,
-                pronouns: record.creator_pronouns,
-                gender: record.creator_gender,
-                profile_picture_object_id: record.creator_profile_picture_object_id,
-                tags: record.creator_tags,
-                bookmark: record.creator_bookmark,
-                created_at: record.creator_created_at,
-                updated_at: record.creator_updated_at,
-            };
+                let creator = User {
+                    id: record.creator_id,
+                    username: record.creator_username,
+                    display_name: record.creator_display_name,
+                    email: record.creator_email,
+                    password_hash: record.creator_password_hash,
+                    verified_at: record.creator_verified_at,
+                    description: record.creator_description,
+                    pronouns: record.creator_pronouns,
+                    gender: record.creator_gender,
+                    profile_picture_object_id: record.creator_profile_picture_object_id,
+                    tags: record.creator_tags,
+                    bookmark: record.creator_bookmark,
+                    created_at: record.creator_created_at,
+                    updated_at: record.creator_updated_at,
+                };
 
-            let direction = RelationDirection::from_str(&record.direction).unwrap();
-            let into_other_language = related_word.language != word.language;
+                let direction = RelationDirection::from_str(&record.direction).unwrap();
+                let into_other_language = related_word.language != word.language;
 
-            WordRelationSearchResult {
-                word: related_word,
-                language: record.word_language_code.clone(),
-                language_code: record.word_language_code,
-                into_other_language,
-                relation: WordRelationForDisplay {
-                    kind: record.kind,
-                },
-                direction,
-                creator,
-                created_at: record.relation_created_at,
-            }
-        }).collect();
-
+                WordRelationSearchResult {
+                    word: related_word,
+                    language: record.word_language_code.clone(),
+                    language_code: record.word_language_code,
+                    into_other_language,
+                    relation: WordRelationForDisplay { kind: record.kind },
+                    direction,
+                    creator,
+                    created_at: record.relation_created_at,
+                }
+            })
+            .collect();
 
         let total = count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -1045,7 +1154,10 @@ impl WordRelationRepository {
         let mut all_nodes: HashSet<Uuid> = HashSet::new();
 
         for edge in &edges {
-            adjacency.entry(edge.antecedent).or_default().push(edge.consequent);
+            adjacency
+                .entry(edge.antecedent)
+                .or_default()
+                .push(edge.consequent);
             all_nodes.insert(edge.antecedent);
             all_nodes.insert(edge.consequent);
             *in_degree.entry(edge.consequent).or_default() += 1;

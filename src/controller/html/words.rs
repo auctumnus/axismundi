@@ -1,15 +1,18 @@
 use askama::Template;
 use axum::{
+    Form, Router,
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
-    Form,
-    Router,
 };
 use serde::Deserialize;
 
 use crate::{
-    attempt, controller::html::{okay, render_generic_error, render_template}, err::{AppError, bad_request, not_found}, get_user, model::{
+    attempt,
+    controller::html::{okay, render_generic_error, render_template},
+    err::{AppError, bad_request, not_found},
+    get_user,
+    model::{
         bookmarks::BookmarkRepository,
         definitions::{CreateDefinition, Definition, DefinitionRepository, UpdateDefinition},
         language_invites::PermissionLevel,
@@ -17,7 +20,10 @@ use crate::{
         languages::{Language, LanguageRepository},
         users::User,
         word_classes::{WordClass, WordClassRepository},
-        word_relations::{CreateWordRelation, LeveledCognacy, RelationDirection, SearchWordRelations, WordRelationRepository, WordRelationSearchResult, WordRelationType},
+        word_relations::{
+            CreateWordRelation, LeveledCognacy, RelationDirection, SearchWordRelations,
+            WordRelationRepository, WordRelationSearchResult, WordRelationType,
+        },
         words::{CreateWord, Word, WordRepository, WordSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
@@ -93,7 +99,6 @@ struct NewWordTemplate {
     previous_notes: String,
     user_has_permission: bool,
 }
-
 
 #[derive(Template)]
 #[template(path = "words/edit.html")]
@@ -197,26 +202,26 @@ async fn word_search(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
     let results = match words
-            .search(&language.id, pagination.clone(), query.clone())
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => {
-                let template = WordSearchTemplate {
-                    current_user,
-                    error: Some(e),
-                    language,
-                    previous_query: query,
-                    previous_pagination: pagination,
-                    results: None,
-                    word_classes: word_classes_list,
-                    user_has_permission,
-                };
-                let body = render_template(template);
-                return (StatusCode::BAD_REQUEST, body);
-            }
-        };
-    
+        .search(&language.id, pagination.clone(), query.clone())
+        .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            let template = WordSearchTemplate {
+                current_user,
+                error: Some(e),
+                language,
+                previous_query: query,
+                previous_pagination: pagination,
+                results: None,
+                word_classes: word_classes_list,
+                user_has_permission,
+            };
+            let body = render_template(template);
+            return (StatusCode::BAD_REQUEST, body);
+        }
+    };
+
     let mut results_with_meta = vec![];
     for word in results.items {
         let creator = attempt!(s, words.find_creator(&word.id).await);
@@ -278,10 +283,13 @@ async fn view_lemmata(
         ..Default::default()
     };
 
-    let lemmata = attempt!(s, words
-        .search(&language.id, PaginatedRequest::default(), search)
-        .await)
-        .items;
+    let lemmata = attempt!(
+        s,
+        words
+            .search(&language.id, PaginatedRequest::default(), search)
+            .await
+    )
+    .items;
 
     if lemmata.is_empty() {
         return render_generic_error(s, not_found(format!("word with slug '{slug}'"))).await;
@@ -290,10 +298,14 @@ async fn view_lemmata(
     // If there's only one lemma, redirect to it directly
     if lemmata.len() == 1 {
         let lemma = &lemmata[0];
-        return (StatusCode::SEE_OTHER, Redirect::to(&format!(
-            "/languages/{}/words/{}/{}",
-            language_code, slug, lemma.lemma
-        )).into_response());
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/languages/{}/words/{}/{}",
+                language_code, slug, lemma.lemma
+            ))
+            .into_response(),
+        );
     }
 
     let word = lemmata[0].word.clone();
@@ -319,7 +331,13 @@ async fn view_lemmata(
 
         // Fetch top 10 definitions for this lemma
         let definitions = match definitions_repo
-            .list_by_word(lemma.id, PaginatedRequest { limit: 10, offset: 0 })
+            .list_by_word(
+                lemma.id,
+                PaginatedRequest {
+                    limit: 10,
+                    offset: 0,
+                },
+            )
             .await
         {
             Ok(res) => res.items,
@@ -347,7 +365,11 @@ async fn view_lemmata(
         };
         is_liked_list.push(is_liked);
 
-        println!("Lemma ID: {}, Definitions: {:?}", lemma.id, words_definitions.last());
+        println!(
+            "Lemma ID: {}, Definitions: {:?}",
+            lemma.id,
+            words_definitions.last()
+        );
     }
 
     let template = LemmataTemplate {
@@ -449,12 +471,18 @@ async fn new_word_submit(
     if definitions_text.is_empty() {
         let template = NewWordTemplate {
             current_user: Some(user),
-            error: Some(crate::err::bad_request("At least one definition is required")),
+            error: Some(crate::err::bad_request(
+                "At least one definition is required",
+            )),
             language,
             word_classes: word_classes_list,
             previous_word: form.word.clone(),
             previous_word_class: form.word_class.clone(),
-            previous_definition: form.definitions.first().map(|s| s.clone()).unwrap_or_default(),
+            previous_definition: form
+                .definitions
+                .first()
+                .map(|s| s.clone())
+                .unwrap_or_default(),
             previous_definitions: form.definitions.iter().skip(1).map(|s| s.clone()).collect(),
             previous_context: form.contexts.first().map(|s| s.clone()).unwrap_or_default(),
             previous_contexts: form.contexts.iter().skip(1).map(|s| s.clone()).collect(),
@@ -504,10 +532,14 @@ async fn new_word_submit(
     .await;
 
     match result {
-        Ok(word) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
-            "/languages/{}/words/{}/{}",
-            language_code, word.slug, word.lemma
-        )).into_response()),
+        Ok(word) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/languages/{}/words/{}/{}",
+                language_code, word.slug, word.lemma
+            ))
+            .into_response(),
+        ),
         Err(e) => {
             let template = NewWordTemplate {
                 current_user: Some(user),
@@ -516,7 +548,10 @@ async fn new_word_submit(
                 word_classes: word_classes_list,
                 previous_word: form.word.clone(),
                 previous_word_class: form.word_class.clone(),
-                previous_definition: definitions_text.first().map(|s| s.clone()).unwrap_or_default(),
+                previous_definition: definitions_text
+                    .first()
+                    .map(|s| s.clone())
+                    .unwrap_or_default(),
                 previous_definitions: definitions_text.iter().skip(1).map(|s| s.clone()).collect(),
                 previous_context: form.contexts.first().map(|s| s.clone()).unwrap_or_default(),
                 previous_contexts: form.contexts.iter().skip(1).map(|s| s.clone()).collect(),
@@ -553,18 +588,25 @@ async fn view_lemma(
         false
     };
 
-    let word = attempt!(s, words
-        .find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma)
-        .await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma)
+            .await
+    );
 
     // Fetch definitions for this word
     let (definitions, _has_more) = match definitions_repo
-        .list_by_word(word.id, PaginatedRequest { limit: 100, offset: 0 })
+        .list_by_word(
+            word.id,
+            PaginatedRequest {
+                limit: 100,
+                offset: 0,
+            },
+        )
         .await
     {
-        Ok(res) => {
-            (res.items, res.has_more)
-        },
+        Ok(res) => (res.items, res.has_more),
         Err(_) => (vec![], false),
     };
 
@@ -589,13 +631,18 @@ async fn view_lemma(
     };
 
     // Fetch recent word relations (3 most recent, with cognacy relations first)
-    let relations_pagination = PaginatedRequest { limit: 3, offset: 0 };
+    let relations_pagination = PaginatedRequest {
+        limit: 3,
+        offset: 0,
+    };
     let relations_search = SearchWordRelations {
         q: None,
         kind: None,
         direction: None,
     };
-    let relations_result = word_relations.search(relations_pagination, relations_search, &word).await;
+    let relations_result = word_relations
+        .search(relations_pagination, relations_search, &word)
+        .await;
     let (recent_relations, total_relations) = match relations_result {
         Ok(res) => (res.items, res.total),
         Err(_) => (vec![], 0),
@@ -632,7 +679,12 @@ async fn edit_word(
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma)
+            .await
+    );
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -657,16 +709,31 @@ async fn edit_word(
 
     // Fetch existing definitions
     let definitions_result = match definitions_repo
-        .list_by_word(word.id, PaginatedRequest { limit: 100, offset: 0 })
+        .list_by_word(
+            word.id,
+            PaginatedRequest {
+                limit: 100,
+                offset: 0,
+            },
+        )
         .await
     {
         Ok(res) => res.items,
         Err(_) => vec![],
     };
 
-    let previous_definitions: Vec<String> = definitions_result.iter().map(|d| d.definition.clone()).collect();
-    let previous_contexts: Vec<String> = definitions_result.iter().map(|d| d.context.clone().unwrap_or_default()).collect();
-    let previous_definition_ids: Vec<String> = definitions_result.iter().map(|d| d.id.to_string()).collect();
+    let previous_definitions: Vec<String> = definitions_result
+        .iter()
+        .map(|d| d.definition.clone())
+        .collect();
+    let previous_contexts: Vec<String> = definitions_result
+        .iter()
+        .map(|d| d.context.clone().unwrap_or_default())
+        .collect();
+    let previous_definition_ids: Vec<String> = definitions_result
+        .iter()
+        .map(|d| d.id.to_string())
+        .collect();
 
     let template = EditWordTemplate {
         current_user,
@@ -700,7 +767,12 @@ async fn edit_word_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma)
+            .await
+    );
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -729,7 +801,9 @@ async fn edit_word_submit(
     if definitions_text.is_empty() {
         let template = EditWordTemplate {
             current_user: Some(user),
-            error: Some(crate::err::bad_request("At least one definition is required")),
+            error: Some(crate::err::bad_request(
+                "At least one definition is required",
+            )),
             language,
             word,
             word_classes: word_classes_list,
@@ -757,11 +831,19 @@ async fn edit_word_submit(
     };
 
     let result = async {
-        let updated_word = words.update_by_lemma(&user, language.id, &slug, lemma, update_word).await?;
+        let updated_word = words
+            .update_by_lemma(&user, language.id, &slug, lemma, update_word)
+            .await?;
 
         // Handle definitions: update existing, create new, delete removed
         let existing_defs = definitions_repo
-            .list_by_word(updated_word.id, PaginatedRequest { limit: 100, offset: 0 })
+            .list_by_word(
+                updated_word.id,
+                PaginatedRequest {
+                    limit: 100,
+                    offset: 0,
+                },
+            )
             .await?
             .items;
 
@@ -806,7 +888,9 @@ async fn edit_word_submit(
                     definition: def_text.clone(),
                     context,
                 };
-                definitions_repo.create(&user, updated_word.id, create_def).await?;
+                definitions_repo
+                    .create(&user, updated_word.id, create_def)
+                    .await?;
             }
         }
 
@@ -822,10 +906,14 @@ async fn edit_word_submit(
     .await;
 
     match result {
-        Ok(updated_word) => (StatusCode::SEE_OTHER, Redirect::to(&format!(
-            "/languages/{}/words/{}/{}",
-            language_code, updated_word.slug, updated_word.lemma
-        )).into_response()),
+        Ok(updated_word) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/languages/{}/words/{}/{}",
+                language_code, updated_word.slug, updated_word.lemma
+            ))
+            .into_response(),
+        ),
         Err(e) => {
             let template = EditWordTemplate {
                 current_user: Some(user),
@@ -868,7 +956,12 @@ async fn add_relation_form(
 ) -> (StatusCode, Response) {
     let current_user = get_user!(&s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
 
     // Check permission
     let has_permission = attempt!(
@@ -878,7 +971,8 @@ async fn add_relation_form(
             .await
     );
     if !has_permission {
-        return render_generic_error(s, bad_request("You don't have permission to add relations")).await;
+        return render_generic_error(s, bad_request("You don't have permission to add relations"))
+            .await;
     }
 
     let template = AddRelationTemplate {
@@ -904,7 +998,12 @@ async fn add_relation_submit(
 ) -> (StatusCode, Response) {
     let current_user = get_user!(&s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
 
     // Check permission on source language
     let has_permission = attempt!(
@@ -960,7 +1059,11 @@ async fn add_relation_submit(
     let has_target_permission = attempt!(
         s,
         language_permissions
-            .has_permission(current_user.id, target_word.language, PermissionLevel::Editor)
+            .has_permission(
+                current_user.id,
+                target_word.language,
+                PermissionLevel::Editor
+            )
             .await
     );
     if !has_target_permission {
@@ -968,7 +1071,9 @@ async fn add_relation_submit(
             current_user: Some(current_user.clone()),
             language,
             word,
-            error: Some(bad_request("You don't have permission to edit the target word's language")),
+            error: Some(bad_request(
+                "You don't have permission to edit the target word's language",
+            )),
         };
         let body = render_template(template);
         return okay(body);
@@ -1046,7 +1151,12 @@ async fn view_word_relations(
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(current_user.as_ref(), language.id, &slug, lemma)
+            .await
+    );
 
     let user_has_permission = if let Some(user) = &current_user {
         language_permissions
@@ -1075,9 +1185,16 @@ async fn view_word_relations(
         }
     });
 
-    let search = SearchWordRelations { q: None, kind, direction };
+    let search = SearchWordRelations {
+        q: None,
+        kind,
+        direction,
+    };
 
-    let results = match word_relations.search(pagination.clone(), search.clone(), &word).await {
+    let results = match word_relations
+        .search(pagination.clone(), search.clone(), &word)
+        .await
+    {
         Ok(res) => Some(res),
         Err(e) => {
             let template = WordRelationsTemplate {
@@ -1127,15 +1244,36 @@ async fn delete_relation_form(
     languages: LanguageRepository,
     words: WordRepository,
     language_permissions: LanguagePermissionRepository,
-    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
-        Path<(String, String, i32, String, String, i32)>,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)): Path<(
+        String,
+        String,
+        i32,
+        String,
+        String,
+        i32,
+    )>,
 ) -> (StatusCode, Response) {
     let current_user = get_user!(&s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
 
     let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
-    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+    let related_word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(
+                Some(&current_user),
+                related_language.id,
+                &related_slug,
+                related_lemma
+            )
+            .await
+    );
 
     // Check permission
     let has_permission = attempt!(
@@ -1145,7 +1283,11 @@ async fn delete_relation_form(
             .await
     );
     if !has_permission {
-        return render_generic_error(s, bad_request("You don't have permission to delete relations")).await;
+        return render_generic_error(
+            s,
+            bad_request("You don't have permission to delete relations"),
+        )
+        .await;
     }
 
     let template = DeleteRelationTemplate {
@@ -1167,15 +1309,36 @@ async fn delete_relation_submit(
     words: WordRepository,
     word_relations: WordRelationRepository,
     language_permissions: LanguagePermissionRepository,
-    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
-        Path<(String, String, i32, String, String, i32)>,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)): Path<(
+        String,
+        String,
+        i32,
+        String,
+        String,
+        i32,
+    )>,
 ) -> (StatusCode, Response) {
     let current_user = get_user!(&s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
 
     let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
-    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+    let related_word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(
+                Some(&current_user),
+                related_language.id,
+                &related_slug,
+                related_lemma
+            )
+            .await
+    );
 
     // Check permission
     let has_permission = attempt!(
@@ -1185,11 +1348,18 @@ async fn delete_relation_submit(
             .await
     );
     if !has_permission {
-        return render_generic_error(s, bad_request("You don't have permission to delete relations")).await;
+        return render_generic_error(
+            s,
+            bad_request("You don't have permission to delete relations"),
+        )
+        .await;
     }
 
     // Delete the relation
-    match word_relations.delete(&current_user, &word, &related_word).await {
+    match word_relations
+        .delete(&current_user, &word, &related_word)
+        .await
+    {
         Ok(_) => {
             // Redirect back to the word page
             (
@@ -1227,15 +1397,36 @@ async fn edit_relation_form(
     words: WordRepository,
     word_relations: WordRelationRepository,
     language_permissions: LanguagePermissionRepository,
-    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
-        Path<(String, String, i32, String, String, i32)>,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)): Path<(
+        String,
+        String,
+        i32,
+        String,
+        String,
+        i32,
+    )>,
 ) -> (StatusCode, Response) {
     let current_user = get_user!(&s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
 
     let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
-    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+    let related_word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(
+                Some(&current_user),
+                related_language.id,
+                &related_slug,
+                related_lemma
+            )
+            .await
+    );
 
     // Check permission
     let has_permission = attempt!(
@@ -1245,13 +1436,21 @@ async fn edit_relation_form(
             .await
     );
     if !has_permission {
-        return render_generic_error(s, bad_request("You don't have permission to edit relations")).await;
+        return render_generic_error(
+            s,
+            bad_request("You don't have permission to edit relations"),
+        )
+        .await;
     }
 
     let has_permission_on_related = attempt!(
         s,
         language_permissions
-            .has_permission(current_user.id, related_language.id, PermissionLevel::Editor)
+            .has_permission(
+                current_user.id,
+                related_language.id,
+                PermissionLevel::Editor
+            )
             .await
     );
 
@@ -1289,16 +1488,37 @@ async fn edit_relation_submit(
     words: WordRepository,
     word_relations: WordRelationRepository,
     language_permissions: LanguagePermissionRepository,
-    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)):
-        Path<(String, String, i32, String, String, i32)>,
+    Path((language_code, slug, lemma, related_language_code, related_slug, related_lemma)): Path<(
+        String,
+        String,
+        i32,
+        String,
+        String,
+        i32,
+    )>,
     Form(form): Form<EditRelationForm>,
 ) -> (StatusCode, Response) {
     let current_user = get_user!(&s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
 
     let related_language = attempt!(s, languages.find_by_code(&related_language_code).await);
-    let related_word = attempt!(s, words.find_by_slug_and_lemma(Some(&current_user), related_language.id, &related_slug, related_lemma).await);
+    let related_word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(
+                Some(&current_user),
+                related_language.id,
+                &related_slug,
+                related_lemma
+            )
+            .await
+    );
 
     // Check permission
     let has_permission = attempt!(
@@ -1310,7 +1530,11 @@ async fn edit_relation_submit(
     let has_permission_on_related = attempt!(
         s,
         language_permissions
-            .has_permission(current_user.id, related_language.id, PermissionLevel::Editor)
+            .has_permission(
+                current_user.id,
+                related_language.id,
+                PermissionLevel::Editor
+            )
             .await
     );
     if !has_permission {
@@ -1331,7 +1555,10 @@ async fn edit_relation_submit(
     }
 
     // Update the relation
-    match word_relations.update(&current_user, &word, &related_word, form.kind).await {
+    match word_relations
+        .update(&current_user, &word, &related_word, form.kind)
+        .await
+    {
         Ok(_) => {
             // Redirect back to the word page
             (
@@ -1381,7 +1608,12 @@ async fn delete_word_form(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(s, words.find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma)
+            .await
+    );
 
     let user_has_permission = permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -1411,8 +1643,11 @@ async fn delete_word_submit(
         .delete_by_lemma(&user, language.id, &slug, lemma)
         .await
     {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to(&format!("/languages/{}/words", language_code)).into_response()),
-        Err(e) => render_generic_error(s, e).await
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{}/words", language_code)).into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
     }
 }
 

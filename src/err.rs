@@ -34,7 +34,7 @@ fn prettify_validation_error(error: &ValidationError) -> String {
                 } else {
                     "invalid length".to_string()
                 }
-            },
+            }
             "regex" => "value is incorrectly formatted".to_string(),
             "email" => "invalid email format".to_string(),
             "password_strength" => "password is too weak".to_string(),
@@ -56,11 +56,9 @@ impl AppError {
         if let Some(errors) = &self.validation_errors {
             if let Some(error) = errors.field_errors().get(field) {
                 if !error.is_empty() {
-                    let error = error.iter()
-                        .map(prettify_validation_error)
-                        .collect();
+                    let error = error.iter().map(prettify_validation_error).collect();
 
-                    return Some(error)
+                    return Some(error);
                 }
             }
         }

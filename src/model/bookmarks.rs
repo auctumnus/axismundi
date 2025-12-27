@@ -1,9 +1,7 @@
 use crate::err::{AppResult, not_found};
 use crate::model::{
-    languages::LanguageRepository,
-    users::UserRepository,
+    languages::LanguageRepository, users::UserRepository, word_classes::WordClassRepository,
     words::WordRepository,
-    word_classes::WordClassRepository,
 };
 use crate::util::AppState;
 use async_trait::async_trait;
@@ -55,8 +53,8 @@ pub struct BookmarkRepository {
 }
 
 const BOOKMARK_ALPHABET: &[char] = &[
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',
+    'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
 
 impl BookmarkRepository {
@@ -68,7 +66,12 @@ impl BookmarkRepository {
         nanoid::nanoid!(15, BOOKMARK_ALPHABET)
     }
 
-    pub async fn resolve_bookmark(&self, item: Uuid, resource: ResourceType, link_type: LinkType) -> AppResult<String> {
+    pub async fn resolve_bookmark(
+        &self,
+        item: Uuid,
+        resource: ResourceType,
+        link_type: LinkType,
+    ) -> AppResult<String> {
         let repository = resource.as_repository(&self.state);
         repository.resolve_bookmark(item, link_type).await
     }

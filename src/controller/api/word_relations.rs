@@ -1,7 +1,12 @@
 use crate::{
-    err::{not_found, unauthorized_no_session, AppResult},
+    err::{AppResult, not_found, unauthorized_no_session},
     model::{
-        languages::LanguageRepository, word_relations::{CognacyFull, CreateWordRelation, SearchWordRelations, WordRelation, WordRelationRepository, WordRelationSearchResult, WordRelationType}, words::WordRepository
+        languages::LanguageRepository,
+        word_relations::{
+            CognacyFull, CreateWordRelation, SearchWordRelations, WordRelation,
+            WordRelationRepository, WordRelationSearchResult, WordRelationType,
+        },
+        words::WordRepository,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
@@ -22,7 +27,8 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
         .route("/languages/{code}/words/{slug}/{lemma}/etymology", get(get_etymology))
 }
 type ApiResponse<T> = AppResult<T>;
-type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;#[derive(Deserialize)]
+type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
+#[derive(Deserialize)]
 pub struct AddRelationRequest {
     kind: WordRelationType,
     language: String,
@@ -43,18 +49,29 @@ pub async fn add_relation(
     };
 
     let language = languages.find_by_code(&code).await?;
-    let antecedent = words.find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma).await?;
+    let antecedent = words
+        .find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma)
+        .await?;
     let consequent_language = languages.find_by_code(&req.language).await?;
-    let consequent = words.find_by_slug_and_lemma(Some(requestor), consequent_language.id, &req.slug, req.lemma).await?;
+    let consequent = words
+        .find_by_slug_and_lemma(
+            Some(requestor),
+            consequent_language.id,
+            &req.slug,
+            req.lemma,
+        )
+        .await?;
 
-    let word_relation = word_relations.create(
-        requestor,
-        CreateWordRelation {
-            antecedent,
-            consequent,
-            kind: req.kind,
-        },
-    ).await?;
+    let word_relation = word_relations
+        .create(
+            requestor,
+            CreateWordRelation {
+                antecedent,
+                consequent,
+                kind: req.kind,
+            },
+        )
+        .await?;
 
     Ok(Json(word_relation))
 }
@@ -64,18 +81,36 @@ pub async fn delete_relation(
     languages: LanguageRepository,
     words: WordRepository,
     word_relations: WordRelationRepository,
-    Path((code, slug, lemma, related_code, related_slug, related_lemma)): Path<(String, String, i32, String, String, i32)>,
+    Path((code, slug, lemma, related_code, related_slug, related_lemma)): Path<(
+        String,
+        String,
+        i32,
+        String,
+        String,
+        i32,
+    )>,
 ) -> ApiResponse<StatusCode> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
-    let antecedent = words.find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma).await?;
+    let antecedent = words
+        .find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma)
+        .await?;
     let consequent_language = languages.find_by_code(&related_code).await?;
-    let consequent = words.find_by_slug_and_lemma(Some(requestor), consequent_language.id, &related_slug, related_lemma).await?;
+    let consequent = words
+        .find_by_slug_and_lemma(
+            Some(requestor),
+            consequent_language.id,
+            &related_slug,
+            related_lemma,
+        )
+        .await?;
 
-    word_relations.delete(requestor, &antecedent, &consequent).await?;
+    word_relations
+        .delete(requestor, &antecedent, &consequent)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -90,7 +125,9 @@ pub async fn search_relations(
     axum::extract::Query(search): axum::extract::Query<SearchWordRelations>,
 ) -> PaginatedApiResponse<WordRelationSearchResult> {
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
+        .await?;
 
     word_relations.search(pagination, search, &word).await
 }
@@ -103,7 +140,9 @@ pub async fn get_etymology(
     Path((code, slug, lemma)): Path<(String, String, i32)>,
 ) -> ApiResponse<Json<CognacyFull>> {
     let language = languages.find_by_code(&code).await?;
-    let word = words.find_by_slug_and_lemma(s.user(), language.id, &slug, lemma).await?;
+    let word = words
+        .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
+        .await?;
 
     let cognacy = word_relations.get_cognacy(&word).await?;
 
@@ -123,7 +162,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        assert_response_status, get, make_authed_user, post, post_without_auth
+        assert_response_status, get, make_authed_user, post, post_without_auth,
     };
     use crate::email::MockEmailService;
 
@@ -210,8 +249,7 @@ mod tests {
             "lemma": 1,
         });
 
-        let request =
-            post_without_auth("languages/test/words/test1/1/relations", body).await;
+        let request = post_without_auth("languages/test/words/test1/1/relations", body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -298,7 +336,11 @@ mod tests {
         assert!(body["items"].is_array());
         let items = body["items"].as_array().unwrap();
         println!("Items: {:#?}", items);
-        assert!(items.iter().all(|item| item["relation"]["kind"] == "borrowed"));
+        assert!(
+            items
+                .iter()
+                .all(|item| item["relation"]["kind"] == "borrowed")
+        );
     }
 
     #[tokio::test]
@@ -341,7 +383,13 @@ mod tests {
         // Check that we have a cognacy object with edges and words
         assert!(body["cognacy"].is_object());
         assert!(body["cognacy"]["inner"]["V1"]["edges"].is_array());
-        assert_eq!(body["cognacy"]["inner"]["V1"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["cognacy"]["inner"]["V1"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
 
         // Check that we have both words in the words map
         assert!(body["words"].is_object());
@@ -491,7 +539,6 @@ mod tests {
         let request = get(&format!("languages/{lang_code}/words/test3/1/etymology")).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND); // no cognacy graph
-        
     }
 
     #[tokio::test]

@@ -1,8 +1,12 @@
 use crate::{
-    err::{bad_request, AppError, AppResult},
-    model::{email_verification_tokens::EmailVerificationTokenRepository, password_reset_tokens::PasswordResetTokenRepository, users::{CreateUser, UpdateUser, User, UserRepository, UserSearch}},
+    err::{AppError, AppResult, bad_request},
+    model::{
+        email_verification_tokens::EmailVerificationTokenRepository,
+        password_reset_tokens::PasswordResetTokenRepository,
+        users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{extract_session::Session, s3::S3, AppState},
+    util::{AppState, extract_session::Session, s3::S3},
 };
 use axum::{
     Json, Router,
@@ -25,7 +29,6 @@ pub fn create_users_router() -> (Router<AppState>, Router<AppState>) {
         .route("/users/{username}", put(update_user))
         .route("/reset-password/start", post(reset_password_start))
         .route("/reset-password/complete", post(reset_password_complete));
-
 
     let default_routes = Router::new()
         .route("/users/{username}", get(get_user))
@@ -59,7 +62,12 @@ pub async fn create_user(
     Json(user): Json<CreateUser>,
 ) -> ApiResponse<Json<CreateUserResponse>> {
     let user_repo = UserRepository::new(state);
-    user_repo.create(user).await.map(|(u, token)| Json(CreateUserResponse { user: u, resend_token: token.id }))
+    user_repo.create(user).await.map(|(u, token)| {
+        Json(CreateUserResponse {
+            user: u,
+            resend_token: token.id,
+        })
+    })
 }
 
 pub async fn update_user(
@@ -157,7 +165,9 @@ pub async fn upload_profile_picture(
     }
 
     // Upload to S3 (uploads the original to minio)
-    let filename = S3.upload_profile_picture(user.id, &file_data, &content_type).await?;
+    let filename = S3
+        .upload_profile_picture(user.id, &file_data, &content_type)
+        .await?;
 
     // Update user record with new profile picture filename
     match users
@@ -213,13 +223,17 @@ pub async fn reset_password_start(
 pub(crate) struct PasswordResetComplete {
     uuid: Uuid,
     token: String,
-    new_password: String
+    new_password: String,
 }
 
 pub async fn reset_password_complete(
     users: UserRepository,
     tokens: PasswordResetTokenRepository,
-    Json(PasswordResetComplete { uuid, token, new_password }): Json<PasswordResetComplete>,
+    Json(PasswordResetComplete {
+        uuid,
+        token,
+        new_password,
+    }): Json<PasswordResetComplete>,
 ) -> ApiResponse<StatusCode> {
     let Ok(user) = users.find_by_id(uuid).await else {
         return Err(bad_request("Invalid or expired password reset token"));
@@ -243,7 +257,11 @@ mod tests {
     use uuid::Uuid;
 
     use crate::{
-        config::CONFIG, controller::api::tests::{get, make_authed_user, post_without_auth}, create_router, email::{self, MockEmailService}, util::AppState
+        config::CONFIG,
+        controller::api::tests::{get, make_authed_user, post_without_auth},
+        create_router,
+        email::{self, MockEmailService},
+        util::AppState,
     };
 
     #[tokio::test]
@@ -1030,11 +1048,8 @@ mod tests {
 
         // 5. resend verification email
         email_service.clear();
-        let request = post_without_auth(
-            &format!("resend-verification/{token_id}"),
-            json!({}),
-        )
-        .await;
+        let request =
+            post_without_auth(&format!("resend-verification/{token_id}"), json!({})).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -1065,11 +1080,7 @@ mod tests {
             "token": new_token,
             "email": email
         });
-        let request = post_without_auth(
-            &format!("verify/{}", user_id),
-            verify_body,
-        )
-        .await;
+        let request = post_without_auth(&format!("verify/{}", user_id), verify_body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -1087,11 +1098,8 @@ mod tests {
 
         // 2. attempt to resend with random uuid
         let random_uuid = uuid::Uuid::new_v4();
-        let request = post_without_auth(
-            &format!("resend-verification/{random_uuid}"),
-            json!({}),
-        )
-        .await;
+        let request =
+            post_without_auth(&format!("resend-verification/{random_uuid}"), json!({})).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
@@ -1131,13 +1139,9 @@ mod tests {
         .unwrap();
 
         // 5. attempt to resend with invalidated token
-        let request = post_without_auth(
-            &format!("resend-verification/{token_id}"),
-            json!({}),
-        )
-        .await;
+        let request =
+            post_without_auth(&format!("resend-verification/{token_id}"), json!({})).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
-
 }

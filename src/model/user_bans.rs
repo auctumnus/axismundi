@@ -1,13 +1,13 @@
-use sqlx::FromRow;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use validator::Validate;
-use crate::err::{AppResult, forbidden, not_found};
-use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::AppState;
+use crate::err::{AppResult, forbidden, not_found};
+use crate::model::user_tags::{CreateUserTag, UserTagRepository};
 use crate::model::users::{User, UserRepository};
-use crate::model::user_tags::{UserTagRepository, CreateUserTag};
+use crate::pagination::{PaginatedRequest, PaginatedResponse};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use uuid::Uuid;
+use validator::Validate;
 
 // Main data struct - matches database table
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -80,14 +80,16 @@ impl UserBanRepository {
         .await?;
 
         // Add the "banned" tag to the user
-        user_tags.create(
-            requestor,
-            req.user_id,
-            CreateUserTag {
-                tag: "banned".to_string(),
-                hidden: false,
-            }
-        ).await?;
+        user_tags
+            .create(
+                requestor,
+                req.user_id,
+                CreateUserTag {
+                    tag: "banned".to_string(),
+                    hidden: false,
+                },
+            )
+            .await?;
 
         Ok(user_ban)
     }
@@ -135,12 +137,9 @@ impl UserBanRepository {
             return Err(forbidden("Only moderators and admins can unban users"));
         }
 
-        let result = sqlx::query!(
-            "delete from user_bans where user_id = $1",
-            user_id
-        )
-        .execute(&self.state.pool)
-        .await?;
+        let result = sqlx::query!("delete from user_bans where user_id = $1", user_id)
+            .execute(&self.state.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(not_found("User is not banned"));
@@ -148,7 +147,9 @@ impl UserBanRepository {
 
         // Remove the "banned" tag from the user
         let user = user_repo.find_by_id(user_id).await?;
-        user_tags.delete(requestor, &user, "banned".to_string()).await?;
+        user_tags
+            .delete(requestor, &user, "banned".to_string())
+            .await?;
 
         Ok(())
     }
@@ -166,7 +167,9 @@ impl UserBanRepository {
         let is_moderator = user_tags.is_moderator(requestor.id).await?;
 
         if !(is_admin || is_moderator) {
-            return Err(forbidden("Only moderators and admins can view banned users"));
+            return Err(forbidden(
+                "Only moderators and admins can view banned users",
+            ));
         }
 
         let items_future = sqlx::query_as!(
@@ -204,7 +207,8 @@ impl UserBanRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,

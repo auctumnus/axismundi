@@ -91,7 +91,9 @@ impl QuotationSuggestionRepository {
                 .await?;
 
             if user_perm.is_none() {
-                return Err(crate::err::forbidden("you don't have permission to view this quotation suggestion"));
+                return Err(crate::err::forbidden(
+                    "you don't have permission to view this quotation suggestion",
+                ));
             }
         } else {
             return Err(crate::err::unauthorized_no_session());
@@ -138,7 +140,9 @@ impl QuotationSuggestionRepository {
             .await?;
 
         let Some(perm) = user_perm else {
-            return Err(bad_request("you don't have permission to create quotation suggestions"));
+            return Err(bad_request(
+                "you don't have permission to create quotation suggestions",
+            ));
         };
 
         if perm.permission == PermissionLevel::Viewer {
@@ -189,7 +193,9 @@ impl QuotationSuggestionRepository {
             .await?;
 
         let Some(perm) = user_perm else {
-            return Err(bad_request("you don't have permission to edit quotation suggestions"));
+            return Err(bad_request(
+                "you don't have permission to edit quotation suggestions",
+            ));
         };
 
         if perm.permission == PermissionLevel::Viewer {
@@ -235,7 +241,9 @@ impl QuotationSuggestionRepository {
             .await?;
 
         let Some(perm) = user_perm else {
-            return Err(bad_request("you don't have permission to delete quotation suggestions"));
+            return Err(bad_request(
+                "you don't have permission to delete quotation suggestions",
+            ));
         };
 
         if perm.permission == PermissionLevel::Viewer {
@@ -266,7 +274,9 @@ impl QuotationSuggestionRepository {
                 .await?;
 
             if user_perm.is_none() {
-                return Err(crate::err::forbidden("you don't have permission to view quotation suggestions for this language"));
+                return Err(crate::err::forbidden(
+                    "you don't have permission to view quotation suggestions for this language",
+                ));
             }
         } else {
             return Err(crate::err::unauthorized_no_session());
@@ -309,7 +319,8 @@ impl QuotationSuggestionRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -344,7 +355,9 @@ impl QuotationSuggestionRepository {
                 .await?;
 
             if user_perm.is_none() {
-                return Err(crate::err::forbidden("you don't have permission to view quotation suggestions for this language"));
+                return Err(crate::err::forbidden(
+                    "you don't have permission to view quotation suggestions for this language",
+                ));
             }
         } else {
             return Err(crate::err::unauthorized_no_session());
@@ -386,7 +399,8 @@ impl QuotationSuggestionRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,

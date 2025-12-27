@@ -4,11 +4,11 @@ use sqlx::FromRow;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::err::{bad_request, forbidden, not_found, AppResult};
-use crate::model::users::User;
-use crate::model::user_tags::UserTagRepository;
-use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::AppState;
+use crate::err::{AppResult, bad_request, forbidden, not_found};
+use crate::model::user_tags::UserTagRepository;
+use crate::model::users::User;
+use crate::pagination::{PaginatedRequest, PaginatedResponse};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "reportable_resource", rename_all = "snake_case")]
@@ -292,7 +292,8 @@ impl ReportRepository {
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -378,7 +379,9 @@ impl ReportRepository {
             .collect();
 
         let total = total_count.unwrap_or(0);
-        let has_more = (i64::from(pagination.offset) + i64::try_from(sanitized_items.len()).unwrap_or(i64::MAX)) < total;
+        let has_more = (i64::from(pagination.offset)
+            + i64::try_from(sanitized_items.len()).unwrap_or(i64::MAX))
+            < total;
 
         Ok(PaginatedResponse {
             items: sanitized_items,
@@ -408,8 +411,7 @@ impl ReportRepository {
         req.validate()?;
 
         // Validate the constraint: can't have visible note if status is hidden
-        if req.resolution_note_hidden == Some(false) && req.resolution_status_hidden == Some(true)
-        {
+        if req.resolution_note_hidden == Some(false) && req.resolution_status_hidden == Some(true) {
             return Err(bad_request(
                 "Resolution note cannot be visible if resolution status is hidden",
             ));

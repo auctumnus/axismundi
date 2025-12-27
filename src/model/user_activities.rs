@@ -5,7 +5,10 @@ use uuid::Uuid;
 
 use crate::{
     err::{AppResult, bad_request, forbidden, not_found},
-    model::{languages::Language, translatable::Translatable, translations::Translation, users::User, words::Word},
+    model::{
+        languages::Language, translatable::Translatable, translations::Translation, users::User,
+        words::Word,
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::AppState,
 };
@@ -26,8 +29,14 @@ pub enum ActivityType {
 impl ActivityType {
     pub fn verb(&self) -> &str {
         match self {
-            ActivityType::CreateLanguage | ActivityType::CreateWord | ActivityType::CreateTranslatable | ActivityType::CreateTranslation => "added",
-            ActivityType::UpdateLanguage | ActivityType::UpdateWord | ActivityType::UpdateTranslatable | ActivityType::UpdateTranslation => "updated",
+            ActivityType::CreateLanguage
+            | ActivityType::CreateWord
+            | ActivityType::CreateTranslatable
+            | ActivityType::CreateTranslation => "added",
+            ActivityType::UpdateLanguage
+            | ActivityType::UpdateWord
+            | ActivityType::UpdateTranslatable
+            | ActivityType::UpdateTranslation => "updated",
         }
     }
 }
@@ -53,7 +62,7 @@ pub struct UserActivity {
     pub related_entity_type: Option<String>,
     pub timestamp: DateTime<Utc>,
     pub user: User,
-    
+
     // materialized
     pub entity: ActivityEntity,
     pub related_entity: Option<ActivityEntity>,
@@ -102,7 +111,8 @@ impl UserActivityRepository {
             id
         )
         .fetch_optional(&self.state.pool)
-        .await? {
+        .await?
+        {
             Ok(UserActivity {
                 id: record.id,
                 user_id: record.user_id,
@@ -126,9 +136,15 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self.resolve_entity(record.entity_id, &record.entity_type.as_str()).await?,
+                entity: self
+                    .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                    .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
-                    self.resolve_related(related_id, &record.related_entity_type.as_deref().unwrap_or("")).await?
+                    self.resolve_related(
+                        related_id,
+                        &record.related_entity_type.as_deref().unwrap_or(""),
+                    )
+                    .await?
                 } else {
                     None
                 },
@@ -218,9 +234,15 @@ impl UserActivityRepository {
                 verified_at: record.u_verified_at,
                 bookmark: record.u_bookmark,
             },
-            entity: self.resolve_entity(record.entity_id, &record.entity_type.as_str()).await?,
+            entity: self
+                .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                .await?,
             related_entity: if let Some(related_id) = record.related_entity_id {
-                self.resolve_related(related_id, &record.related_entity_type.as_deref().unwrap_or("")).await?
+                self.resolve_related(
+                    related_id,
+                    &record.related_entity_type.as_deref().unwrap_or(""),
+                )
+                .await?
             } else {
                 None
             },
@@ -342,42 +364,48 @@ impl UserActivityRepository {
         .fetch_one(&self.state.pool);
 
         let (records, total_count) = tokio::try_join!(records_future, count_future)?;
-            let mut items = Vec::new();
+        let mut items = Vec::new();
 
-            for record in records {
-                items.push(UserActivity {
-                    id: record.id,
-                    user_id: record.user_id,
-                    activity: record.activity,
-                    entity_id: record.entity_id,
-                    related_entity_id: record.related_entity_id,
-                    timestamp: record.timestamp,
-                    user: User {
-                        id: record.u_id,
-                        username: record.u_username,
-                        email: record.u_email,
-                        password_hash: record.u_password_hash,
-                        display_name: record.u_display_name,
-                        description: record.u_description,
-                        pronouns: record.u_pronouns,
-                        gender: record.u_gender,
-                        profile_picture_object_id: record.u_profile_picture_object_id,
-                        tags: record.u_tags,
-                        created_at: record.u_created_at,
-                        updated_at: record.u_updated_at,
-                        verified_at: record.u_verified_at,
-                        bookmark: record.u_bookmark,
-                    },
-                    entity: self.resolve_entity(record.entity_id, &record.entity_type.as_str()).await?,
-                    related_entity: if let Some(related_id) = record.related_entity_id {
-                        self.resolve_related(related_id, &record.related_entity_type.as_deref().unwrap_or("")).await?
-                    } else {
-                        None
-                    },
-                    entity_type: record.entity_type,
-                    related_entity_type: record.related_entity_type,
-                });
-            }
+        for record in records {
+            items.push(UserActivity {
+                id: record.id,
+                user_id: record.user_id,
+                activity: record.activity,
+                entity_id: record.entity_id,
+                related_entity_id: record.related_entity_id,
+                timestamp: record.timestamp,
+                user: User {
+                    id: record.u_id,
+                    username: record.u_username,
+                    email: record.u_email,
+                    password_hash: record.u_password_hash,
+                    display_name: record.u_display_name,
+                    description: record.u_description,
+                    pronouns: record.u_pronouns,
+                    gender: record.u_gender,
+                    profile_picture_object_id: record.u_profile_picture_object_id,
+                    tags: record.u_tags,
+                    created_at: record.u_created_at,
+                    updated_at: record.u_updated_at,
+                    verified_at: record.u_verified_at,
+                    bookmark: record.u_bookmark,
+                },
+                entity: self
+                    .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                    .await?,
+                related_entity: if let Some(related_id) = record.related_entity_id {
+                    self.resolve_related(
+                        related_id,
+                        &record.related_entity_type.as_deref().unwrap_or(""),
+                    )
+                    .await?
+                } else {
+                    None
+                },
+                entity_type: record.entity_type,
+                related_entity_type: record.related_entity_type,
+            });
+        }
 
         let total = total_count.unwrap_or(0);
 
@@ -477,7 +505,6 @@ impl UserActivityRepository {
             i64::from(effective_offset)
         )
         .fetch_all(&self.state.pool);
-            
 
         let count_future = sqlx::query_scalar!(
             r#"
@@ -493,40 +520,46 @@ impl UserActivityRepository {
 
         let mut items = Vec::new();
 
-            for record in records {
-                items.push(UserActivity {
-                    id: record.id,
-                    user_id: record.user_id,
-                    activity: record.activity,
-                    entity_id: record.entity_id,
-                    related_entity_id: record.related_entity_id,
-                    timestamp: record.timestamp,
-                    user: User {
-                        id: record.u_id,
-                        username: record.u_username,
-                        email: record.u_email,
-                        password_hash: record.u_password_hash,
-                        display_name: record.u_display_name,
-                        description: record.u_description,
-                        pronouns: record.u_pronouns,
-                        gender: record.u_gender,
-                        profile_picture_object_id: record.u_profile_picture_object_id,
-                        tags: record.u_tags,
-                        created_at: record.u_created_at,
-                        updated_at: record.u_updated_at,
-                        verified_at: record.u_verified_at,
-                        bookmark: record.u_bookmark,
-                    },
-                    entity: self.resolve_entity(record.entity_id, &record.entity_type.as_str()).await?,
-                    related_entity: if let Some(related_id) = record.related_entity_id {
-                        self.resolve_related(related_id, &record.related_entity_type.as_deref().unwrap_or("")).await?
-                    } else {
-                        None
-                    },
-                    entity_type: record.entity_type,
-                    related_entity_type: record.related_entity_type,
-                });
-            }
+        for record in records {
+            items.push(UserActivity {
+                id: record.id,
+                user_id: record.user_id,
+                activity: record.activity,
+                entity_id: record.entity_id,
+                related_entity_id: record.related_entity_id,
+                timestamp: record.timestamp,
+                user: User {
+                    id: record.u_id,
+                    username: record.u_username,
+                    email: record.u_email,
+                    password_hash: record.u_password_hash,
+                    display_name: record.u_display_name,
+                    description: record.u_description,
+                    pronouns: record.u_pronouns,
+                    gender: record.u_gender,
+                    profile_picture_object_id: record.u_profile_picture_object_id,
+                    tags: record.u_tags,
+                    created_at: record.u_created_at,
+                    updated_at: record.u_updated_at,
+                    verified_at: record.u_verified_at,
+                    bookmark: record.u_bookmark,
+                },
+                entity: self
+                    .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                    .await?,
+                related_entity: if let Some(related_id) = record.related_entity_id {
+                    self.resolve_related(
+                        related_id,
+                        &record.related_entity_type.as_deref().unwrap_or(""),
+                    )
+                    .await?
+                } else {
+                    None
+                },
+                entity_type: record.entity_type,
+                related_entity_type: record.related_entity_type,
+            });
+        }
 
         let total = total_count.unwrap_or(0);
 
@@ -612,9 +645,15 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self.resolve_entity(record.entity_id, record.entity_type.as_str()).await?,
+                entity: self
+                    .resolve_entity(record.entity_id, record.entity_type.as_str())
+                    .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
-                    self.resolve_related(related_id, record.related_entity_type.as_deref().unwrap_or("")).await?
+                    self.resolve_related(
+                        related_id,
+                        record.related_entity_type.as_deref().unwrap_or(""),
+                    )
+                    .await?
                 } else {
                     None
                 },
@@ -666,7 +705,8 @@ impl UserActivityRepository {
                 }
             }
             "translatable" => {
-                let translatables_repo = crate::model::translatable::TranslatableRepository::new(self.state.clone());
+                let translatables_repo =
+                    crate::model::translatable::TranslatableRepository::new(self.state.clone());
                 if let Ok(translatable) = translatables_repo.find_by_id(entity_id).await {
                     Ok(ActivityEntity::Translatable(translatable))
                 } else {
@@ -677,7 +717,8 @@ impl UserActivityRepository {
                 }
             }
             "translation" => {
-                let translations_repo = crate::model::translations::TranslationRepository::new(self.state.clone());
+                let translations_repo =
+                    crate::model::translations::TranslationRepository::new(self.state.clone());
                 if let Ok(translation) = translations_repo.find_by_id(entity_id).await {
                     let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
                         .find_by_id(translation.language)
@@ -689,7 +730,7 @@ impl UserActivityRepository {
                         entity_id
                     )))
                 }
-            },
+            }
             _ => Err(bad_request(format!(
                 "unable to resolve entity with id '{}'",
                 entity_id
@@ -697,15 +738,16 @@ impl UserActivityRepository {
         }
     }
 
-    pub async fn resolve_related(&self, related_id: Uuid, kind: &str) -> AppResult<Option<ActivityEntity>> {
+    pub async fn resolve_related(
+        &self,
+        related_id: Uuid,
+        kind: &str,
+    ) -> AppResult<Option<ActivityEntity>> {
         match kind {
             "language" => {
                 let languages_repo =
                     crate::model::languages::LanguageRepository::new(self.state.clone());
-                if let Ok(language) = languages_repo
-                    .find_by_id(related_id)
-                    .await
-                {
+                if let Ok(language) = languages_repo.find_by_id(related_id).await {
                     Ok(Some(ActivityEntity::Language(language)))
                 } else {
                     Ok(None)

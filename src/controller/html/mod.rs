@@ -1,24 +1,40 @@
 use std::sync::Arc;
 
 use crate::{
-    ErrorTemplate, controller::html::users::render_login_form, err::{AppError, internal_error}, model::{contribution_stats::{ContributionStats, ContributionStatsRepository}, languages::{Language, LanguageRepository}, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::{UserActivity, UserActivityRepository}, users::{User, UserRepository}}, pagination::PaginatedRequest, util::{AppState, extract_session::Session}
+    ErrorTemplate,
+    controller::html::users::render_login_form,
+    err::{AppError, internal_error},
+    model::{
+        contribution_stats::{ContributionStats, ContributionStatsRepository},
+        languages::{Language, LanguageRepository},
+        translatable::{TranslatableRepository, TranslatableSearch},
+        user_activities::{UserActivity, UserActivityRepository},
+        users::{User, UserRepository},
+    },
+    pagination::PaginatedRequest,
+    util::{AppState, extract_session::Session},
 };
 
 use crate::attempt;
 use askama::Template;
-use axum::{Router, http::{StatusCode}, response::{Response, Html, IntoResponse, Redirect}, routing::get};
+use axum::{
+    Router,
+    http::StatusCode,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::get,
+};
 use governor::middleware::NoOpMiddleware;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
 
-mod users;
-mod languages;
-mod words;
-mod word_classes;
-mod translatables;
-mod translations;
 mod bookmarks;
 mod language_invites;
+mod languages;
+mod translatables;
+mod translations;
+mod users;
+mod word_classes;
+mod words;
 
 pub fn create_html_controller() -> Router<AppState> {
     let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
@@ -35,7 +51,7 @@ pub fn create_html_controller() -> Router<AppState> {
             normal_limiter.retain_recent();
         }
     });
-    
+
     let (secure_user_routes, normal_user_routes) = users::create_router();
     let (secure_language_routes, normal_language_routes) = languages::create_router();
     let (secure_word_routes, normal_word_routes) = words::create_router();
@@ -74,14 +90,17 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_routes)
 }
 
-fn render_template<T: Template>(template: T) -> Response{ 
-    template.render().map_or_else(
-        |e| {
-            tracing::error!("Template rendering error: {}", e);
-            Html("500 Internal Server Error".to_string())
-        },
-        Html,
-    ).into_response()
+fn render_template<T: Template>(template: T) -> Response {
+    template
+        .render()
+        .map_or_else(
+            |e| {
+                tracing::error!("Template rendering error: {}", e);
+                Html("500 Internal Server Error".to_string())
+            },
+            Html,
+        )
+        .into_response()
 }
 
 #[derive(Template)]
@@ -120,7 +139,14 @@ struct HomeTemplate {
     translatables: Vec<TranslatableWithLiked>,
 }
 
-async fn home(users: UserRepository, languages: LanguageRepository, translatables: TranslatableRepository, activities_repo: UserActivityRepository, contribution_stats: ContributionStatsRepository, s: Session) -> (StatusCode, Response) {
+async fn home(
+    users: UserRepository,
+    languages: LanguageRepository,
+    translatables: TranslatableRepository,
+    activities_repo: UserActivityRepository,
+    contribution_stats: ContributionStatsRepository,
+    s: Session,
+) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (StatusCode::OK, Redirect::to("/").into_response());
     };
@@ -130,7 +156,10 @@ async fn home(users: UserRepository, languages: LanguageRepository, translatable
     };
     let mut languages_with_contributors = Vec::with_capacity(l.len());
     for lang in &l {
-        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&lang.id, 5).await);
+        let top_contributors = attempt!(
+            s,
+            contribution_stats.get_top_contributors(&lang.id, 5).await
+        );
         let is_liked = attempt!(s, languages.is_liked(&user.id, &lang.id).await);
         let language_with_contributors = LanguagesWithContributors {
             language: lang.clone(),
@@ -141,10 +170,17 @@ async fn home(users: UserRepository, languages: LanguageRepository, translatable
     }
     let languages = languages_with_contributors;
 
-    let translatables_res = translatables.search(PaginatedRequest {
-        limit: 5,
-        offset: 0,
-    }, Default::default()).await.map(|res| res.items).unwrap_or_else(|_| vec![]);
+    let translatables_res = translatables
+        .search(
+            PaginatedRequest {
+                limit: 5,
+                offset: 0,
+            },
+            Default::default(),
+        )
+        .await
+        .map(|res| res.items)
+        .unwrap_or_else(|_| vec![]);
 
     let translatables_with_liked = {
         let mut vec = Vec::with_capacity(translatables_res.len());
@@ -188,10 +224,22 @@ pub async fn render_generic_error(s: Session, error: AppError) -> (StatusCode, R
 pub async fn no_session(redirect: Option<String>) -> (StatusCode, Response) {
     match redirect {
         Some(redirect) => {
-            let login_url = format!("/login?redirect={}", percent_encoding::percent_encode(redirect.as_bytes(), percent_encoding::NON_ALPHANUMERIC));
-            (StatusCode::TEMPORARY_REDIRECT, Redirect::to(&login_url).into_response())
-        },
-        None => (StatusCode::TEMPORARY_REDIRECT, Redirect::to("/login").into_response()),
+            let login_url = format!(
+                "/login?redirect={}",
+                percent_encoding::percent_encode(
+                    redirect.as_bytes(),
+                    percent_encoding::NON_ALPHANUMERIC
+                )
+            );
+            (
+                StatusCode::TEMPORARY_REDIRECT,
+                Redirect::to(&login_url).into_response(),
+            )
+        }
+        None => (
+            StatusCode::TEMPORARY_REDIRECT,
+            Redirect::to("/login").into_response(),
+        ),
     }
 }
 

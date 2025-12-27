@@ -1,16 +1,17 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::translatable::{
-        CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch, UpdateTranslatable,
+        CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch,
+        UpdateTranslatable,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::extract_session::Session,
 };
 use axum::{
+    Json,
     extract::Path,
     http::StatusCode,
     routing::{delete, get, post, put},
-    Json,
 };
 use validator::Validate;
 
@@ -106,7 +107,9 @@ pub async fn like_translatable(
 
     let translatable = translatables.find_by_slug(&slug).await?;
 
-    let like_count = translatables.like_translatable(translatable.id, requestor.id).await?;
+    let like_count = translatables
+        .like_translatable(translatable.id, requestor.id)
+        .await?;
     let response = LikeTranslatableResponse {
         liked: true,
         like_count: like_count.unwrap_or(translatable.like_count),
@@ -125,7 +128,9 @@ pub async fn unlike_translatable(
 
     let translatable = translatables.find_by_slug(&slug).await?;
 
-    let like_count = translatables.unlike_translatable(translatable.id, requestor.id).await?;
+    let like_count = translatables
+        .unlike_translatable(translatable.id, requestor.id)
+        .await?;
     let response = LikeTranslatableResponse {
         liked: false,
         like_count: like_count.unwrap_or(translatable.like_count),
@@ -140,7 +145,9 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{delete, delete_without_auth, get, make_authed_user, post, put, put_without_auth};
+    use crate::controller::api::tests::{
+        delete, delete_without_auth, get, make_authed_user, post, put, put_without_auth,
+    };
     use crate::email::MockEmailService;
 
     struct TestContext {
@@ -283,14 +290,24 @@ mod tests {
         let translatable = create_test_translatable(&ctx.token, &mut ctx.app).await;
         let slug = translatable["slug"].as_str().unwrap();
 
-        let request = post(&ctx.token, &format!("translatable/{}/like", slug), json!({})).await;
+        let request = post(
+            &ctx.token,
+            &format!("translatable/{}/like", slug),
+            json!({}),
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["liked"], true);
         assert_eq!(body["like_count"], 1);
 
-        let request = post(&ctx.token, &format!("translatable/{}/unlike", slug), json!({})).await;
+        let request = post(
+            &ctx.token,
+            &format!("translatable/{}/unlike", slug),
+            json!({}),
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;

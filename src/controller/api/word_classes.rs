@@ -119,7 +119,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete_without_auth, get, make_authed_user, post, put_without_auth
+        delete_without_auth, get, make_authed_user, post, put_without_auth,
     };
     use crate::email::MockEmailService;
 
@@ -217,7 +217,11 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // create a few word classes
-        for (abbr, name) in [("conj", "conjunction"), ("part", "particle"), ("interj", "interjection")] {
+        for (abbr, name) in [
+            ("conj", "conjunction"),
+            ("part", "particle"),
+            ("interj", "interjection"),
+        ] {
             let body = json!({
                 "abbreviation": abbr,
                 "name": name,

@@ -4,12 +4,12 @@ use crate::{
         user_tags::{CreateUserTag, UserTag, UserTagRepository},
         users::UserRepository,
     },
-    util::{extract_session::Session, ensure_verified, AppState},
+    util::{AppState, ensure_verified, extract_session::Session},
 };
 use axum::{
+    Json, Router,
     extract::Path,
     routing::{delete, get, post},
-    Json, Router,
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -17,8 +17,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/users/{username}/tags", post(create_user_tag))
         .route("/users/{username}/tags/{tag}", delete(delete_user_tag));
 
-    let normal_routes = Router::new()
-        .route("/users/{username}/tags", get(list_user_tags));
+    let normal_routes = Router::new().route("/users/{username}/tags", get(list_user_tags));
 
     (secure_routes, normal_routes)
 }
@@ -79,34 +78,37 @@ mod tests {
     use reqwest::StatusCode;
     use serde_json::json;
 
+    use crate::CONFIG;
     use crate::{
+        AppState,
         controller::api::tests::{delete, get, make_authed_user, post, post_without_auth},
         email::MockEmailService,
         tests::{random_name, response_to_value},
-        AppState,
     };
     use sqlx::PgPool;
     use tower::{Service, ServiceExt};
-    use crate::CONFIG;
 
     /// Helper to create a moderator user for testing
-    async fn make_moderator_user(app: &axum::routing::RouterIntoService<axum::body::Body>, email_service: Arc<MockEmailService>, pool: &PgPool) -> String {
+    async fn make_moderator_user(
+        app: &axum::routing::RouterIntoService<axum::body::Body>,
+        email_service: Arc<MockEmailService>,
+        pool: &PgPool,
+    ) -> String {
         let username = random_name();
         let token = make_authed_user(&username, app, email_service).await;
 
-        let id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            username
-        )
-        .fetch_one(pool)
-        .await.unwrap();
+        let id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'moderator', false)",
             id
         )
         .execute(pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         token
     }
@@ -114,7 +116,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_user_tag() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -126,7 +129,8 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
+        )
+        .await;
         let create_tag_response = app.call(create_tag_request).await.unwrap();
         assert_eq!(create_tag_response.status(), StatusCode::OK);
 
@@ -145,7 +149,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_user_tag_unauthorized() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, _admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, _admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -157,7 +162,8 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
+        )
+        .await;
         let create_tag_response = app.call(create_tag_request).await.unwrap();
         assert_eq!(create_tag_response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -165,7 +171,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_user_tag_non_moderator() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, _admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, _admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         // Create a regular user
         let regular_username = random_name();
@@ -182,7 +189,8 @@ mod tests {
                 "tag": "contributor",
                 "hidden": false
             }),
-        ).await;
+        )
+        .await;
         let create_tag_response = app.call(create_tag_request).await.unwrap();
         assert_eq!(create_tag_response.status(), StatusCode::FORBIDDEN);
     }
@@ -190,7 +198,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_admin_tag_forbidden() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -203,7 +212,8 @@ mod tests {
                 "tag": "admin",
                 "hidden": false
             }),
-        ).await;
+        )
+        .await;
         let create_tag_response = app.call(create_tag_request).await.unwrap();
         assert_eq!(create_tag_response.status(), StatusCode::FORBIDDEN);
     }
@@ -233,7 +243,8 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
+        )
+        .await;
         let create_tag_response = app.call(create_tag_request).await.unwrap();
         assert_eq!(create_tag_response.status(), StatusCode::FORBIDDEN);
     }
@@ -241,7 +252,8 @@ mod tests {
     #[tokio::test]
     async fn test_admin_can_create_moderator() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -254,7 +266,8 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
+        )
+        .await;
         let create_tag_response = app.call(create_tag_request).await.unwrap();
         assert_eq!(create_tag_response.status(), StatusCode::OK);
     }
@@ -262,7 +275,8 @@ mod tests {
     #[tokio::test]
     async fn test_list_user_tags() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service.clone()).await;
@@ -276,8 +290,14 @@ mod tests {
                     "tag": tag,
                     "hidden": false
                 }),
-            ).await;
-            app.ready().await.unwrap().call(create_tag_request).await.unwrap();
+            )
+            .await;
+            app.ready()
+                .await
+                .unwrap()
+                .call(create_tag_request)
+                .await
+                .unwrap();
         }
 
         // List tags
@@ -293,7 +313,8 @@ mod tests {
     #[tokio::test]
     async fn test_list_user_tags_empty() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, _admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, _admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -311,7 +332,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_user_tag() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -324,12 +346,24 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_tag_request).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_tag_request)
+            .await
+            .unwrap();
 
         // Delete the tag
         let delete_request = delete(&admin_token, &format!("users/{username}/tags/moderator"));
-        let delete_response = app.ready().await.unwrap().call(delete_request).await.unwrap();
+        let delete_response = app
+            .ready()
+            .await
+            .unwrap()
+            .call(delete_request)
+            .await
+            .unwrap();
         assert_eq!(delete_response.status(), StatusCode::OK);
 
         // Verify tag was deleted
@@ -343,7 +377,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_user_tag_unauthorized() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -356,11 +391,19 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_tag_request).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_tag_request)
+            .await
+            .unwrap();
 
         // Try to delete without auth
-        let delete_request = crate::controller::api::tests::delete_without_auth(&format!("users/{username}/tags/moderator"));
+        let delete_request = crate::controller::api::tests::delete_without_auth(&format!(
+            "users/{username}/tags/moderator"
+        ));
         let delete_response = app.call(delete_request).await.unwrap();
         assert_eq!(delete_response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -368,7 +411,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_user_tag_non_moderator() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service.clone()).await;
@@ -381,8 +425,14 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_tag_request).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_tag_request)
+            .await
+            .unwrap();
 
         // Create a regular user
         let regular_username = random_name();
@@ -408,36 +458,39 @@ mod tests {
         // Create two admin users
         let admin1_username = random_name();
         let admin1_token = make_authed_user(&admin1_username, &app, email_service.clone()).await;
-        let admin1_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            admin1_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let admin1_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin1_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
             admin1_id
         )
         .execute(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         let admin2_username = random_name();
         let _ = make_authed_user(&admin2_username, &app, email_service).await;
-        let admin2_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            admin2_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let admin2_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin2_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
             admin2_id
         )
         .execute(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         // Try to delete admin tag (should be forbidden even for admins)
-        let delete_request = delete(&admin1_token, &format!("users/{admin2_username}/tags/admin"));
+        let delete_request = delete(
+            &admin1_token,
+            &format!("users/{admin2_username}/tags/admin"),
+        );
         let delete_response = app.call(delete_request).await.unwrap();
         assert_eq!(delete_response.status(), StatusCode::FORBIDDEN);
     }
@@ -459,21 +512,24 @@ mod tests {
         // Create another user with moderator tag
         let target_username = random_name();
         let _ = make_authed_user(&target_username, &app, email_service.clone()).await;
-        let target_id = sqlx::query_scalar!(
-            "select id from users where username = $1",
-            target_username
-        )
-        .fetch_one(&pool)
-        .await.unwrap();
+        let target_id =
+            sqlx::query_scalar!("select id from users where username = $1", target_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         sqlx::query!(
             "insert into user_tags (user_id, tag, hidden) values ($1, 'moderator', false)",
             target_id
         )
         .execute(&pool)
-        .await.unwrap();
+        .await
+        .unwrap();
 
         // Try to delete moderator tag as moderator (should fail)
-        let delete_request = delete(&moderator_token, &format!("users/{target_username}/tags/moderator"));
+        let delete_request = delete(
+            &moderator_token,
+            &format!("users/{target_username}/tags/moderator"),
+        );
         let delete_response = app.call(delete_request).await.unwrap();
         assert_eq!(delete_response.status(), StatusCode::FORBIDDEN);
     }
@@ -481,7 +537,8 @@ mod tests {
     #[tokio::test]
     async fn test_admin_can_delete_moderator() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;
@@ -494,8 +551,14 @@ mod tests {
                 "tag": "moderator",
                 "hidden": false
             }),
-        ).await;
-        app.ready().await.unwrap().call(create_tag_request).await.unwrap();
+        )
+        .await;
+        app.ready()
+            .await
+            .unwrap()
+            .call(create_tag_request)
+            .await
+            .unwrap();
 
         // Admin should be able to delete moderator tag
         let delete_request = delete(&admin_token, &format!("users/{username}/tags/moderator"));
@@ -506,7 +569,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_nonexistent_tag() {
         let email_service = Arc::new(MockEmailService::new());
-        let (mut app, admin_token) = crate::tests::test_app_with_admin_and_email_service(&email_service).await;
+        let (mut app, admin_token) =
+            crate::tests::test_app_with_admin_and_email_service(&email_service).await;
 
         let username = random_name();
         let _ = make_authed_user(&username, &app, email_service).await;

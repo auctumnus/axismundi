@@ -1,19 +1,47 @@
 use askama::Template;
-use axum::{Router, extract::Query, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}};
+use axum::{
+    Router,
+    extract::Query,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::{get, post},
+};
 use axum_extra::extract::{CookieJar, Multipart, cookie::Cookie};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors, TranslatableWithLiked}, err::{AppError, bad_request}, model::{contribution_stats::ContributionStatsRepository, email_verification_tokens::EmailVerificationTokenRepository, languages::{LanguageRepository, LanguageSearch}, sessions::SessionRepository, translatable::{TranslatableRepository, TranslatableSearch}, user_activities::UserActivityRepository, users::{CreateUser, UpdateUser, User, UserRepository, UserSearch}}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::{SESSION_COOKIE_NAME, Session}, s3::S3}};
+use crate::{
+    controller::html::{
+        LanguagesWithContributors, TranslatableWithLiked, okay, render_generic_error,
+        render_template,
+    },
+    err::{AppError, bad_request},
+    model::{
+        contribution_stats::ContributionStatsRepository,
+        email_verification_tokens::EmailVerificationTokenRepository,
+        languages::{LanguageRepository, LanguageSearch},
+        sessions::SessionRepository,
+        translatable::{TranslatableRepository, TranslatableSearch},
+        user_activities::UserActivityRepository,
+        users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{
+        AppState,
+        extract_session::{SESSION_COOKIE_NAME, Session},
+        s3::S3,
+    },
+};
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
-    let secure_routes = Router::<AppState>::new()
-        .route("/verify/{user_id}", get(verify));
+    let secure_routes = Router::<AppState>::new().route("/verify/{user_id}", get(verify));
     let normal_routes = Router::<AppState>::new()
         .route("/login", get(login_form).post(login_submit))
         .route("/register", get(signup_form).post(signup_submit))
-        .route("/resend-verification/{token_id}", get(resend_verification_form).post(resend_verification_submit))
+        .route(
+            "/resend-verification/{token_id}",
+            get(resend_verification_form).post(resend_verification_submit),
+        )
         .route("/settings", get(settings_form).post(settings_submit))
         .route("/change-profile-picture", post(change_profile_picture))
         .route("/logout", get(logout_form).post(logout_submit))
@@ -23,9 +51,17 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     (secure_routes, normal_routes)
 }
 
-pub async fn render_login_form(s: Session, error: Option<AppError>, redirect_url: Option<String>) -> (StatusCode, Response) {
+pub async fn render_login_form(
+    s: Session,
+    error: Option<AppError>,
+    redirect_url: Option<String>,
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-    okay(render_template(LoginFormTemplate { current_user, error, redirect_url }))
+    okay(render_template(LoginFormTemplate {
+        current_user,
+        error,
+        redirect_url,
+    }))
 }
 
 #[derive(Template)]
@@ -54,7 +90,13 @@ struct LoginQuery {
 
 const ALLOWED_REDIRECTS: &[&str] = &["settings"];
 
-async fn login_submit(jar: CookieJar, s: Session, sessions: SessionRepository, query: Query<LoginQuery>, form: axum::Form<LoginFormData>) -> (CookieJar, (StatusCode, Response)) {
+async fn login_submit(
+    jar: CookieJar,
+    s: Session,
+    sessions: SessionRepository,
+    query: Query<LoginQuery>,
+    form: axum::Form<LoginFormData>,
+) -> (CookieJar, (StatusCode, Response)) {
     match sessions.login(&form.email, &form.password).await {
         Ok((token, _)) => {
             let jar = jar.add(
@@ -95,7 +137,11 @@ struct SignupFormTemplate {
 
 async fn signup_form(s: Session) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-    okay(render_template(SignupFormTemplate { current_user, error: None, previous_input: None }))
+    okay(render_template(SignupFormTemplate {
+        current_user,
+        error: None,
+        previous_input: None,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -113,16 +159,21 @@ struct SignupSuccessTemplate {
     token_id: Uuid,
 }
 
-async fn signup_submit(users: UserRepository, form: axum::Form<SignupFormData>) -> (StatusCode, Response) {
-    let res = users.create(CreateUser {
-        email: form.email.clone(),
-        password: form.password.clone(),
-        username: form.username.clone(),
-        display_name: None,
-        description: None,
-        pronouns: None,
-        gender: None,
-    }).await;
+async fn signup_submit(
+    users: UserRepository,
+    form: axum::Form<SignupFormData>,
+) -> (StatusCode, Response) {
+    let res = users
+        .create(CreateUser {
+            email: form.email.clone(),
+            password: form.password.clone(),
+            username: form.username.clone(),
+            display_name: None,
+            description: None,
+            pronouns: None,
+            gender: None,
+        })
+        .await;
 
     match res {
         Err(e) => {
@@ -137,8 +188,11 @@ async fn signup_submit(users: UserRepository, form: axum::Form<SignupFormData>) 
             };
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)
-        },
-        Ok((_, token)) => okay(render_template(SignupSuccessTemplate { current_user: None, token_id: token.id })),
+        }
+        Ok((_, token)) => okay(render_template(SignupSuccessTemplate {
+            current_user: None,
+            token_id: token.id,
+        })),
     }
 }
 
@@ -151,10 +205,17 @@ struct ResendVerificationTemplate {
     error: Option<AppError>,
 }
 
-async fn resend_verification_form(s: Session, path: axum::extract::Path<Uuid>) -> (StatusCode, Response) {
+async fn resend_verification_form(
+    s: Session,
+    path: axum::extract::Path<Uuid>,
+) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let token_id = *path;
-    okay(render_template(ResendVerificationTemplate { current_user, token_id, error: None }))
+    okay(render_template(ResendVerificationTemplate {
+        current_user,
+        token_id,
+        error: None,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -162,22 +223,27 @@ struct ResendVerificationFormData {
     token_id: Uuid,
 }
 
-async fn resend_verification_submit(tokens: EmailVerificationTokenRepository, form: axum::Form<ResendVerificationFormData>) -> (StatusCode, Response) {
-    tokens.resend(form.token_id).await
-        .map_or_else(|e| {
+async fn resend_verification_submit(
+    tokens: EmailVerificationTokenRepository,
+    form: axum::Form<ResendVerificationFormData>,
+) -> (StatusCode, Response) {
+    tokens.resend(form.token_id).await.map_or_else(
+        |e| {
             let body = render_template(ResendVerificationTemplate {
                 current_user: None,
                 token_id: form.token_id,
                 error: Some(e),
             });
             (StatusCode::BAD_REQUEST, body)
-        }, |token| {
+        },
+        |token| {
             okay(render_template(ResendVerificationTemplate {
                 current_user: None,
                 token_id: token.id,
                 error: None,
             }))
-        })
+        },
+    )
 }
 
 #[derive(Template)]
@@ -193,15 +259,21 @@ pub(crate) struct VerifyEmail {
 }
 
 #[axum::debug_handler(state=AppState)]
-async fn verify(users: UserRepository, path: axum::extract::Path<Uuid>, Query(verify): Query<VerifyEmail>) -> (StatusCode, Response) {
-    let res = users.verify(*path, &verify.email, &verify.token).await
+async fn verify(
+    users: UserRepository,
+    path: axum::extract::Path<Uuid>,
+    Query(verify): Query<VerifyEmail>,
+) -> (StatusCode, Response) {
+    let res = users
+        .verify(*path, &verify.email, &verify.token)
+        .await
         .map(|_| VerifiedTemplate { current_user: None });
 
     match res {
         Ok(template) => {
             let body = render_template(template);
             (StatusCode::OK, body)
-        },
+        }
         Err(e) => {
             let body = render_template(VerifiedTemplate { current_user: None });
             (StatusCode::BAD_REQUEST, body)
@@ -224,7 +296,11 @@ struct SettingsFormData {
 mod ma {
     macro_rules! prev {
         ($current_user:ident, $previous_input:ident, $field:ident) => {
-            $previous_input.as_ref().and_then(|p| p.$field.clone()).or($current_user.as_ref().and_then(|u| u.$field.clone())).unwrap_or(String::new())
+            $previous_input
+                .as_ref()
+                .and_then(|p| p.$field.clone())
+                .or($current_user.as_ref().and_then(|u| u.$field.clone()))
+                .unwrap_or(String::new())
         };
     }
     pub(crate) use prev;
@@ -271,24 +347,38 @@ fn coalesce(in_form: &Option<String>, in_resource: &Option<String>) -> Option<St
     })
 }
 
-async fn settings_submit(s: Session, users: UserRepository, form: axum::Form<SettingsFormData>) -> (StatusCode, Response) {
+async fn settings_submit(
+    s: Session,
+    users: UserRepository,
+    form: axum::Form<SettingsFormData>,
+) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
     println!("display name in form: {:?}", form.display_name);
 
-    match users.update(&user, user.id, UpdateUser {
-        username: coalesce(&form.username, &Some(user.username.clone())),
-        email: coalesce(&form.email, &Some(user.email.clone())),
-        display_name: coalesce(&form.display_name, &user.display_name),
-        description: coalesce(&form.description, &user.description),
-        pronouns: coalesce(&form.pronouns, &user.pronouns),
-        gender: coalesce(&form.gender, &user.gender),
-        current_password: form.current_password.clone(),
-        new_password: form.new_password.clone(),
-    }).await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+    match users
+        .update(
+            &user,
+            user.id,
+            UpdateUser {
+                username: coalesce(&form.username, &Some(user.username.clone())),
+                email: coalesce(&form.email, &Some(user.email.clone())),
+                display_name: coalesce(&form.display_name, &user.display_name),
+                description: coalesce(&form.description, &user.description),
+                pronouns: coalesce(&form.pronouns, &user.pronouns),
+                gender: coalesce(&form.gender, &user.gender),
+                current_password: form.current_password.clone(),
+                new_password: form.new_password.clone(),
+            },
+        )
+        .await
+    {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
         Err(e) => {
             let redacted = SettingsFormData {
                 username: form.username.clone(),
@@ -323,7 +413,10 @@ async fn change_profile_picture(
     mut multipart: Multipart,
 ) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return (StatusCode::SEE_OTHER, Redirect::to("/login?redirect=settings").into_response());
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
     };
 
     let mut file_data: Option<Vec<u8>> = None;
@@ -394,7 +487,10 @@ async fn change_profile_picture(
     }
 
     // Upload to S3
-    let filename = match S3.upload_profile_picture(user.id, &file_data, &content_type).await {
+    let filename = match S3
+        .upload_profile_picture(user.id, &file_data, &content_type)
+        .await
+    {
         Ok(f) => f,
         Err(e) => {
             let template = SettingsTemplate {
@@ -409,8 +505,14 @@ async fn change_profile_picture(
     };
 
     // Update user record with new profile picture filename
-    match users.update_profile_picture(&user, user.id, &filename).await {
-        Ok(Some(_)) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+    match users
+        .update_profile_picture(&user, user.id, &filename)
+        .await
+    {
+        Ok(Some(_)) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
         Ok(None) => {
             let template = SettingsTemplate {
                 previous_username: user.username.clone(),
@@ -443,17 +545,27 @@ struct LogoutTemplate {
 
 async fn logout_form(s: Session) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
-    okay(render_template(LogoutTemplate { current_user, error: None }))
+    okay(render_template(LogoutTemplate {
+        current_user,
+        error: None,
+    }))
 }
 
-async fn logout_submit(jar: CookieJar, s: Session, sessions: SessionRepository) -> (CookieJar, (StatusCode, Response)) {
+async fn logout_submit(
+    jar: CookieJar,
+    s: Session,
+    sessions: SessionRepository,
+) -> (CookieJar, (StatusCode, Response)) {
     if let Some(session) = s.session() {
         let _ = sessions.invalidate(session.clone()).await;
     }
 
     let jar = jar.remove(Cookie::from(SESSION_COOKIE_NAME));
 
-    (jar, (StatusCode::SEE_OTHER, Redirect::to("/").into_response()))
+    (
+        jar,
+        (StatusCode::SEE_OTHER, Redirect::to("/").into_response()),
+    )
 }
 
 #[derive(Template)]
@@ -546,18 +658,26 @@ async fn profile(
         Err(e) => return render_generic_error(s, e).await,
     };
 
-    let languages_result = languages.search(PaginatedRequest {
-        limit: 5,
-        offset: 0,
-    }, LanguageSearch {
-        owned_by: Some(username.clone()),
-        ..Default::default()
-    }).await;
+    let languages_result = languages
+        .search(
+            PaginatedRequest {
+                limit: 5,
+                offset: 0,
+            },
+            LanguageSearch {
+                owned_by: Some(username.clone()),
+                ..Default::default()
+            },
+        )
+        .await;
 
     let mut languages_with_contributors = Vec::new();
     if let Ok(paginated) = languages_result {
         for lang in &paginated.items {
-            let top_contributors = contribution_stats.get_top_contributors(&lang.id, 5).await.unwrap_or_default();
+            let top_contributors = contribution_stats
+                .get_top_contributors(&lang.id, 5)
+                .await
+                .unwrap_or_default();
             let is_liked = if let Some(ref cu) = current_user {
                 languages.is_liked(&cu.id, &lang.id).await.unwrap_or(false)
             } else {
@@ -573,31 +693,44 @@ async fn profile(
     let languages_list = languages_with_contributors;
 
     // Get user activities (limit to 5)
-    let activities_result = activities.list_by_user(
-        current_user.as_ref(),
-        user.id,
-        None,
-        PaginatedRequest {
-            limit: 5,
-            offset: 0,
-        }
-    ).await;
+    let activities_result = activities
+        .list_by_user(
+            current_user.as_ref(),
+            user.id,
+            None,
+            PaginatedRequest {
+                limit: 5,
+                offset: 0,
+            },
+        )
+        .await;
 
     let activities_list = match activities_result {
         Ok(paginated) => paginated.items,
         Err(_) => Vec::new(), // If we can't fetch activities, just show empty list
     };
 
-    let translatables_result = translatables.search(PaginatedRequest { limit: 5, offset: 0 }, TranslatableSearch {
-        created_by: Some(username.clone()),
-        ..Default::default()
-    }).await;
+    let translatables_result = translatables
+        .search(
+            PaginatedRequest {
+                limit: 5,
+                offset: 0,
+            },
+            TranslatableSearch {
+                created_by: Some(username.clone()),
+                ..Default::default()
+            },
+        )
+        .await;
 
     let mut translatables_with_liked = Vec::new();
     if let Ok(paginated) = translatables_result {
         for translatable in &paginated.items {
             let is_liked = if let Some(ref cu) = current_user {
-                translatables.is_liked(&translatable.id, &cu.id).await.unwrap_or(false)
+                translatables
+                    .is_liked(&translatable.id, &cu.id)
+                    .await
+                    .unwrap_or(false)
             } else {
                 false
             };
@@ -611,12 +744,16 @@ async fn profile(
 
     let rendered_description = users.render_description(&user).await.unwrap_or_default();
 
-    (StatusCode::OK, render_template(ProfileTemplate {
-        current_user,
-        user,
-        languages: languages_list,
-        activities: activities_list,
-        translatables: translatables_list,
-        rendered_description,
-    }).into_response())
+    (
+        StatusCode::OK,
+        render_template(ProfileTemplate {
+            current_user,
+            user,
+            languages: languages_list,
+            activities: activities_list,
+            translatables: translatables_list,
+            rendered_description,
+        })
+        .into_response(),
+    )
 }

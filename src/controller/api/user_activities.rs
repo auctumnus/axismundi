@@ -1,5 +1,5 @@
 use crate::{
-    err::{unauthorized_no_session, AppResult},
+    err::{AppResult, unauthorized_no_session},
     model::{
         languages::LanguageRepository,
         user_activities::{UserActivity, UserActivityRepository},

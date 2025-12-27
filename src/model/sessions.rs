@@ -41,7 +41,13 @@ impl SessionRepository {
 
         let result = user_repo.find_by_email(email).await;
 
-        if matches!(result, Err(AppError { status_code: axum::http::StatusCode::NOT_FOUND, .. })) {
+        if matches!(
+            result,
+            Err(AppError {
+                status_code: axum::http::StatusCode::NOT_FOUND,
+                ..
+            })
+        ) {
             println!("could not find : {}", email);
         }
 
@@ -180,7 +186,11 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn invalidate_all_with_tx(&self, user_id: Uuid, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AppResult<()> {
+    pub async fn invalidate_all_with_tx(
+        &self,
+        user_id: Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<()> {
         sqlx::query!(
             r#"
                 UPDATE user_sessions
@@ -214,7 +224,11 @@ crate::util::repo_from_parts!(SessionRepository);
 
 #[async_trait::async_trait]
 impl crate::model::bookmarks::ResolveBookmark for SessionRepository {
-    async fn resolve_bookmark(&self, item: Uuid, link_type: crate::model::bookmarks::LinkType) -> AppResult<String> {
+    async fn resolve_bookmark(
+        &self,
+        item: Uuid,
+        link_type: crate::model::bookmarks::LinkType,
+    ) -> AppResult<String> {
         // api: /api/sessions/{id}
         // web: /sessions/{id}
         let slug = match link_type {

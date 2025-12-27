@@ -4,8 +4,8 @@ use crate::{
 };
 use s3::{Bucket, Region, creds::Credentials};
 use std::sync::LazyLock;
-use uuid::Uuid;
 use thumbor::Server;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct S3Config {
@@ -38,8 +38,16 @@ pub static S3: LazyLock<S3Config> = LazyLock::new(|| {
         Err(e) => panic!("Failed to initialize S3 bucket: {e}"),
     };
 
-    let thumbor_url = config.public_url_base.as_ref().expect("public_url_base must be set for S3 config").clone();
-    let thumbor_security_key = config.thumbor_security_key.as_ref().expect("thumbor_security_key must be set for S3 config").clone();
+    let thumbor_url = config
+        .public_url_base
+        .as_ref()
+        .expect("public_url_base must be set for S3 config")
+        .clone();
+    let thumbor_security_key = config
+        .thumbor_security_key
+        .as_ref()
+        .expect("thumbor_security_key must be set for S3 config")
+        .clone();
 
     let thumbor_server = thumbor::Server::new(&thumbor_url, &thumbor_security_key).unwrap();
 
@@ -96,12 +104,17 @@ impl S3Config {
         };
 
         let filename = format!("profile-{}.{}", user_id, extension);
-        self.upload_image_original(&filename, file_data, content_type).await
+        self.upload_image_original(&filename, file_data, content_type)
+            .await
     }
 
     /// gets the url for an original image stored in minio
     pub fn get_original_url(&self, filename: &str) -> String {
-        format!("{}/originals/{}", self.public_url_base.trim_end_matches('/'), filename)
+        format!(
+            "{}/originals/{}",
+            self.public_url_base.trim_end_matches('/'),
+            filename
+        )
     }
 
     /// generates a thumbor url for an image with the given dimensions
@@ -109,21 +122,35 @@ impl S3Config {
     /// if a security key is configured, generates a signed url
     pub fn get_thumbor_url(&self, filename: &str, width: u32, height: u32) -> String {
         let image_url = format!("originals/{}", filename);
-        self.thumbor_server.endpoint_builder().resize((width as i32, height as i32)).build().to_url(&image_url)
+        self.thumbor_server
+            .endpoint_builder()
+            .resize((width as i32, height as i32))
+            .build()
+            .to_url(&image_url)
     }
 
     /// generates a thumbor url with smart cropping (face/feature detection)
     /// if a security key is configured, generates a signed url
     pub fn get_thumbor_url_smart(&self, filename: &str, width: u32, height: u32) -> String {
         let image_url = format!("originals/{}", filename);
-        self.thumbor_server.endpoint_builder().resize((width as i32, height as i32)).smart(true).build().to_url(&image_url)
+        self.thumbor_server
+            .endpoint_builder()
+            .resize((width as i32, height as i32))
+            .smart(true)
+            .build()
+            .to_url(&image_url)
     }
 
     /// generates a thumbor url that fits the image inside the dimensions (maintains aspect ratio)
     /// if a security key is configured, generates a signed url
     pub fn get_thumbor_url_fit(&self, filename: &str, width: u32, height: u32) -> String {
         let image_url = format!("originals/{}", filename);
-        self.thumbor_server.endpoint_builder().resize((width as i32, height as i32)).fit_in(thumbor::endpoint::FitIn::Default).build().to_url(&image_url)
+        self.thumbor_server
+            .endpoint_builder()
+            .resize((width as i32, height as i32))
+            .fit_in(thumbor::endpoint::FitIn::Default)
+            .build()
+            .to_url(&image_url)
     }
 
     // legacy helper that returns a thumbor url for profile pictures

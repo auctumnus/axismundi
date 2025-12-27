@@ -55,7 +55,11 @@ impl PasswordResetTokenRepository {
         Ok(())
     }
 
-    pub async fn find_by_token(&self, user: Uuid, token: &str) -> AppResult<Option<PasswordResetToken>> {
+    pub async fn find_by_token(
+        &self,
+        user: Uuid,
+        token: &str,
+    ) -> AppResult<Option<PasswordResetToken>> {
         let hashed_token = stable_hash(token);
         let result = sqlx::query_as!(
             PasswordResetToken,

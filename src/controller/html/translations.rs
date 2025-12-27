@@ -2,27 +2,61 @@ use std::thread::current;
 
 use askama::Template;
 use axum::{
-    Form, Router, extract::{Path, Query}, http::StatusCode, response::{Html, IntoResponse, Redirect, Response}, routing::{get, post}
+    Form, Router,
+    extract::{Path, Query},
+    http::StatusCode,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::{get, post},
 };
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    attempt, controller::html::{okay, render_generic_error, render_template, LanguagesWithContributors}, err::{AppError, bad_request, not_found}, get_user, model::{
-        contribution_stats::ContributionStatsRepository, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository, LanguageSearch}, translatable::{Translatable, TranslatableRepository}, translations::{CreateTranslation, Translation, TranslationRepository, TranslationSearch, UpdateTranslation}, users::{User, UserRepository}
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}
+    attempt,
+    controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
+    err::{AppError, bad_request, not_found},
+    get_user,
+    model::{
+        contribution_stats::ContributionStatsRepository,
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{Language, LanguageRepository, LanguageSearch},
+        translatable::{Translatable, TranslatableRepository},
+        translations::{
+            CreateTranslation, Translation, TranslationRepository, TranslationSearch,
+            UpdateTranslation,
+        },
+        users::{User, UserRepository},
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, extract_session::Session},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
-        .route("/translatable/{slug}/new-translation", post(new_translation_submit))
-        .route("/translatable/{slug}/edit-translation", post(edit_translation_submit));
+        .route(
+            "/translatable/{slug}/new-translation",
+            post(new_translation_submit),
+        )
+        .route(
+            "/translatable/{slug}/edit-translation",
+            post(edit_translation_submit),
+        );
 
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{code}/translations", get(translation_search))
-        .route("/translatable/{slug}/new-translation", get(new_translation_step_1_form))
-        .route("/translatable/{slug}/translation/{code}", get(view_translation))
-        .route("/translatable/{slug}/edit-translation/{code}", get(edit_translation_form));
+        .route(
+            "/translatable/{slug}/new-translation",
+            get(new_translation_step_1_form),
+        )
+        .route(
+            "/translatable/{slug}/translation/{code}",
+            get(view_translation),
+        )
+        .route(
+            "/translatable/{slug}/edit-translation/{code}",
+            get(edit_translation_form),
+        );
 
     (secure_routes, normal_routes)
 }
@@ -80,24 +114,24 @@ async fn translation_search(
     };
 
     let results = match translations
-            .search(&language.id, pagination.clone(), query.clone())
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => {
-                let template = TranslationSearchTemplate {
-                    current_user,
-                    error: Some(e),
-                    language,
-                    previous_query: query,
-                    previous_pagination: pagination,
-                    results: None,
-                    user_has_permission,
-                };
-                let body = render_template(template);
-                return (StatusCode::BAD_REQUEST, body);
-            }
-        };
+        .search(&language.id, pagination.clone(), query.clone())
+        .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            let template = TranslationSearchTemplate {
+                current_user,
+                error: Some(e),
+                language,
+                previous_query: query,
+                previous_pagination: pagination,
+                results: None,
+                user_has_permission,
+            };
+            let body = render_template(template);
+            return (StatusCode::BAD_REQUEST, body);
+        }
+    };
 
     let mut results_with_meta = vec![];
     for translation in results.items {
@@ -198,8 +232,6 @@ struct NewTranslationFormData {
     translated_text: Option<String>,
 }
 
-
-
 async fn new_translation_submit(
     s: Session,
     translatables: TranslatableRepository,
@@ -212,9 +244,7 @@ async fn new_translation_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    let translatable = attempt!(s, translatables
-        .find_by_slug(&slug)
-        .await);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
     let can_edit_translatable = translatable.created_by == user.id;
 
@@ -235,13 +265,10 @@ async fn new_translation_submit(
                 can_edit_language: false,
             };
 
-            return (StatusCode::BAD_REQUEST, render_template(template))
+            return (StatusCode::BAD_REQUEST, render_template(template));
         };
 
-        let Ok(language) = languages
-            .find_by_code(&language_code)
-            .await
-        else {
+        let Ok(language) = languages.find_by_code(&language_code).await else {
             let error = bad_request("Language not found");
 
             let available_languages = attempt!(s, languages.find_all_by_user(user.id).await);
@@ -257,7 +284,7 @@ async fn new_translation_submit(
                 can_edit_language: false,
             };
 
-            return (StatusCode::BAD_REQUEST, render_template(template))
+            return (StatusCode::BAD_REQUEST, render_template(template));
         };
 
         let can_edit_language = permissions
@@ -265,7 +292,12 @@ async fn new_translation_submit(
             .await
             .unwrap_or(false);
 
-        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language.id, 5).await);
+        let top_contributors = attempt!(
+            s,
+            contribution_stats
+                .get_top_contributors(&language.id, 5)
+                .await
+        );
         let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
         let language_with_contributors = LanguagesWithContributors {
             language: language.clone(),
@@ -290,16 +322,19 @@ async fn new_translation_submit(
             return render_generic_error(s, bad_request("Language ID is required")).await;
         };
 
-        let language = attempt!(s, languages
-            .find_by_id(language_id)
-            .await);
+        let language = attempt!(s, languages.find_by_id(language_id).await);
 
         let can_edit_language = permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false);
 
-        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language.id, 5).await);
+        let top_contributors = attempt!(
+            s,
+            contribution_stats
+                .get_top_contributors(&language.id, 5)
+                .await
+        );
         let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
 
         let Some(translated_text) = form.translated_text.clone() else {
@@ -322,9 +357,8 @@ async fn new_translation_submit(
                 can_edit_language,
             };
 
-            return (StatusCode::BAD_REQUEST, render_template(template))
+            return (StatusCode::BAD_REQUEST, render_template(template));
         };
-
 
         let create_result = translations
             .create(
@@ -348,7 +382,10 @@ async fn new_translation_submit(
                     "/translatable/{}/translation/{}",
                     translatable.slug, language.code
                 );
-                (StatusCode::SEE_OTHER, Redirect::to(&redirect_url).into_response())
+                (
+                    StatusCode::SEE_OTHER,
+                    Redirect::to(&redirect_url).into_response(),
+                )
             }
             Err(e) => {
                 let language_with_contributors = LanguagesWithContributors {
@@ -420,17 +457,24 @@ async fn view_translation(
 ) -> (StatusCode, Response) {
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
     let language = attempt!(s, languages.find_by_code(&code).await);
-    let translation = attempt!(s, translations
-        .find_by_translatable_and_language(translatable.id, language.id)
-        .await);
+    let translation = attempt!(
+        s,
+        translations
+            .find_by_translatable_and_language(translatable.id, language.id)
+            .await
+    );
 
     let translatable_creator = attempt!(s, users.find_by_id(translatable.created_by).await);
     let translation_creator = attempt!(s, users.find_by_id(translation.created_by).await);
 
     let current_user_has_permission = if let Some(current_user) = s.user() {
-        attempt!(s, permissions
-            .find_by_user_and_language(current_user.id, language.id)
-            .await).is_some()
+        attempt!(
+            s,
+            permissions
+                .find_by_user_and_language(current_user.id, language.id)
+                .await
+        )
+        .is_some()
     } else {
         false
     };
@@ -451,13 +495,23 @@ async fn view_translation(
     };
 
     let translatable_is_liked = if let Some(current_user) = s.user() {
-        attempt!(s, translatables.is_liked(&current_user.id, &translatable.id).await)
+        attempt!(
+            s,
+            translatables
+                .is_liked(&current_user.id, &translatable.id)
+                .await
+        )
     } else {
         false
     };
 
     let translation_is_liked = if let Some(current_user) = s.user() {
-        attempt!(s, translations.is_liked(&current_user.id, &translation.id).await)
+        attempt!(
+            s,
+            translations
+                .is_liked(&current_user.id, &translation.id)
+                .await
+        )
     } else {
         false
     };
@@ -512,9 +566,12 @@ async fn edit_translation_form(
 
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let translation = attempt!(s, translations
-        .find_by_translatable_and_language(translatable.id, language.id)
-        .await);
+    let translation = attempt!(
+        s,
+        translations
+            .find_by_translatable_and_language(translatable.id, language.id)
+            .await
+    );
 
     let can_edit_translatable = translatable.created_by == user.id;
 
@@ -561,13 +618,9 @@ async fn edit_translation_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    let translatable = attempt!(s, translatables
-        .find_by_slug(&slug)
-        .await);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
-    let language = attempt!(s, languages
-        .find_by_id(form.language_id)
-        .await);
+    let language = attempt!(s, languages.find_by_id(form.language_id).await);
 
     let can_edit_translatable = translatable.created_by == user.id;
 
@@ -583,9 +636,12 @@ async fn edit_translation_submit(
         .flatten()
         .is_some();
 
-    let existing_translation = attempt!(s, translations
-        .find_by_translatable_and_language(translatable.id, language.id)
-        .await);
+    let existing_translation = attempt!(
+        s,
+        translations
+            .find_by_translatable_and_language(translatable.id, language.id)
+            .await
+    );
     let translation = translations
         .update(
             &user,
@@ -607,7 +663,10 @@ async fn edit_translation_submit(
                 "/translatable/{}/translation/{}",
                 translatable.slug, language.code
             );
-            (StatusCode::SEE_OTHER, Redirect::to(&redirect_url).into_response())
+            (
+                StatusCode::SEE_OTHER,
+                Redirect::to(&redirect_url).into_response(),
+            )
         }
         Err(e) => {
             let template = EditTranslationTemplate {
@@ -623,6 +682,5 @@ async fn edit_translation_submit(
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)
         }
-
     }
 }

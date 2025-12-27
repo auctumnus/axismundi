@@ -3,16 +3,10 @@ use crate::{
     model::bookmarks::{BookmarkRepository, LinkType},
     util::AppState,
 };
-use axum::{
-    extract::Path,
-    response::Redirect,
-};
+use axum::{extract::Path, response::Redirect};
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {
-    axum::Router::new().route(
-        "/bookmarks/{slug}",
-        axum::routing::get(get_bookmark),
-    )
+    axum::Router::new().route("/bookmarks/{slug}", axum::routing::get(get_bookmark))
 }
 
 async fn get_bookmark(
@@ -21,7 +15,9 @@ async fn get_bookmark(
 ) -> AppResult<Redirect> {
     let bookmarks = BookmarkRepository::new(state);
     let bookmark = bookmarks.get_by_slug(&slug).await?;
-    let to = bookmarks.resolve_bookmark(bookmark.item, bookmark.resource, LinkType::Api).await?;
+    let to = bookmarks
+        .resolve_bookmark(bookmark.item, bookmark.resource, LinkType::Api)
+        .await?;
     Ok(Redirect::temporary(&to))
 }
 
@@ -32,9 +28,7 @@ mod tests {
     use std::sync::Arc;
     use tower::Service;
 
-    use crate::controller::api::tests::{
-        get, make_authed_user, post, put
-    };
+    use crate::controller::api::tests::{get, make_authed_user, post, put};
     use crate::email::MockEmailService;
 
     #[tokio::test]
@@ -74,7 +68,10 @@ mod tests {
         let get_bookmark_request = get(&format!("bookmarks/{bookmark}")).await;
         let get_bookmark_response = app.call(get_bookmark_request).await.unwrap();
 
-        assert_eq!(get_bookmark_response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            get_bookmark_response.status(),
+            StatusCode::TEMPORARY_REDIRECT
+        );
         let location = get_bookmark_response
             .headers()
             .get("location")
@@ -122,7 +119,10 @@ mod tests {
         let get_bookmark_request = get(&format!("bookmarks/{bookmark}")).await;
         let get_bookmark_response = app.call(get_bookmark_request).await.unwrap();
 
-        assert_eq!(get_bookmark_response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            get_bookmark_response.status(),
+            StatusCode::TEMPORARY_REDIRECT
+        );
         let location = get_bookmark_response
             .headers()
             .get("location")
@@ -181,7 +181,10 @@ mod tests {
         let get_bookmark_request = get(&format!("bookmarks/{bookmark}")).await;
         let get_bookmark_response = app.call(get_bookmark_request).await.unwrap();
 
-        assert_eq!(get_bookmark_response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            get_bookmark_response.status(),
+            StatusCode::TEMPORARY_REDIRECT
+        );
         let location = get_bookmark_response
             .headers()
             .get("location")
@@ -241,7 +244,10 @@ mod tests {
         let get_bookmark_request = get(&format!("bookmarks/{bookmark}")).await;
         let get_bookmark_response = app.call(get_bookmark_request).await.unwrap();
 
-        assert_eq!(get_bookmark_response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            get_bookmark_response.status(),
+            StatusCode::TEMPORARY_REDIRECT
+        );
         let location = get_bookmark_response
             .headers()
             .get("location")
@@ -250,5 +256,4 @@ mod tests {
             .unwrap();
         assert!(location.ends_with(&format!("languages/{lang_code}/word-classes/n3")));
     }
-
 }

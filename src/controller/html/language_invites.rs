@@ -1,11 +1,10 @@
 use askama::Template;
 use axum::{
-    Router,
+    Form, Router,
     extract::Path,
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
-    Form,
 };
 use serde::Deserialize;
 use uuid::Uuid;
@@ -25,7 +24,7 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{extract_session::Session, AppState},
+    util::{AppState, extract_session::Session},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -49,10 +48,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{code}/invites", get(list_invites))
-        .route(
-            "/languages/{code}/invites/new",
-            get(new_invitation_form),
-        )
+        .route("/languages/{code}/invites/new", get(new_invitation_form))
         .route(
             "/languages/{code}/invites/{id}/revoke",
             get(revoke_invitation_form),
@@ -381,9 +377,7 @@ async fn revoke_invitation_submit(
 
     attempt!(
         s,
-        invites
-            .delete(&user, language.id, invite.recipient)
-            .await
+        invites.delete(&user, language.id, invite.recipient).await
     );
 
     (

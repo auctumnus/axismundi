@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use resend_rs::types::CreateEmailBaseOptions;
 use resend_rs::Resend;
+use resend_rs::types::CreateEmailBaseOptions;
 
 use crate::config::ResendConfig;
 use crate::err::AppResult;
@@ -130,22 +130,18 @@ impl EmailService for ResendEmailService {
 </html>"#
         );
 
-        let email_old = CreateEmailBaseOptions::new(&self.from_email, [old_email], subject)
-            .with_html(&html);
+        let email_old =
+            CreateEmailBaseOptions::new(&self.from_email, [old_email], subject).with_html(&html);
         let email_new =
             CreateEmailBaseOptions::new(&self.from_email, [new_email], subject).with_html(&html);
 
-        self.client
-            .emails
-            .send(email_old)
-            .await
-            .map_err(|e| crate::err::internal_error(format!("failed to send email to old address: {}", e)))?;
+        self.client.emails.send(email_old).await.map_err(|e| {
+            crate::err::internal_error(format!("failed to send email to old address: {}", e))
+        })?;
 
-        self.client
-            .emails
-            .send(email_new)
-            .await
-            .map_err(|e| crate::err::internal_error(format!("failed to send email to new address: {}", e)))?;
+        self.client.emails.send(email_new).await.map_err(|e| {
+            crate::err::internal_error(format!("failed to send email to new address: {}", e))
+        })?;
 
         Ok(())
     }
@@ -163,96 +159,100 @@ pub fn make_email_service(config: &ResendConfig) -> impl EmailService {
     }
 }
 
-    // mock email service for testing
-    #[derive(Clone, Debug)]
-    pub struct SentEmail {
-        pub to: String,
-        pub email_type: EmailType,
-        pub token: String,
-        pub user_id: uuid::Uuid,
-    }
+// mock email service for testing
+#[derive(Clone, Debug)]
+pub struct SentEmail {
+    pub to: String,
+    pub email_type: EmailType,
+    pub token: String,
+    pub user_id: uuid::Uuid,
+}
 
-    #[derive(Clone, Debug, PartialEq)]
-    pub enum EmailType {
-        Verification,
-        PasswordReset,
-        EmailChangeNotification,
-    }
+#[derive(Clone, Debug, PartialEq)]
+pub enum EmailType {
+    Verification,
+    PasswordReset,
+    EmailChangeNotification,
+}
 
-    #[derive(Debug, Clone)]
-    pub struct MockEmailService {
-        pub sent_emails: Arc<Mutex<Vec<SentEmail>>>,
-    }
+#[derive(Debug, Clone)]
+pub struct MockEmailService {
+    pub sent_emails: Arc<Mutex<Vec<SentEmail>>>,
+}
 
-    impl MockEmailService {
-        pub fn new() -> Self {
-            Self {
-                sent_emails: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        pub fn get_sent_emails(&self) -> Vec<SentEmail> {
-            self.sent_emails.lock().unwrap().clone()
-        }
-
-        pub fn clear(&self) {
-            self.sent_emails.lock().unwrap().clear();
+impl MockEmailService {
+    pub fn new() -> Self {
+        Self {
+            sent_emails: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    #[async_trait]
-    impl EmailService for MockEmailService {
-        async fn send_verification_email(
-            &self,
-            user_id: uuid::Uuid,
-            to: &str,
-            token: &str,
-        ) -> AppResult<()> {
-            tracing::debug!("sending verification email; to: {to}, token: {token}, user_id: {user_id}");
-            self.sent_emails.lock().unwrap().push(SentEmail {
-                to: to.to_string(),
-                email_type: EmailType::Verification,
-                token: token.to_string(),
-                user_id,
-            });
-            Ok(())
-        }
-
-        async fn send_password_reset_email(
-            &self,
-            user_id: uuid::Uuid,
-            to: &str,
-            token: &str,
-        ) -> AppResult<()> {
-            tracing::debug!("sending password reset email; to: {to}, token: {token}, user_id: {user_id}");
-            self.sent_emails.lock().unwrap().push(SentEmail {
-                to: to.to_string(),
-                email_type: EmailType::PasswordReset,
-                token: token.to_string(),
-                user_id,
-            });
-            Ok(())
-        }
-
-        async fn send_email_change_notification(
-            &self,
-            user_id: uuid::Uuid,
-            old_email: &str,
-            new_email: &str,
-        ) -> AppResult<()> {
-            tracing::debug!("sending email change notification; old_email: {old_email}, new_email: {new_email}, user_id: {user_id}");
-            self.sent_emails.lock().unwrap().push(SentEmail {
-                to: old_email.to_string(),
-                email_type: EmailType::EmailChangeNotification,
-                token: String::new(),
-                user_id,
-            });
-            self.sent_emails.lock().unwrap().push(SentEmail {
-                to: new_email.to_string(),
-                email_type: EmailType::EmailChangeNotification,
-                token: String::new(),
-                user_id,
-            });
-            Ok(())
-        }
+    pub fn get_sent_emails(&self) -> Vec<SentEmail> {
+        self.sent_emails.lock().unwrap().clone()
     }
+
+    pub fn clear(&self) {
+        self.sent_emails.lock().unwrap().clear();
+    }
+}
+
+#[async_trait]
+impl EmailService for MockEmailService {
+    async fn send_verification_email(
+        &self,
+        user_id: uuid::Uuid,
+        to: &str,
+        token: &str,
+    ) -> AppResult<()> {
+        tracing::debug!("sending verification email; to: {to}, token: {token}, user_id: {user_id}");
+        self.sent_emails.lock().unwrap().push(SentEmail {
+            to: to.to_string(),
+            email_type: EmailType::Verification,
+            token: token.to_string(),
+            user_id,
+        });
+        Ok(())
+    }
+
+    async fn send_password_reset_email(
+        &self,
+        user_id: uuid::Uuid,
+        to: &str,
+        token: &str,
+    ) -> AppResult<()> {
+        tracing::debug!(
+            "sending password reset email; to: {to}, token: {token}, user_id: {user_id}"
+        );
+        self.sent_emails.lock().unwrap().push(SentEmail {
+            to: to.to_string(),
+            email_type: EmailType::PasswordReset,
+            token: token.to_string(),
+            user_id,
+        });
+        Ok(())
+    }
+
+    async fn send_email_change_notification(
+        &self,
+        user_id: uuid::Uuid,
+        old_email: &str,
+        new_email: &str,
+    ) -> AppResult<()> {
+        tracing::debug!(
+            "sending email change notification; old_email: {old_email}, new_email: {new_email}, user_id: {user_id}"
+        );
+        self.sent_emails.lock().unwrap().push(SentEmail {
+            to: old_email.to_string(),
+            email_type: EmailType::EmailChangeNotification,
+            token: String::new(),
+            user_id,
+        });
+        self.sent_emails.lock().unwrap().push(SentEmail {
+            to: new_email.to_string(),
+            email_type: EmailType::EmailChangeNotification,
+            token: String::new(),
+            user_id,
+        });
+        Ok(())
+    }
+}

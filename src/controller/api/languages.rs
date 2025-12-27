@@ -32,7 +32,10 @@ pub fn create_router() -> axum::Router<AppState> {
             axum::routing::get(get_language_editors),
         )
         .route("/languages/{code}/like", axum::routing::post(like_language))
-        .route("/languages/{code}/unlike", axum::routing::post(unlike_language))
+        .route(
+            "/languages/{code}/unlike",
+            axum::routing::post(unlike_language),
+        )
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -745,18 +748,282 @@ mod tests {
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let request = crate::controller::api::tests::post(&token, &format!("languages/{code}/like"), json!({})).await;
+        let request = crate::controller::api::tests::post(
+            &token,
+            &format!("languages/{code}/like"),
+            json!({}),
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["liked"], true);
         assert_eq!(body["like_count"], 1);
 
-        let request = crate::controller::api::tests::post(&token, &format!("languages/{code}/unlike"), json!({})).await;
+        let request = crate::controller::api::tests::post(
+            &token,
+            &format!("languages/{code}/unlike"),
+            json!({}),
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert_eq!(body["liked"], false);
         assert_eq!(body["like_count"], 0);
+    }
+
+    /// Helper struct for admin/mod override tests
+    struct PermOverrideTestContext {
+        pool: sqlx::PgPool,
+        app: axum::routing::RouterIntoService<axum::body::Body>,
+        _owner_token: String,
+        override_user_token: String,
+        override_user_id: uuid::Uuid,
+        language_id: String,
+        language_code: String,
+    }
+
+    /// Creates a test context with:
+    /// - A language owned by one user
+    /// - An admin or moderator user (depending on user_tag parameter)
+    async fn make_perm_override_test_context(user_tag: &str) -> PermOverrideTestContext {
+        use crate::CONFIG;
+        use crate::util::AppState;
+        use sqlx::PgPool;
+
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let app_state = AppState {
+            pool: pool.clone(),
+            email_service: email_service_trait,
+        };
+        let mut app = crate::create_router(app_state).into_service();
+
+        // Create language owned by one user
+        let owner_username = crate::tests::random_name();
+        let owner_token = make_authed_user(&owner_username, &app, email_service.clone()).await;
+
+        let code = crate::tests::random_code();
+        let body = json!({
+            "code": code,
+            "name": "Test Language",
+            "description": "Original description"
+        });
+
+        let request = post(&owner_token, "languages", body).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let created_language = crate::tests::response_to_value(response.into_body()).await;
+        let language_id = created_language["id"].as_str().unwrap().to_string();
+
+        // Create override user (admin or moderator) and give them the appropriate tag
+        let override_username = crate::tests::random_name();
+        let override_user_token =
+            make_authed_user(&override_username, &app, email_service.clone()).await;
+
+        let override_user_id: uuid::Uuid = sqlx::query_scalar!(
+            "select id from users where username = $1",
+            override_username
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query!(
+            "insert into user_tags (user_id, tag) values ($1, $2)",
+            override_user_id,
+            user_tag
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        PermOverrideTestContext {
+            pool,
+            app,
+            _owner_token: owner_token,
+            override_user_token,
+            override_user_id,
+            language_id,
+            language_code: code,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_edit_language_as_admin_creates_audit_log() {
+        let ctx = make_perm_override_test_context("admin").await;
+        let PermOverrideTestContext {
+            pool,
+            mut app,
+            override_user_token,
+            override_user_id,
+            language_id,
+            language_code,
+            ..
+        } = ctx;
+
+        // Admin should be able to edit the language even without language-level permissions
+        let update_body = json!({
+            "name": "Updated by Admin",
+            "description": "Updated description"
+        });
+
+        let request = crate::controller::api::tests::put(
+            &override_user_token,
+            &format!("languages/{}", language_code),
+            &update_body,
+        );
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let updated_language = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(updated_language["name"], "Updated by Admin");
+        assert_eq!(updated_language["description"], "Updated description");
+
+        // Verify an audit log was created
+        let audit_logs: Vec<serde_json::Value> = sqlx::query!(
+            r#"
+            select
+                id,
+                user_id,
+                action as "action: crate::model::audit_log::AuditActionType",
+                action_at,
+                resource_type as "resource_type: crate::model::audit_log::AuditableResource",
+                resource_id,
+                details
+            from audit_logs
+            where resource_type = 'language' and resource_id = $1
+            order by action_at desc
+            "#,
+            uuid::Uuid::parse_str(&language_id).unwrap()
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| {
+            json!({
+                "id": row.id,
+                "user_id": row.user_id,
+                "action": format!("{:?}", row.action),
+                "action_at": row.action_at,
+                "resource_type": format!("{:?}", row.resource_type),
+                "resource_id": row.resource_id,
+                "details": row.details
+            })
+        })
+        .collect();
+
+        // Should have at least one audit log (the update)
+        assert!(!audit_logs.is_empty(), "No audit logs found");
+
+        // Find the most recent "Updated" action
+        let update_log = audit_logs
+            .iter()
+            .find(|log| log["action"].as_str() == Some("Updated"))
+            .expect("No update audit log found");
+
+        // Verify the audit log details
+        assert_eq!(update_log["user_id"], override_user_id.to_string());
+        assert_eq!(update_log["resource_type"], "Language");
+        assert_eq!(update_log["resource_id"], language_id);
+
+        let details = &update_log["details"];
+        assert_eq!(details["updates"]["name"], "Updated by Admin");
+        assert_eq!(details["updates"]["description"], "Updated description");
+    }
+
+    #[tokio::test]
+    async fn test_edit_language_as_moderator_creates_audit_log() {
+        let ctx = make_perm_override_test_context("moderator").await;
+        let PermOverrideTestContext {
+            pool,
+            mut app,
+            override_user_token,
+            language_id,
+            language_code,
+            ..
+        } = ctx;
+
+        // Moderator should be able to edit the language even without language-level permissions
+        let update_body = json!({
+            "name": "Updated by Moderator",
+        });
+
+        let request = crate::controller::api::tests::put(
+            &override_user_token,
+            &format!("languages/{}", language_code),
+            &update_body,
+        );
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let updated_language = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(updated_language["name"], "Updated by Moderator");
+
+        // Verify an audit log was created
+        let audit_log_count: i64 = sqlx::query_scalar!(
+            r#"
+            select count(*)
+            from audit_logs
+            where resource_type = 'language'
+              and resource_id = $1
+            "#,
+            uuid::Uuid::parse_str(&language_id).unwrap()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+
+        assert!(audit_log_count > 0, "No audit log found");
+    }
+
+    #[tokio::test]
+    async fn test_delete_language_as_admin_creates_audit_log() {
+        let ctx = make_perm_override_test_context("admin").await;
+        let PermOverrideTestContext {
+            pool,
+            mut app,
+            override_user_token,
+            language_id,
+            language_code,
+            ..
+        } = ctx;
+
+        // Admin should be able to delete the language even without language-level permissions
+        let request = crate::controller::api::tests::delete(
+            &override_user_token,
+            &format!("languages/{}", language_code),
+        );
+        let response = app.call(request).await.unwrap();
+        let status = response.status();
+        assert!(
+            status == StatusCode::OK || status == StatusCode::NO_CONTENT,
+            "Expected OK or NO_CONTENT, got {:?}",
+            status
+        );
+
+        // Verify an audit log was created
+        let audit_log_count: i64 = sqlx::query_scalar!(
+            r#"
+            select count(*)
+            from audit_logs
+            where resource_type = 'language'
+              and resource_id = $1
+              and action = 'deleted'
+            "#,
+            uuid::Uuid::parse_str(&language_id).unwrap()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+
+        assert!(
+            audit_log_count == 1,
+            "Expected exactly one delete audit log, got {}",
+            audit_log_count
+        );
     }
 }
