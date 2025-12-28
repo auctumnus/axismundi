@@ -4,6 +4,11 @@
 {% block title %}delete {{ word.word }}? - {{ language.name }} - axismundi{% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>delete word</h1>
 
 <form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">

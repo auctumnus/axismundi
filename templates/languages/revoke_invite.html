@@ -4,6 +4,11 @@
 {% block title %}revoke invitation - {{ language.name }} - axismundi{% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>{{ language.name }} - revoke invitation</h1>
 
 <form class="default" method="post" action="/languages/{{ language.code }}/invites/{{ invite.id }}/revoke">

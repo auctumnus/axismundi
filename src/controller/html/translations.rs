@@ -31,6 +31,7 @@ use crate::{
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
 };
+use axum::extract::State;
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -178,10 +179,12 @@ struct NewTranslationStep1Template {
     can_edit_translatable: bool,
     language: Option<Language>,
     can_edit_language: bool,
+    will_create_audit_log: bool,
 }
 
 async fn new_translation_step_1_form(
     s: Session,
+    State(state): State<AppState>,
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     Path(slug): Path<String>,
@@ -204,6 +207,7 @@ async fn new_translation_step_1_form(
         can_edit_translatable,
         language: None,
         can_edit_language: false,
+        will_create_audit_log: false,
     };
 
     okay(render_template(template))
@@ -222,6 +226,7 @@ struct NewTranslationStep2Template {
     previous_translated_text: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
+    will_create_audit_log: bool,
 }
 
 #[derive(Deserialize)]
@@ -234,6 +239,7 @@ struct NewTranslationFormData {
 
 async fn new_translation_submit(
     s: Session,
+    State(state): State<AppState>,
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
@@ -263,6 +269,7 @@ async fn new_translation_submit(
                 can_edit_translatable,
                 language: None,
                 can_edit_language: false,
+                will_create_audit_log: false,
             };
 
             return (StatusCode::BAD_REQUEST, render_template(template));
@@ -282,15 +289,23 @@ async fn new_translation_submit(
                 can_edit_translatable,
                 language: None,
                 can_edit_language: false,
+                will_create_audit_log: false,
             };
 
             return (StatusCode::BAD_REQUEST, render_template(template));
         };
 
-        let can_edit_language = permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        let can_edit_language = is_admin_or_mod || permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false);
+
+        let will_create_audit_log =
+            crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
         let top_contributors = attempt!(
             s,
@@ -314,6 +329,7 @@ async fn new_translation_submit(
             previous_translated_text: String::new(),
             can_edit_translatable,
             can_edit_language,
+            will_create_audit_log,
         };
 
         okay(render_template(template))
@@ -324,10 +340,17 @@ async fn new_translation_submit(
 
         let language = attempt!(s, languages.find_by_id(language_id).await);
 
-        let can_edit_language = permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        let can_edit_language = is_admin_or_mod || permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false);
+
+        let will_create_audit_log =
+            crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
         let top_contributors = attempt!(
             s,
@@ -355,6 +378,7 @@ async fn new_translation_submit(
                 previous_translated_text: String::new(),
                 can_edit_translatable,
                 can_edit_language,
+                will_create_audit_log,
             };
 
             return (StatusCode::BAD_REQUEST, render_template(template));
@@ -403,6 +427,7 @@ async fn new_translation_submit(
                     previous_translated_text: translated_text,
                     can_edit_translatable,
                     can_edit_language,
+                    will_create_audit_log,
                 };
 
                 (StatusCode::BAD_REQUEST, render_template(template))
@@ -422,6 +447,7 @@ async fn new_translation_submit(
             can_edit_translatable,
             language: None,
             can_edit_language: false,
+            will_create_audit_log: false,
         };
 
         (StatusCode::BAD_REQUEST, render_template(template))
@@ -546,14 +572,17 @@ struct EditTranslationTemplate {
     error: Option<AppError>,
     translatable: Translatable,
     language: Language,
+    translation: Translation,
     previous_translated_text: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
     can_edit_translation: bool,
+    will_create_audit_log: bool,
 }
 
 async fn edit_translation_form(
     s: Session,
+    State(state): State<AppState>,
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
@@ -575,27 +604,36 @@ async fn edit_translation_form(
 
     let can_edit_translatable = translatable.created_by == user.id;
 
-    let can_edit_language = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
 
-    let can_edit_translation = permissions
+    let can_edit_translation = is_admin_or_mod || permissions
         .find_by_user_and_language(user.id, language.id)
         .await
         .ok()
         .flatten()
         .is_some();
 
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
         translatable,
         language,
+        translation: translation.clone(),
         previous_translated_text: translation.translated_text.clone(),
         can_edit_translatable,
         can_edit_language,
         can_edit_translation,
+        will_create_audit_log,
     };
 
     okay(render_template(template))
@@ -609,6 +647,7 @@ struct EditTranslationFormData {
 
 async fn edit_translation_submit(
     s: Session,
+    State(state): State<AppState>,
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
@@ -624,17 +663,24 @@ async fn edit_translation_submit(
 
     let can_edit_translatable = translatable.created_by == user.id;
 
-    let can_edit_language = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
 
-    let can_edit_translation = permissions
+    let can_edit_translation = is_admin_or_mod || permissions
         .find_by_user_and_language(user.id, language.id)
         .await
         .ok()
         .flatten()
         .is_some();
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let existing_translation = attempt!(
         s,
@@ -674,10 +720,12 @@ async fn edit_translation_submit(
                 error: Some(e),
                 translatable: translatable.clone(),
                 language,
+                translation: existing_translation,
                 previous_translated_text: form.translated_text.clone(),
                 can_edit_translatable,
                 can_edit_language,
                 can_edit_translation,
+                will_create_audit_log,
             };
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)

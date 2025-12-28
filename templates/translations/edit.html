@@ -14,6 +14,11 @@
     <script src="/static/annotation.js" defer></script>
 {% endblock %}
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>edit translation</h1>
 
 {% if let Some(error) = error %}
@@ -48,5 +53,5 @@
 {% block footer %}
 {% call u::translatable_section(&translatable, can_edit_translatable) %}
 {% call u::language_section(&language, can_edit_language) %}
-{% call u::translation_section(&translatable, &language, can_edit_translation) %}
+{% call u::translation_section(&translatable, &language, &translation, can_edit_translation) %}
 {% endblock %}

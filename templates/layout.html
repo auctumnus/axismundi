@@ -85,24 +85,49 @@
     {% block toc %}{% endblock %}
 
     <main>
+        {% if let Some(user) = current_user.as_ref() %}
+            {% if user.is_banned() %}
+                <div class="alert warning">
+                    <p>
+                        your account has been banned. you will not be able to edit or interact with content
+                        until the ban is lifted.
+                    </p>
+                    <p>
+                        if you would like to appeal your ban, please <a href="/connect">contact support</a>.
+                    </p>
+                </div>
+            {% endif %}
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 
     <footer>
         <ul>
             <li>
-            <h2>axismundi</h2>
-            <ul>
-                <li><a href="/">home</a></li>
-                <li><a href="/translatables">translatables</a></li>
-                <li><a href="/languages">languages</a></li>
-                <li><a href="/users">users</a></li>
-                {% if let Some(u) = current_user.as_ref() %}
-                <li><a href="/users/{{ u.username }}">my profile</a></li>
-                <li><a href="/settings">settings</a></li>
-                {% endif %}
-            </ul>
+                <h2>axismundi</h2>
+                <ul>
+                    <li><a href="/">home</a></li>
+                    <li><a href="/translatables">translatables</a></li>
+                    <li><a href="/languages">languages</a></li>
+                    <li><a href="/users">users</a></li>
+                    {% if let Some(u) = current_user.as_ref() %}
+                    <li><a href="/users/{{ u.username }}">my profile</a></li>
+                    <li><a href="/settings">settings</a></li>
+                    {% endif %}
+                </ul>
             </li>
+            {% if let Some(user) = current_user.as_ref() %}
+                {% if user.is_admin() || user.is_moderator() %}
+            <li>
+                <h2>moderation</h2>
+                <ul>
+                    <li><a href="/admin/audit-log">audit log</a></li>
+                    <li><a href="/admin/reports">user reports</a></li>
+                    <li><a href="/admin/bans">manage users</a></li>
+                </ul>
+            </li>
+                {% endif %}
+            {% endif %}
     {% block footer %}
     {% endblock %}
         </ul>

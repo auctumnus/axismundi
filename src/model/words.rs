@@ -162,23 +162,26 @@ impl WordRepository {
             .ensure_not_banned(requestor.id)
             .await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request("you don't have permission to create words"));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot create words"));
             }
         }
 
@@ -226,7 +229,7 @@ impl WordRepository {
         let created_word = self.find_by_id(word_result.id).await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -373,23 +376,26 @@ impl WordRepository {
             .find_by_slug_and_lemma(Some(requestor), language, slug, lemma)
             .await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, word.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, word.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request("you don't have permission to edit words"));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot edit words"));
             }
         }
 
@@ -486,7 +492,7 @@ impl WordRepository {
             result.ok_or_else(|| not_found(format!("word with id '{}'", word.id)))?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -541,23 +547,26 @@ impl WordRepository {
             .find_by_slug_and_lemma(Some(requestor), language, slug, lemma)
             .await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, word.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, word.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request("you don't have permission to delete words"));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot delete words"));
             }
         }
 
@@ -566,7 +575,7 @@ impl WordRepository {
             .await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod && result.rows_affected() > 0 {
+        if needs_audit_log && result.rows_affected() > 0 {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),

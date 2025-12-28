@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/ban-card.css">
+{% endblock %}
+
+{% block title %}bans - axismundi{% endblock %}
+
+{% block content %}
+<div class="header-with-actions">
+    <h2 class="with-action">bans</h2>
+</div>
+
+<form class="default" method="get" action="/bans">
+    <div class="search-bar">
+        <section class="search-controls">
+            <label for="text_query">Search query</label>
+            <div class="search-bar-container">
+                <input type="search" id="text_query" name="text_query" value="{{ previous_query.text_query.as_ref().unwrap_or(&"".to_string()) }}">
+                <button class="search button" type="submit" data-tooltip="Search" aria-label="Search"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9.5 16q-2.725 0-4.612-1.888T3 9.5t1.888-4.612T9.5 3t4.613 1.888T16 9.5q0 1.1-.35 2.075T14.7 13.3l5.6 5.6q.275.275.275.7t-.275.7t-.7.275t-.7-.275l-5.6-5.6q-.75.6-1.725.95T9.5 16m0-2q1.875 0 3.188-1.312T14 9.5t-1.312-3.187T9.5 5T6.313 6.313T5 9.5t1.313 3.188T9.5 14"/></svg></button>
+            </div>
+        </section>
+    </div>
+</form>
+
+{% if bans.is_empty() %}
+    <p>No bans found.</p>
+{% else %}
+    <ul class="ban-list">
+        {% for ban_with_users in bans %}
+            <li class="ban-card">
+                <div class="left">
+                    <div class="ban-info">
+                        {% call u::badge(&ban_with_users.banned_by_user, size="medium") %}
+                        <span class="banned-text">banned</span>
+                        {% call u::badge(&ban_with_users.banned_user, size="medium") %}
+                    </div>
+                    <div class="ban-reason">
+                        {{ ban_with_users.ban.reason }}
+                    </div>
+                    <div class="ban-time">
+                        {% call u::relative(&ban_with_users.ban.banned_at) %}
+                    </div>
+                </div>
+                <div class="ban-actions">
+                    <a href="/admin/bans/{{ ban_with_users.banned_user.username }}/unban" class="button icon gray" data-tooltip="Unban" aria-label="Unban">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M6 22q-.825 0-1.412-.587T4 20V10q0-.825.588-1.412T6 8h9V6q0-1.25-.875-2.125T12 3q-1.05 0-1.838.638T9.1 5.225q-.1.35-.413.563T8 6q-.425 0-.712-.275t-.213-.65q.35-1.725 1.725-2.9T12 1q2.075 0 3.538 1.462T17 6v2h1q.825 0 1.413.588T20 10v10q0 .825-.587 1.413T18 22zm0-2h12V10H6zm6-3q.825 0 1.413-.587T14 15t-.587-1.412T12 13t-1.412.588T10 15t.588 1.413T12 17m-6 3V10z"/></svg>
+                    </a>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+
+    {% if has_more %}
+        <div class="pagination">
+            <a href="/bans?offset={{ pagination.offset + pagination.limit }}&limit={{ pagination.limit }}{% if let Some(q) = previous_query.text_query %}&text_query={{ q }}{% endif %}" class="button">Load more</a>
+        </div>
+    {% endif %}
+{% endif %}
+
+{% endblock %}

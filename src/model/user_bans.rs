@@ -28,7 +28,7 @@ pub struct CreateUserBan {
 }
 
 // Search request
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserBanSearch {
     pub text_query: Option<String>,
     pub banned_by: Option<Uuid>,

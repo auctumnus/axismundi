@@ -13,13 +13,47 @@ dev-frontend:
   cd frontend && bun run dev
 
 make-test-user:
-    @echo "Creating test users ..."
+    @echo "Creating test user ..."
     curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"aaa@aaa.com","password":"kitty paw fuzzy socks","username":"autumn"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'aaa@aaa.com'"
 
-    @echo "Creating test users ..."
+    @echo "Creating second test user..."
     curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"bbb@bbb.com","password":"kitty paw fuzzy socks","username":"winter"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'bbb@bbb.com'"
+
+    @echo "Creating admin user..."
+    curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"kitty paw fuzzy socks","username":"admin"}'
+    docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'admin@admin.com'"
+
+    just make-admin admin@admin.com
+
+# Make a user an admin by email or username
+make-admin identifier:
+    #!/usr/bin/env sh
+    echo "Looking up user: {{identifier}}..."
+    user_id=$(docker exec axismundi-db psql -U user -d axismundi -t -c "SELECT id FROM users WHERE email = '{{identifier}}' OR username = '{{identifier}}' LIMIT 1" | xargs)
+
+    if [ -z "$user_id" ]; then
+        echo "Error: User not found with identifier '{{identifier}}'"
+        exit 1
+    fi
+
+    echo "Found user: $user_id"
+
+    # Check if user already has admin tag
+    has_admin=$(docker exec axismundi-db psql -U user -d axismundi -t -c "SELECT EXISTS(SELECT 1 FROM user_tags WHERE user_id = '$user_id' AND tag = 'admin')" | xargs)
+
+    if [ "$has_admin" = "t" ]; then
+        echo "User already has admin tag!"
+        exit 0
+    fi
+
+    echo "Adding admin tag..."
+    docker exec axismundi-db psql -U user -d axismundi -c "INSERT INTO user_tags (user_id, tag, hidden) VALUES ('$user_id', 'admin', false)"
+
+    echo "Successfully made user an admin!"
+    echo "User tags:"
+    docker exec axismundi-db psql -U user -d axismundi -c "SELECT tag, hidden, created_at FROM user_tags WHERE user_id = '$user_id'"
 
 # Start only the database
 db:

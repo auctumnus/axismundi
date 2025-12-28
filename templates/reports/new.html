@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% import "util.html" as u %}
+
+{% block title %}report resource - axismundi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>report resource</h1>
+
+    {% if let Some(error) = error %}
+        <div class="error">
+            {{ error.message }}
+        </div>
+    {% endif %}
+
+    <p>Use this form to report content that violates our community guidelines. All reports are reviewed by moderators.</p>
+
+    <form method="post" action="/report/new">
+        <input type="hidden" name="resource_type" value="{{ resource_type_str }}">
+        <input type="hidden" name="resource_id" value="{{ resource_id }}">
+
+        <section>
+            <label for="reason">Reason</label>
+            {% call u::field_error(name="reason") %}
+            <textarea id="reason" name="reason" required>{% if let Some(reason) = previous_reason %}{{ reason }}{% endif %}</textarea>
+        </section>
+
+        <button type="submit">Submit Report</button>
+        <a href="javascript:history.back()" class="button secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

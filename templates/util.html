@@ -19,6 +19,16 @@
 {% endif %}
 {% endmacro %}
 
+{% macro audit_log_banner() %}
+<div class="audit-log-banner card" style="background-color: var(--warning-bg, #fff3cd); border-left: 4px solid var(--warning, #ffc107); padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem;">
+    <div style="flex: 1;">
+        <p style="margin: 0;">
+            <strong>admin/moderator override:</strong> this action will bypass normal permissions and be logged in the audit log
+        </p>
+    </div>
+</div>
+{% endmacro %}
+
 {% macro name(user) %}
 {% if let Some(name) = user.display_name.clone() %}
     {{ name }}
@@ -114,7 +124,7 @@
                 <li>{{ translations_count }} {% match *translations_count %}{% when 1 %}translation{% else %}translations{% endmatch %}</li>
             </ul>
         </span>
-        <span class="likes {% if translatable_with_liked.is_liked %}liked{% endif %}" data-target="{{ translatable_with_liked.translatable.slug }}" data-tooltip="Like this translatable" role="button">
+        <span class="likes like-button {% if translatable_with_liked.is_liked %}liked{% endif %}" data-target="/api/translatables/{{ translatable_with_liked.translatable.slug }}" data-tooltip="Like this translatable" role="button">
             <span class="icon-button-container yellow">
                 <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                 <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
@@ -173,7 +183,7 @@
                     {% endfor %}
                 </ul>
             </span>
-            <span class="likes {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
+            <span class="likes like-button {% if language_with_contributors.language.like_count > 0 %}liked{% endif %}" data-target="/api/languages/{{ language_with_contributors.language.code }}" data-tooltip="Like this language" role="button">
                 <span class="icon-button-container yellow">
                     <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                     <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
@@ -195,7 +205,7 @@
                 {% call relative(&translation_with_author.translation.created_at) %}
             </span>
         </span>
-        <span class="likes {% if translation_with_author.translation.like_count > 0 %}liked{% endif %}" data-target="{{ translation_with_author.translation.translatable_slug }}/{{ language_code }}" data-tooltip="Like this translation" role="button">
+        <span class="likes like-button {% if translation_with_author.translation.like_count > 0 %}liked{% endif %}" data-target="/api/translatables/{{ translation_with_author.translation.translatable_slug }}/translations/{{ language_code }}" data-tooltip="Like this translation" role="button">
             <span class="icon-button-container yellow">
                 <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                 <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
@@ -220,7 +230,7 @@
                 created by {% call user_display(&word_with_meta.creator, "small") %} {% call relative(&word_with_meta.word.created_at) %}
             </span>
         </span>
-        <span class="likes {% if word_with_meta.word.like_count > 0 %}liked{% endif %}" data-target="{{ word_with_meta.word.language_code.as_ref().unwrap() }}/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}" data-tooltip="Like this word" role="button">
+        <span class="likes like-button {% if word_with_meta.word.like_count > 0 %}liked{% endif %}" data-target="/api/languages/{{ word_with_meta.word.language_code.as_ref().unwrap() }}/words/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}" data-tooltip="Like this word" role="button">
             <span class="icon-button-container yellow">
                 <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                 <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
@@ -363,6 +373,81 @@
 </li>
 {% endmacro %}
 
+{% macro audit_log_card(entry) %}
+<li class="audit-log-card">
+    <span class="left">
+        <span class="log-detail">
+            {% if let Some(user) = &entry.user %}
+                {% call badge(user) %}
+            {% else %}
+                <span>a deleted user</span>
+            {% endif %}
+            <span>{{ entry.action.as_str() }}</span>
+            {% call audit_log_resource_link(&entry) %}
+        </span>
+
+        {% call relative(&entry.action_at) %}
+        <details>
+            <summary>details</summary>
+            <pre class="json-block">{{ entry.details }}</pre>
+        </details>
+    </span>
+    <a href="/admin/audit-log/{{ entry.id }}" class="right button icon gray">
+        <svg class="icon chevron" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
+    </a>
+</li>
+{% endmacro %}
+
+{% macro report_card(report) %}
+<li class="report-card">
+    <span class="left">
+        <span class="report-summary">
+            <span class="resource-type">{% match report.resource_type %}
+                {% when crate::model::reports::ReportableResource::User %}user
+                {% when crate::model::reports::ReportableResource::Language %}language
+                {% when crate::model::reports::ReportableResource::Word %}word
+                {% when crate::model::reports::ReportableResource::Translation %}translation
+                {% when crate::model::reports::ReportableResource::Translatable %}translatable
+                {% when crate::model::reports::ReportableResource::WordRelation %}word relation
+                {% when crate::model::reports::ReportableResource::Invite %}invite
+                {% when crate::model::reports::ReportableResource::Permission %}permission
+            {% endmatch %}</span>
+            {% if let Some(priority) = report.priority %}
+                <span class="priority-badge priority-{% match priority %}
+                    {% when crate::model::reports::ReportPriority::Low %}low
+                    {% when crate::model::reports::ReportPriority::Medium %}medium
+                    {% when crate::model::reports::ReportPriority::High %}high
+                    {% when crate::model::reports::ReportPriority::Urgent %}urgent
+                {% endmatch %}">{% match priority %}
+                    {% when crate::model::reports::ReportPriority::Low %}low
+                    {% when crate::model::reports::ReportPriority::Medium %}medium
+                    {% when crate::model::reports::ReportPriority::High %}high
+                    {% when crate::model::reports::ReportPriority::Urgent %}urgent
+                {% endmatch %}</span>
+            {% endif %}
+            {% if let Some(status) = report.resolution_status %}
+                <span class="status-badge status-{% match status %}
+                    {% when crate::model::reports::ResolutionStatus::Pending %}pending
+                    {% when crate::model::reports::ResolutionStatus::InProgress %}in-progress
+                    {% when crate::model::reports::ResolutionStatus::Dismissed %}dismissed
+                    {% when crate::model::reports::ResolutionStatus::ActionTaken %}action-taken
+                {% endmatch %}">{% match status %}
+                    {% when crate::model::reports::ResolutionStatus::Pending %}pending
+                    {% when crate::model::reports::ResolutionStatus::InProgress %}in progress
+                    {% when crate::model::reports::ResolutionStatus::Dismissed %}dismissed
+                    {% when crate::model::reports::ResolutionStatus::ActionTaken %}action taken
+                {% endmatch %}</span>
+            {% endif %}
+        </span>
+        <span class="report-reason">{{ report.reason }}</span>
+        {% call relative(&report.reported_at) %}
+    </span>
+    <a href="/admin/reports/{{ report.id }}" class="right button icon gray">
+        <svg class="icon chevron" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
+    </a>
+</li>
+{% endmacro %}
+
 {% macro language_section(language, can_edit_language) %}
 <li>
     <h2>{{ language.name }}</h2>
@@ -376,6 +461,7 @@
             <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
             <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
         {% endif %}
+        <li><a href="/report/new?resource_type=language&resource_id={{ language.id }}">report</a></li>
     </ul>
 </li>
 {% endmacro %}
@@ -394,6 +480,7 @@
             <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit">edit word</a></li>
             <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">delete word</a></li>
         {% endif %}
+        <li><a href="/report/new?resource_type=word&resource_id={{ word.id }}">report</a></li>
     </ul>
 </li>
 {% endmacro %}
@@ -406,11 +493,12 @@
         {% if can_edit_translatable %}
             <li><a href="/translatable/{{ translatable.slug }}/edit">edit translatable</a></li>
         {% endif %}
+        <li><a href="/report/new?resource_type=translatable&resource_id={{ translatable.id }}">report</a></li>
     </ul>
 </li>
 {% endmacro %}
 
-{% macro translation_section(translatable, language, can_edit_translation) %}
+{% macro translation_section(translatable, language, translation, can_edit_translation) %}
 <li>
     <h2>translation</h2>
     <ul>
@@ -418,6 +506,7 @@
         {% if can_edit_translation %}
             <li><a href="/translatable/{{ translatable.slug }}/edit-translation/{{ language.code }}">edit translation</a></li>
         {% endif %}
+        <li><a href="/report/new?resource_type=translation&resource_id={{ translation.id }}">report</a></li>
     </ul>
 </li>
 {% endmacro %}
@@ -445,4 +534,62 @@
     </div>
 </div>
 
+{% endmacro %}
+
+{% macro audit_log_resource_link(audit_log) %}
+{% if let Some(resource) = &audit_log.resource %}
+    {% match resource %}
+        {% when crate::model::audit_log::AuditableResourceResolved::User(user) %}
+            <a href="/users/{{ user.username }}">{{ user.username }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Language(language) %}
+            <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Word(word) %}
+            <a href="/languages/{{ word.language_code.as_ref().unwrap() }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Translation(translation) %}
+            <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ translation.language_code }}">a translation</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Translatable(translatable) %}
+            <a href="/translatable/{{ translatable.slug }}">{{ translatable.title }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::WordRelation(_) %}
+            <span>a word relation</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Invite(_) %}
+            <span>an invite</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Permission(_) %}
+            <span>a permission</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Quotation(quotation) %}
+            <a href="/quotations/{{ quotation.id }}">a quotation</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Definition(_) %}
+            <span>a definition</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::QuotationSuggestion(_) %}
+            <span>a quotation suggestion</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Report(report) %}
+            <a href="/reports/{{ report.id }}">a report</a>
+    {% endmatch %}
+{% else %}
+    {% match audit_log.resource_type %}
+        {% when crate::model::audit_log::AuditableResource::User %}
+            <span>a deleted user</span>
+        {% when crate::model::audit_log::AuditableResource::Language %}
+            <span>a deleted language</span>
+        {% when crate::model::audit_log::AuditableResource::Word %}
+            <span>a deleted word</span>
+        {% when crate::model::audit_log::AuditableResource::Translation %}
+            <span>a deleted translation</span>
+        {% when crate::model::audit_log::AuditableResource::Translatable %}
+            <span>a deleted translatable</span>
+        {% when crate::model::audit_log::AuditableResource::WordRelation %}
+            <span>a deleted word relation</span>
+        {% when crate::model::audit_log::AuditableResource::Invite %}
+            <span>a deleted invite</span>
+        {% when crate::model::audit_log::AuditableResource::Permission %}
+            <span>a deleted permission</span>
+        {% when crate::model::audit_log::AuditableResource::Quotation %}
+            <span>a deleted quotation</span>
+        {% when crate::model::audit_log::AuditableResource::Definition %}
+            <span>a deleted definition</span>
+        {% when crate::model::audit_log::AuditableResource::QuotationSuggestion %}
+            <span>a deleted quotation suggestion</span>
+        {% when crate::model::audit_log::AuditableResource::Report %}
+            <span>a deleted report</span>
+    {% endmatch %}
+{% endif %}
 {% endmacro %}

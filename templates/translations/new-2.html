@@ -19,6 +19,11 @@
 {% block title %}new translation - axismundi{% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>new translation</h1>
 
 {% if let Some(error) = error %}

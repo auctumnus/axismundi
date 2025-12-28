@@ -116,26 +116,28 @@ impl QuotationRepository {
             ));
         }
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            // Check permissions
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, translation.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, translation.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request(
                     "you don't have permission to create quotations",
                 ));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot create quotations"));
             }
         }
 
@@ -176,7 +178,7 @@ impl QuotationRepository {
         .await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -218,24 +220,26 @@ impl QuotationRepository {
                 .find_by_id(existing.translation)
                 .await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            // Check permissions
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, translation.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, translation.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request("you don't have permission to edit quotations"));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot edit quotations"));
             }
         }
 
@@ -298,7 +302,7 @@ impl QuotationRepository {
         let updated = result.ok_or_else(|| not_found(format!("quotation with id '{id}'")))?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -331,26 +335,28 @@ impl QuotationRepository {
                 .find_by_id(existing.translation)
                 .await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            // Check permissions
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, translation.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, translation.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request(
                     "you don't have permission to delete quotations",
                 ));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot delete quotations"));
             }
         }
 
@@ -359,7 +365,7 @@ impl QuotationRepository {
             .await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod && result.rows_affected() > 0 {
+        if needs_audit_log && result.rows_affected() > 0 {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),

@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Form, Router,
-    extract::Path,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -65,10 +65,12 @@ struct NewInvitationTemplate {
     error: Option<AppError>,
     can_grant_owner: bool,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 async fn new_invitation_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
@@ -76,14 +78,18 @@ async fn new_invitation_form(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let can_grant_owner = attempt!(
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_grant_owner = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Owner)
             .await
     );
 
-    let user_has_permission = attempt!(
+    let user_has_permission = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Admin)
@@ -98,12 +104,16 @@ async fn new_invitation_form(
         .await;
     }
 
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
     let template = NewInvitationTemplate {
         current_user: Some(user),
         language,
         error: None,
         can_grant_owner,
         user_has_permission: user_has_permission || can_grant_owner,
+        will_create_audit_log,
     };
 
     okay(render_template(template))
@@ -117,6 +127,7 @@ struct NewInvitationFormData {
 
 async fn create_invitation_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     invites: LanguageInviteRepository,
     permissions: LanguagePermissionRepository,
@@ -126,14 +137,18 @@ async fn create_invitation_submit(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let can_grant_owner = attempt!(
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_grant_owner = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Owner)
             .await
     );
 
-    let user_has_permission = attempt!(
+    let user_has_permission = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Admin)
@@ -147,6 +162,9 @@ async fn create_invitation_submit(
         )
         .await;
     }
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     match invites
         .create(
@@ -170,6 +188,7 @@ async fn create_invitation_submit(
                 error: Some(e),
                 can_grant_owner,
                 user_has_permission: user_has_permission || can_grant_owner,
+                will_create_audit_log,
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
@@ -281,10 +300,12 @@ struct RevokeInvitationTemplate {
     invite: LanguageInvite,
     invited_user: User,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 async fn revoke_invitation_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     invites: LanguageInviteRepository,
     users: UserRepository,
@@ -299,14 +320,18 @@ async fn revoke_invitation_form(
         return render_generic_error(s, crate::err::not_found("Invitation not found")).await;
     }
 
-    let user_has_permission = attempt!(
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let user_has_permission = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Admin)
             .await
     );
 
-    let is_owner = attempt!(
+    let is_owner = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Owner)
@@ -325,12 +350,16 @@ async fn revoke_invitation_form(
 
     let invited_user = attempt!(s, users.find_by_id(invite.recipient).await);
 
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
     let template = RevokeInvitationTemplate {
         current_user: Some(user),
         language,
         invite,
         invited_user,
         user_has_permission: user_has_permission || is_owner,
+        will_create_audit_log,
     };
 
     okay(render_template(template))

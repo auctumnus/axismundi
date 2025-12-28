@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/ban-card.css">
+{% endblock %}
+
+{% block title %}unban {{ banned_user.username }} - axismundi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>unban user</h1>
+
+    {% call u::top_level_error() %}
+
+    <div class="ban-card preview">
+        <div class="left">
+            <div class="ban-info">
+                {% call u::badge(&banned_by_user, size="medium") %}
+                <span class="banned-text">banned</span>
+                {% call u::badge(&banned_user, size="medium") %}
+            </div>
+            <div class="ban-reason">
+                {{ ban.reason }}
+            </div>
+            <div class="ban-time">
+                {% call u::relative(&ban.banned_at) %}
+            </div>
+        </div>
+    </div>
+
+    <p class="warning-text">
+        are you sure you want to unban {{ banned_user.username }}? this will restore their access to the website.
+    </p>
+
+    <form class="default" method="post" action="/admin/bans/{{ banned_user.username }}/unban">
+        <button type="submit">Unban User</button>
+    </form>
+</div>
+{% endblock %}

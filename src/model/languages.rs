@@ -269,26 +269,30 @@ impl LanguageRepository {
 
         ensure_verified(requestor)?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, id)
-                .await?;
-            let Some(perm) = user_perm else {
-                return Err(forbidden("you don't have permission to edit this language"));
-            };
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, id)
+            .await?;
 
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(forbidden("viewers cannot edit language"));
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has Editor+ permission, check if they're trying to change privacy without being Owner
+                if updates.private.is_some() && perm.permission != PermissionLevel::Owner {
+                    return Err(forbidden("only owners can change language privacy"));
+                }
+                // Has proper permission, no audit log needed
             }
-
-            if updates.private.is_some() && perm.permission != PermissionLevel::Owner {
-                return Err(forbidden("only owners can change language privacy"));
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
+                return Err(forbidden("you don't have permission to edit this language"));
             }
         }
 
@@ -328,7 +332,7 @@ impl LanguageRepository {
         let updated_lang = result.ok_or_else(|| not_found(format!("language with id '{id}'")))?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -365,23 +369,28 @@ impl LanguageRepository {
         tracing::debug!("Deleting language {id}");
         ensure_verified(requestor)?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, id)
-                .await?;
-            let Some(perm) = user_perm else {
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, id)
+            .await?;
+
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission == PermissionLevel::Owner => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(forbidden(
                     "you don't have permission to delete this language",
                 ));
-            };
-            if perm.permission != PermissionLevel::Owner {
-                return Err(forbidden("only owners can delete languages"));
             }
         }
 
@@ -393,7 +402,7 @@ impl LanguageRepository {
             .await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod && result.rows_affected() > 0 {
+        if needs_audit_log && result.rows_affected() > 0 {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),

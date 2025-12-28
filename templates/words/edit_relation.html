@@ -4,6 +4,11 @@
 {% block title %}edit relation - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>edit relation</h1>
 
 {% if let Some(_) = error %}

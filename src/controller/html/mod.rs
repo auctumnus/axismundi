@@ -27,11 +27,14 @@ use governor::middleware::NoOpMiddleware;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
 
+mod audit_logs;
 mod bookmarks;
 mod language_invites;
 mod languages;
+mod reports;
 mod translatables;
 mod translations;
+mod user_bans;
 mod users;
 mod word_classes;
 mod words;
@@ -60,6 +63,9 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_translation_routes, normal_translation_routes) = translations::create_router();
     let (secure_bookmark_routes, normal_bookmark_routes) = bookmarks::create_router();
     let (secure_invite_routes, normal_invite_routes) = language_invites::create_router();
+    let (secure_audit_log_routes, normal_audit_log_routes) = audit_logs::create_router();
+    let (secure_ban_routes, normal_ban_routes) = user_bans::create_router();
+    let (secure_report_routes, normal_report_routes) = reports::create_router();
 
     let secure_routes = Router::<AppState>::new()
         .merge(secure_user_routes)
@@ -69,7 +75,10 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_translatable_routes)
         .merge(secure_translation_routes)
         .merge(secure_bookmark_routes)
-        .merge(secure_invite_routes);
+        .merge(secure_invite_routes)
+        .merge(secure_audit_log_routes)
+        .merge(secure_ban_routes)
+        .merge(secure_report_routes);
 
     let normal_routes = Router::<AppState>::new()
         .route("/", get(landing))
@@ -83,7 +92,10 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_translatable_routes)
         .merge(normal_translation_routes)
         .merge(normal_bookmark_routes)
-        .merge(normal_invite_routes);
+        .merge(normal_invite_routes)
+        .merge(normal_audit_log_routes)
+        .merge(normal_ban_routes)
+        .merge(normal_report_routes);
 
     Router::<AppState>::new()
         .merge(secure_routes)

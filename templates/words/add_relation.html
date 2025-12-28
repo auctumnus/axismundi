@@ -8,6 +8,11 @@
 {% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>add relation</h1>
 
 <div class="context-cards">

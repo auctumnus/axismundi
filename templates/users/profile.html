@@ -4,6 +4,7 @@
 {% block title %}{% call u::name(user) %} - axismundi{% endblock %}
 
 {% block head %}
+<script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/profile.css">
 <link rel="stylesheet" href="/static/activity.css">
 <link rel="stylesheet" href="/static/language-card.css">
@@ -17,8 +18,6 @@
 </script>
 <script src="/static/tooltip.js" type="module" defer></script>
 <script src="/static/time.js" type="module" defer></script>
-<script src="/static/language-card.js" defer></script>
-<script src="/static/translatable-card.js" defer></script>
 <link rel="stylesheet" href="/static/tooltip.css">
 {% endblock %}
 
@@ -166,4 +165,21 @@
     </ul>
 {% endif %}
 
+{% endblock %}
+
+{% block footer %}
+{% if let Some(current_user) = current_user %}
+    {% if current_user.is_admin() || current_user.is_moderator() %}
+        <li>
+            <h2>moderation actions</h2>
+            <ul>
+                {% if user.is_banned() %}
+                <li><a href="/admin/bans/{{ user.username }}/unban">unban this user</a></li>
+                {% else %}
+                <li><a href="/admin/bans/{{ user.username }}/ban">ban this user</a></li>
+                {% endif %}
+            </ul>
+        </li>
+    {% endif %}
+{% endif %}
 {% endblock %}

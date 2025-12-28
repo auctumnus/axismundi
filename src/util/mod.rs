@@ -93,6 +93,36 @@ pub async fn is_admin_or_mod(state: &AppState, user_id: uuid::Uuid) -> AppResult
     Ok(is_admin || is_moderator)
 }
 
+/// Check if an operation on a language will create an audit log entry.
+/// This happens when an admin/mod user performs an action without proper language permissions.
+pub async fn will_create_audit_log_for_language(
+    state: &AppState,
+    user: &User,
+    language_id: uuid::Uuid,
+) -> bool {
+    use crate::model::language_invites::PermissionLevel;
+    use crate::model::language_permissions::LanguagePermissionRepository;
+
+    // Check if user is admin/mod
+    let is_admin_or_mod = is_admin_or_mod(state, user.id)
+        .await
+        .unwrap_or(false);
+
+    if !is_admin_or_mod {
+        return false;
+    }
+
+    // Check if they have proper permission for this language (Editor or above)
+    let perms = LanguagePermissionRepository::new(state.clone());
+    let has_permission = perms
+        .has_permission(user.id, language_id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    // Will create audit log if admin/mod but lacks permission
+    !has_permission
+}
+
 pub type PasswordValidationContext<'v_a> = &'v_a [&'v_a str];
 
 pub fn validate_password(

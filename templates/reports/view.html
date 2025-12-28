@@ -1,0 +1,250 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}report - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/report-card.css">
+<style>
+    .report-view {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .report-header {
+        margin-bottom: 2rem;
+    }
+
+    .report-header h1 {
+        margin-bottom: 0.5rem;
+    }
+
+    .report-summary {
+        font-size: 1.1rem;
+        color: var(--text-secondary, #666);
+        margin-bottom: 1rem;
+    }
+
+    .report-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .meta-item {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .meta-label {
+        font-weight: 600;
+        min-width: 140px;
+    }
+
+    .reason-section {
+        margin-top: 2rem;
+    }
+
+    .reason-section h2 {
+        margin-bottom: 1rem;
+    }
+
+    .reason-text {
+        background: var(--card-bg, #f5f5f5);
+        border: 1px solid var(--border, #ddd);
+        border-radius: 4px;
+        padding: 1rem;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .priority-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .priority-low {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .priority-medium {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+
+    .priority-high {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .priority-urgent {
+        background: #f3e5f5;
+        color: #6a1b9a;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .status-pending {
+        background: #fafafa;
+        color: #616161;
+    }
+
+    .status-in-progress {
+        background: #e1f5fe;
+        color: #0277bd;
+    }
+
+    .status-dismissed {
+        background: #f1f8e9;
+        color: #558b2f;
+    }
+
+    .status-action-taken {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .back-link {
+        margin-bottom: 1rem;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="report-view">
+    <a href="/admin/reports" class="back-link button gray">← back to reports</a>
+
+    <div class="report-header">
+        <h1>report</h1>
+        <div class="report-summary">
+            Report on
+            {% match report.resource_type %}
+                {% when crate::model::reports::ReportableResource::User %}user
+                {% when crate::model::reports::ReportableResource::Language %}language
+                {% when crate::model::reports::ReportableResource::Word %}word
+                {% when crate::model::reports::ReportableResource::Translation %}translation
+                {% when crate::model::reports::ReportableResource::Translatable %}translatable
+                {% when crate::model::reports::ReportableResource::WordRelation %}word relation
+                {% when crate::model::reports::ReportableResource::Invite %}invite
+                {% when crate::model::reports::ReportableResource::Permission %}permission
+            {% endmatch %}
+            <code>{{ report.resource_id }}</code>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="report-meta">
+            <div class="meta-item">
+                <span class="meta-label">report id:</span>
+                <code>{{ report.id }}</code>
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">reported at:</span>
+                {% call u::relative(&report.reported_at) %}
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">reporter:</span>
+                {% if let Some(reporter_id) = report.reporter %}
+                    <code>{{ reporter_id }}</code>
+                {% else %}
+                    <span>anonymous</span>
+                {% endif %}
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">resource type:</span>
+                <span>{% match report.resource_type %}
+                    {% when crate::model::reports::ReportableResource::User %}user
+                    {% when crate::model::reports::ReportableResource::Language %}language
+                    {% when crate::model::reports::ReportableResource::Word %}word
+                    {% when crate::model::reports::ReportableResource::Translation %}translation
+                    {% when crate::model::reports::ReportableResource::Translatable %}translatable
+                    {% when crate::model::reports::ReportableResource::WordRelation %}word relation
+                    {% when crate::model::reports::ReportableResource::Invite %}invite
+                    {% when crate::model::reports::ReportableResource::Permission %}permission
+                {% endmatch %}</span>
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">resource id:</span>
+                <code>{{ report.resource_id }}</code>
+            </div>
+
+            {% if let Some(priority) = report.priority %}
+                <div class="meta-item">
+                    <span class="meta-label">priority:</span>
+                    <span class="priority-badge priority-{% match priority %}
+                        {% when crate::model::reports::ReportPriority::Low %}low
+                        {% when crate::model::reports::ReportPriority::Medium %}medium
+                        {% when crate::model::reports::ReportPriority::High %}high
+                        {% when crate::model::reports::ReportPriority::Urgent %}urgent
+                    {% endmatch %}">{% match priority %}
+                        {% when crate::model::reports::ReportPriority::Low %}Low
+                        {% when crate::model::reports::ReportPriority::Medium %}Medium
+                        {% when crate::model::reports::ReportPriority::High %}High
+                        {% when crate::model::reports::ReportPriority::Urgent %}Urgent
+                    {% endmatch %}</span>
+                </div>
+            {% endif %}
+
+            {% if let Some(status) = report.resolution_status %}
+                <div class="meta-item">
+                    <span class="meta-label">status:</span>
+                    <span class="status-badge status-{% match status %}
+                        {% when crate::model::reports::ResolutionStatus::Pending %}pending
+                        {% when crate::model::reports::ResolutionStatus::InProgress %}in-progress
+                        {% when crate::model::reports::ResolutionStatus::Dismissed %}dismissed
+                        {% when crate::model::reports::ResolutionStatus::ActionTaken %}action-taken
+                    {% endmatch %}">{% match status %}
+                        {% when crate::model::reports::ResolutionStatus::Pending %}Pending
+                        {% when crate::model::reports::ResolutionStatus::InProgress %}In Progress
+                        {% when crate::model::reports::ResolutionStatus::Dismissed %}Dismissed
+                        {% when crate::model::reports::ResolutionStatus::ActionTaken %}Action Taken
+                    {% endmatch %}</span>
+                </div>
+            {% endif %}
+
+            {% if let Some(resolved_at) = report.resolved_at %}
+                <div class="meta-item">
+                    <span class="meta-label">resolved at:</span>
+                    {% call u::relative(&resolved_at) %}
+                </div>
+            {% endif %}
+
+            {% if let Some(resolved_by) = report.resolved_by %}
+                <div class="meta-item">
+                    <span class="meta-label">resolved by:</span>
+                    <code>{{ resolved_by }}</code>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="reason-section">
+            <h2>reason</h2>
+            <div class="reason-text">{{ report.reason }}</div>
+        </div>
+
+        {% if let Some(note) = report.resolution_note %}
+            <div class="reason-section">
+                <h2>resolution note</h2>
+                <div class="reason-text">{{ note }}</div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

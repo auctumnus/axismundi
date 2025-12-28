@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Form, Router,
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
@@ -98,6 +98,7 @@ struct NewWordTemplate {
     previous_ipa: String,
     previous_notes: String,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 #[derive(Template)]
@@ -117,6 +118,7 @@ struct EditWordTemplate {
     previous_ipa: String,
     previous_notes: String,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 #[derive(Deserialize)]
@@ -158,6 +160,7 @@ struct WordWithMeta {
 
 async fn word_search(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     definitions: DefinitionRepository,
@@ -171,7 +174,11 @@ async fn word_search(
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
-        permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        is_admin_or_mod || permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false)
@@ -258,6 +265,7 @@ async fn word_search(
 
 async fn view_lemmata(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_classes: WordClassRepository,
@@ -269,7 +277,11 @@ async fn view_lemmata(
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
-        permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        is_admin_or_mod || permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false)
@@ -392,6 +404,7 @@ async fn view_lemmata(
 
 async fn new_word(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
@@ -401,10 +414,20 @@ async fn new_word(
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
-        permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        is_admin_or_mod || permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let will_create_audit_log = if let Some(user) = &current_user {
+        crate::util::will_create_audit_log_for_language(&state, user, language.id).await
     } else {
         false
     };
@@ -425,6 +448,7 @@ async fn new_word(
         previous_ipa: String::new(),
         previous_notes: String::new(),
         user_has_permission,
+        will_create_audit_log,
     };
 
     let body = render_template(template);
@@ -433,6 +457,7 @@ async fn new_word(
 
 async fn new_word_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     word_classes: WordClassRepository,
     words: WordRepository,
@@ -444,10 +469,17 @@ async fn new_word_submit(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
-    let user_has_permission = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let user_has_permission = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
@@ -489,6 +521,7 @@ async fn new_word_submit(
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
             user_has_permission,
+            will_create_audit_log,
         };
 
         let body = render_template(template);
@@ -558,6 +591,7 @@ async fn new_word_submit(
                 previous_ipa: form.ipa.clone().unwrap_or_default(),
                 previous_notes: form.notes.clone().unwrap_or_default(),
                 user_has_permission,
+                will_create_audit_log,
             };
 
             let body = render_template(template);
@@ -568,6 +602,7 @@ async fn new_word_submit(
 
 async fn view_lemma(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     definitions_repo: DefinitionRepository,
@@ -580,7 +615,11 @@ async fn view_lemma(
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
     let user_has_permission = if let Some(user) = &current_user {
-        permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        is_admin_or_mod || permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false)
@@ -670,6 +709,7 @@ async fn view_lemma(
 
 async fn edit_word(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_classes: WordClassRepository,
@@ -691,6 +731,12 @@ async fn edit_word(
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let will_create_audit_log = if let Some(user) = &current_user {
+        crate::util::will_create_audit_log_for_language(&state, user, language.id).await
     } else {
         false
     };
@@ -749,6 +795,7 @@ async fn edit_word(
         previous_ipa: word.ipa.unwrap_or_default(),
         previous_notes: word.notes.unwrap_or_default(),
         user_has_permission,
+        will_create_audit_log,
     };
 
     let body = render_template(template);
@@ -757,6 +804,7 @@ async fn edit_word(
 
 async fn edit_word_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_classes: WordClassRepository,
@@ -774,10 +822,17 @@ async fn edit_word_submit(
             .await
     );
 
-    let user_has_permission = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let user_has_permission = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
@@ -815,6 +870,7 @@ async fn edit_word_submit(
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
             user_has_permission,
+            will_create_audit_log,
         };
 
         let body = render_template(template);
@@ -929,6 +985,7 @@ async fn edit_word_submit(
                 previous_ipa: form.ipa.clone().unwrap_or_default(),
                 previous_notes: form.notes.clone().unwrap_or_default(),
                 user_has_permission,
+                will_create_audit_log,
             };
 
             let body = render_template(template);
@@ -945,10 +1002,12 @@ struct AddRelationTemplate {
     language: Language,
     word: Word,
     error: Option<AppError>,
+    will_create_audit_log: bool,
 }
 
 async fn add_relation_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     language_permissions: LanguagePermissionRepository,
@@ -963,8 +1022,12 @@ async fn add_relation_form(
             .await
     );
 
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
     // Check permission
-    let has_permission = attempt!(
+    let has_permission = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(current_user.id, language.id, PermissionLevel::Editor)
@@ -975,11 +1038,15 @@ async fn add_relation_form(
             .await;
     }
 
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
+
     let template = AddRelationTemplate {
         current_user: Some(current_user.clone()),
         language,
         word,
         error: None,
+        will_create_audit_log,
     };
 
     let body = render_template(template);
@@ -988,6 +1055,7 @@ async fn add_relation_form(
 
 async fn add_relation_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_relations: WordRelationRepository,
@@ -1005,8 +1073,15 @@ async fn add_relation_submit(
             .await
     );
 
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
+
     // Check permission on source language
-    let has_permission = attempt!(
+    let has_permission = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(current_user.id, language.id, PermissionLevel::Editor)
@@ -1018,6 +1093,7 @@ async fn add_relation_submit(
             language,
             word,
             error: Some(bad_request("You don't have permission to add relations")),
+            will_create_audit_log,
         };
         let body = render_template(template);
         return okay(body);
@@ -1037,6 +1113,7 @@ async fn add_relation_submit(
                         language,
                         word,
                         error: Some(e),
+                        will_create_audit_log,
                     };
                     let body = render_template(template);
                     return okay(body);
@@ -1049,6 +1126,7 @@ async fn add_relation_submit(
                 language,
                 word,
                 error: Some(e),
+                will_create_audit_log,
             };
             let body = render_template(template);
             return okay(body);
@@ -1056,7 +1134,7 @@ async fn add_relation_submit(
     };
 
     // Check permission on target language
-    let has_target_permission = attempt!(
+    let has_target_permission = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(
@@ -1074,6 +1152,7 @@ async fn add_relation_submit(
             error: Some(bad_request(
                 "You don't have permission to edit the target word's language",
             )),
+            will_create_audit_log,
         };
         let body = render_template(template);
         return okay(body);
@@ -1106,6 +1185,7 @@ async fn add_relation_submit(
                 language,
                 word,
                 error: Some(e),
+                will_create_audit_log,
             };
             let body = render_template(template);
             okay(body)
@@ -1141,6 +1221,7 @@ struct RelationsFilterQuery {
 
 async fn view_word_relations(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_relations: WordRelationRepository,
@@ -1159,7 +1240,11 @@ async fn view_word_relations(
     );
 
     let user_has_permission = if let Some(user) = &current_user {
-        language_permissions
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+            .await
+            .unwrap_or(false);
+
+        is_admin_or_mod || language_permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false)
@@ -1237,10 +1322,12 @@ struct DeleteRelationTemplate {
     related_word: Word,
     related_word_language_code: String,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 async fn delete_relation_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     language_permissions: LanguagePermissionRepository,
@@ -1275,8 +1362,12 @@ async fn delete_relation_form(
             .await
     );
 
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
     // Check permission
-    let has_permission = attempt!(
+    let has_permission = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(current_user.id, language.id, PermissionLevel::Editor)
@@ -1290,6 +1381,9 @@ async fn delete_relation_form(
         .await;
     }
 
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
+
     let template = DeleteRelationTemplate {
         current_user: Some(current_user.clone()),
         language,
@@ -1297,6 +1391,7 @@ async fn delete_relation_form(
         related_word,
         related_word_language_code: related_language_code.clone(),
         user_has_permission: has_permission,
+        will_create_audit_log,
     };
 
     let body = render_template(template);
@@ -1389,10 +1484,12 @@ struct EditRelationTemplate {
     error: Option<AppError>,
     user_has_permission: bool,
     user_has_permission_on_related: bool,
+    will_create_audit_log: bool,
 }
 
 async fn edit_relation_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_relations: WordRelationRepository,
@@ -1428,8 +1525,12 @@ async fn edit_relation_form(
             .await
     );
 
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
     // Check permission
-    let has_permission = attempt!(
+    let has_permission = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(current_user.id, language.id, PermissionLevel::Editor)
@@ -1443,7 +1544,7 @@ async fn edit_relation_form(
         .await;
     }
 
-    let has_permission_on_related = attempt!(
+    let has_permission_on_related = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(
@@ -1453,6 +1554,9 @@ async fn edit_relation_form(
             )
             .await
     );
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
 
     // Find the existing relation to get its current kind
     let relation_kind = match word_relations.find_relation(&word, &related_word).await {
@@ -1471,6 +1575,7 @@ async fn edit_relation_form(
         error: None,
         user_has_permission: has_permission,
         user_has_permission_on_related: has_permission_on_related,
+        will_create_audit_log,
     };
 
     let body = render_template(template);
@@ -1484,6 +1589,7 @@ struct EditRelationForm {
 
 async fn edit_relation_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     word_relations: WordRelationRepository,
@@ -1520,14 +1626,21 @@ async fn edit_relation_submit(
             .await
     );
 
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
+
     // Check permission
-    let has_permission = attempt!(
+    let has_permission = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(current_user.id, language.id, PermissionLevel::Editor)
             .await
     );
-    let has_permission_on_related = attempt!(
+    let has_permission_on_related = is_admin_or_mod || attempt!(
         s,
         language_permissions
             .has_permission(
@@ -1549,6 +1662,7 @@ async fn edit_relation_submit(
             error: Some(bad_request("You don't have permission to edit relations")),
             user_has_permission: has_permission,
             user_has_permission_on_related: has_permission_on_related,
+            will_create_audit_log,
         };
         let body = render_template(template);
         return okay(body);
@@ -1582,6 +1696,7 @@ async fn edit_relation_submit(
                 error: Some(e),
                 user_has_permission: has_permission,
                 user_has_permission_on_related: has_permission_on_related,
+                will_create_audit_log,
             };
             let body = render_template(template);
             okay(body)
@@ -1597,10 +1712,12 @@ struct DeleteWordTemplate {
     language: Language,
     word: Word,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 async fn delete_word_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     permissions: LanguagePermissionRepository,
@@ -1615,16 +1732,24 @@ async fn delete_word_form(
             .await
     );
 
-    let user_has_permission = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let user_has_permission = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let template = DeleteWordTemplate {
         current_user: Some(user),
         language,
         word,
         user_has_permission,
+        will_create_audit_log,
     };
 
     okay(render_template(template))

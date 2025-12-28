@@ -1,0 +1,159 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}audit log entry - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/audit-log.css">
+<style>
+    .audit-log-view {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .audit-log-header {
+        margin-bottom: 2rem;
+    }
+
+    .audit-log-header h1 {
+        margin-bottom: 0.5rem;
+    }
+
+    .audit-log-summary {
+        font-size: 1.1rem;
+        color: var(--text-secondary, #666);
+        margin-bottom: 1rem;
+    }
+
+    .audit-log-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .meta-item {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .meta-label {
+        font-weight: 600;
+        min-width: 120px;
+    }
+
+    .details-section {
+        margin-top: 2rem;
+    }
+
+    .details-section h2 {
+        margin-bottom: 1rem;
+    }
+
+    .json-details {
+        background: var(--card-bg, #f5f5f5);
+        border: 1px solid var(--border, #ddd);
+        border-radius: 4px;
+        padding: 1rem;
+        overflow-x: auto;
+    }
+
+    .json-details pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.9rem;
+    }
+
+    .back-link {
+        margin-bottom: 1rem;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="audit-log-view">
+    <a href="/admin/audit-log" class="back-link button gray">← back to audit log</a>
+
+    <div class="audit-log-header">
+        <h1>audit log entry</h1>
+        <div class="audit-log-summary">
+            {% if let Some(user) = &entry.user %}
+                {% call u::badge(user) %}
+            {% else %}
+                <span>a deleted user</span>
+            {% endif %}
+            <span>{{ entry.action.as_str() }}</span>
+            {% call u::audit_log_resource_link(&entry) %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="audit-log-meta">
+            <div class="meta-item">
+                <span class="meta-label">entry id:</span>
+                <code>{{ entry.id }}</code>
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">timestamp:</span>
+                {% call u::relative(&entry.action_at) %}
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">action:</span>
+                <span>{{ entry.action.as_str() }}</span>
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">resource type:</span>
+                <span>{% match entry.resource_type %}
+                    {% when crate::model::audit_log::AuditableResource::User %}user
+                    {% when crate::model::audit_log::AuditableResource::Language %}language
+                    {% when crate::model::audit_log::AuditableResource::Word %}word
+                    {% when crate::model::audit_log::AuditableResource::Translation %}translation
+                    {% when crate::model::audit_log::AuditableResource::Translatable %}translatable
+                    {% when crate::model::audit_log::AuditableResource::WordRelation %}word relation
+                    {% when crate::model::audit_log::AuditableResource::Invite %}invite
+                    {% when crate::model::audit_log::AuditableResource::Permission %}permission
+                    {% when crate::model::audit_log::AuditableResource::Quotation %}quotation
+                    {% when crate::model::audit_log::AuditableResource::Definition %}definition
+                    {% when crate::model::audit_log::AuditableResource::QuotationSuggestion %}quotation suggestion
+                    {% when crate::model::audit_log::AuditableResource::Report %}report
+                {% endmatch %}</span>
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">resource id:</span>
+                <code>{{ entry.resource_id }}</code>
+            </div>
+
+            <div class="meta-item">
+                <span class="meta-label">user:</span>
+                {% if let Some(user) = &entry.user %}
+                    <a href="/users/{{ user.username }}">{{ user.username }}</a>
+                    {% if let Some(user_id) = entry.user_id %}
+                        <code>({{ user_id }})</code>
+                    {% endif %}
+                {% else %}
+                    {% if let Some(user_id) = entry.user_id %}
+                        <span>deleted user <code>({{ user_id }})</code></span>
+                    {% else %}
+                        <span>system action</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="details-section">
+            <h2>details</h2>
+            <div class="json-details">
+                <pre>{{ entry.details }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

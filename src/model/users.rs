@@ -69,6 +69,18 @@ impl User {
             .as_ref()
             .map(|object_id| S3.get_profile_picture_url(object_id))
     }
+
+    pub fn is_admin(&self) -> bool {
+        self.tags.iter().any(|tag| tag == "admin")
+    }
+
+    pub fn is_moderator(&self) -> bool {
+        self.tags.iter().any(|tag| tag == "moderator")
+    }
+
+    pub fn is_banned(&self) -> bool {
+        self.tags.iter().any(|tag| tag == "banned")
+    }
 }
 
 pub static USERNAME_REGEX: LazyLock<Regex> = re!("^([a-z0-9](-|_)?)+[a-z0-9]$");

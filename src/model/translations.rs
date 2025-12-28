@@ -36,6 +36,7 @@ pub struct Translation {
 
     pub translatable_slug: String,
     pub translatable_title: String,
+    pub language_code: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -111,9 +112,11 @@ impl TranslationRepository {
                     t.created_by,
                     t.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
                 WHERE t.id = $1
             "#,
             id
@@ -144,9 +147,11 @@ impl TranslationRepository {
                     t.created_by,
                     t.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
                 WHERE tr.slug = $1
             "#,
             slug
@@ -181,9 +186,11 @@ impl TranslationRepository {
                     t.created_by,
                     t.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
                 WHERE t.translatable = $1 AND t.language = $2
             "#,
             translatable_id,
@@ -210,26 +217,28 @@ impl TranslationRepository {
             .ensure_not_banned(requestor.id)
             .await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            // Check permissions for the language
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, language_id)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, language_id)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request(
                     "you don't have permission to create translations",
                 ));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot create translations"));
             }
         }
 
@@ -278,9 +287,11 @@ impl TranslationRepository {
                     i.created_by,
                     i.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM inserted i
                 JOIN translatable tr ON i.translatable = tr.id
+                JOIN languages l ON i.language = l.id
             "#,
             translatable_id,
             language_id,
@@ -296,7 +307,7 @@ impl TranslationRepository {
         .await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -350,26 +361,28 @@ impl TranslationRepository {
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            // Check permissions
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, existing.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, existing.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request(
                     "you don't have permission to edit translations",
                 ));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot edit translations"));
             }
         }
 
@@ -405,9 +418,11 @@ impl TranslationRepository {
                     u.created_by,
                     u.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM updated u
                 JOIN translatable tr ON u.translatable = tr.id
+                JOIN languages l ON u.language = l.id
             "#,
             id,
             updates.translated_text,
@@ -425,7 +440,7 @@ impl TranslationRepository {
             result.ok_or_else(|| not_found(format!("translation with id '{id}'")))?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod {
+        if needs_audit_log {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -472,26 +487,28 @@ impl TranslationRepository {
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
 
-        // Check if requestor is admin/mod - if so, allow with audit log
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+        let mut needs_audit_log = false;
 
-        if !is_admin_or_mod {
-            // Check permissions
-            let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-                self.state.clone(),
-            );
-            let user_perm = permissions
-                .find_by_user_and_language(requestor.id, existing.language)
-                .await?;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, existing.language)
+            .await?;
 
-            let Some(perm) = user_perm else {
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                needs_audit_log = true;
+            }
+            _ => {
                 return Err(bad_request(
                     "you don't have permission to delete translations",
                 ));
-            };
-
-            if perm.permission == PermissionLevel::Viewer {
-                return Err(bad_request("viewers cannot delete translations"));
             }
         }
 
@@ -500,7 +517,7 @@ impl TranslationRepository {
             .await?;
 
         // Create audit log if admin/mod override
-        if is_admin_or_mod && result.rows_affected() > 0 {
+        if needs_audit_log && result.rows_affected() > 0 {
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
             let log_req = crate::model::audit_log::CreateAuditLog {
                 user_id: Some(requestor.id),
@@ -543,9 +560,11 @@ impl TranslationRepository {
                     t.created_by,
                     t.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
                 WHERE t.translatable = $1
                 ORDER BY t.created_at DESC
                 LIMIT $2
@@ -606,9 +625,11 @@ impl TranslationRepository {
                     t.created_by,
                     t.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
                 WHERE t.language = $1
                 ORDER BY t.created_at DESC
                 LIMIT $2
@@ -784,9 +805,11 @@ impl TranslationRepository {
                     t.created_by,
                     t.updated_by,
                     tr.slug as translatable_slug,
-                    tr.title as translatable_title
+                    tr.title as translatable_title,
+                    l.code as language_code
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
                 WHERE t.language = $1
             "#,
         );

@@ -4,6 +4,11 @@
 {% block title %}edit permission - {{ language.name }} - axismundi{% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>edit permission</h1>
 
 {% call u::top_level_error() %}

@@ -18,6 +18,11 @@ document.addEventListener("DOMContentLoaded", () => {
 {% endblock %}
 
 {% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
 <h1>invite user</h1>
 
 {% call u::top_level_error() %}

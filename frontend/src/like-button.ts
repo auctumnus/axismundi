@@ -1,57 +1,53 @@
-/**
- * Initialize like buttons for a specific resource type
- * @param selector - CSS selector to find like buttons (e.g., '#language-list .likes')
- * @param getApiPath - Function that takes a target string and returns the API path prefix
- *                     (e.g., (target) => `/api/languages/${target}`)
- */
-export function initializeLikeButtons(
-    selector: string,
-    getApiPath: (target: string) => string
-): void {
-    document.querySelectorAll(selector).forEach((likeButton) => {
-        likeButton.addEventListener('click', async (event) => {
-            event.preventDefault();
-            event.stopPropagation();
+document.addEventListener('DOMContentLoaded', () => {
+    const likeButtons = document.querySelectorAll('.like-button');
 
-            const target = likeButton.getAttribute('data-target');
-            if (!target) {
-                console.error('Like button missing data-target attribute');
-                return;
+    for (const button of likeButtons) {
+        const target = button.getAttribute('data-target');
+        const likeEndpoint = `${target}/like`;
+        const unlikeEndpoint = `${target}/unlike`;
+        const likeCountSpan = button.querySelector('.like-count');
+
+        let isLiked = button.classList.contains('liked');
+        let likeCount = parseInt(likeCountSpan?.textContent || '0', 10);
+
+        button.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            let endpoint = likeEndpoint;
+
+            if(isLiked) {
+                endpoint = unlikeEndpoint;
             }
-
-            const shouldLike = !likeButton.classList.contains('liked');
-            const apiPath = getApiPath(target);
-            const endpoint = `${apiPath}/${shouldLike ? 'like' : 'unlike'}`;
 
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
                 });
 
                 if (response.ok) {
-                    const data = await response.json();
-                    const likeCountSpan = likeButton.querySelector('span.like-count');
+                    isLiked = !isLiked;
+                    button.classList.toggle('liked', isLiked);
+
+                    if (isLiked) {
+                        likeCount += 1;
+                    } else {
+                        likeCount -= 1;
+                    }
 
                     if (likeCountSpan) {
-                        likeCountSpan.textContent = data.like_count;
-                    }
-
-                    if (data.liked) {
-                        likeButton.classList.add('liked');
-                        likeButton.classList.add('animating');
-                        setTimeout(() => {
-                            likeButton.classList.remove('animating');
-                        }, 400);
-                    } else {
-                        likeButton.classList.remove('liked');
-                        likeButton.classList.remove('animating');
+                        likeCountSpan.textContent = likeCount.toString();
                     }
                 } else {
-                    console.error('Failed to toggle like status');
+                    console.error('Failed to toggle like status:', response.statusText);
                 }
             } catch (error) {
                 console.error('Error toggling like status:', error);
             }
         });
-    });
-}
+    }
+})

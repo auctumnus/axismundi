@@ -1,0 +1,91 @@
+.report-card {
+    display: flex;
+    flex-direction: row;
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+    gap: .5rem;
+    align-items: center;
+
+    text-decoration: none;
+
+    transition: border-color var(--duration-very-fast) ease-in-out, box-shadow var(--duration-very-fast) ease-in-out;
+
+    .left {
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+        flex-grow: 1;
+    }
+
+    .report-summary {
+        display: flex;
+        flex-direction: row;
+        gap: .5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .resource-type {
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .report-reason {
+        color: var(--text-secondary, #666);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 600px;
+    }
+
+    .priority-badge,
+    .status-badge {
+        display: inline-block;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .priority-low {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .priority-medium {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+
+    .priority-high {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .priority-urgent {
+        background: #f3e5f5;
+        color: #6a1b9a;
+    }
+
+    .status-pending {
+        background: #fafafa;
+        color: #616161;
+    }
+
+    .status-in-progress {
+        background: #e1f5fe;
+        color: #0277bd;
+    }
+
+    .status-dismissed {
+        background: #f1f8e9;
+        color: #558b2f;
+    }
+
+    .status-action-taken {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+}

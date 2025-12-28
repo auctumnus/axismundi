@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Form, Router,
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -402,10 +402,12 @@ struct EditLanguageFormTemplate {
     previous_description: String,
     can_edit_language: bool,
     can_delete_language: bool,
+    will_create_audit_log: bool,
 }
 
 async fn edit_language_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
@@ -413,15 +415,22 @@ async fn edit_language_form(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let can_edit_language = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
 
-    let can_delete_language = permissions
+    let can_delete_language = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Owner)
         .await
         .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let template = EditLanguageFormTemplate {
         current_user: Some(user),
@@ -432,6 +441,7 @@ async fn edit_language_form(
         previous_description: language.description,
         can_edit_language,
         can_delete_language,
+        will_create_audit_log,
     };
 
     okay(render_template(template))
@@ -446,6 +456,7 @@ struct EditLanguageFormData {
 
 async fn edit_language_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
@@ -454,10 +465,17 @@ async fn edit_language_submit(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let can_edit_language = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Editor)
         .await
         .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let updates = crate::model::languages::UpdateLanguage {
         code: if form.code != language.code {
@@ -484,11 +502,13 @@ async fn edit_language_submit(
             Redirect::to(&format!("/languages/{}", lang.code)).into_response(),
         ),
         Err(e) => {
+            let can_delete_language = is_admin_or_mod || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Owner)
+                .await
+                .unwrap_or(false);
+
             let template = EditLanguageFormTemplate {
-                can_delete_language: permissions
-                    .has_permission(user.id, language.id, PermissionLevel::Owner)
-                    .await
-                    .unwrap_or(false),
+                can_delete_language,
                 current_user: Some(user),
                 language: language.clone(),
                 error: Some(e),
@@ -496,6 +516,7 @@ async fn edit_language_submit(
                 previous_name: form.name.clone(),
                 previous_description: form.description.clone(),
                 can_edit_language,
+                will_create_audit_log,
             };
 
             let body = render_template(template);
@@ -630,10 +651,12 @@ struct DeletePermissionTemplate {
     permission: crate::model::language_permissions::LanguagePermission,
     target_user: User,
     user_has_permission: bool,
+    will_create_audit_log: bool,
 }
 
 async fn delete_permission_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     users: UserRepository,
@@ -653,12 +676,19 @@ async fn delete_permission_form(
 
     let target_user = attempt!(s, users.find_by_id(permission.user).await);
 
-    let user_has_permission = attempt!(
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let user_has_permission = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
     );
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let template = DeletePermissionTemplate {
         current_user: Some(user),
@@ -666,6 +696,7 @@ async fn delete_permission_form(
         permission,
         target_user,
         user_has_permission,
+        will_create_audit_log,
     };
 
     okay(render_template(template))
@@ -709,10 +740,12 @@ struct EditPermissionTemplate {
     can_grant_owner: bool,
     user_has_permission: bool,
     error: Option<AppError>,
+    will_create_audit_log: bool,
 }
 
 async fn edit_permission_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     users: UserRepository,
@@ -732,19 +765,26 @@ async fn edit_permission_form(
 
     let target_user = attempt!(s, users.find_by_id(permission.user).await);
 
-    let can_grant_owner = attempt!(
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_grant_owner = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Owner)
             .await
     );
 
-    let user_has_permission = attempt!(
+    let user_has_permission = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
     );
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let template = EditPermissionTemplate {
         current_user: Some(user),
@@ -754,6 +794,7 @@ async fn edit_permission_form(
         can_grant_owner,
         user_has_permission,
         error: None,
+        will_create_audit_log,
     };
 
     okay(render_template(template))
@@ -766,6 +807,7 @@ struct EditPermissionFormData {
 
 async fn edit_permission_submit(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     users: UserRepository,
@@ -784,19 +826,26 @@ async fn edit_permission_submit(
         .await;
     }
 
-    let can_grant_owner = attempt!(
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_grant_owner = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Owner)
             .await
     );
 
-    let user_has_permission = attempt!(
+    let user_has_permission = is_admin_or_mod || attempt!(
         s,
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
     );
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     match permissions
         .update_permission_checked(&user, id, form.permission)
@@ -816,6 +865,7 @@ async fn edit_permission_submit(
                 can_grant_owner,
                 user_has_permission,
                 error: Some(e),
+                will_create_audit_log,
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
@@ -831,10 +881,12 @@ struct DeleteLanguageTemplate {
     current_user: Option<User>,
     language: Language,
     can_delete_language: bool,
+    will_create_audit_log: bool,
 }
 
 async fn delete_language_form(
     s: Session,
+    State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
     Path(code): Path<String>,
@@ -842,15 +894,23 @@ async fn delete_language_form(
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let can_delete_language = permissions
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_delete_language = is_admin_or_mod || permissions
         .has_permission(user.id, language.id, PermissionLevel::Owner)
         .await
         .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let template = DeleteLanguageTemplate {
         current_user: Some(user),
         language,
         can_delete_language,
+        will_create_audit_log,
     };
 
     okay(render_template(template))

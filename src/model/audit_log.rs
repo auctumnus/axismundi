@@ -1,14 +1,24 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use sqlx::FromRow;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::AppState;
 use crate::err::{AppResult, forbidden, not_found};
+use crate::model::definitions::Definition;
+use crate::model::language_invites::LanguageInvite;
+use crate::model::language_permissions::LanguagePermission;
+use crate::model::languages::Language;
+use crate::model::quotation_suggestions::QuotationSuggestion;
+use crate::model::quotations::Quotation;
+use crate::model::reports::Report;
+use crate::model::translatable::Translatable;
+use crate::model::translations::Translation;
 use crate::model::user_tags::UserTagRepository;
 use crate::model::users::User;
+use crate::model::word_relations::WordRelation;
+use crate::model::words::Word;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
@@ -29,6 +39,23 @@ pub enum AuditableResource {
     Report,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum AuditableResourceResolved {
+    User(User),
+    Language(Language),
+    Word(Word),
+    Translation(Translation),
+    Translatable(Translatable),
+    WordRelation(WordRelation),
+    Invite(LanguageInvite),
+    Permission(LanguagePermission),
+    Quotation(Quotation),
+    Definition(Definition),
+    QuotationSuggestion(QuotationSuggestion),
+    Report(Report),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "audit_action_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
@@ -43,7 +70,22 @@ pub enum AuditActionType {
     RemoveTag,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+impl AuditActionType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AuditActionType::Created => "created",
+            AuditActionType::Updated => "updated",
+            AuditActionType::Deleted => "deleted",
+            AuditActionType::UpdatedReport => "updated",
+            AuditActionType::UserBan => "banned",
+            AuditActionType::UserUnban => "unbanned",
+            AuditActionType::AddTag => "added a tag to",
+            AuditActionType::RemoveTag => "removed a tag from",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditLog {
     pub id: Uuid,
     pub user_id: Option<Uuid>,
@@ -52,6 +94,9 @@ pub struct AuditLog {
     pub resource_type: AuditableResource,
     pub resource_id: Uuid,
     pub details: JsonValue,
+
+    pub user: Option<User>,
+    pub resource: Option<AuditableResourceResolved>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -81,13 +126,147 @@ impl AuditLogRepository {
         Self { state }
     }
 
+    /// Helper to fetch a user by ID
+    async fn fetch_user(&self, user_id: Option<Uuid>) -> AppResult<Option<User>> {
+        if let Some(user_id) = user_id {
+            Ok(sqlx::query_as!(
+                User,
+                r#"
+                select
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.tags,
+                    users.created_at,
+                    users.updated_at,
+                    users.verified_at,
+                    COALESCE(b.slug, '')::text as "bookmark!"
+                from users
+                left join bookmarks b on b.item = users.id and b.resource = 'user'
+                where users.id = $1
+                "#,
+                user_id
+            )
+            .fetch_optional(&self.state.pool)
+            .await?)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Helper to resolve a resource by type and ID
+    /// Returns None if the resource has been deleted or can't be found
+    async fn resolve_resource(
+        &self,
+        resource_type: AuditableResource,
+        resource_id: Uuid,
+    ) -> Option<AuditableResourceResolved> {
+        use crate::model::definitions::DefinitionRepository;
+        use crate::model::language_invites::LanguageInviteRepository;
+        use crate::model::language_permissions::LanguagePermissionRepository;
+        use crate::model::languages::LanguageRepository;
+        use crate::model::quotation_suggestions::QuotationSuggestionRepository;
+        use crate::model::quotations::QuotationRepository;
+        use crate::model::translatable::TranslatableRepository;
+        use crate::model::translations::TranslationRepository;
+        use crate::model::users::UserRepository;
+        use crate::model::words::WordRepository;
+
+        match resource_type {
+            AuditableResource::User => {
+                let repo = UserRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::User)
+            }
+            AuditableResource::Language => {
+                let repo = LanguageRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Language)
+            }
+            AuditableResource::Word => {
+                let repo = WordRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Word)
+            }
+            AuditableResource::Translation => {
+                let repo = TranslationRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Translation)
+            }
+            AuditableResource::Translatable => {
+                let repo = TranslatableRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Translatable)
+            }
+            AuditableResource::WordRelation => {
+                // WordRelation doesn't have a find_by_id method, so we can't resolve it
+                None
+            }
+            AuditableResource::Invite => {
+                let repo = LanguageInviteRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Invite)
+            }
+            AuditableResource::Permission => {
+                let repo = LanguagePermissionRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Permission)
+            }
+            AuditableResource::Quotation => {
+                let repo = QuotationRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Quotation)
+            }
+            AuditableResource::Definition => {
+                let repo = DefinitionRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::Definition)
+            }
+            AuditableResource::QuotationSuggestion => {
+                let repo = QuotationSuggestionRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::QuotationSuggestion)
+            }
+            AuditableResource::Report => {
+                // Report requires a user parameter, which we don't have here
+                // We could fetch it differently, but for now just return None
+                None
+            }
+        }
+    }
+
     /// Create a new audit log entry without permission checks.
     /// Use this when you've already verified the user is admin/mod.
     pub(crate) async fn create_internal(&self, req: CreateAuditLog) -> AppResult<AuditLog> {
         req.validate()?;
 
-        let log = sqlx::query_as!(
-            AuditLog,
+        let record = sqlx::query!(
             r#"
             insert into audit_logs (user_id, action, resource_type, resource_id, details)
             values ($1, $2, $3, $4, $5)
@@ -109,7 +288,22 @@ impl AuditLogRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
-        Ok(log)
+        let user = self.fetch_user(record.user_id).await?;
+        let resource = self
+            .resolve_resource(record.resource_type, record.resource_id)
+            .await;
+
+        Ok(AuditLog {
+            id: record.id,
+            user_id: record.user_id,
+            action: record.action,
+            action_at: record.action_at,
+            resource_type: record.resource_type,
+            resource_id: record.resource_id,
+            details: record.details,
+            user,
+            resource,
+        })
     }
 
     /// Create a new audit log entry. Only callable by mods/admins.
@@ -139,8 +333,7 @@ impl AuditLogRepository {
             return Err(forbidden("Only moderators and admins can view audit logs"));
         }
 
-        let log = sqlx::query_as!(
-            AuditLog,
+        let record = sqlx::query!(
             r#"
             select
                 id,
@@ -159,7 +352,22 @@ impl AuditLogRepository {
         .await?
         .ok_or_else(|| not_found("Audit log not found"))?;
 
-        Ok(log)
+        let user = self.fetch_user(record.user_id).await?;
+        let resource = self
+            .resolve_resource(record.resource_type, record.resource_id)
+            .await;
+
+        Ok(AuditLog {
+            id: record.id,
+            user_id: record.user_id,
+            action: record.action,
+            action_at: record.action_at,
+            resource_type: record.resource_type,
+            resource_id: record.resource_id,
+            details: record.details,
+            user,
+            resource,
+        })
     }
 
     /// List all audit logs with pagination. Only accessible to mods/admins.
@@ -177,8 +385,7 @@ impl AuditLogRepository {
             return Err(forbidden("Only moderators and admins can view audit logs"));
         }
 
-        let logs = sqlx::query_as!(
-            AuditLog,
+        let records = sqlx::query!(
             r#"
             select
                 id,
@@ -197,6 +404,25 @@ impl AuditLogRepository {
         )
         .fetch_all(&self.state.pool)
         .await?;
+
+        let mut logs = Vec::new();
+        for record in records {
+            let user = self.fetch_user(record.user_id).await?;
+            let resource = self
+                .resolve_resource(record.resource_type, record.resource_id)
+                .await;
+            logs.push(AuditLog {
+                id: record.id,
+                user_id: record.user_id,
+                action: record.action,
+                action_at: record.action_at,
+                resource_type: record.resource_type,
+                resource_id: record.resource_id,
+                details: record.details,
+                user,
+                resource,
+            });
+        }
 
         let total = sqlx::query_scalar!("select count(*) from audit_logs")
             .fetch_one(&self.state.pool)
@@ -232,8 +458,7 @@ impl AuditLogRepository {
         }
 
         // Build dynamic query based on filters
-        let logs = sqlx::query_as!(
-            AuditLog,
+        let records = sqlx::query!(
             r#"
             select
                 id,
@@ -261,6 +486,25 @@ impl AuditLogRepository {
         )
         .fetch_all(&self.state.pool)
         .await?;
+
+        let mut logs = Vec::new();
+        for record in records {
+            let user = self.fetch_user(record.user_id).await?;
+            let resource = self
+                .resolve_resource(record.resource_type, record.resource_id)
+                .await;
+            logs.push(AuditLog {
+                id: record.id,
+                user_id: record.user_id,
+                action: record.action,
+                action_at: record.action_at,
+                resource_type: record.resource_type,
+                resource_id: record.resource_id,
+                details: record.details,
+                user,
+                resource,
+            });
+        }
 
         let total = sqlx::query_scalar!(
             r#"
