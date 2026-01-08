@@ -130,9 +130,8 @@ mod tests {
     use crate::CONFIG;
     use crate::{
         AppState,
-        controller::api::tests::{delete, get, get_with_auth, make_authed_user, post},
+        controller::api::tests::{delete, get_with_auth, make_authed_user, post},
         email::MockEmailService,
-        model::reports::{ReportPriority, ResolutionStatus},
         tests::{random_name, response_to_value},
     };
     use sqlx::PgPool;

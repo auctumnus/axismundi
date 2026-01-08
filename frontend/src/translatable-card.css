@@ -29,9 +29,12 @@ ul#translatable-list {
     .left {
         display: flex;
         flex-direction: column;
-        gap: .5rem;
+        gap: 1.25rem;
         flex-grow: 1;
         justify-content: space-between;
+        li {
+            margin-bottom: 0;
+        }
     }
 
     .translatable-title {

@@ -32,6 +32,10 @@
 
     a {
         color: var(--foreground-primary);
+        text-decoration: none;
+        &:hover {
+            text-decoration: underline;
+        }
     }
 
     span, time {

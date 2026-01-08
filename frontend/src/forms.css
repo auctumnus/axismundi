@@ -149,6 +149,12 @@ form.default {
     }
   }
 
+  label:has(input[type="checkbox"]) {
+    display: flex;
+    flex-direction: row;
+    gap: .5rem;
+  }
+
   .select-container {
     position: relative;
     z-index: 0;
@@ -194,7 +200,6 @@ form.default {
       pointer-events: none;
       color: var(--foreground-secondary);
     }
-
   }
 }
 

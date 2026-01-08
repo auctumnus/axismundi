@@ -15,7 +15,68 @@
 
     <p>Use this form to report content that violates our community guidelines. All reports are reviewed by moderators.</p>
 
-    <form method="post" action="/report/new">
+    {% if let Some(data) = resource_data %}
+        <div class="context-cards">
+            {% match data %}
+                {% when crate::controller::html::reports::ReportableResourceData::User with { user } %}
+                    <div class="context-card user-context">
+                        <span class="context-label">reporting user</span>
+                        <a href="/users/{{ user.username }}" class="context-card-link">
+                            <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
+                            {% if let Some(description) = &user.description %}
+                                <span class="context-text">{{ description }}</span>
+                            {% endif %}
+                        </a>
+                    </div>
+                {% when crate::controller::html::reports::ReportableResourceData::Language with { language } %}
+                    <div class="context-card language-context">
+                        <span class="context-label">reporting language</span>
+                        <a href="/languages/{{ language.code }}" class="context-card-link">
+                            <span class="context-title">{{ language.name }} ({{ language.code }})</span>
+                            <span class="context-text">{% call u::language_summary(language) %}</span>
+                        </a>
+                    </div>
+                {% when crate::controller::html::reports::ReportableResourceData::Word with { word } %}
+                    <div class="context-card word-context">
+                        <span class="context-label">reporting word</span>
+                        {% if let Some(lang_code) = &word.language_code %}
+                            <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}" class="context-card-link">
+                                <span class="context-title">{{ word.word }}{% if let Some(abbr) = &word.word_class_abbreviation %} <span class="word-class-abbreviation">({{ abbr }}.)</span>{% endif %}</span>
+                            </a>
+                        {% else %}
+                            <div class="context-card-link">
+                                <span class="context-title">{{ word.word }}{% if let Some(abbr) = &word.word_class_abbreviation %} <span class="word-class-abbreviation">({{ abbr }}.)</span>{% endif %}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% when crate::controller::html::reports::ReportableResourceData::Translation with { translation } %}
+                    <div class="context-card translation-context">
+                        <span class="context-label">reporting translation</span>
+                        <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ translation.language_code }}" class="context-card-link">
+                            <span class="context-title">{{ translation.translatable_title }}</span>
+                            <span class="context-text">created {% call u::relative(&translation.created_at) %}</span>
+                        </a>
+                    </div>
+                {% when crate::controller::html::reports::ReportableResourceData::Translatable with { translatable } %}
+                    <div class="context-card translatable-context">
+                        <span class="context-label">reporting translatable</span>
+                        <a href="/translatable/{{ translatable.slug }}" class="context-card-link">
+                            <span class="context-title">{{ translatable.title }}</span>
+                            <span class="context-text">{{ translatable.english }}</span>
+                        </a>
+                    </div>
+                {% when crate::controller::html::reports::ReportableResourceData::Other %}
+                    <div class="context-card">
+                        <span class="context-label">reporting</span>
+                        <div class="context-card-link">
+                            <span class="context-text">preview not available for this resource type</span>
+                        </div>
+                    </div>
+            {% endmatch %}
+        </div>
+    {% endif %}
+
+    <form class="default" method="post" action="/report/new">
         <input type="hidden" name="resource_type" value="{{ resource_type_str }}">
         <input type="hidden" name="resource_id" value="{{ resource_id }}">
 
@@ -26,7 +87,6 @@
         </section>
 
         <button type="submit">Submit Report</button>
-        <a href="javascript:history.back()" class="button secondary">Cancel</a>
     </form>
 </div>
 {% endblock %}

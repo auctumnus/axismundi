@@ -35,6 +35,18 @@
     <p>{{ translatable.english }}</p>
 </div>
 
+{% if translations.len() == 0 && current_user.is_some() %}
+<h2>translations</h2>
+<div class="card">
+    <h2>no translations yet</h2>
+    <p>create the first translation for this text</p>
+    <div class="actions">
+        <a class="button primary-button" href="/translatables/{{ translatable.slug }}/new-translation">new translation</a>
+    </div>
+</div>
+
+{% else %}
+
 <div class="header-with-actions">
     <h2>translations</h2>
     <ul>
@@ -58,6 +70,9 @@
 {% if translations.len() <= 0 %}
     <p class="empty-description">no translations yet</p>
 {% endif %}
+
+{% endif %}
+
 
 {% endblock %}
 

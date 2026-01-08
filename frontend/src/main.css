@@ -29,6 +29,9 @@
 
   --font-normal: 'Roboto', 'Noto Sans', Arial, sans-serif;
   --font-heading: 'Roboto Slab', 'Roboto', 'Noto Sans', Arial, sans-serif;
+  /* we don't actually ship berkeley mono; this only uses it if you have it installed,
+    but i like that font too much to not use it */
+  --font-monospace: 'Berkeley Mono', 'Roboto Mono', monospace;
 
   --duration-very-fast: 75ms;
   --duration-fast: 150ms;
@@ -487,6 +490,12 @@ footer {
   }
 }
 
+:is(.language-card, .translatable-card) .likes {
+  position: relative;
+  top: -.325rem;
+
+}
+
 .likes {
         display: flex;
         flex-direction: column;
@@ -509,9 +518,7 @@ footer {
 
 
         .like-count {
-            /* we don't actually ship berkeley mono; this only uses it if you have it installed,
-                but i like that font too much to not use it */
-            font-family: 'Berkeley Mono', 'Roboto Mono', monospace;
+          font-family: var(--font-monospace);
         }
 
         &.liked {
@@ -558,6 +565,21 @@ footer {
 
   &:first-child {
     margin-top: 1rem;
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+
+  div.actions {
+    display: flex;
+    flex-direction: row;
+    gap: .5rem;
+    margin-bottom: .5rem;
+
+    a.button, button {
+      margin-bottom: 0;
+    }
   }
 }
 
@@ -774,6 +796,7 @@ a.with-icon, button.with-icon {
   font-size: .875rem;
   color: var(--foreground-secondary);
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -793,4 +816,35 @@ a.with-icon, button.with-icon {
     list-style: none;
     margin: 0;
   }
+}
+
+code {
+  font-family: var(--font-monospace);
+}
+
+.back-link {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .25rem;
+    margin-bottom: 1.75rem;
+    color: var(--foreground-secondary);
+    text-decoration: none;
+
+    transition: color var(--duration-very-fast) ease-in-out;
+
+    svg.icon {
+      transition: color var(--duration-very-fast) ease-in-out;
+      position: relative;
+      top: .5px;
+    }
+
+    &:hover {
+      text-decoration: underline;
+      color: var(--foreground-primary);
+
+      svg.icon {
+        color: var(--foreground-primary);
+      }
+    }
 }

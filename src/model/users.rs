@@ -180,7 +180,9 @@ impl UserRepository {
 
         user.validate_with_args(&user_inputs.as_ref())?;
 
-        if self.username_exists(&user.username).await? {
+        let username_lower = user.username.to_lowercase();
+
+        if self.username_exists(&username_lower).await? {
             return Err(bad_request("username is in use"));
         }
 
@@ -215,7 +217,7 @@ impl UserRepository {
                     ($1, $2, $3, $4, $5, $6, $7, $8)
                 returning id, username, email, password_hash, display_name, description, pronouns, gender, profile_picture_object_id, verified_at, created_at, updated_at
                 "#,
-            user.username,
+            username_lower,
             user.email.to_lowercase(),
             password_hash,
             user.display_name,
@@ -315,6 +317,7 @@ impl UserRepository {
     }
 
     pub async fn find_by_username(&self, username: &str) -> AppResult<User> {
+        let username_lower = username.to_lowercase();
         let result = sqlx::query_as!(
             User,
             r#"
@@ -337,7 +340,7 @@ impl UserRepository {
                 LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
                 WHERE users.username = $1
             "#,
-            username
+            username_lower
         )
         .fetch_optional(&self.state.pool)
         .await?;
@@ -404,7 +407,9 @@ impl UserRepository {
 
         ensure_verified(requestor)?;
 
-        if let Some(username) = &updates.username {
+        let username_lower = updates.username.as_ref().map(|u| u.to_lowercase());
+
+        if let Some(username) = &username_lower {
             if self.username_exists(username).await? {
                 return Err(bad_request("Username is in use"));
             }
@@ -506,7 +511,7 @@ impl UserRepository {
             RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
             "#,
             id,
-            updates.username,
+            username_lower,
             display_name_final,
             description_final,
             pronouns_final,
@@ -698,9 +703,10 @@ impl UserRepository {
     }
 
     pub async fn username_exists(&self, username: &str) -> AppResult<bool> {
+        let username_lower = username.to_lowercase();
         let result = sqlx::query!(
             "SELECT 1 as exists FROM users WHERE username = $1",
-            username
+            username_lower
         )
         .fetch_optional(&self.state.pool)
         .await?;

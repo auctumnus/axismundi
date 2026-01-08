@@ -22,10 +22,10 @@ pub struct PaginatedResponse<T> {
 
 impl<T> PaginatedResponse<T> {
     pub fn request_last_page(&self) -> PaginatedRequest {
-        let last_offset = if self.total % (self.limit as i64) == 0 {
-            self.total - (self.limit as i64)
+        let last_offset = if self.total % i64::from(self.limit) == 0 {
+            self.total - i64::from(self.limit)
         } else {
-            self.total - (self.total % (self.limit as i64))
+            self.total - (self.total % i64::from(self.limit))
         };
         PaginatedRequest {
             limit: self.limit,
@@ -39,10 +39,6 @@ impl<T> PaginatedResponse<T> {
 
     pub fn current_page(&self) -> i32 {
         (self.offset / self.limit) + 1
-    }
-
-    pub fn is_singular(&self) -> bool {
-        self.total == 1
     }
 
     pub fn results_text(&self) -> String {

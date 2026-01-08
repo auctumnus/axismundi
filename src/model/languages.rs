@@ -9,7 +9,7 @@ use crate::{
     model::{
         language_invites::PermissionLevel,
         user_bans::UserBanRepository,
-        users::{User, UserSearch},
+        users::{User, UserSearch, USERNAME_REGEX},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -32,7 +32,7 @@ pub struct Language {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateLanguage {
-    #[validate(length(min = 2, max = 10))]
+    #[validate(length(min = 2, max = 10), regex(path = USERNAME_REGEX))]
     pub code: String,
 
     #[validate(length(min = 2, max = 100))]
@@ -48,7 +48,7 @@ pub struct CreateLanguage {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateLanguage {
-    #[validate(length(min = 2, max = 10))]
+    #[validate(length(min = 2, max = 10), regex(path = USERNAME_REGEX))]
     pub code: Option<String>,
 
     #[serde(default)]
@@ -112,11 +112,13 @@ impl LanguageRepository {
             .ensure_not_banned(requestor.id)
             .await?;
 
-        if self.code_exists(&language.code).await? {
+        let code_lower = language.code.to_lowercase();
+
+        if self.code_exists(&code_lower).await? {
             return Err(bad_request("language code is already in use"));
         }
 
-        if &language.code == "search" {
+        if code_lower == "search" {
             return Err(bad_request("cannot use 'search' as language code"));
         }
 
@@ -128,7 +130,7 @@ impl LanguageRepository {
                 VALUES ($1, $2, $3, $4, $5, $5)
                 RETURNING id, code, name, private, description, created_by, updated_by, created_at, updated_at
             "#,
-            language.code,
+            code_lower,
             language.name,
             language.private,
             language.description,
@@ -232,6 +234,7 @@ impl LanguageRepository {
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<Language> {
+        let code_lower = code.to_lowercase();
         let result = sqlx::query_as!(
             Language,
             r#"
@@ -251,7 +254,7 @@ impl LanguageRepository {
                 LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
                 WHERE languages.code = $1
             "#,
-            code
+            code_lower
         )
         .fetch_optional(&self.state.pool)
         .await?;
@@ -296,13 +299,15 @@ impl LanguageRepository {
             }
         }
 
-        if let Some(code) = &updates.code {
+        let code_lower = updates.code.as_ref().map(|c| c.to_lowercase());
+
+        if let Some(code) = &code_lower {
             if code == "search" {
                 return Err(bad_request("cannot use 'search' as language code"));
             }
         }
 
-        if let Some(code) = &updates.code {
+        if let Some(code) = &code_lower {
             if self.code_exists(code).await? {
                 return Err(bad_request("language code is already in use"));
             }
@@ -321,7 +326,7 @@ impl LanguageRepository {
                 RETURNING languages.*, (SELECT slug FROM bookmarks WHERE item = languages.id AND resource = 'language') as "bookmark!"
             "#,
             id,
-            updates.code,
+            code_lower,
             updates.name,
             updates.description,
             requestor.id
@@ -421,7 +426,8 @@ impl LanguageRepository {
     }
 
     pub async fn code_exists(&self, code: &str) -> AppResult<bool> {
-        let result = sqlx::query!("SELECT 1 as exists FROM languages WHERE code = $1", code)
+        let code_lower = code.to_lowercase();
+        let result = sqlx::query!("SELECT 1 as exists FROM languages WHERE code = $1", code_lower)
             .fetch_optional(&self.state.pool)
             .await?;
 

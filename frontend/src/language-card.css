@@ -95,7 +95,5 @@ ul#language-list {
 }
 
 .like-count {
-    /* we don't actually ship berkeley mono; this only uses it if you have it installed,
-        but i like that font too much to not use it */
-    font-family: 'Berkeley Mono', 'Roboto Mono', monospace;
+    font-family: var(--font-monospace);
 }

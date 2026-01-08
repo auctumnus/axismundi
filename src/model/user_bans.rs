@@ -91,6 +91,20 @@ impl UserBanRepository {
             )
             .await?;
 
+        // Create audit log entry
+        let audit_log = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+        audit_log
+            .create_internal(crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::UserBan,
+                resource_type: crate::model::audit_log::AuditableResource::User,
+                resource_id: req.user_id,
+                details: serde_json::json!({
+                    "reason": req.reason,
+                }),
+            })
+            .await?;
+
         Ok(user_ban)
     }
 
@@ -149,6 +163,18 @@ impl UserBanRepository {
         let user = user_repo.find_by_id(user_id).await?;
         user_tags
             .delete(requestor, &user, "banned".to_string())
+            .await?;
+
+        // Create audit log entry
+        let audit_log = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+        audit_log
+            .create_internal(crate::model::audit_log::CreateAuditLog {
+                user_id: Some(requestor.id),
+                action: crate::model::audit_log::AuditActionType::UserUnban,
+                resource_type: crate::model::audit_log::AuditableResource::User,
+                resource_id: user_id,
+                details: serde_json::json!({}),
+            })
             .await?;
 
         Ok(())

@@ -72,6 +72,18 @@
     {% endif %}
 </div>
 
+{% if recent_words.len() == 0 && can_edit_language %}
+<h2>words</h2>
+<div class="card">
+    <h2>no words yet</h2>
+    <p>create the first word in this language to get started</p>
+    <div class="actions">
+        <a class="button primary-button" href="/languages/{{ language.code }}/new-word">new word</a>
+    </div>
+</div>
+
+{% else %}
+
 <div class="header-with-actions">
     <h2>words</h2>
     <ul>
@@ -91,12 +103,24 @@
     {% for word_with_meta in recent_words %}
         {% call u::render_word_card(&word_with_meta) %}
     {% endfor %}
-
 </ul>
 
 {% if recent_words.len() <= 0 %}
     <p class="empty-description">no words yet</p>
 {% endif %}
+
+{% endif %}
+
+{% if recent_translations.len() == 0 && can_edit_language %}
+<h2>translations</h2>
+<div class="card">
+    <h2>no translations yet</h2>
+    <p>create the first translation in this language to get started</p>
+    <div class="actions">
+        <a class="button primary-button" href="/translatables">find something to translate</a>
+    </div>
+</div>
+{% else %}
 
 <div class="header-with-actions">
     <h2>translations</h2>
@@ -116,6 +140,7 @@
 
 {% if recent_translations.len() <= 0 %}
     <p class="empty-description">no translations yet</p>
+{% endif %}
 {% endif %}
 
 {% endblock %}

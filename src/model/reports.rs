@@ -465,20 +465,30 @@ impl ReportRepository {
         }
 
         // If we're marking as resolved/dismissed/action_taken, set resolved_at and resolved_by
-        let resolved_at = if matches!(
-            report.resolution_status,
-            Some(ResolutionStatus::Dismissed) | Some(ResolutionStatus::ActionTaken)
-        ) && report.resolved_at.is_none()
-        {
-            Some(Utc::now())
-        } else {
-            report.resolved_at
-        };
-
-        let resolved_by = if resolved_at.is_some() && report.resolved_by.is_none() {
-            Some(requestor.id)
-        } else {
-            report.resolved_by
+        // If we're marking as pending/in_progress, clear those fields
+        let (resolved_at, resolved_by) = match report.resolution_status {
+            Some(ResolutionStatus::Pending) | Some(ResolutionStatus::InProgress) => {
+                // Clear resolution fields
+                (None, None)
+            }
+            Some(ResolutionStatus::Dismissed) | Some(ResolutionStatus::ActionTaken) => {
+                // Set resolution fields if not already set
+                let resolved_at = if report.resolved_at.is_none() {
+                    Some(Utc::now())
+                } else {
+                    report.resolved_at
+                };
+                let resolved_by = if report.resolved_by.is_none() {
+                    Some(requestor.id)
+                } else {
+                    report.resolved_by
+                };
+                (resolved_at, resolved_by)
+            }
+            None => {
+                // No status set, keep existing values
+                (report.resolved_at, report.resolved_by)
+            }
         };
 
         // Update in database

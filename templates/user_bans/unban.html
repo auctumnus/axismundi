@@ -29,9 +29,9 @@
         </div>
     </div>
 
-    <p class="warning-text">
+    <div class="warning">
         are you sure you want to unban {{ banned_user.username }}? this will restore their access to the website.
-    </p>
+    </div>
 
     <form class="default" method="post" action="/admin/bans/{{ banned_user.username }}/unban">
         <button type="submit">Unban User</button>

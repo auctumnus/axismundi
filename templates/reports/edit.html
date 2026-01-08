@@ -1,27 +1,26 @@
 {% extends "layout.html" %}
-{%- import "util.html" as u -%}
+{% import "util.html" as u %}
 
-{% block title %}report - axismundi{% endblock %}
+{% block title %}edit report - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/report-card.css">
+<style>
+    .report-text {
+        color: var(--foreground-primary);
+        font-family: var(--font-monospace);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-{% call u::back_button("/admin/reports" , "to search") %}
+<div class="container">
+    <h1>edit report</h1>
 
-<div class="report-view">
-    <div class="header-with-actions">
-        <h2 class="with-action">report</h2>
-        {% if report.priority.is_some() %}
-            <ul>
-                <li>
-                    <a class="with-icon" href="/admin/reports/{{ report.id }}/edit"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
-                    <span>edit</span>
-                </a></li>
-            </ul>
-        {% endif %}
-    </div>
+    {% if let Some(error) = error %}
+        <div class="error">
+            {{ error.message }}
+        </div>
+    {% endif %}
 
     <div class="context-cards">
         {% if let Some(data) = resource_data %}
@@ -137,113 +136,68 @@
                 </div>
             </div>
         {% endif %}
-    </div>
 
-    <div class="card">
-        <table class="report-meta">
-            <tr>
-                <th>reported at</th>
-                <td>{% call u::relative(&report.reported_at) %}</td>
-            </tr>
-
-            {% if let Some(priority) = report.priority %}
-                <tr>
-                    <th>priority</th>
-                    <td><span class="priority-badge priority-{% match priority %}
-                        {% when crate::model::reports::ReportPriority::Low %}low
-                        {% when crate::model::reports::ReportPriority::Medium %}medium
-                        {% when crate::model::reports::ReportPriority::High %}high
-                        {% when crate::model::reports::ReportPriority::Urgent %}urgent
-                    {% endmatch %}">{% match priority %}
-                        {% when crate::model::reports::ReportPriority::Low %}Low
-                        {% when crate::model::reports::ReportPriority::Medium %}Medium
-                        {% when crate::model::reports::ReportPriority::High %}High
-                        {% when crate::model::reports::ReportPriority::Urgent %}Urgent
-                    {% endmatch %}</span></td>
-                </tr>
-            {% endif %}
-
-            {% if let Some(status) = report.resolution_status %}
-                <tr>
-                    <th>status</th>
-                    <td><span class="status-badge status-{% match status %}
-                        {% when crate::model::reports::ResolutionStatus::Pending %}pending
-                        {% when crate::model::reports::ResolutionStatus::InProgress %}in-progress
-                        {% when crate::model::reports::ResolutionStatus::Dismissed %}dismissed
-                        {% when crate::model::reports::ResolutionStatus::ActionTaken %}action-taken
-                    {% endmatch %}">{% match status %}
-                        {% when crate::model::reports::ResolutionStatus::Pending %}Pending
-                        {% when crate::model::reports::ResolutionStatus::InProgress %}In Progress
-                        {% when crate::model::reports::ResolutionStatus::Dismissed %}Dismissed
-                        {% when crate::model::reports::ResolutionStatus::ActionTaken %}Action Taken
-                    {% endmatch %}</span></td>
-                </tr>
-            {% endif %}
-
-            {% if let Some(resolved_at) = report.resolved_at %}
-                <tr>
-                    <th>resolved at</th>
-                    <td>{% call u::relative(&resolved_at) %}</td>
-                </tr>
-            {% endif %}
-
-            {% if let Some(resolved_by) = report.resolved_by %}
-                <tr>
-                    <th>resolved by</th>
-                    <td><code>{{ resolved_by }}</code></td>
-                </tr>
-            {% endif %}
-        </table>
-
-        <div class="reason-section">
-            <h2>reason</h2>
-            <div class="reason-text">{{ report.reason }}</div>
-        </div>
-
-        {% if let Some(note) = report.resolution_note %}
-            <div class="reason-section">
-                <h2>resolution note</h2>
-                <div class="reason-text">{{ note }}</div>
+        <div class="context-card">
+            <span class="context-label">report text</span>
+            <div class="context-card-link">
+                <span class="context-text report-text">{{ report.reason }}</span>
             </div>
-        {% endif %}
-
-        <details>
-            <summary>advanced details</summary>
-            <table class="report-meta">
-                <tr>
-                    <th>report id</th>
-                    <td><code>{{ report.id }}</code></td>
-                </tr>
-
-                <tr>
-                    <th>reporter</th>
-                    <td>{% if let Some(reporter_id) = report.reporter %}
-                        <code>{{ reporter_id }}</code>
-                    {% else %}
-                        <span>User was deleted.</span>
-                    {% endif %}</td>
-                </tr>
-
-                <tr>
-                    <th>resource id</th>
-                    <td><code>{{ report.resource_id }}</code></td>
-                </tr>
-
-                <tr>
-                    <th>resource type</th>
-                    <td>{% match report.resource_type %}
-                        {% when crate::model::reports::ReportableResource::User %}user
-                        {% when crate::model::reports::ReportableResource::Language %}language
-                        {% when crate::model::reports::ReportableResource::Word %}word
-                        {% when crate::model::reports::ReportableResource::Translation %}translation
-                        {% when crate::model::reports::ReportableResource::Translatable %}translatable
-                        {% when crate::model::reports::ReportableResource::WordRelation %}word relation
-                        {% when crate::model::reports::ReportableResource::Invite %}invite
-                        {% when crate::model::reports::ReportableResource::Permission %}permission
-                    {% endmatch %}</td>
-                </tr>
-            </table>
-        </details>
+        </div>
     </div>
+
+    <form class="default" method="post" action="/admin/reports/{{ report.id }}/edit">
+        <section>
+            <label for="priority">Priority</label>
+            <div class="select-container">
+                <select id="priority" name="priority" required>
+                    <option value="">-- none --</option>
+                    <option value="low"{% if let Some(p) = report.priority %}{% if matches!(p, crate::model::reports::ReportPriority::Low) %} selected{% endif %}{% endif %}>low</option>
+                    <option value="medium"{% if let Some(p) = report.priority %}{% if matches!(p, crate::model::reports::ReportPriority::Medium) %} selected{% endif %}{% endif %}>medium</option>
+                    <option value="high"{% if let Some(p) = report.priority %}{% if matches!(p, crate::model::reports::ReportPriority::High) %} selected{% endif %}{% endif %}>high</option>
+                    <option value="urgent"{% if let Some(p) = report.priority %}{% if matches!(p, crate::model::reports::ReportPriority::Urgent) %} selected{% endif %}{% endif %}>urgent</option>
+                
+                </select>
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            </div>
+        </section>
+        <section>
+            <label for="resolution_status">Resolution status</label>
+            <div class="select-container">
+                <select id="resolution_status" name="resolution_status" required>
+                    <option value="">-- none --</option>
+                    <option value="pending"{% if let Some(s) = report.resolution_status %}{% if matches!(s, crate::model::reports::ResolutionStatus::Pending) %} selected{% endif %}{% endif %}>pending</option>
+                    <option value="in_progress"{% if let Some(s) = report.resolution_status %}{% if matches!(s, crate::model::reports::ResolutionStatus::InProgress) %} selected{% endif %}{% endif %}>in progress</option>
+                    <option value="dismissed"{% if let Some(s) = report.resolution_status %}{% if matches!(s, crate::model::reports::ResolutionStatus::Dismissed) %} selected{% endif %}{% endif %}>dismissed</option>
+                    <option value="action_taken"{% if let Some(s) = report.resolution_status %}{% if matches!(s, crate::model::reports::ResolutionStatus::ActionTaken) %} selected{% endif %}{% endif %}>action taken</option>
+                </select>
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            </div>
+        </section>
+
+        <section>
+            <label for="resolution_note">Resolution note</label>
+            {% call u::field_error(name="resolution_note") %}
+            <textarea id="resolution_note" name="resolution_note" rows="4">{% if let Some(note) = &report.resolution_note %}{{ note }}{% endif %}</textarea>
+        </section>
+
+        <h2>Visibility Settings</h2>
+
+        <section>
+            <label>
+                <input type="checkbox" name="resolution_status_hidden" value="true"{% if let Some(hidden) = report.resolution_status_hidden %}{% if hidden %} checked{% endif %}{% endif %}>
+                <span>hide resolution status from reporter</span>
+                <span class="hint"></span>
+            </label>
+        </section>
+
+        <section>
+            <label>
+                <input type="checkbox" name="resolution_note_hidden" value="true"{% if let Some(hidden) = report.resolution_note_hidden %}{% if hidden %} checked{% endif %}{% endif %}>
+                <span>hide resolution note from reporter</span>
+            </label>
+        </section>
+
+        <button type="submit">Update Report</button>
+    </form>
 </div>
 {% endblock %}

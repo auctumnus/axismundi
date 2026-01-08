@@ -43,7 +43,6 @@ pub async fn create_quotation_suggestion(
     s: Session,
     Path(code): Path<String>,
     languages: LanguageRepository,
-    definitions: DefinitionRepository,
     quotation_suggestions: QuotationSuggestionRepository,
     Json(req): Json<CreateQuotationSuggestion>,
 ) -> ApiResponse<Json<QuotationSuggestion>> {

@@ -56,18 +56,13 @@ async fn search_audit_logs(
 #[cfg(test)]
 mod tests {
     use axum::http::StatusCode;
-    use serde_json::json;
-    use std::sync::Arc;
     use tower::Service;
 
     use crate::controller::api::tests::{
-        create_test_definition, create_test_language, create_test_translatable,
-        create_test_translation, create_test_word, delete, delete_without_auth, get, get_with_auth,
-        make_authed_user, post, post_without_auth, print_response_body,
+        get, get_with_auth,
     };
-    use crate::email::MockEmailService;
     use sqlx::PgPool;
-    use tower::ServiceExt;
+    use tower::ServiceExt as _;
 
     use crate::{config::CONFIG, create_router, email, util::AppState};
 

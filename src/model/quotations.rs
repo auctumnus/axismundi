@@ -16,14 +16,17 @@ pub struct Quotation {
     pub id: Uuid,
     #[serde(skip_serializing)]
     pub translation: Uuid,
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub definition: Uuid,
     pub span_start: i32,
     pub span_end: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub created_by: Uuid,
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub updated_by: Uuid,
 }

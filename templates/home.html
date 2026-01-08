@@ -6,6 +6,7 @@
 {% block head %}
 <script src="/static/home.js" defer></script>
 <script src="/static/like-button.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/home.css">
 <link rel="stylesheet" href="/static/language-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
 <script type="importmap">
@@ -31,8 +32,13 @@
 
 {% if languages.is_empty() %}
 <h2>your languages</h2>
-<p>you haven't added any languages yet.</p>
-<a href="/new-language" class="button">get started</a>
+<div class="no-languages-yet card">
+    <h2>no languages yet</h2>
+    <p>create your first language to get started</p>
+    <div class="actions">
+        <a class="button primary-button" href="/new-language">new language</a>
+    </div>
+</div>
 {% else %}
 <div class="header-with-actions">
     <h2 class="with-action">your languages</h2>
@@ -52,6 +58,7 @@
         {% call u::render_language_card(&language_with_contributors) %}
     {% endfor %}
 </ul>
+
 {% endif %}
 
 <div class="header-with-actions">

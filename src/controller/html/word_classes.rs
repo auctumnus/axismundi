@@ -360,29 +360,29 @@ async fn edit_word_class_submit(
     };
 
     let updates = UpdateWordClass {
-        name: if form.name != word_class.name {
+        name: if form.name == word_class.name {
+            None
+        } else {
             Some(form.name.clone())
-        } else {
-            None
         },
-        abbreviation: if form.abbreviation != word_class.abbreviation {
+        abbreviation: if form.abbreviation == word_class.abbreviation {
+            None
+        } else {
             Some(form.abbreviation.clone())
-        } else {
-            None
         },
-        notes: if form_notes != word_class.notes {
-            form_notes
-        } else {
+        notes: if form_notes == word_class.notes {
             None
+        } else {
+            form_notes
         },
     };
 
     match word_classes.update(&user, word_class.id, updates).await {
-        Ok(updated) => (
+        Ok(updated_wc) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!(
                 "/languages/{}/word-classes/{}",
-                code, updated.abbreviation
+                code, updated_wc.abbreviation
             ))
             .into_response(),
         ),

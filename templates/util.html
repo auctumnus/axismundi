@@ -1,5 +1,12 @@
 <!-- This is a file for Askama macros; it should never be directly rendered. -->
 
+{% macro back_button(url="/", towards="") %}
+<a href="{{ url }}" class="back-link">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m10.8 12l3.9 3.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275l-4.6-4.6q-.15-.15-.212-.325T8.425 12t.063-.375t.212-.325l4.6-4.6q.275-.275.7-.275t.7.275t.275.7t-.275.7z"/></svg>
+    <span>back {{ towards }}</span>
+</a>
+{% endmacro %}
+
 {% macro field_error(name) %}
 {% if let Some(errors) = crate::util::get_error(error, name) %}
     <ul class="field-errors">
@@ -387,10 +394,6 @@
         </span>
 
         {% call relative(&entry.action_at) %}
-        <details>
-            <summary>details</summary>
-            <pre class="json-block">{{ entry.details }}</pre>
-        </details>
     </span>
     <a href="/admin/audit-log/{{ entry.id }}" class="right button icon gray">
         <svg class="icon chevron" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
@@ -540,7 +543,7 @@
 {% if let Some(resource) = &audit_log.resource %}
     {% match resource %}
         {% when crate::model::audit_log::AuditableResourceResolved::User(user) %}
-            <a href="/users/{{ user.username }}">{{ user.username }}</a>
+            {% call badge(user) %}
         {% when crate::model::audit_log::AuditableResourceResolved::Language(language) %}
             <a href="/languages/{{ language.code }}">{{ language.name }}</a>
         {% when crate::model::audit_log::AuditableResourceResolved::Word(word) %}
@@ -567,29 +570,29 @@
 {% else %}
     {% match audit_log.resource_type %}
         {% when crate::model::audit_log::AuditableResource::User %}
-            <span>a deleted user</span>
+            <span>a user</span>
         {% when crate::model::audit_log::AuditableResource::Language %}
-            <span>a deleted language</span>
+            <span>a language</span>
         {% when crate::model::audit_log::AuditableResource::Word %}
-            <span>a deleted word</span>
+            <span>a word</span>
         {% when crate::model::audit_log::AuditableResource::Translation %}
-            <span>a deleted translation</span>
+            <span>a translation</span>
         {% when crate::model::audit_log::AuditableResource::Translatable %}
-            <span>a deleted translatable</span>
+            <span>a translatable</span>
         {% when crate::model::audit_log::AuditableResource::WordRelation %}
-            <span>a deleted word relation</span>
+            <span>a word relation</span>
         {% when crate::model::audit_log::AuditableResource::Invite %}
-            <span>a deleted invite</span>
+            <span>an invite</span>
         {% when crate::model::audit_log::AuditableResource::Permission %}
-            <span>a deleted permission</span>
+            <span>a permission</span>
         {% when crate::model::audit_log::AuditableResource::Quotation %}
-            <span>a deleted quotation</span>
+            <span>a quotation</span>
         {% when crate::model::audit_log::AuditableResource::Definition %}
-            <span>a deleted definition</span>
+            <span>a definition</span>
         {% when crate::model::audit_log::AuditableResource::QuotationSuggestion %}
-            <span>a deleted quotation suggestion</span>
+            <span>a quotation suggestion</span>
         {% when crate::model::audit_log::AuditableResource::Report %}
-            <span>a deleted report</span>
+            <span>a report</span>
     {% endmatch %}
 {% endif %}
 {% endmacro %}
