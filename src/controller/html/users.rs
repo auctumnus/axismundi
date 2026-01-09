@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     Router,
     extract::Query,
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use axum_extra::extract::{CookieJar, Multipart, cookie::Cookie};
@@ -51,7 +51,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     (secure_routes, normal_routes)
 }
 
-pub async fn render_login_form(
+#[allow(clippy::needless_pass_by_value)]
+pub fn render_login_form(
     s: Session,
     error: Option<AppError>,
     redirect_url: Option<String>,
@@ -74,7 +75,7 @@ struct LoginFormTemplate {
 }
 
 async fn login_form(s: Session) -> (StatusCode, Response) {
-    render_login_form(s, None, None).await
+    render_login_form(s, None, None)
 }
 
 #[derive(Deserialize)]
@@ -274,7 +275,7 @@ async fn verify(
             let body = render_template(template);
             (StatusCode::OK, body)
         }
-        Err(e) => {
+        Err(_e) => {
             let body = render_template(VerifiedTemplate { current_user: None });
             (StatusCode::BAD_REQUEST, body)
         }
@@ -315,6 +316,7 @@ struct SettingsTemplate {
     error: Option<AppError>,
     previous_input: Option<SettingsFormData>,
     previous_username: String,
+    #[allow(dead_code)]
     previous_email: String,
 }
 async fn settings_form(s: Session) -> (StatusCode, Response) {
@@ -334,15 +336,15 @@ async fn settings_form(s: Session) -> (StatusCode, Response) {
     (StatusCode::OK, body)
 }
 
-fn coalesce(in_form: &Option<String>, in_resource: &Option<String>) -> Option<String> {
-    in_form.clone().and_then(|p| {
-        if in_resource.as_ref().map_or(false, |r| r == &p) {
+fn coalesce(in_form: Option<&String>, in_resource: Option<&String>) -> Option<String> {
+    in_form.and_then(|p| {
+        if in_resource == Some(p) {
             // Value unchanged, don't update
             None
         } else {
             // Value changed (including empty string to clear the field)
             // Empty string will be converted to NULL in the SQL query
-            Some(p)
+            Some(p.clone())
         }
     })
 }
@@ -363,12 +365,12 @@ async fn settings_submit(
             &user,
             user.id,
             UpdateUser {
-                username: coalesce(&form.username, &Some(user.username.clone())),
-                email: coalesce(&form.email, &Some(user.email.clone())),
-                display_name: coalesce(&form.display_name, &user.display_name),
-                description: coalesce(&form.description, &user.description),
-                pronouns: coalesce(&form.pronouns, &user.pronouns),
-                gender: coalesce(&form.gender, &user.gender),
+                username: coalesce(form.username.as_ref(), Some(&user.username)),
+                email: coalesce(form.email.as_ref(), Some(&user.email)),
+                display_name: coalesce(form.display_name.as_ref(), user.display_name.as_ref()),
+                description: coalesce(form.description.as_ref(), user.description.as_ref()),
+                pronouns: coalesce(form.pronouns.as_ref(), user.pronouns.as_ref()),
+                gender: coalesce(form.gender.as_ref(), user.gender.as_ref()),
                 current_password: form.current_password.clone(),
                 new_password: form.new_password.clone(),
             },
@@ -407,6 +409,103 @@ async fn settings_submit(
 
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
+fn render_settings_error(user: &User, error: AppError, status: StatusCode) -> (StatusCode, Response) {
+    let template = SettingsTemplate {
+        previous_username: user.username.clone(),
+        previous_email: user.email.clone(),
+        current_user: Some(user.clone()),
+        error: Some(error),
+        previous_input: None,
+    };
+    (status, render_template(template))
+}
+
+async fn extract_profile_picture(
+    multipart: &mut Multipart,
+    user: &User,
+) -> Result<(Vec<u8>, String), (StatusCode, Response)> {
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    // Extract file from multipart form
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        let field_name = field.name().unwrap_or("");
+
+        if field_name == "profile_picture" {
+            content_type = field.content_type().map(std::string::ToString::to_string);
+            let data = match field.bytes().await {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    return Err(render_settings_error(
+                        user,
+                        bad_request(format!("Failed to read file: {e}")),
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+            };
+            file_data = Some(data.to_vec());
+            break;
+        }
+    }
+
+    let file_data = file_data.ok_or_else(|| {
+        render_settings_error(
+            user,
+            bad_request("No profile picture file provided"),
+            StatusCode::BAD_REQUEST,
+        )
+    })?;
+
+    let content_type = content_type.ok_or_else(|| {
+        render_settings_error(
+            user,
+            bad_request("No content type provided"),
+            StatusCode::BAD_REQUEST,
+        )
+    })?;
+
+    Ok((file_data, content_type))
+}
+
+fn validate_file_size(file_data: &[u8], user: &User) -> Result<(), Box<(StatusCode, Response)>> {
+    if file_data.len() > MAX_FILE_SIZE {
+        return Err(Box::new(render_settings_error(
+            user,
+            bad_request("File size exceeds the maximum limit of 5MB"),
+            StatusCode::BAD_REQUEST,
+        )));
+    }
+    Ok(())
+}
+
+async fn upload_and_update_profile_picture(
+    users: &UserRepository,
+    user: &User,
+    file_data: &[u8],
+    content_type: &str,
+) -> Result<(), Box<(StatusCode, Response)>> {
+    // Upload to S3
+    let filename = S3
+        .upload_profile_picture(user.id, file_data, content_type)
+        .await
+        .map_err(|e| Box::new(render_settings_error(user, e, StatusCode::INTERNAL_SERVER_ERROR)))?;
+
+    // Update user record with new profile picture filename
+    match users.update_profile_picture(user, user.id, &filename).await {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err(Box::new(render_settings_error(
+            user,
+            bad_request("User not found"),
+            StatusCode::NOT_FOUND,
+        ))),
+        Err(e) => Err(Box::new(render_settings_error(
+            user,
+            e,
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))),
+    }
+}
+
 async fn change_profile_picture(
     s: Session,
     users: UserRepository,
@@ -419,120 +518,21 @@ async fn change_profile_picture(
         );
     };
 
-    let mut file_data: Option<Vec<u8>> = None;
-    let mut content_type: Option<String> = None;
+    let (file_data, content_type) = match extract_profile_picture(&mut multipart, &user).await {
+        Ok(result) => result,
+        Err(response) => return response,
+    };
 
-    // Extract file from multipart form
-    while let Some(field) = multipart.next_field().await.ok().flatten() {
-        let field_name = field.name().unwrap_or("");
-
-        if field_name == "profile_picture" {
-            content_type = field.content_type().map(|s| s.to_string());
-            let data = match field.bytes().await {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    let template = SettingsTemplate {
-                        previous_username: user.username.clone(),
-                        previous_email: user.email.clone(),
-                        current_user: Some(user),
-                        error: Some(bad_request(format!("Failed to read file: {e}"))),
-                        previous_input: None,
-                    };
-                    return (StatusCode::BAD_REQUEST, render_template(template));
-                }
-            };
-            file_data = Some(data.to_vec());
-            break;
-        }
+    if let Err(response) = validate_file_size(&file_data, &user) {
+        return *response;
     }
 
-    let file_data = match file_data {
-        Some(data) => data,
-        None => {
-            let template = SettingsTemplate {
-                previous_username: user.username.clone(),
-                previous_email: user.email.clone(),
-                current_user: Some(user),
-                error: Some(bad_request("No profile picture file provided")),
-                previous_input: None,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
-
-    let content_type = match content_type {
-        Some(ct) => ct,
-        None => {
-            let template = SettingsTemplate {
-                previous_username: user.username.clone(),
-                previous_email: user.email.clone(),
-                current_user: Some(user),
-                error: Some(bad_request("No content type provided")),
-                previous_input: None,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
-
-    // Validate file size
-    if file_data.len() > MAX_FILE_SIZE {
-        let template = SettingsTemplate {
-            previous_username: user.username.clone(),
-            previous_email: user.email.clone(),
-            current_user: Some(user),
-            error: Some(bad_request("File size exceeds the maximum limit of 5MB")),
-            previous_input: None,
-        };
-        return (StatusCode::BAD_REQUEST, render_template(template));
-    }
-
-    // Upload to S3
-    let filename = match S3
-        .upload_profile_picture(user.id, &file_data, &content_type)
-        .await
-    {
-        Ok(f) => f,
-        Err(e) => {
-            let template = SettingsTemplate {
-                previous_username: user.username.clone(),
-                previous_email: user.email.clone(),
-                current_user: Some(user),
-                error: Some(e),
-                previous_input: None,
-            };
-            return (StatusCode::INTERNAL_SERVER_ERROR, render_template(template));
-        }
-    };
-
-    // Update user record with new profile picture filename
-    match users
-        .update_profile_picture(&user, user.id, &filename)
-        .await
-    {
-        Ok(Some(_)) => (
+    match upload_and_update_profile_picture(&users, &user, &file_data, &content_type).await {
+        Ok(()) => (
             StatusCode::SEE_OTHER,
             Redirect::to("/settings").into_response(),
         ),
-        Ok(None) => {
-            let template = SettingsTemplate {
-                previous_username: user.username.clone(),
-                previous_email: user.email.clone(),
-                current_user: Some(user),
-                error: Some(bad_request("User not found")),
-                previous_input: None,
-            };
-            (StatusCode::NOT_FOUND, render_template(template))
-        }
-        Err(e) => {
-            let template = SettingsTemplate {
-                previous_username: user.username.clone(),
-                previous_email: user.email.clone(),
-                current_user: Some(user),
-                error: Some(e),
-                previous_input: None,
-            };
-            (StatusCode::INTERNAL_SERVER_ERROR, render_template(template))
-        }
+        Err(response) => *response,
     }
 }
 
@@ -742,7 +742,7 @@ async fn profile(
     }
     let translatables_list = translatables_with_liked;
 
-    let rendered_description = users.render_description(&user).await.unwrap_or_default();
+    let rendered_description = UserRepository::render_description(&user).unwrap_or_default();
 
     (
         StatusCode::OK,

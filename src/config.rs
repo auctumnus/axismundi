@@ -37,12 +37,14 @@ const fn default_environment() -> Environment {
 }
 
 #[derive(Clone, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct ResendConfig {
     pub api_key: String,
     pub from_email: String,
 }
 
 #[derive(Clone, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct MaidConfig {
     #[serde(default = "default_maid_port")]
     pub port: u16,
@@ -80,7 +82,9 @@ pub struct BannerConfig {
 pub struct AppConfig {
     pub database_url: String,
     pub s3: S3Config,
+    #[allow(dead_code)]
     pub resend: ResendConfig,
+    #[allow(dead_code)]
     pub maid: MaidConfig,
     #[serde(default = "default_file_upload_limit")]
     #[allow(dead_code)]

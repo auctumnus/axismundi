@@ -29,12 +29,12 @@ impl<T> PaginatedResponse<T> {
         };
         PaginatedRequest {
             limit: self.limit,
-            offset: last_offset as PaginationSize,
+            offset: last_offset.try_into().unwrap_or(0),
         }
     }
 
     pub fn total_pages(&self) -> i32 {
-        ((self.total + self.limit as i64 - 1) / self.limit as i64) as i32
+        ((self.total + i64::from(self.limit) - 1) / i64::from(self.limit)).try_into().unwrap_or(0)
     }
 
     pub fn current_page(&self) -> i32 {

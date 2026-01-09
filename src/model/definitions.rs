@@ -11,6 +11,7 @@ use crate::{
     util::{AppState, ensure_verified},
 };
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Definition {
     pub id: Uuid,
@@ -21,8 +22,10 @@ pub struct Definition {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub updated_by: Uuid,
 }
 
@@ -218,7 +221,7 @@ impl DefinitionRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        let updated = result.ok_or_else(|| not_found(format!("definition with id '{id}'")))?;
+        let definition_result = result.ok_or_else(|| not_found(format!("definition with id '{id}'")))?;
 
         // Create audit log if admin/mod override
         if needs_audit_log {
@@ -237,7 +240,7 @@ impl DefinitionRepository {
             let _ = audit_logs.create_internal(log_req).await;
         }
 
-        Ok(updated)
+        Ok(definition_result)
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {

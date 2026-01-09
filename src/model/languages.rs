@@ -70,7 +70,7 @@ impl LanguageRepository {
         Self { state }
     }
 
-    pub async fn render_description(&self, language: &Language) -> AppResult<String> {
+    pub fn render_description(language: &Language) -> AppResult<String> {
         let rendered = crate::md::render_md(&language.description)?;
         Ok(rendered)
     }

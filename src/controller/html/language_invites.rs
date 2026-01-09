@@ -443,7 +443,7 @@ async fn dismiss_invitation_submit(
     let language = attempt!(s, languages.find_by_code(&code).await);
 
     match invites.delete(&user, language.id, user.id).await {
-        Ok(_) => (
+        Ok(()) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/languages/{}", code)).into_response(),
         ),

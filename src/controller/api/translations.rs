@@ -259,7 +259,7 @@ mod tests {
     use tower::Service;
 
     use crate::controller::api::tests::{
-        delete, get, make_authed_user, post, post_without_auth, put, put_without_auth,
+        delete, get, make_authed_user, post_without_auth, put, put_without_auth,
     };
     use crate::email::MockEmailService;
 
@@ -303,11 +303,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let translation = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -325,7 +324,6 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let body = json!({
@@ -346,11 +344,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
-        let created = crate::controller::api::tests::create_test_translation(
-            token,
+        let _created = crate::controller::api::tests::create_test_translation(
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -380,11 +377,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _translation = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -405,11 +401,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _translation = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -430,11 +425,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _created = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -463,11 +457,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _created = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -492,11 +485,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _created = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -517,11 +509,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _created = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,
@@ -541,11 +532,10 @@ mod tests {
         let translatable_slug = ctx.translatable["slug"].as_str().unwrap();
         let language_code = ctx.language["code"].as_str().unwrap();
 
-        let token = &ctx.token;
         let app = &mut ctx.app;
 
         let _created = crate::controller::api::tests::create_test_translation(
-            token,
+            &ctx.token,
             app,
             translatable_slug,
             language_code,

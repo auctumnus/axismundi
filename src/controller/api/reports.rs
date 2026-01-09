@@ -142,7 +142,7 @@ mod tests {
     fn patch(
         token: &str,
         uri: &str,
-        body: serde_json::Value,
+        body: &serde_json::Value,
     ) -> axum::http::Request<axum::body::Body> {
         use axum::body::Body;
         use axum::http::Request;
@@ -620,7 +620,7 @@ mod tests {
         let update_request = patch(
             &moderator_token,
             &format!("reports/{}", report_id),
-            json!({
+            &json!({
                 "priority": "high",
                 "resolution_status": "in_progress",
                 "resolution_note": "Looking into this"
@@ -647,7 +647,7 @@ mod tests {
         let update_request = patch(
             &reporter_token,
             &format!("reports/{}", report_id),
-            json!({
+            &json!({
                 "priority": "low"
             }),
         );
@@ -706,7 +706,7 @@ mod tests {
         let update_request = patch(
             &moderator_token,
             &format!("reports/{}", report_id),
-            json!({
+            &json!({
                 "resolution_status": "dismissed"
             }),
         );
@@ -777,7 +777,7 @@ mod tests {
         let update_request = patch(
             &moderator_token,
             &format!("reports/{}", report_id),
-            json!({
+            &json!({
                 "resolution_status_hidden": true,
                 "resolution_note_hidden": false
             }),
@@ -920,7 +920,7 @@ mod tests {
         let update_request = patch(
             &moderator_token,
             &format!("reports/{}", report_id),
-            json!({
+            &json!({
                 "resolution_status": "in_progress",
                 "resolution_note": "Working on it",
                 "resolution_status_hidden": false,

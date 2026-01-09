@@ -71,12 +71,11 @@ pub enum AuditActionType {
 }
 
 impl AuditActionType {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             AuditActionType::Created => "created",
-            AuditActionType::Updated => "updated",
+            AuditActionType::Updated | AuditActionType::UpdatedReport  => "updated",
             AuditActionType::Deleted => "deleted",
-            AuditActionType::UpdatedReport => "updated",
             AuditActionType::UserBan => "banned",
             AuditActionType::UserUnban => "unbanned",
             AuditActionType::AddTag => "added a tag to",
@@ -307,6 +306,7 @@ impl AuditLogRepository {
     }
 
     /// Create a new audit log entry. Only callable by mods/admins.
+    #[allow(dead_code)]
     pub async fn create(&self, requestor: &User, req: CreateAuditLog) -> AppResult<AuditLog> {
         // Check mod/admin permissions
         let user_tags = UserTagRepository::new(self.state.clone());
@@ -371,6 +371,7 @@ impl AuditLogRepository {
     }
 
     /// List all audit logs with pagination. Only accessible to mods/admins.
+    #[allow(dead_code)]
     pub async fn list(
         &self,
         requestor: &User,

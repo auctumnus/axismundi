@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     Router,
     extract::Path,
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use reqwest::StatusCode;
@@ -227,6 +227,7 @@ struct ViewWordClassTemplate {
     word_class: WordClass,
     rendered_notes: String,
     creator: User,
+    #[allow(dead_code)]
     user_has_permission: bool,
     can_edit_language: bool,
 }
@@ -246,7 +247,7 @@ async fn view_word_class(
             .find_by_abbreviation(&language.id, &abbreviation)
             .await
     );
-    let rendered_notes = attempt!(s, word_classes.render_notes(&word_class));
+    let rendered_notes = attempt!(s, WordClassRepository::render_notes(&word_class));
     let creator = attempt!(s, users.find_by_id(word_class.created_by).await);
 
     let user_has_permission = if let Some(user) = s.user() {

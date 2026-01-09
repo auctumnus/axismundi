@@ -8,7 +8,7 @@
 {% endmacro %}
 
 {% macro field_error(name) %}
-{% if let Some(errors) = crate::util::get_error(error, name) %}
+{% if let Some(errors) = crate::util::get_error(error.as_ref(), name) %}
     <ul class="field-errors">
         {% for error in errors %}
             <li>{{ error.to_string() }}</li>
@@ -18,7 +18,7 @@
 {% endmacro %}
 
 {% macro top_level_error() %}
-{% if let Some(error) = crate::util::get_top_level_error(error) %}
+{% if let Some(error) = crate::util::get_top_level_error(error.as_ref()) %}
     <div class="error">
         <h2>Error</h2>
         <p>{{ error }}</p>

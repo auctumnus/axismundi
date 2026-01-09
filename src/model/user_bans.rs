@@ -120,6 +120,7 @@ impl UserBanRepository {
         Ok(user_ban)
     }
 
+    #[allow(dead_code)]
     pub async fn is_banned(&self, user_id: Uuid) -> AppResult<bool> {
         let result = sqlx::query_scalar!(
             "select exists(select 1 from user_bans where user_id = $1)",

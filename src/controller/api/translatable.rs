@@ -158,7 +158,7 @@ mod tests {
     async fn create_test_context() -> TestContext {
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+        let app = crate::tests::test_app_with_email_service(&email_service_trait)
             .await
             .unwrap();
 

@@ -257,7 +257,7 @@ impl QuotationRepository {
             return Err(bad_request("span_start and span_end must be non-negative"));
         }
 
-        if span_end > translation.translated_text.chars().count() as i32 {
+        if span_end > translation.translated_text.chars().count().try_into().unwrap_or(i32::MAX) {
             return Err(bad_request("span_end exceeds length of translated text"));
         }
 
@@ -302,7 +302,7 @@ impl QuotationRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        let updated = result.ok_or_else(|| not_found(format!("quotation with id '{id}'")))?;
+        let quotation_result = result.ok_or_else(|| not_found(format!("quotation with id '{id}'")))?;
 
         // Create audit log if admin/mod override
         if needs_audit_log {
@@ -321,7 +321,7 @@ impl QuotationRepository {
             let _ = audit_logs.create_internal(log_req).await;
         }
 
-        Ok(updated)
+        Ok(quotation_result)
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {

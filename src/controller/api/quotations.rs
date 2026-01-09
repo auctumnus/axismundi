@@ -50,6 +50,7 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create_quotation(
     s: Session,
     Path((translatable_slug, language_code)): Path<(String, String)>,
@@ -138,19 +139,19 @@ pub async fn list_quotations_by_translation(
 }
 
 pub async fn list_quotations_by_definition(
-    Path((language_code, word_slug, definition_id)): Path<(String, String, Uuid)>,
+    Path((language_code, _word_slug, definition_id)): Path<(String, String, Uuid)>,
     languages: LanguageRepository,
     definitions: DefinitionRepository,
     quotations: QuotationRepository,
     pagination: PaginatedRequest,
 ) -> PaginatedApiResponse<Quotation> {
-    let language = languages
+    let _language = languages
         .find_by_code(&language_code)
         .await
         .map_err(|_| crate::err::not_found("Language not found"))?;
 
     // Verify definition exists and belongs to the word
-    let definition = definitions.find_by_id(definition_id).await?;
+    let _definition = definitions.find_by_id(definition_id).await?;
 
     // Note: We have language_code and word_slug in the path but aren't strictly validating them
     // The definition_id is already unique and verifies the definition exists
@@ -240,7 +241,6 @@ mod tests {
         make_authed_user, post, post_without_auth, print_response_body,
     };
     use crate::email::MockEmailService;
-    use tower::ServiceExt;
 
     struct TestContext {
         token: String,
@@ -260,7 +260,7 @@ mod tests {
             .unwrap();
 
         let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &mut app, email_service.clone()).await;
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
 
         let language = create_test_language(&token, &mut app).await;
         let language_code = language["code"].as_str().unwrap();
@@ -322,7 +322,6 @@ mod tests {
         let TestContext {
             token,
             mut app,
-            translation,
             translatable,
             language,
             definition,
@@ -348,7 +347,6 @@ mod tests {
     async fn test_create_quotation_unauthorized() {
         let ctx = create_test_context().await;
         let TestContext {
-            token,
             mut app,
             translation,
             definition,
@@ -380,7 +378,6 @@ mod tests {
             mut app,
             translatable,
             language,
-            translation,
             definition,
             ..
         } = ctx;
@@ -427,7 +424,6 @@ mod tests {
             token,
             mut app,
             translatable,
-            translation,
             definition,
             language,
             ..
@@ -436,7 +432,7 @@ mod tests {
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
 
-        let quotation = create_test_quotation(
+        create_test_quotation(
             &token,
             &mut app,
             translatable_slug,
@@ -464,7 +460,6 @@ mod tests {
             token,
             mut app,
             translatable,
-            translation,
             definition,
             language,
             word,
@@ -475,7 +470,7 @@ mod tests {
         let word_slug = word["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
 
-        let quotation = create_test_quotation(
+        create_test_quotation(
             &token,
             &mut app,
             translatable_slug,
@@ -506,7 +501,6 @@ mod tests {
             mut app,
             translatable,
             language,
-            translation,
             definition,
             ..
         } = ctx;
@@ -552,17 +546,13 @@ mod tests {
     async fn test_edit_quotation_unauthorized() {
         let ctx = create_test_context().await;
         let TestContext {
-            token,
             mut app,
             translatable,
             language,
-            translation,
-            definition,
             ..
         } = ctx;
         let translatable_slug = translatable["slug"].as_str().unwrap();
         let language_code = language["code"].as_str().unwrap();
-        let definition_id = definition["id"].as_str().unwrap();
         let update_body = json!({
             "span_start": 5,
         });
@@ -588,7 +578,6 @@ mod tests {
             mut app,
             translatable,
             language,
-            translation,
             definition,
             ..
         } = ctx;
@@ -624,7 +613,6 @@ mod tests {
             mut app,
             translatable,
             language,
-            translation,
             definition,
             ..
         } = ctx;

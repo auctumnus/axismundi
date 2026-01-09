@@ -17,13 +17,16 @@ pub struct QuotationSuggestion {
     #[serde(skip_serializing)]
     pub language: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub definition: Uuid,
     pub span_content: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub updated_by: Uuid,
 }
 
@@ -74,6 +77,7 @@ impl QuotationSuggestionRepository {
         result.ok_or_else(|| not_found(format!("quotation suggestion with id '{id}'")))
     }
 
+    #[allow(dead_code)]
     pub async fn find_by_id_with_permission_check(
         &self,
         requestor: Option<&User>,
@@ -167,6 +171,7 @@ impl QuotationSuggestionRepository {
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub async fn update(
         &self,
         requestor: &User,
@@ -331,6 +336,7 @@ impl QuotationSuggestionRepository {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn list_by_definition(
         &self,
         requestor: Option<&User>,

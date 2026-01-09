@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::fmt::Write as _;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -32,6 +33,7 @@ pub struct Translation {
     #[serde(skip_serializing)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub updated_by: Uuid,
 
     pub translatable_slug: String,
@@ -127,6 +129,7 @@ impl TranslationRepository {
         result.ok_or_else(|| not_found(format!("translation with id '{id}'")))
     }
 
+    #[allow(dead_code)]
     pub async fn find_by_slug(&self, slug: &str) -> AppResult<Translation> {
         let result = sqlx::query_as!(
             Translation,
@@ -202,23 +205,8 @@ impl TranslationRepository {
         Ok(result)
     }
 
-    pub async fn create(
-        &self,
-        requestor: &User,
-        translatable_id: Uuid,
-        language_id: Uuid,
-        translation: CreateTranslation,
-    ) -> AppResult<Translation> {
-        translation.validate()?;
-
-        ensure_verified(requestor)?;
-
-        crate::model::user_bans::UserBanRepository::new(self.state.clone())
-            .ensure_not_banned(requestor.id)
-            .await?;
-
+    async fn check_create_permission(&self, requestor: &User, language_id: Uuid) -> AppResult<bool> {
         let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
@@ -230,38 +218,97 @@ impl TranslationRepository {
         match (user_perm, is_admin_or_mod) {
             (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
                 // Has proper permission, no audit log needed
+                Ok(false)
             }
             (_, true) => {
                 // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
+                Ok(true)
             }
             _ => {
-                return Err(bad_request(
+                Err(bad_request(
                     "you don't have permission to create translations",
-                ));
+                ))
             }
         }
+    }
+
+    async fn verify_translation_unique(&self, translatable_id: Uuid, language_id: Uuid) -> AppResult<()> {
+        match self
+            .find_by_translatable_and_language(translatable_id, language_id)
+            .await
+        {
+            Ok(_) => {
+                Err(bad_request(
+                    "a translation for this translatable in this language already exists",
+                ))
+            }
+            Err(AppError {
+                status_code: StatusCode::NOT_FOUND,
+                ..
+            }) => Ok(()),
+            e => e.map(|_| ()),
+        }
+    }
+
+    async fn create_translation_audit_log(&self, requestor: &User, translation_id: Uuid, translatable_id: Uuid, language_id: Uuid, translated_text: &str) -> AppResult<()> {
+        let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+        let log_req = crate::model::audit_log::CreateAuditLog {
+            user_id: Some(requestor.id),
+            action: crate::model::audit_log::AuditActionType::Created,
+            resource_type: crate::model::audit_log::AuditableResource::Translation,
+            resource_id: translation_id,
+            details: serde_json::json!({
+                "translatable_id": translatable_id,
+                "language_id": language_id,
+                "translated_text": translated_text
+            }),
+        };
+        let _ = audit_logs.create_internal(log_req).await;
+        Ok(())
+    }
+
+    async fn create_translation_activity(&self, requestor: &User, translation_id: Uuid, language_id: Uuid) -> AppResult<()> {
+        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let lang = lang_repo.find_by_id(language_id).await?;
+        if !lang.private {
+            let activity_repo =
+                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+            let _activity = activity_repo
+                .create(
+                    requestor.id,
+                    crate::model::user_activities::ActivityType::CreateTranslation,
+                    translation_id,
+                    "translation",
+                    Some(language_id),
+                    Some("language"),
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn create(
+        &self,
+        requestor: &User,
+        translatable_id: Uuid,
+        language_id: Uuid,
+        translation: CreateTranslation,
+    ) -> AppResult<Translation> {
+        translation.validate()?;
+        ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let needs_audit_log = self.check_create_permission(requestor, language_id).await?;
 
         // Verify the translatable exists
         crate::model::translatable::TranslatableRepository::new(self.state.clone())
             .find_by_id(translatable_id)
             .await?;
 
-        match self
-            .find_by_translatable_and_language(translatable_id, language_id)
-            .await
-        {
-            Ok(_) => {
-                return Err(bad_request(
-                    "a translation for this translatable in this language already exists",
-                ));
-            }
-            Err(AppError {
-                status_code: StatusCode::NOT_FOUND,
-                ..
-            }) => {}
-            e => return e,
-        }
+        self.verify_translation_unique(translatable_id, language_id).await?;
 
         let result = sqlx::query_as!(
             Translation,
@@ -306,24 +353,60 @@ impl TranslationRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
-        // Create audit log if admin/mod override
         if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Created,
-                resource_type: crate::model::audit_log::AuditableResource::Translation,
-                resource_id: result.id,
-                details: serde_json::json!({
-                    "translatable_id": translatable_id,
-                    "language_id": language_id,
-                    "translated_text": translation.translated_text
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
+            self.create_translation_audit_log(requestor, result.id, translatable_id, language_id, &translation.translated_text).await?;
         }
 
-        // Create activity if language is public
+        self.create_translation_activity(requestor, result.id, language_id).await?;
+
+        Ok(result)
+    }
+
+    async fn check_update_permission(&self, requestor: &User, language_id: Uuid) -> AppResult<bool> {
+        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let user_perm = permissions
+            .find_by_user_and_language(requestor.id, language_id)
+            .await?;
+
+        match (user_perm, is_admin_or_mod) {
+            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
+                // Has proper permission, no audit log needed
+                Ok(false)
+            }
+            (_, true) => {
+                // Is admin/mod but doesn't have proper permission, allow with audit log
+                Ok(true)
+            }
+            _ => {
+                Err(bad_request(
+                    "you don't have permission to edit translations",
+                ))
+            }
+        }
+    }
+
+    async fn create_update_audit_log(&self, requestor: &User, translation_id: Uuid, existing: &Translation, updates: &UpdateTranslation) -> AppResult<()> {
+        let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+        let log_req = crate::model::audit_log::CreateAuditLog {
+            user_id: Some(requestor.id),
+            action: crate::model::audit_log::AuditActionType::Updated,
+            resource_type: crate::model::audit_log::AuditableResource::Translation,
+            resource_id: translation_id,
+            details: serde_json::json!({
+                "language_id": existing.language,
+                "translatable_id": existing.translatable,
+                "updates": updates
+            }),
+        };
+        let _ = audit_logs.create_internal(log_req).await;
+        Ok(())
+    }
+
+    async fn create_update_activity(&self, requestor: &User, translation_id: Uuid, language_id: Uuid) -> AppResult<()> {
         let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
         let lang = lang_repo.find_by_id(language_id).await?;
         if !lang.private {
@@ -332,16 +415,15 @@ impl TranslationRepository {
             let _activity = activity_repo
                 .create(
                     requestor.id,
-                    crate::model::user_activities::ActivityType::CreateTranslation,
-                    result.id,
+                    crate::model::user_activities::ActivityType::UpdateTranslation,
+                    translation_id,
                     "translation",
                     Some(language_id),
                     Some("language"),
                 )
                 .await?;
         }
-
-        Ok(result)
+        Ok(())
     }
 
     pub async fn update(
@@ -351,7 +433,6 @@ impl TranslationRepository {
         updates: UpdateTranslation,
     ) -> AppResult<Translation> {
         updates.validate()?;
-
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
@@ -361,30 +442,7 @@ impl TranslationRepository {
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, existing.language)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request(
-                    "you don't have permission to edit translations",
-                ));
-            }
-        }
+        let needs_audit_log = self.check_update_permission(requestor, existing.language).await?;
 
         let result = sqlx::query_as!(
             Translation,
@@ -439,40 +497,11 @@ impl TranslationRepository {
         let updated_translation =
             result.ok_or_else(|| not_found(format!("translation with id '{id}'")))?;
 
-        // Create audit log if admin/mod override
         if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Updated,
-                resource_type: crate::model::audit_log::AuditableResource::Translation,
-                resource_id: id,
-                details: serde_json::json!({
-                    "language_id": existing.language,
-                    "translatable_id": existing.translatable,
-                    "updates": updates
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
+            self.create_update_audit_log(requestor, id, &existing, &updates).await?;
         }
 
-        // Create activity if language is public
-        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
-        let lang = lang_repo.find_by_id(existing.language).await?;
-        if !lang.private {
-            let activity_repo =
-                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo
-                .create(
-                    requestor.id,
-                    crate::model::user_activities::ActivityType::UpdateTranslation,
-                    updated_translation.id,
-                    "translation",
-                    Some(existing.language),
-                    Some("language"),
-                )
-                .await?;
-        }
+        self.create_update_activity(requestor, updated_translation.id, existing.language).await?;
 
         Ok(updated_translation)
     }
@@ -777,18 +806,11 @@ pub struct TranslationSearch {
 }
 
 impl TranslationRepository {
-    pub async fn search(
-        &self,
-        language_id: &Uuid,
-        pagination: PaginatedRequest,
-        search: TranslationSearch,
-    ) -> AppResult<PaginatedResponse<Translation>> {
-        // Start with language filter
+    fn build_search_queries(search: &TranslationSearch) -> (String, String, usize) {
         let mut param_count = 1;
 
-        // Build items query
         let mut items_query = String::from(
-            r#"
+            r"
                 SELECT
                     t.id,
                     t.translatable,
@@ -811,14 +833,14 @@ impl TranslationRepository {
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
                 WHERE t.language = $1
-            "#,
+            ",
         );
 
         let mut count_query = String::from(
             "SELECT COUNT(*) FROM translation t JOIN translatable tr ON t.translatable = tr.id WHERE t.language = $1",
         );
 
-        if let Some(q) = &search.q {
+        if search.q.is_some() {
             param_count += 1;
             let condition = format!(
                 " AND (tr.title ILIKE ${} OR t.translated_text ILIKE ${})",
@@ -828,149 +850,82 @@ impl TranslationRepository {
             count_query.push_str(&condition);
         }
 
-        if let Some(_created_before) = &search.created_before {
+        if search.created_before.is_some() {
             param_count += 1;
             let condition = format!(" AND t.created_at < ${}", param_count);
             items_query.push_str(&condition);
             count_query.push_str(&condition);
         }
 
-        if let Some(_created_after) = &search.created_after {
+        if search.created_after.is_some() {
             param_count += 1;
             let condition = format!(" AND t.created_at > ${}", param_count);
             items_query.push_str(&condition);
             count_query.push_str(&condition);
         }
 
-        items_query.push_str(&format!(
+        write!(
+            &mut items_query,
             " ORDER BY t.created_at DESC LIMIT ${} OFFSET ${}",
             param_count + 1,
             param_count + 2
-        ));
+        )
+        .unwrap();
 
-        // Execute queries based on search parameters
-        let (items, total): (Vec<Translation>, i64) = if let Some(q) = &search.q {
-            let search_pattern = format!("%{q}%");
-            if let (Some(created_before), Some(created_after)) =
-                (&search.created_before, &search.created_after)
-            {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(created_before)
-                        .bind(created_after)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(created_before)
-                        .bind(created_after)
-                        .fetch_one(&self.state.pool)
-                )?
-            } else if let Some(created_before) = &search.created_before {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(created_before)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(created_before)
-                        .fetch_one(&self.state.pool)
-                )?
-            } else if let Some(created_after) = &search.created_after {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(created_after)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(created_after)
-                        .fetch_one(&self.state.pool)
-                )?
-            } else {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(&search_pattern)
-                        .fetch_one(&self.state.pool)
-                )?
-            }
-        } else {
-            if let (Some(created_before), Some(created_after)) =
-                (&search.created_before, &search.created_after)
-            {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(created_before)
-                        .bind(created_after)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(created_before)
-                        .bind(created_after)
-                        .fetch_one(&self.state.pool)
-                )?
-            } else if let Some(created_before) = &search.created_before {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(created_before)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(created_before)
-                        .fetch_one(&self.state.pool)
-                )?
-            } else if let Some(created_after) = &search.created_after {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(created_after)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .bind(created_after)
-                        .fetch_one(&self.state.pool)
-                )?
-            } else {
-                tokio::try_join!(
-                    sqlx::query_as::<_, Translation>(&items_query)
-                        .bind(language_id)
-                        .bind(i64::from(pagination.limit))
-                        .bind(i64::from(pagination.offset))
-                        .fetch_all(&self.state.pool),
-                    sqlx::query_scalar::<_, i64>(&count_query)
-                        .bind(language_id)
-                        .fetch_one(&self.state.pool)
-                )?
-            }
-        };
+        (items_query, count_query, param_count)
+    }
+
+    async fn execute_search_queries(
+        &self,
+        items_query: &str,
+        count_query: &str,
+        language_id: &Uuid,
+        search: &TranslationSearch,
+        pagination: &PaginatedRequest,
+    ) -> AppResult<(Vec<Translation>, i64)> {
+        let search_pattern = search.q.as_ref().map(|q| format!("%{q}%"));
+
+        let mut items_q = sqlx::query_as::<_, Translation>(items_query).bind(language_id);
+        let mut count_q = sqlx::query_scalar::<_, i64>(count_query).bind(language_id);
+
+        if let Some(ref pattern) = search_pattern {
+            items_q = items_q.bind(pattern);
+            count_q = count_q.bind(pattern);
+        }
+
+        if let Some(ref created_before) = search.created_before {
+            items_q = items_q.bind(created_before);
+            count_q = count_q.bind(created_before);
+        }
+
+        if let Some(ref created_after) = search.created_after {
+            items_q = items_q.bind(created_after);
+            count_q = count_q.bind(created_after);
+        }
+
+        let items_future = items_q
+            .bind(i64::from(pagination.limit))
+            .bind(i64::from(pagination.offset))
+            .fetch_all(&self.state.pool);
+
+        let count_future = count_q.fetch_one(&self.state.pool);
+
+        let (items, total) = tokio::try_join!(items_future, count_future)?;
+
+        Ok((items, total))
+    }
+
+    pub async fn search(
+        &self,
+        language_id: &Uuid,
+        pagination: PaginatedRequest,
+        search: TranslationSearch,
+    ) -> AppResult<PaginatedResponse<Translation>> {
+        let (items_query, count_query, _param_count) = TranslationRepository::build_search_queries(&search);
+
+        let (items, total) = self
+            .execute_search_queries(&items_query, &count_query, language_id, &search, &pagination)
+            .await?;
 
         let has_more =
             (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
@@ -1042,7 +997,7 @@ mod tests {
         let owner = user_repo.find_by_id(owner_id).await.unwrap();
 
         let lang_repo = LanguageRepository::new(app_state.clone());
-        let source_lang = lang_repo
+        let _source_lang = lang_repo
             .create(
                 &owner,
                 CreateLanguage {
@@ -1177,7 +1132,7 @@ mod tests {
         let owner = user_repo.find_by_id(owner_id).await.unwrap();
 
         let lang_repo = LanguageRepository::new(app_state.clone());
-        let source_lang = lang_repo
+        let _source_lang = lang_repo
             .create(
                 &owner,
                 CreateLanguage {
@@ -1331,7 +1286,7 @@ mod tests {
         let owner = user_repo.find_by_id(owner_id).await.unwrap();
 
         let lang_repo = LanguageRepository::new(app_state.clone());
-        let source_lang = lang_repo
+        let _source_lang = lang_repo
             .create(
                 &owner,
                 CreateLanguage {

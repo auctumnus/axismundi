@@ -319,9 +319,7 @@ pub(crate) mod tests {
         let request = post(token, "languages", body).await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let language = crate::tests::response_to_value(response.into_body()).await;
-
-        language
+        crate::tests::response_to_value(response.into_body()).await
     }
 
     pub(crate) async fn create_test_word(

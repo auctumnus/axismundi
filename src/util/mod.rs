@@ -160,22 +160,13 @@ impl Clone for AppState {
     }
 }
 
-// we use this in the html templates, and we get a &Option<AppError> which is annoying to work with
-#[allow(clippy::ref_option)]
-pub fn get_error(error: &Option<AppError>, field: &str) -> Option<Vec<String>> {
-    if let Some(err) = error {
-        err.error_for_field(field)
-    } else {
-        None
-    }
+// we use this in the html templates
+pub fn get_error(error: Option<&AppError>, field: &str) -> Option<Vec<String>> {
+    error.and_then(|err| err.error_for_field(field))
 }
 
-pub fn get_top_level_error(error: &Option<AppError>) -> Option<&str> {
-    if let Some(err) = error {
-        err.top_level_error()
-    } else {
-        None
-    }
+pub fn get_top_level_error(error: Option<&AppError>) -> Option<&str> {
+    error.and_then(|err| err.top_level_error())
 }
 
 pub fn relative_time(timestamp: &chrono::DateTime<Utc>) -> String {

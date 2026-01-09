@@ -404,6 +404,37 @@ impl LanguagePermissionRepository {
 
 crate::util::repo_from_parts!(LanguagePermissionRepository);
 
+#[async_trait::async_trait]
+impl crate::model::bookmarks::ResolveBookmark for LanguagePermissionRepository {
+    async fn resolve_bookmark(
+        &self,
+        item: Uuid,
+        link_type: crate::model::bookmarks::LinkType,
+    ) -> AppResult<String> {
+        // api: /api/languages/{code}/permissions/{username}
+        // web: /languages/{code}/permissions/{username}
+        let permission = self.find_by_id(item).await?;
+
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_id(permission.language).await?;
+
+        let users = crate::model::users::UserRepository::new(self.state.clone());
+        let user = users.find_by_id(permission.user).await?;
+
+        let slug = match link_type {
+            crate::model::bookmarks::LinkType::Web => {
+                format!("/languages/{}/permissions/{}", language.code, user.username)
+            }
+            crate::model::bookmarks::LinkType::Api => format!(
+                "/api/languages/{}/permissions/{}",
+                language.code, user.username
+            ),
+        };
+
+        Ok(slug)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1107,36 +1138,5 @@ mod tests {
 
         // Should be 0 logs because owner is using normal permissions
         assert_eq!(logs.items.len(), 0);
-    }
-}
-
-#[async_trait::async_trait]
-impl crate::model::bookmarks::ResolveBookmark for LanguagePermissionRepository {
-    async fn resolve_bookmark(
-        &self,
-        item: Uuid,
-        link_type: crate::model::bookmarks::LinkType,
-    ) -> AppResult<String> {
-        // api: /api/languages/{code}/permissions/{username}
-        // web: /languages/{code}/permissions/{username}
-        let permission = self.find_by_id(item).await?;
-
-        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
-        let language = languages.find_by_id(permission.language).await?;
-
-        let users = crate::model::users::UserRepository::new(self.state.clone());
-        let user = users.find_by_id(permission.user).await?;
-
-        let slug = match link_type {
-            crate::model::bookmarks::LinkType::Web => {
-                format!("/languages/{}/permissions/{}", language.code, user.username)
-            }
-            crate::model::bookmarks::LinkType::Api => format!(
-                "/api/languages/{}/permissions/{}",
-                language.code, user.username
-            ),
-        };
-
-        Ok(slug)
     }
 }

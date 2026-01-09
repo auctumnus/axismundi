@@ -161,7 +161,7 @@ impl UserRepository {
         Self { state }
     }
 
-    pub async fn render_description(&self, user: &User) -> AppResult<String> {
+    pub fn render_description(user: &User) -> AppResult<String> {
         let rendered = user
             .description
             .as_ref()
@@ -400,7 +400,7 @@ impl UserRepository {
             updates
                 .display_name
                 .as_deref()
-                .unwrap_or(&requestor.display_name.as_deref().unwrap_or("")),
+                .unwrap_or(requestor.display_name.as_deref().unwrap_or("")),
         ];
 
         updates.validate_with_args(&user_inputs.as_ref())?;
@@ -471,19 +471,13 @@ impl UserRepository {
         // Convert empty strings to None (clearing the field), or use the original value if not updating
         let display_name_final = updates
             .display_name
-            .as_ref()
-            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
-            .unwrap_or_else(|| requestor.display_name.clone());
+            .as_ref().map_or_else(|| requestor.display_name.clone(), |s| if s.is_empty() { None } else { Some(s.clone()) });
         let description_final = updates
             .description
-            .as_ref()
-            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
-            .unwrap_or_else(|| requestor.description.clone());
+            .as_ref().map_or_else(|| requestor.description.clone(), |s| if s.is_empty() { None } else { Some(s.clone()) });
         let pronouns_final = updates
             .pronouns
-            .as_ref()
-            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
-            .unwrap_or_else(|| requestor.pronouns.clone());
+            .as_ref().map_or_else(|| requestor.pronouns.clone(), |s| if s.is_empty() { None } else { Some(s.clone()) });
 
         // Handle gender (which includes # prefix stripping)
         let gender_final = if let Some(g) = &updates.gender {

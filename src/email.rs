@@ -38,6 +38,7 @@ pub struct ResendEmailService {
 }
 
 impl ResendEmailService {
+    #[allow(dead_code)]
     pub fn new(config: &ResendConfig) -> Self {
         Self {
             client: Resend::new(&config.api_key),
@@ -121,13 +122,13 @@ impl EmailService for ResendEmailService {
     ) -> AppResult<()> {
         let subject = "your email address has been changed";
         let html = format!(
-            r#"<html>
+            r"<html>
 <body>
 <h1>email address changed</h1>
 <p>this is a notification that your email address has been changed from {old_email} to {new_email}.</p>
 <p>if you didn't make this change, please contact support immediately.</p>
 </body>
-</html>"#
+</html>"
         );
 
         let email_old =
@@ -147,6 +148,7 @@ impl EmailService for ResendEmailService {
     }
 }
 
+#[allow(dead_code)]
 pub fn make_email_service(config: &ResendConfig) -> impl EmailService {
     #[cfg(test)]
     {
@@ -161,6 +163,7 @@ pub fn make_email_service(config: &ResendConfig) -> impl EmailService {
 
 // mock email service for testing
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct SentEmail {
     pub to: String,
     pub email_type: EmailType,
@@ -187,10 +190,12 @@ impl MockEmailService {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_sent_emails(&self) -> Vec<SentEmail> {
         self.sent_emails.lock().unwrap().clone()
     }
 
+    #[allow(dead_code)]
     pub fn clear(&self) {
         self.sent_emails.lock().unwrap().clear();
     }

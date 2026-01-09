@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    controller::html::{okay, render_template, render_generic_error},
+    controller::html::{okay, render_template},
     err::AppError,
     get_user,
     model::{
@@ -26,6 +26,59 @@ use crate::{
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session, ensure_verified},
 };
+
+// Helper struct to group resource repositories for fetching reportable resource data
+struct ResourceRepositories {
+    users: UserRepository,
+    languages: LanguageRepository,
+    words: WordRepository,
+    translations: TranslationRepository,
+    translatables: TranslatableRepository,
+}
+
+impl ResourceRepositories {
+    fn new(state: AppState) -> Self {
+        Self {
+            users: UserRepository::new(state.clone()),
+            languages: LanguageRepository::new(state.clone()),
+            words: WordRepository::new(state.clone()),
+            translations: TranslationRepository::new(state.clone()),
+            translatables: TranslatableRepository::new(state),
+        }
+    }
+
+    async fn fetch_resource_data(&self, resource_type: ReportableResource, resource_id: Uuid) -> Option<ReportableResourceData> {
+        match resource_type {
+            ReportableResource::User => {
+                self.users.find_by_id(resource_id).await.ok().map(|u| ReportableResourceData::User { user: u })
+            }
+            ReportableResource::Language => {
+                self.languages.find_by_id(resource_id).await.ok().map(|l| ReportableResourceData::Language { language: l })
+            }
+            ReportableResource::Word => {
+                self.words.find_by_id(resource_id).await.ok().map(|w| ReportableResourceData::Word { word: w })
+            }
+            ReportableResource::Translation => {
+                self.translations.find_by_id(resource_id).await.ok().map(|t| ReportableResourceData::Translation { translation: t })
+            }
+            ReportableResource::Translatable => {
+                self.translatables.find_by_id(resource_id).await.ok().map(|t| ReportableResourceData::Translatable { translatable: t })
+            }
+            _ => Some(ReportableResourceData::Other),
+        }
+    }
+}
+
+impl axum::extract::FromRequestParts<crate::util::AppState> for ResourceRepositories {
+    type Rejection = (axum::http::StatusCode, &'static str);
+
+    async fn from_request_parts(
+        _: &mut axum::http::request::Parts,
+        state: &crate::util::AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self::new(state.clone()))
+    }
+}
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::new()
@@ -179,50 +232,13 @@ fn resource_type_to_string(resource_type: ReportableResource) -> String {
 
 async fn new_report_form(
     s: Session,
-    users: UserRepository,
-    languages: LanguageRepository,
-    words: WordRepository,
-    translations: TranslationRepository,
-    translatables: TranslatableRepository,
+    repos: ResourceRepositories,
     Query(query): Query<NewReportQuery>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
     // Fetch the resource data based on type
-    let resource_data = match query.resource_type {
-        ReportableResource::User => {
-            match users.find_by_id(query.resource_id).await {
-                Ok(u) => Some(ReportableResourceData::User { user: u }),
-                Err(e) => return render_generic_error(s, e).await,
-            }
-        }
-        ReportableResource::Language => {
-            match languages.find_by_id(query.resource_id).await {
-                Ok(l) => Some(ReportableResourceData::Language { language: l }),
-                Err(e) => return render_generic_error(s, e).await,
-            }
-        }
-        ReportableResource::Word => {
-            match words.find_by_id(query.resource_id).await {
-                Ok(w) => Some(ReportableResourceData::Word { word: w }),
-                Err(e) => return render_generic_error(s, e).await,
-            }
-        }
-        ReportableResource::Translation => {
-            match translations.find_by_id(query.resource_id).await {
-                Ok(t) => Some(ReportableResourceData::Translation { translation: t }),
-                Err(e) => return render_generic_error(s, e).await,
-            }
-        }
-        ReportableResource::Translatable => {
-            match translatables.find_by_id(query.resource_id).await {
-                Ok(t) => Some(ReportableResourceData::Translatable { translatable: t }),
-                Err(e) => return render_generic_error(s, e).await,
-            }
-        }
-        // For complex resources we don't have preview cards for
-        _ => Some(ReportableResourceData::Other),
-    };
+    let resource_data = repos.fetch_resource_data(query.resource_type, query.resource_id).await;
 
     let template = NewReportTemplate {
         current_user: Some(user),
@@ -250,19 +266,16 @@ async fn create_report_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    match ensure_verified(&user) {
-        Ok(_) => {},
-        Err(e) => {
-            let template = NewReportTemplate {
-                current_user: Some(user),
-                error: Some(e),
-                resource_type_str: resource_type_to_string(form.resource_type),
-                resource_id: form.resource_id,
-                previous_reason: Some(form.reason.clone()),
-                resource_data: None, // Skip fetching on error
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
+    if let Err(e) = ensure_verified(&user) {
+        let template = NewReportTemplate {
+            current_user: Some(user),
+            error: Some(e),
+            resource_type_str: resource_type_to_string(form.resource_type),
+            resource_id: form.resource_id,
+            previous_reason: Some(form.reason.clone()),
+            resource_data: None, // Skip fetching on error
+        };
+        return (StatusCode::BAD_REQUEST, render_template(template));
     }
 
     let create_req = CreateReport {
@@ -304,12 +317,7 @@ struct ViewReportTemplate {
 async fn view_report(
     s: Session,
     reports: ReportRepository,
-    user_tags: UserTagRepository,
-    users: UserRepository,
-    languages: LanguageRepository,
-    words: WordRepository,
-    translations: TranslationRepository,
-    translatables: TranslatableRepository,
+    repos: ResourceRepositories,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Response) {
     let current_user = match s.user() {
@@ -334,30 +342,13 @@ async fn view_report(
 
     // Fetch the reporter user if they exist
     let reporter = if let Some(reporter_id) = report.reporter {
-        users.find_by_id(reporter_id).await.ok()
+        repos.users.find_by_id(reporter_id).await.ok()
     } else {
         None
     };
 
     // Fetch the resource data based on type
-    let resource_data = match report.resource_type {
-        ReportableResource::User => {
-            users.find_by_id(report.resource_id).await.ok().map(|u| ReportableResourceData::User { user: u })
-        }
-        ReportableResource::Language => {
-            languages.find_by_id(report.resource_id).await.ok().map(|l| ReportableResourceData::Language { language: l })
-        }
-        ReportableResource::Word => {
-            words.find_by_id(report.resource_id).await.ok().map(|w| ReportableResourceData::Word { word: w })
-        }
-        ReportableResource::Translation => {
-            translations.find_by_id(report.resource_id).await.ok().map(|t| ReportableResourceData::Translation { translation: t })
-        }
-        ReportableResource::Translatable => {
-            translatables.find_by_id(report.resource_id).await.ok().map(|t| ReportableResourceData::Translatable { translatable: t })
-        }
-        _ => Some(ReportableResourceData::Other),
-    };
+    let resource_data = repos.fetch_resource_data(report.resource_type, report.resource_id).await;
 
     let template = ViewReportTemplate {
         current_user: Some(current_user),
@@ -383,11 +374,7 @@ async fn edit_report_form(
     s: Session,
     reports: ReportRepository,
     user_tags: UserTagRepository,
-    users: UserRepository,
-    languages: LanguageRepository,
-    words: WordRepository,
-    translations: TranslationRepository,
-    translatables: TranslatableRepository,
+    repos: ResourceRepositories,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Response) {
     let current_user = match s.user() {
@@ -420,30 +407,13 @@ async fn edit_report_form(
 
     // Fetch the reporter user if they exist
     let reporter = if let Some(reporter_id) = report.reporter {
-        users.find_by_id(reporter_id).await.ok()
+        repos.users.find_by_id(reporter_id).await.ok()
     } else {
         None
     };
 
     // Fetch the resource data based on type
-    let resource_data = match report.resource_type {
-        ReportableResource::User => {
-            users.find_by_id(report.resource_id).await.ok().map(|u| ReportableResourceData::User { user: u })
-        }
-        ReportableResource::Language => {
-            languages.find_by_id(report.resource_id).await.ok().map(|l| ReportableResourceData::Language { language: l })
-        }
-        ReportableResource::Word => {
-            words.find_by_id(report.resource_id).await.ok().map(|w| ReportableResourceData::Word { word: w })
-        }
-        ReportableResource::Translation => {
-            translations.find_by_id(report.resource_id).await.ok().map(|t| ReportableResourceData::Translation { translation: t })
-        }
-        ReportableResource::Translatable => {
-            translatables.find_by_id(report.resource_id).await.ok().map(|t| ReportableResourceData::Translatable { translatable: t })
-        }
-        _ => Some(ReportableResourceData::Other),
-    };
+    let resource_data = repos.fetch_resource_data(report.resource_type, report.resource_id).await;
 
     let template = EditReportTemplate {
         current_user: Some(current_user),
@@ -467,15 +437,12 @@ struct EditReportFormData {
     resolution_note_hidden: Option<String>,
 }
 
+#[axum::debug_handler(state=AppState)]
 async fn edit_report_submit(
     s: Session,
     reports: ReportRepository,
     user_tags: UserTagRepository,
-    users: UserRepository,
-    languages: LanguageRepository,
-    words: WordRepository,
-    translations: TranslationRepository,
-    translatables: TranslatableRepository,
+    repos: ResourceRepositories,
     Path(id): Path<Uuid>,
     Form(form): Form<EditReportFormData>,
 ) -> (StatusCode, Response) {
@@ -534,39 +501,19 @@ async fn edit_report_submit(
         }
         Err(e) => {
             // Re-fetch the report to show the form again with error
-            let report = match reports.find_by_id(&current_user, id).await {
-                Ok(r) => r,
-                Err(_) => {
+            let Ok(report) = reports.find_by_id(&current_user, id).await else {
                     return crate::controller::html::render_generic_error(s, e).await;
-                }
             };
 
             // Fetch the reporter user if they exist
             let reporter = if let Some(reporter_id) = report.reporter {
-                users.find_by_id(reporter_id).await.ok()
+                repos.users.find_by_id(reporter_id).await.ok()
             } else {
                 None
             };
 
             // Fetch the resource data based on type
-            let resource_data = match report.resource_type {
-                ReportableResource::User => {
-                    users.find_by_id(report.resource_id).await.ok().map(|u| ReportableResourceData::User { user: u })
-                }
-                ReportableResource::Language => {
-                    languages.find_by_id(report.resource_id).await.ok().map(|l| ReportableResourceData::Language { language: l })
-                }
-                ReportableResource::Word => {
-                    words.find_by_id(report.resource_id).await.ok().map(|w| ReportableResourceData::Word { word: w })
-                }
-                ReportableResource::Translation => {
-                    translations.find_by_id(report.resource_id).await.ok().map(|t| ReportableResourceData::Translation { translation: t })
-                }
-                ReportableResource::Translatable => {
-                    translatables.find_by_id(report.resource_id).await.ok().map(|t| ReportableResourceData::Translatable { translatable: t })
-                }
-                _ => Some(ReportableResourceData::Other),
-            };
+            let resource_data = repos.fetch_resource_data(report.resource_type, report.resource_id).await;
 
             let template = EditReportTemplate {
                 current_user: Some(current_user),

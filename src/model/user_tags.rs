@@ -13,6 +13,7 @@ pub struct UserTag {
     #[serde(skip_serializing)]
     pub id: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub user_id: Uuid,
     pub tag: String,
     pub hidden: bool,

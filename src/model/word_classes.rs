@@ -320,7 +320,7 @@ impl WordClassRepository {
         result.ok_or_else(|| not_found(format!("word class with id '{id}'")))
     }
 
-    pub fn render_notes(&self, word_class: &WordClass) -> AppResult<String> {
+    pub fn render_notes(word_class: &WordClass) -> AppResult<String> {
         let rendered = word_class
             .notes
             .as_ref()

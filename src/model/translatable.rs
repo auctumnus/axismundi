@@ -29,6 +29,7 @@ pub struct Translatable {
     #[serde(skip_serializing)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub updated_by: Uuid,
 }
 
@@ -43,7 +44,7 @@ pub struct CreateTranslatable {
     #[validate(length(min = 1, max = 40))]
     pub title: String,
 
-    #[validate(length(min = 1, max = 100000))]
+    #[validate(length(min = 1, max = 100_000))]
     pub english: String,
 
     #[validate(length(max = 1000))]
@@ -53,7 +54,7 @@ pub struct CreateTranslatable {
     #[validate(length(max = 2000))]
     pub source_url: Option<String>,
 
-    #[validate(length(max = 100000))]
+    #[validate(length(max = 100_000))]
     pub source_content: Option<String>,
 
     #[validate(length(max = 100))]
@@ -68,7 +69,7 @@ pub struct UpdateTranslatable {
     #[validate(length(min = 1, max = 500))]
     pub title: Option<String>,
 
-    #[validate(length(min = 1, max = 100000))]
+    #[validate(length(min = 1, max = 100_000))]
     pub english: Option<String>,
 
     #[validate(length(max = 1000))]
@@ -78,7 +79,7 @@ pub struct UpdateTranslatable {
     #[validate(length(max = 2000))]
     pub source_url: Option<String>,
 
-    #[validate(length(max = 100000))]
+    #[validate(length(max = 100_000))]
     pub source_content: Option<String>,
 
     #[validate(length(max = 100))]
@@ -236,11 +237,7 @@ impl TranslatableRepository {
             ));
         }
 
-        let slug = if let Some(ref new_title) = updates.title {
-            Some(slug::slugify(new_title))
-        } else {
-            None
-        };
+        let slug = updates.title.as_ref().map(slug::slugify);
 
         let result = sqlx::query_as!(
             Translatable,

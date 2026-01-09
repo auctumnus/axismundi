@@ -137,12 +137,12 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str())
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
                         related_id,
-                        &record.related_entity_type.as_deref().unwrap_or(""),
+                        record.related_entity_type.as_deref().unwrap_or(""),
                     )
                     .await?
                 } else {
@@ -235,12 +235,12 @@ impl UserActivityRepository {
                 bookmark: record.u_bookmark,
             },
             entity: self
-                .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                .resolve_entity(record.entity_id, record.entity_type.as_str())
                 .await?,
             related_entity: if let Some(related_id) = record.related_entity_id {
                 self.resolve_related(
                     related_id,
-                    &record.related_entity_type.as_deref().unwrap_or(""),
+                    record.related_entity_type.as_deref().unwrap_or(""),
                 )
                 .await?
             } else {
@@ -267,7 +267,7 @@ impl UserActivityRepository {
     }
 
     /// List activities for a user. Returns the last 20 activities unless the requestor
-    /// has edit permissions on the language (if language_id is provided).
+    /// has edit permissions on the language (if `language_id` is provided).
     pub async fn list_by_user(
         &self,
         requestor: Option<&User>,
@@ -391,12 +391,12 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str())
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
                         related_id,
-                        &record.related_entity_type.as_deref().unwrap_or(""),
+                        record.related_entity_type.as_deref().unwrap_or(""),
                     )
                     .await?
                 } else {
@@ -545,12 +545,12 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, &record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str())
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
                         related_id,
-                        &record.related_entity_type.as_deref().unwrap_or(""),
+                        record.related_entity_type.as_deref().unwrap_or(""),
                     )
                     .await?
                 } else {

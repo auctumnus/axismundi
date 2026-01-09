@@ -1,11 +1,9 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
-        definitions::DefinitionRepository,
         languages::LanguageRepository,
         quotation_suggestions::{
             CreateQuotationSuggestion, QuotationSuggestion, QuotationSuggestionRepository,
-            UpdateQuotationSuggestion,
         },
     },
     pagination::{PaginatedRequest, PaginatedResponse},
@@ -15,7 +13,7 @@ use axum::{
     Json,
     extract::{Path, Query},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
 };
 use uuid::Uuid;
 use validator::Validate;
@@ -85,7 +83,7 @@ pub async fn list_quotation_suggestions_by_language(
 pub async fn delete_quotation_suggestion(
     s: Session,
     quotation_suggestions: QuotationSuggestionRepository,
-    Path((code, id)): Path<(String, Uuid)>,
+    Path((_code, id)): Path<(String, Uuid)>,
 ) -> ApiResponse<StatusCode> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
@@ -109,15 +107,17 @@ mod tests {
         make_authed_user, post, print_response_body,
     };
     use crate::email::MockEmailService;
-    use tower::ServiceExt;
 
     struct TestContext {
         token: String,
         app: axum::routing::RouterIntoService<axum::body::Body>,
         language: serde_json::Value,
+        #[allow(dead_code)]
         word: serde_json::Value,
         definition: serde_json::Value,
+        #[allow(dead_code)]
         translation: serde_json::Value,
+        #[allow(dead_code)]
         translatable: serde_json::Value,
     }
 
@@ -129,7 +129,7 @@ mod tests {
             .unwrap();
 
         let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &mut app, email_service.clone()).await;
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
 
         let language = create_test_language(&token, &mut app).await;
         let language_code = language["code"].as_str().unwrap();
@@ -174,8 +174,7 @@ mod tests {
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let created = crate::tests::response_to_value(response.into_body()).await;
-        created
+        crate::tests::response_to_value(response.into_body()).await
     }
 
     #[tokio::test]
@@ -183,7 +182,6 @@ mod tests {
         let mut ctx = create_test_context().await;
 
         let suggestion = create_test_quotation_suggestion(&mut ctx).await;
-        let definition_id = ctx.definition["id"].as_str().unwrap();
         assert_eq!(suggestion["span_content"], "test");
     }
 

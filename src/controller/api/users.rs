@@ -147,7 +147,7 @@ pub async fn upload_profile_picture(
         let field_name = field.name().unwrap_or("");
 
         if field_name == "image" {
-            content_type = field.content_type().map(|s| s.to_string());
+            content_type = field.content_type().map(std::string::ToString::to_string);
             let data = field
                 .bytes()
                 .await

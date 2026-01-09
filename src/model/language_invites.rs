@@ -22,7 +22,7 @@ pub enum PermissionLevel {
 }
 
 impl PermissionLevel {
-    pub fn display_name(&self) -> &'static str {
+    pub fn display_name(self) -> &'static str {
         match self {
             PermissionLevel::Viewer => "viewer",
             PermissionLevel::Editor => "editor",

@@ -21,7 +21,7 @@ use crate::{
         users::User,
         word_classes::{WordClass, WordClassRepository},
         word_relations::{
-            CreateWordRelation, LeveledCognacy, RelationDirection, SearchWordRelations,
+            CreateWordRelation, RelationDirection, SearchWordRelations,
             WordRelationRepository, WordRelationSearchResult, WordRelationType,
         },
         words::{CreateWord, Word, WordRepository, WordSearch},
@@ -158,6 +158,7 @@ struct WordWithMeta {
     creator: User,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn word_search(
     s: Session,
     State(state): State<AppState>,
@@ -263,6 +264,7 @@ async fn word_search(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn view_lemmata(
     s: Session,
     State(state): State<AppState>,
@@ -358,7 +360,7 @@ async fn view_lemmata(
         words_definitions.push(definitions);
 
         // Render notes for this lemma
-        let notes = attempt!(s, words.render_notes(lemma).await);
+        let notes = attempt!(s, WordRepository::render_notes(lemma));
         rendered_notes.push(notes);
 
         // Fetch creator
@@ -455,6 +457,7 @@ async fn new_word(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn new_word_submit(
     s: Session,
     State(state): State<AppState>,
@@ -466,6 +469,7 @@ async fn new_word_submit(
     Path(language_code): Path<String>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
 ) -> (StatusCode, Response) {
+    const MAX_DEFINITIONS: usize = 10;
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
@@ -484,7 +488,6 @@ async fn new_word_submit(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
     // Filter out empty definitions and limit to 10
-    const MAX_DEFINITIONS: usize = 10;
     let definitions_text: Vec<String> = form
         .definitions
         .iter()
@@ -512,12 +515,11 @@ async fn new_word_submit(
             previous_word_class: form.word_class.clone(),
             previous_definition: form
                 .definitions
-                .first()
-                .map(|s| s.clone())
+                .first().cloned()
                 .unwrap_or_default(),
-            previous_definitions: form.definitions.iter().skip(1).map(|s| s.clone()).collect(),
-            previous_context: form.contexts.first().map(|s| s.clone()).unwrap_or_default(),
-            previous_contexts: form.contexts.iter().skip(1).map(|s| s.clone()).collect(),
+            previous_definitions: form.definitions.iter().skip(1).cloned().collect(),
+            previous_context: form.contexts.first().cloned().unwrap_or_default(),
+            previous_contexts: form.contexts.iter().skip(1).cloned().collect(),
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
             user_has_permission,
@@ -582,12 +584,11 @@ async fn new_word_submit(
                 previous_word: form.word.clone(),
                 previous_word_class: form.word_class.clone(),
                 previous_definition: definitions_text
-                    .first()
-                    .map(|s| s.clone())
+                    .first().cloned()
                     .unwrap_or_default(),
-                previous_definitions: definitions_text.iter().skip(1).map(|s| s.clone()).collect(),
-                previous_context: form.contexts.first().map(|s| s.clone()).unwrap_or_default(),
-                previous_contexts: form.contexts.iter().skip(1).map(|s| s.clone()).collect(),
+                previous_definitions: definitions_text.iter().skip(1).cloned().collect(),
+                previous_context: form.contexts.first().cloned().unwrap_or_default(),
+                previous_contexts: form.contexts.iter().skip(1).cloned().collect(),
                 previous_ipa: form.ipa.clone().unwrap_or_default(),
                 previous_notes: form.notes.clone().unwrap_or_default(),
                 user_has_permission,
@@ -600,6 +601,7 @@ async fn new_word_submit(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn view_lemma(
     s: Session,
     State(state): State<AppState>,
@@ -658,7 +660,7 @@ async fn view_lemma(
         format!("/languages/{}/words", language_code)
     };
 
-    let rendered_notes = attempt!(s, words.render_notes(&word).await);
+    let rendered_notes = attempt!(s, WordRepository::render_notes(&word));
 
     let creator = attempt!(s, words.find_creator(&word.id).await);
     let contributor_count = attempt!(s, words.count_contributors(word.id).await);
@@ -707,6 +709,7 @@ async fn view_lemma(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn edit_word(
     s: Session,
     State(state): State<AppState>,
@@ -802,6 +805,7 @@ async fn edit_word(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn edit_word_submit(
     s: Session,
     State(state): State<AppState>,
@@ -813,6 +817,7 @@ async fn edit_word_submit(
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<EditWordFormData>,
 ) -> (StatusCode, Response) {
+    const MAX_DEFINITIONS: usize = 10;
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
     let word = attempt!(
@@ -837,7 +842,6 @@ async fn edit_word_submit(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
 
     // Filter out empty definitions and limit to 10
-    const MAX_DEFINITIONS: usize = 10;
     let definitions_text: Vec<String> = form
         .definitions
         .iter()
@@ -887,14 +891,14 @@ async fn edit_word_submit(
     };
 
     let result = async {
-        let updated_word = words
+        let word_result = words
             .update_by_lemma(&user, language.id, &slug, lemma, update_word)
             .await?;
 
         // Handle definitions: update existing, create new, delete removed
         let existing_defs = definitions_repo
             .list_by_word(
-                updated_word.id,
+                word_result.id,
                 PaginatedRequest {
                     limit: 100,
                     offset: 0,
@@ -945,7 +949,7 @@ async fn edit_word_submit(
                     context,
                 };
                 definitions_repo
-                    .create(&user, updated_word.id, create_def)
+                    .create(&user, word_result.id, create_def)
                     .await?;
             }
         }
@@ -957,16 +961,16 @@ async fn edit_word_submit(
             }
         }
 
-        Ok::<_, crate::err::AppError>(updated_word)
+        Ok::<_, crate::err::AppError>(word_result)
     }
     .await;
 
     match result {
-        Ok(updated_word) => (
+        Ok(word_result) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!(
                 "/languages/{}/words/{}/{}",
-                language_code, updated_word.slug, updated_word.lemma
+                language_code, word_result.slug, word_result.lemma
             ))
             .into_response(),
         ),
@@ -1053,6 +1057,7 @@ async fn add_relation_form(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn add_relation_submit(
     s: Session,
     State(state): State<AppState>,
@@ -1218,7 +1223,7 @@ struct RelationsFilterQuery {
     kind: Option<String>,
     direction: Option<String>,
 }
-
+#[allow(clippy::too_many_arguments)]
 async fn view_word_relations(
     s: Session,
     State(state): State<AppState>,
@@ -1455,7 +1460,7 @@ async fn delete_relation_submit(
         .delete(&current_user, &word, &related_word)
         .await
     {
-        Ok(_) => {
+        Ok(()) => {
             // Redirect back to the word page
             (
                 StatusCode::SEE_OTHER,
@@ -1587,6 +1592,7 @@ struct EditRelationForm {
     kind: WordRelationType,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn edit_relation_submit(
     s: Session,
     State(state): State<AppState>,

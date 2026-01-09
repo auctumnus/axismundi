@@ -62,7 +62,6 @@ mod tests {
         get, get_with_auth,
     };
     use sqlx::PgPool;
-    use tower::ServiceExt as _;
 
     use crate::{config::CONFIG, create_router, email, util::AppState};
 
@@ -75,7 +74,9 @@ mod tests {
         normal_token: String,
 
         admin_id: uuid::Uuid,
+        #[allow(dead_code)]
         moderator_id: uuid::Uuid,
+        #[allow(dead_code)]
         normal_id: uuid::Uuid,
 
         audit_log_id: uuid::Uuid,
@@ -242,7 +243,7 @@ mod tests {
     #[tokio::test]
     async fn test_search_audit_logs_as_admin() {
         let mut ctx = make_test_context().await;
-        let language_id = add_audit_logs_for_search(&mut ctx).await;
+        add_audit_logs_for_search(&mut ctx).await;
 
         let request = get_with_auth(&ctx.admin_token, "audit_logs").await;
         let response = ctx.app.call(request).await.unwrap();

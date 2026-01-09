@@ -138,7 +138,7 @@ impl WordRepository {
         Ok((slug, lemma))
     }
 
-    pub async fn render_notes(&self, word: &Word) -> AppResult<String> {
+    pub fn render_notes(word: &Word) -> AppResult<String> {
         let rendered = word
             .notes
             .as_ref()
@@ -1012,7 +1012,6 @@ mod tests {
     use crate::model::audit_log::{
         AuditActionType, AuditLogFilter, AuditLogRepository, AuditableResource,
     };
-    use crate::model::language_invites::PermissionLevel;
     use crate::model::languages::{CreateLanguage, LanguageRepository};
     use crate::model::users::UserRepository;
     use crate::pagination::PaginatedRequest;

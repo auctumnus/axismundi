@@ -1,11 +1,9 @@
-use std::thread::current;
-
 use askama::Template;
 use axum::{
     Form, Router,
     extract::{Path, Query},
     http::StatusCode,
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use serde::Deserialize;
@@ -14,13 +12,13 @@ use uuid::Uuid;
 use crate::{
     attempt,
     controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
-    err::{AppError, bad_request, not_found},
+    err::{AppError, bad_request},
     get_user,
     model::{
         contribution_stats::ContributionStatsRepository,
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
-        languages::{Language, LanguageRepository, LanguageSearch},
+        languages::{Language, LanguageRepository},
         translatable::{Translatable, TranslatableRepository},
         translations::{
             CreateTranslation, Translation, TranslationRepository, TranslationSearch,
@@ -80,6 +78,7 @@ struct TranslationSearchTemplate {
     user_has_permission: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn translation_search(
     s: Session,
     languages: LanguageRepository,
@@ -184,7 +183,7 @@ struct NewTranslationStep1Template {
 
 async fn new_translation_step_1_form(
     s: Session,
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     Path(slug): Path<String>,
@@ -237,6 +236,7 @@ struct NewTranslationFormData {
     translated_text: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn new_translation_submit(
     s: Session,
     State(state): State<AppState>,
@@ -457,6 +457,7 @@ async fn new_translation_submit(
 // View translation
 #[derive(Template)]
 #[template(path = "translations/view.html")]
+#[allow(clippy::struct_excessive_bools)]
 struct ViewTranslationTemplate {
     current_user: Option<User>,
     translatable: Translatable,
@@ -464,6 +465,7 @@ struct ViewTranslationTemplate {
     language: Language,
     translation: Translation,
     translation_creator: User,
+    #[allow(dead_code)]
     current_user_has_permission: bool,
     can_edit_translatable: bool,
     can_edit_language: bool,
@@ -567,6 +569,7 @@ async fn view_translation(
 #[derive(Template)]
 #[template(path = "translations/edit.html")]
 #[allow(dead_code)]
+#[allow(clippy::struct_excessive_bools)]
 struct EditTranslationTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
@@ -645,6 +648,7 @@ struct EditTranslationFormData {
     language_id: Uuid,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn edit_translation_submit(
     s: Session,
     State(state): State<AppState>,

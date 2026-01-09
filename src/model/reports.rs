@@ -45,7 +45,7 @@ pub enum ReportPriority {
 }
 
 /// Main report struct. Fields are Option<> when they might be hidden from non-mod users.
-/// Use ReportRepository methods to fetch - they'll automatically populate or hide fields
+/// Use `ReportRepository` methods to fetch - they'll automatically populate or hide fields
 /// based on the requestor's permissions.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Report {
@@ -155,7 +155,7 @@ impl ReportRepository {
         .await?;
 
         // Sanitize the report for the reporter (they're not a mod)
-        Ok(self.sanitize_for_user(&report, reporter))
+        Ok(ReportRepository::sanitize_for_user(&report, reporter))
     }
 
     /// Find a report by ID. Automatically filters based on requestor permissions.
@@ -203,7 +203,7 @@ impl ReportRepository {
             if report.reporter != Some(requestor.id) {
                 return Err(forbidden("You can only view your own reports"));
             }
-            return Ok(self.sanitize_for_user(&report, requestor));
+            return Ok(ReportRepository::sanitize_for_user(&report, requestor));
         }
 
         // Mods/admins see everything
@@ -375,7 +375,7 @@ impl ReportRepository {
         // Sanitize all reports for the user
         let sanitized_items: Vec<Report> = items
             .into_iter()
-            .map(|r| self.sanitize_for_user(&r, user))
+            .map(|r| ReportRepository::sanitize_for_user(&r, user))
             .collect();
 
         let total = total_count.unwrap_or(0);
@@ -467,11 +467,11 @@ impl ReportRepository {
         // If we're marking as resolved/dismissed/action_taken, set resolved_at and resolved_by
         // If we're marking as pending/in_progress, clear those fields
         let (resolved_at, resolved_by) = match report.resolution_status {
-            Some(ResolutionStatus::Pending) | Some(ResolutionStatus::InProgress) => {
+            Some(ResolutionStatus::Pending | ResolutionStatus::InProgress) => {
                 // Clear resolution fields
                 (None, None)
             }
-            Some(ResolutionStatus::Dismissed) | Some(ResolutionStatus::ActionTaken) => {
+            Some(ResolutionStatus::Dismissed | ResolutionStatus::ActionTaken) => {
                 // Set resolution fields if not already set
                 let resolved_at = if report.resolved_at.is_none() {
                     Some(Utc::now())
@@ -558,7 +558,7 @@ impl ReportRepository {
     }
 
     /// Sanitize a report for a regular user (hide mod-only fields)
-    fn sanitize_for_user(&self, report: &Report, _user: &User) -> Report {
+    fn sanitize_for_user(report: &Report, _user: &User) -> Report {
         let mut sanitized = report.clone();
 
         // Always hide mod-only fields

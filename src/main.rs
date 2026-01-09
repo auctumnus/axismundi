@@ -1,6 +1,7 @@
 // ignore unused warnings
 #![warn(clippy::pedantic, clippy::style)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::too_many_lines)]
 use askama::Template;
 use axum::{
     Router,
@@ -137,34 +138,6 @@ pub(crate) mod tests {
         Ok(app)
     }
 
-    pub(crate) async fn test_app_with_admin_user() -> (RouterIntoService<axum::body::Body>, String)
-    {
-        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
-        let email_service = std::sync::Arc::new(email::MockEmailService::new());
-        let app_state = AppState {
-            pool: pool.clone(),
-            email_service: email_service.clone(),
-        };
-        let app = create_router(app_state).into_service();
-
-        let username = crate::tests::random_name();
-        let token = crate::tests::make_authed_user(&username, &app, email_service).await;
-
-        let id = sqlx::query_scalar!("select id from users where username = $1", username)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-
-        sqlx::query!(
-            "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
-            id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        (app, token)
-    }
-
     pub(crate) async fn test_app_with_admin_and_email_service(
         email_service: &std::sync::Arc<crate::email::MockEmailService>,
     ) -> (RouterIntoService<axum::body::Body>, String) {
@@ -219,7 +192,7 @@ pub(crate) mod tests {
         format!(
             "{}_{}",
             random_word::get(random_word::Lang::En),
-            nanoid::nanoid!(4).replace("_", "")
+            nanoid::nanoid!(4).replace('_', "")
         )
         .replace('-', "")
         .to_lowercase()

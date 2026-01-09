@@ -221,6 +221,7 @@ mod tests {
 
     struct TestContext {
         token: String,
+        #[allow(dead_code)]
         username: String,
         app: axum::routing::RouterIntoService<axum::body::Body>,
         language: serde_json::Value,
@@ -234,7 +235,7 @@ mod tests {
             .unwrap();
 
         let username = crate::tests::random_name();
-        let token = make_authed_user(&username, &mut app, email_service.clone()).await;
+        let token = make_authed_user(&username, &app, email_service.clone()).await;
 
         let language = create_test_language(&token, &mut app).await;
 

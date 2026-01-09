@@ -9,7 +9,9 @@ use crate::{
 };
 
 pub struct ContributionStats {
+    #[allow(dead_code)]
     pub language_id: Uuid,
+    #[allow(dead_code)]
     pub user_id: Uuid,
     pub word_count: i64,
     pub translation_count: i64,
@@ -30,6 +32,7 @@ impl ContributionStatsRepository {
         Self { state }
     }
 
+    #[allow(dead_code)]
     pub async fn increment_word_count(
         &self,
         language: &Uuid,
@@ -54,6 +57,7 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
+    #[allow(dead_code)]
     pub async fn decrement_word_count(
         &self,
         language: &Uuid,
@@ -78,6 +82,7 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
+    #[allow(dead_code)]
     pub async fn increment_translation_count(
         &self,
         language: &Uuid,
@@ -102,6 +107,7 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
+    #[allow(dead_code)]
     pub async fn decrement_translation_count(
         &self,
         language: &Uuid,
@@ -165,7 +171,7 @@ impl ContributionStatsRepository {
 
         let mut c = vec![owner];
         for user in &contributors {
-            if (!c.iter().any(|u| u.id == user.id)) {
+            if !c.iter().any(|u| u.id == user.id) {
                 c.push(user.clone());
             }
         }
@@ -224,9 +230,9 @@ impl ContributionStatsRepository {
             "#,
             language,
             like_query,
-            limit as i64,
+            i64::from(limit),
             min_permission as PermissionLevel,
-            offset as i64,
+            i64::from(offset),
         )
         .fetch_all(&self.state.pool);
         let count_future = sqlx::query_scalar!(

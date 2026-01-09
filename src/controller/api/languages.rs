@@ -786,7 +786,7 @@ mod tests {
 
     /// Creates a test context with:
     /// - A language owned by one user
-    /// - An admin or moderator user (depending on user_tag parameter)
+    /// - An admin or moderator user (depending on `user_tag` parameter)
     async fn make_perm_override_test_context(user_tag: &str) -> PermOverrideTestContext {
         use crate::CONFIG;
         use crate::util::AppState;

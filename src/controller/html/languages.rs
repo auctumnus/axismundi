@@ -256,7 +256,7 @@ struct ViewLanguageTemplate {
     pending_invite: Option<(crate::model::language_invites::LanguageInvite, User)>,
 }
 
-#[axum::debug_handler(state=AppState)]
+#[allow(clippy::too_many_arguments)]
 async fn view_language(
     s: Session,
     languages: LanguageRepository,
@@ -272,19 +272,15 @@ async fn view_language(
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
-    let rendered_description = attempt!(s, languages.render_description(&language).await);
+    let rendered_description = attempt!(s, LanguageRepository::render_description(&language));
+    let get_five = PaginatedRequest { limit: 5, offset: 0 };
     let recent_words = attempt!(
         s,
         words
             .search(
                 &language.id,
-                PaginatedRequest {
-                    limit: 5,
-                    offset: 0,
-                },
-                WordSearch {
-                    ..Default::default()
-                }
+                get_five.clone(),
+                WordSearch::default()
             )
             .await
     );
@@ -294,10 +290,7 @@ async fn view_language(
         translations
             .list_by_language(
                 language.id,
-                PaginatedRequest {
-                    limit: 5,
-                    offset: 0,
-                }
+                get_five,
             )
             .await
     );
@@ -360,7 +353,6 @@ async fn view_language(
             .await
         {
             Ok(Some(invite)) if invite.accepted_at.is_none() => {
-                // Fetch the sender
                 match users.find_by_id(invite.sender).await {
                     Ok(sender) => Some((invite, sender)),
                     Err(_) => None,
@@ -386,8 +378,7 @@ async fn view_language(
         pending_invite,
     };
 
-    let body = render_template(template);
-    okay(body)
+    okay(render_template(template))
 }
 
 #[derive(Template)]
@@ -478,20 +469,20 @@ async fn edit_language_submit(
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let updates = crate::model::languages::UpdateLanguage {
-        code: if form.code != language.code {
+        code: if form.code == language.code {
+            None
+        } else {
             Some(form.code.clone())
-        } else {
-            None
         },
-        name: if form.name != language.name {
+        name: if form.name == language.name {
+            None
+        } else {
             Some(form.name.clone())
-        } else {
-            None
         },
-        description: if form.description != language.description {
-            Some(form.description.clone())
-        } else {
+        description: if form.description == language.description {
             None
+        } else {
+            Some(form.description.clone())
         },
         private: None,
     };
@@ -543,9 +534,11 @@ struct SearchContributorsTemplate {
     contributors: Vec<ContributorWithStats>,
     user_has_permission: bool,
     previous_query: ContributionsSearch,
+    #[allow(dead_code)]
     previous_pagination: PaginatedRequest,
 }
 
+#[allow(clippy::match_same_arms)] // easier to read like this
 async fn search_contributors(
     s: Session,
     languages: LanguageRepository,

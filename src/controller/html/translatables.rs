@@ -269,8 +269,7 @@ async fn view_translatable(
     // Check if the user can edit this translatable (only creator can edit)
     let can_edit_translatable = s
         .user()
-        .map(|u| u.id == translatable.created_by)
-        .unwrap_or(false);
+        .is_some_and(|u| u.id == translatable.created_by);
 
     let template = ViewTranslatableTemplate {
         current_user: s.user().cloned(),
@@ -331,15 +330,15 @@ async fn edit_translatable_submit(
 
     let updates = UpdateTranslatable {
         slug: None,
-        title: if form.title != translatable.title {
+        title: if form.title == translatable.title {
+            None
+        } else {
             Some(form.title.clone())
-        } else {
-            None
         },
-        english: if form.english != translatable.english {
-            Some(form.english.clone())
-        } else {
+        english: if form.english == translatable.english {
             None
+        } else {
+            Some(form.english.clone())
         },
         source_name: None,
         source_url: None,
@@ -348,9 +347,9 @@ async fn edit_translatable_submit(
     };
 
     match translatables.update(&user, translatable.id, updates).await {
-        Ok(updated) => (
+        Ok(result) => (
             StatusCode::SEE_OTHER,
-            Redirect::to(&format!("/translatable/{}", updated.slug)).into_response(),
+            Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
         ),
         Err(e) => {
             let template = EditTranslatableTemplate {

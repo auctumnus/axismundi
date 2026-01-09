@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use crate::{
     ErrorTemplate,
-    controller::html::users::render_login_form,
     err::{AppError, internal_error},
     model::{
-        contribution_stats::{ContributionStats, ContributionStatsRepository},
+        contribution_stats::ContributionStatsRepository,
         languages::{Language, LanguageRepository},
         translatable::{TranslatableRepository, TranslatableSearch},
         user_activities::{UserActivity, UserActivityRepository},
@@ -133,6 +132,7 @@ async fn landing(s: Session) -> impl IntoResponse {
 pub struct LanguagesWithContributors {
     pub language: Language,
     pub top_contributors: Vec<User>,
+    #[allow(dead_code)]
     pub is_liked: bool,
 }
 
@@ -144,6 +144,7 @@ pub struct TranslatableWithLiked {
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
+    #[allow(dead_code)]
     error: Option<AppError>,
     current_user: Option<User>,
     languages: Vec<LanguagesWithContributors>,
@@ -173,12 +174,12 @@ async fn home(
             contribution_stats.get_top_contributors(&lang.id, 5).await
         );
         let is_liked = attempt!(s, languages.is_liked(&user.id, &lang.id).await);
-        let language_with_contributors = LanguagesWithContributors {
+        let l = LanguagesWithContributors {
             language: lang.clone(),
             top_contributors,
             is_liked,
         };
-        languages_with_contributors.push(language_with_contributors);
+        languages_with_contributors.push(l);
     }
     let languages = languages_with_contributors;
 
@@ -188,11 +189,10 @@ async fn home(
                 limit: 5,
                 offset: 0,
             },
-            Default::default(),
+            TranslatableSearch::default(),
         )
         .await
-        .map(|res| res.items)
-        .unwrap_or_else(|_| vec![]);
+        .map_or_else( |_| vec![], |res| res.items);
 
     let translatables_with_liked = {
         let mut vec = Vec::with_capacity(translatables_res.len());
@@ -233,7 +233,7 @@ pub async fn render_generic_error(s: Session, error: AppError) -> (StatusCode, R
     (status_code, body)
 }
 
-pub async fn no_session(redirect: Option<String>) -> (StatusCode, Response) {
+pub fn no_session(redirect: Option<String>) -> (StatusCode, Response) {
     match redirect {
         Some(redirect) => {
             let login_url = format!(
@@ -277,7 +277,7 @@ mod macros {
             match $session.user().cloned() {
                 Some(user) => user,
                 None => {
-                    return $crate::controller::html::no_session(None).await;
+                    return $crate::controller::html::no_session(None);
                 }
             }
         };
@@ -285,7 +285,7 @@ mod macros {
             match $session.user().cloned() {
                 Some(user) => user,
                 None => {
-                    return $crate::controller::html::no_session(Some($redirect)).await;
+                    return $crate::controller::html::no_session(Some($redirect));
                 }
             }
         };

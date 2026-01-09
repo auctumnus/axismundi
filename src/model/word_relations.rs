@@ -1126,6 +1126,7 @@ impl WordRelationRepository {
 
     /// Compute topological levels for cognacy graph using Kahn's algorithm
     /// with maximum depth strategy (words placed at deepest reachable level)
+    #[allow(dead_code)]
     pub async fn get_leveled_cognacy(&self, word: &Word) -> AppResult<Option<LeveledCognacy>> {
         use std::collections::{HashMap, HashSet, VecDeque};
 
