@@ -2,6 +2,8 @@
 
 conlanging community platform
 
+to participate in beta tests for our official instance, join [our discord](https://discord.gg/VGzdwcdKzu)
+
 ## Development
 
 This is written in Rust, with a simple frontend using Typescript.
