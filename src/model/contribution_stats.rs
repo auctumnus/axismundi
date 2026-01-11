@@ -225,6 +225,7 @@ impl ContributionStatsRepository {
                 LEFT JOIN language_permissions lp ON lp."user" = u.id AND lp.language = $1
                 WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)
                 AND (lp.permission IS NULL OR lp.permission >= $4)
+                AND (cs.word_count IS NOT NULL OR cs.translation_count IS NOT NULL OR lp.permission IS NOT NULL)
                 ORDER BY (COALESCE(cs.word_count, 0) + (10 * COALESCE(cs.translation_count, 0))) DESC
                 LIMIT $3 OFFSET $5
             "#,

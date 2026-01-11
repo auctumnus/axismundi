@@ -378,6 +378,7 @@ a.button, form.default button[type="submit"] {
   font-size: 1rem;
   cursor: pointer;
   text-decoration: none;
+  font-size: .875rem;
 
   transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
 

@@ -28,11 +28,21 @@
     </div>
 {% endif %}
 
-<p>You are editing the translation for: <strong>{{ translatable.title }}</strong></p>
-
-<p>You are translating into <strong>{{ language.name }}</strong></p>
-
-<p>{{ translatable.english }}</p>
+<div class="context-cards">
+    <div class="context-card language-context">
+        <span class="context-label">for language</span>
+        <ul class="standalone-card">
+            {% call u::render_language_card(&language_with_contributors) %}
+        </ul>
+    </div>
+    <div class="context-card translatable-context">
+        <span class="context-label">translatable</span>
+        <div class="context-card-link">
+            <span class="context-title">{{ translatable.title }}</span>
+            <span class="context-text">{{ translatable.english }}</span>
+        </div>
+    </div>
+</div>
 
 <form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit-translation">
     <section>

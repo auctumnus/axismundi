@@ -11,6 +11,10 @@ ul.contributor-list {
     }
 }
 
+form.default {
+    margin-bottom: .5rem;
+}
+
 .contributor-card {
     display: flex;
     flex-direction: row;

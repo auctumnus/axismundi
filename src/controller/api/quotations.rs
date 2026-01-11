@@ -22,11 +22,11 @@ use validator::Validate;
 pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
         .route(
-            "/translatables/{translatable_slug}/translations/{language_code}/quotations",
+            "/translatable/{translatable_slug}/translations/{language_code}/quotations",
             post(create_quotation),
         )
         .route(
-            "/translatables/{translatable_slug}/translations/{language_code}/quotations",
+            "/translatable/{translatable_slug}/translations/{language_code}/quotations",
             get(list_quotations_by_translation),
         )
         .route(
@@ -34,15 +34,15 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
             get(list_quotations_by_definition),
         )
         .route(
-            "/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}",
+            "/translatable/{translatable_slug}/translations/{language_code}/quotations/{id}",
             get(get_quotation_from_translation),
         )
         .route(
-            "/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}",
+            "/translatable/{translatable_slug}/translations/{language_code}/quotations/{id}",
             put(edit_quotation_from_translation),
         )
         .route(
-            "/translatables/{translatable_slug}/translations/{language_code}/quotations/{id}",
+            "/translatable/{translatable_slug}/translations/{language_code}/quotations/{id}",
             delete(delete_quotation_from_translation),
         )
 }
@@ -303,7 +303,7 @@ mod tests {
 
         let request = post(
             token,
-            &format!("translatables/{translatable_slug}/translations/{language_code}/quotations",),
+            &format!("translatable/{translatable_slug}/translations/{language_code}/quotations",),
             body,
         )
         .await;
@@ -362,7 +362,7 @@ mod tests {
         });
 
         let request = post_without_auth(
-            &format!("translatables/{translatable_slug}/translations/{language_code}/quotations",),
+            &format!("translatable/{translatable_slug}/translations/{language_code}/quotations",),
             body,
         )
         .await;
@@ -395,7 +395,7 @@ mod tests {
         let quotation_id = quotation["id"].as_str().unwrap();
 
         let request = get(&format!(
-            "translatables/{}/translations/{}/quotations/{}",
+            "translatable/{}/translations/{}/quotations/{}",
             translatable_slug, language_code, quotation_id
         ))
         .await;
@@ -442,7 +442,7 @@ mod tests {
         .await;
 
         let request = get(&format!(
-            "translatables/{}/translations/{}/quotations",
+            "translatable/{}/translations/{}/quotations",
             translatable_slug, language_code
         ))
         .await;
@@ -524,7 +524,7 @@ mod tests {
         let request = crate::controller::api::tests::put(
             &token,
             &format!(
-                "translatables/{}/translations/{}/quotations/{}",
+                "translatable/{}/translations/{}/quotations/{}",
                 translatable_slug, language_code, quotation_id
             ),
             &update_body,
@@ -559,7 +559,7 @@ mod tests {
 
         let request = crate::controller::api::tests::put_without_auth(
             &format!(
-                "translatables/{}/translations/{}/quotations/{}",
+                "translatable/{}/translations/{}/quotations/{}",
                 translatable_slug,
                 language_code,
                 uuid::Uuid::nil()
@@ -597,7 +597,7 @@ mod tests {
         let request = delete(
             &token,
             &format!(
-                "translatables/{}/translations/{}/quotations/{}",
+                "translatable/{}/translations/{}/quotations/{}",
                 translatable_slug, language_code, quotation_id
             ),
         );
@@ -630,7 +630,7 @@ mod tests {
         let quotation_id = quotation["id"].as_str().unwrap();
 
         let request = delete_without_auth(&format!(
-            "translatables/{}/translations/{}/quotations/{}",
+            "translatable/{}/translations/{}/quotations/{}",
             translatable_slug, language_code, quotation_id
         ));
         let response = app.call(request).await.unwrap();

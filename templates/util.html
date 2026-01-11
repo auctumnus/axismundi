@@ -131,7 +131,7 @@
                 <li>{{ translations_count }} {% match *translations_count %}{% when 1 %}translation{% else %}translations{% endmatch %}</li>
             </ul>
         </span>
-        <span class="likes like-button {% if translatable_with_liked.is_liked %}liked{% endif %}" data-target="/api/translatables/{{ translatable_with_liked.translatable.slug }}" data-tooltip="Like this translatable" role="button">
+        <span class="likes like-button {% if translatable_with_liked.is_liked %}liked{% endif %}" data-target="/api/translatable/{{ translatable_with_liked.translatable.slug }}" data-tooltip="Like this translatable" role="button">
             <span class="icon-button-container yellow">
                 <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                 <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
@@ -212,7 +212,7 @@
                 {% call relative(&translation_with_author.translation.created_at) %}
             </span>
         </span>
-        <span class="likes like-button {% if translation_with_author.translation.like_count > 0 %}liked{% endif %}" data-target="/api/translatables/{{ translation_with_author.translation.translatable_slug }}/translations/{{ language_code }}" data-tooltip="Like this translation" role="button">
+        <span class="likes like-button {% if translation_with_author.translation.like_count > 0 %}liked{% endif %}" data-target="/api/translatable/{{ translation_with_author.translation.translatable_slug }}/translations/{{ language_code }}" data-tooltip="Like this translation" role="button">
             <span class="icon-button-container yellow">
                 <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                 <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>

@@ -575,6 +575,7 @@ struct EditTranslationTemplate {
     error: Option<AppError>,
     translatable: Translatable,
     language: Language,
+    language_with_contributors: LanguagesWithContributors,
     translation: Translation,
     previous_translated_text: String,
     can_edit_translatable: bool,
@@ -626,11 +627,25 @@ async fn edit_translation_form(
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
+    let top_contributors = attempt!(
+        s,
+        ContributionStatsRepository::new(state.clone())
+            .get_top_contributors(&language.id, 5)
+            .await
+    );
+    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let language_with_contributors = LanguagesWithContributors {
+        language: language.clone(),
+        top_contributors,
+        is_liked,
+    };
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
         translatable,
         language,
+        language_with_contributors,
         translation: translation.clone(),
         previous_translated_text: translation.translated_text.clone(),
         can_edit_translatable,
@@ -707,6 +722,19 @@ async fn edit_translation_submit(
         )
         .await;
 
+    let top_contributors = attempt!(
+        s,
+        ContributionStatsRepository::new(state.clone())
+            .get_top_contributors(&language.id, 5)
+            .await
+    );
+    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let language_with_contributors = LanguagesWithContributors {
+        language: language.clone(),
+        top_contributors,
+        is_liked,
+    };
+
     match translation {
         Ok(_) => {
             let redirect_url = format!(
@@ -726,6 +754,7 @@ async fn edit_translation_submit(
                 language,
                 translation: existing_translation,
                 previous_translated_text: form.translated_text.clone(),
+                language_with_contributors,
                 can_edit_translatable,
                 can_edit_language,
                 can_edit_translation,
