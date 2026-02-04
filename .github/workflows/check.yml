@@ -14,6 +14,6 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: sudo apt install just graphviz
+      - run: sudo apt install just libgraphviz-dev
       - run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
       - run: just test
