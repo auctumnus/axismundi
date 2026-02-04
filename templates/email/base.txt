@@ -1,0 +1,8 @@
+hello,
+
+{% block content %}{% endblock %}
+
+thanks,
+the axismundi team
+
+{{ crate::config::CONFIG.public_url_base }}

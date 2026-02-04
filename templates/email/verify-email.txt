@@ -1,0 +1,9 @@
+{% extends "email/base.txt" %}
+
+{% block content %}
+someone just used this email address to create an account on axismundi.
+
+if this was you, please verify your email address by clicking the link below:
+
+{{ verify_url }}
+{% endblock %}

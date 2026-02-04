@@ -1,10 +1,11 @@
 use std::sync::{Arc, Mutex};
 
+use askama::Template;
 use async_trait::async_trait;
 use resend_rs::Resend;
 use resend_rs::types::CreateEmailBaseOptions;
 
-use crate::config::ResendConfig;
+use crate::config::{CONFIG, ResendConfig};
 use crate::err::AppResult;
 
 #[async_trait]
@@ -42,9 +43,21 @@ impl ResendEmailService {
     pub fn new(config: &ResendConfig) -> Self {
         Self {
             client: Resend::new(&config.api_key),
-            from_email: config.from_email.clone(),
+            from_email: format!("Axismundi <{}>", config.from_email),
         }
     }
+}
+
+#[derive(Template)]
+#[template(path = "email/verify-email.html")]
+struct VerifyEmailHTML<'a> {
+    verify_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "email/verify-email.txt")]
+struct VerifyEmailText<'a> {
+    verify_url: &'a str,
 }
 
 #[async_trait]
@@ -55,23 +68,20 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let verification_url = format!("https://axismundi.org/verify-email?token={}", token);
+        let verify_url = &CONFIG.url(&format!("verify/{user_id}?token={token}&email={to}"));
         let subject = "verify your email";
-        let html = format!(
-            r#"<html>
-<body>
-<h1>verify your email</h1>
-<p>click the link below to verify your email address:</p>
-<p><a href="{}">verify email</a></p>
-<p>or copy and paste this link into your browser:</p>
-<p>{}</p>
-<p>user id: {}</p>
-</body>
-</html>"#,
-            verification_url, verification_url, user_id
-        );
+        let html = VerifyEmailHTML { verify_url }
+            .render()
+            .map_err(|e| {
+                crate::err::internal_error(format!("failed to render verification email: {}", e))
+            })?;
+        let text = VerifyEmailText { verify_url }
+            .render()
+            .map_err(|e| {
+                crate::err::internal_error(format!("failed to render verification email: {}", e))
+            })?;
 
-        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html);
+        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html).with_text(&text);
 
         self.client
             .emails
@@ -88,7 +98,7 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let reset_url = format!("https://axismundi.org/reset-password?token={}", token);
+        let reset_url = &CONFIG.url(&format!("reset-password?token={}", token));
         let subject = "reset your password";
         let html = format!(
             r#"<html>

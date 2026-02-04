@@ -1,0 +1,15 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+<p>hello,</p>
+
+<p>someone just used this email address to create an account on axismundi.</p>
+
+<p>if this was you, please verify your email address by clicking the link below:</p>
+
+<p><a href="{{ verify_url }}">{{ verify_url }}</a></p>
+
+<p>thanks,<br/>
+the axismundi team</p>
+
+{% endblock %}

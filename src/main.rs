@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util::AppState;
 
 use crate::{
-    config::CONFIG, email::MockEmailService, model::users::User, util::extract_session::Session,
+    config::CONFIG, email::{MockEmailService, ResendEmailService}, model::users::User, util::extract_session::Session,
 };
 mod config;
 mod controller;
@@ -40,7 +40,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // on Drop
     let pool = PgPool::connect(&CONFIG.database_url).await?;
 
-    let email_service = std::sync::Arc::new(MockEmailService::new());
+    let email_service = match &CONFIG.email {
+        config::EmailConfig::Resend(resend_config) => {
+            std::sync::Arc::new(ResendEmailService::new(resend_config))
+                as std::sync::Arc<dyn email::EmailService>
+        }
+        config::EmailConfig::Mock => {
+            std::sync::Arc::new(MockEmailService::new()) as std::sync::Arc<dyn email::EmailService>
+        }
+    };
 
     let app_state = AppState {
         pool: pool.clone(),

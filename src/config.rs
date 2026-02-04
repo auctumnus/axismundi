@@ -76,6 +76,7 @@ const fn default_wait_between_tasks_ms() -> u64 {
 const fn default_task_timeout_ms() -> u64 {
     15_000
 }
+
 #[derive(Clone, Deserialize, Debug, Default)]
 pub struct BannerConfig {
     pub message: String,
@@ -84,11 +85,18 @@ pub struct BannerConfig {
 }
 
 #[derive(Clone, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum EmailConfig {
+    Resend(ResendConfig),
+    Mock,
+}
+
+#[derive(Clone, Deserialize, Debug)]
 pub struct AppConfig {
     pub database_url: String,
     pub s3: S3Config,
     #[allow(dead_code)]
-    pub resend: ResendConfig,
+    pub email: EmailConfig,
     #[allow(dead_code)]
     pub maid: MaidConfig,
     #[serde(default = "default_file_upload_limit")]
@@ -144,10 +152,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 task_timeout_ms: default_task_timeout_ms(),
                 port: 3003,
             },
-            resend: ResendConfig {
-                api_key: "re_test_key".to_string(),
-                from_email: "test@example.com".to_string(),
-            },
+            email: EmailConfig::Mock,
             file_upload_limit_bytes: default_file_upload_limit(),
             port: 3001,
             public_url_base: "http://localhost:3001".to_string(),
