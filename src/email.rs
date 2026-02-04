@@ -68,7 +68,7 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let verify_url = &CONFIG.url(&format!("verify/{user_id}?token={token}&email={to}"));
+        let verify_url = &CONFIG.url(&format!("verify/{user_id}?token={token}&email={}", serde_urlencoded::to_string(to)?));
         let subject = "verify your email";
         let html = VerifyEmailHTML { verify_url }
             .render()
@@ -98,7 +98,7 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let reset_url = &CONFIG.url(&format!("reset-password?token={}", token));
+        let reset_url = &CONFIG.url(&format!("reset-password?token={}", serde_urlencoded::to_string(token)?));
         let subject = "reset your password";
         let html = format!(
             r#"<html>

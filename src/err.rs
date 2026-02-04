@@ -168,6 +168,12 @@ impl From<image::ImageError> for AppError {
     }
 }
 
+impl From<serde_urlencoded::ser::Error> for AppError {
+    fn from(err: serde_urlencoded::ser::Error) -> Self {
+        internal_error(err)
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (self.status_code, self.message).into_response()
