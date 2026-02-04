@@ -1,0 +1,116 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    u.id as u_id,\n                    u.username as u_username,\n                    u.email as u_email,\n                    u.password_hash as u_password_hash,\n                    u.display_name as u_display_name,\n                    u.description as u_description,\n                    u.pronouns as u_pronouns,\n                    u.gender as u_gender,\n                    u.profile_picture_object_id as u_profile_picture_object_id,\n                    u.verified_at as u_verified_at,\n                    u.tags as u_tags,\n                    u.created_at as u_created_at,\n                    u.updated_at as u_updated_at,\n                    COALESCE(bookmarks.slug, '')::text as \"bookmark!\"\n                FROM users u\n                LEFT JOIN bookmarks ON bookmarks.item = u.id AND bookmarks.resource = 'user'\n                LEFT JOIN language_family_permissions lfp ON lfp.\"user\" = u.id AND lfp.family = $1\n                LEFT JOIN LATERAL (\n                    SELECT\n                        SUM(cs.word_count) as total_words,\n                        SUM(cs.translation_count) as total_translations\n                    FROM contribution_stats cs\n                    JOIN language_family_members lfm ON lfm.language_id = cs.language_id\n                    WHERE lfm.family_id = $1 AND cs.user_id = u.id\n                ) stats ON true\n                WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)\n                AND (lfp.permission IS NULL OR lfp.permission >= $4)\n                AND (COALESCE(stats.total_words, 0) > 0 OR COALESCE(stats.total_translations, 0) > 0 OR lfp.permission IS NOT NULL)\n                ORDER BY (COALESCE(stats.total_words, 0) + (10 * COALESCE(stats.total_translations, 0))) DESC\n                LIMIT $3 OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "u_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "u_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "u_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "u_password_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "u_display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "u_description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "u_pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "u_gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "u_profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "u_verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "u_tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "u_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "u_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "bookmark!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "3e73f288bba5cae4627fd7dc7ba56123095208c1302199e754d270d11ca31dc8"
+}

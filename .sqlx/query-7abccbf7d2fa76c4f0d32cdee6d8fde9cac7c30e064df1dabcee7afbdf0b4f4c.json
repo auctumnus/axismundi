@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        DELETE FROM cognacies\n                        WHERE id = $1\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7abccbf7d2fa76c4f0d32cdee6d8fde9cac7c30e064df1dabcee7afbdf0b4f4c"
+}

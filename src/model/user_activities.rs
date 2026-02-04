@@ -4,13 +4,10 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::{
-    err::{AppResult, bad_request, forbidden, not_found},
-    model::{
-        languages::Language, translatable::Translatable, translations::Translation, users::User,
-        words::Word,
-    },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::AppState,
+    controller::html::LanguagesWithContributors, err::{AppResult, bad_request, forbidden, not_found}, model::{
+        languages::Language, translatable::Translatable, translations::Translation, users::{User, UserRepository},
+        words::{Word, WordWithMeta},
+    }, pagination::{PaginatedRequest, PaginatedResponse}, util::AppState
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
@@ -43,8 +40,8 @@ impl ActivityType {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum ActivityEntity {
-    Word(Word, String),
-    Language(Language),
+    Word(WordWithMeta, String),
+    Language(LanguagesWithContributors),
     User(User),
     Translatable(Translatable),
     Translation(Translation, String),
@@ -77,7 +74,7 @@ impl UserActivityRepository {
         Self { state }
     }
 
-    pub async fn find_by_id(&self, id: Uuid) -> AppResult<UserActivity> {
+    pub async fn find_by_id(&self, id: Uuid, requestor: Option<&User>) -> AppResult<UserActivity> {
         if let Some(record) = sqlx::query!(
             r#"
                 SELECT
@@ -137,7 +134,7 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
@@ -211,6 +208,8 @@ impl UserActivityRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
+        let user = UserRepository::new(self.state.clone()).find_by_id(user_id).await?;
+
         Ok(UserActivity {
             id: record.id,
             user_id: record.user_id,
@@ -235,7 +234,7 @@ impl UserActivityRepository {
                 bookmark: record.u_bookmark,
             },
             entity: self
-                .resolve_entity(record.entity_id, record.entity_type.as_str())
+                .resolve_entity(record.entity_id, record.entity_type.as_str(), Some(&user))
                 .await?,
             related_entity: if let Some(related_id) = record.related_entity_id {
                 self.resolve_related(
@@ -253,7 +252,7 @@ impl UserActivityRepository {
 
     /// Delete an activity by its ID. Only the related user can delete their own activities.
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
-        let activity = self.find_by_id(id).await?;
+        let activity = self.find_by_id(id, Some(requestor)).await?;
 
         if activity.user_id != requestor.id {
             return Err(forbidden("you can only delete your own activities"));
@@ -391,7 +390,7 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
@@ -545,7 +544,7 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
@@ -584,7 +583,7 @@ impl UserActivityRepository {
     }
 
     /// List the last 20 site-wide activities, ordered by timestamp descending.
-    pub async fn list_site_wide(&self) -> AppResult<Vec<UserActivity>> {
+    pub async fn list_site_wide(&self, requestor: Option<&User>) -> AppResult<Vec<UserActivity>> {
         let records = sqlx::query!(
             r#"
                 SELECT
@@ -646,7 +645,7 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str())
+                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
                     .await?,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
@@ -665,7 +664,7 @@ impl UserActivityRepository {
         Ok(activities)
     }
 
-    pub async fn resolve_entity(&self, entity_id: Uuid, kind: &str) -> AppResult<ActivityEntity> {
+    pub async fn resolve_entity(&self, entity_id: Uuid, kind: &str, requestor: Option<&User>) -> AppResult<ActivityEntity> {
         match kind {
             "word" => {
                 let words_repo = crate::model::words::WordRepository::new(self.state.clone());
@@ -673,6 +672,7 @@ impl UserActivityRepository {
                     let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
                         .find_by_id(word.language)
                         .await?;
+                    let word = words_repo.materialize(word, requestor).await?;
                     Ok(ActivityEntity::Word(word, lang.code))
                 } else {
                     Err(bad_request(format!(
@@ -685,6 +685,7 @@ impl UserActivityRepository {
                 let languages_repo =
                     crate::model::languages::LanguageRepository::new(self.state.clone());
                 if let Ok(language) = languages_repo.find_by_id(entity_id).await {
+                    let language = languages_repo.materialize(language, requestor).await?;
                     Ok(ActivityEntity::Language(language))
                 } else {
                     Err(bad_request(format!(
@@ -748,6 +749,7 @@ impl UserActivityRepository {
                 let languages_repo =
                     crate::model::languages::LanguageRepository::new(self.state.clone());
                 if let Ok(language) = languages_repo.find_by_id(related_id).await {
+                    let language = languages_repo.materialize(language, None).await?;
                     Ok(Some(ActivityEntity::Language(language)))
                 } else {
                     Ok(None)

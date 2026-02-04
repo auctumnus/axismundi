@@ -5,14 +5,9 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    err::{AppResult, bad_request, forbidden, not_found},
-    model::{
-        language_invites::PermissionLevel,
-        user_bans::UserBanRepository,
-        users::{User, UserSearch, USERNAME_REGEX},
-    },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, ensure_verified},
+    controller::html::LanguagesWithContributors, err::{AppResult, bad_request, forbidden, not_found}, model::{
+        contribution_stats::ContributionStatsRepository, language_invites::PermissionLevel, user_bans::UserBanRepository, users::{USERNAME_REGEX, User, UserSearch}
+    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified}
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -73,6 +68,24 @@ impl LanguageRepository {
     pub fn render_description(language: &Language) -> AppResult<String> {
         let rendered = crate::md::render_md(&language.description)?;
         Ok(rendered)
+    }
+
+    pub async fn materialize(&self, language: Language, requestor: Option<&User>) -> AppResult<LanguagesWithContributors> {
+        let top_contributors = ContributionStatsRepository::new(self.state.clone())
+            .get_top_contributors(&language.id, 5)
+            .await?;
+        
+        let is_liked = if let Some(user) = requestor {
+            self.is_liked(&language.id, &user.id).await?
+        } else {
+            false
+        };
+
+        Ok(LanguagesWithContributors {
+            language,
+            top_contributors,
+            is_liked,
+        })
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Language> {
@@ -260,6 +273,38 @@ impl LanguageRepository {
         .await?;
 
         result.ok_or_else(|| not_found(format!("language with code '{code}'")))
+    }
+
+    /// List all languages the user has at least Editor permission on.
+    pub async fn list_editable_by_user(&self, user_id: Uuid) -> AppResult<Vec<Language>> {
+        let results = sqlx::query_as!(
+            Language,
+            r#"
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.like_count,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                JOIN language_permissions ON language_permissions.language = languages.id
+                WHERE language_permissions."user" = $1
+                AND language_permissions.permission IN ('editor', 'admin', 'owner')
+                ORDER BY languages.name
+            "#,
+            user_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(results)
     }
 
     pub async fn update(
@@ -495,6 +540,12 @@ impl LanguageRepository {
                 ($1::TEXT IS NULL OR users.username = $1)
                 AND ($2::TIMESTAMPTZ IS NULL OR languages.created_at < $2)
                 AND ($3::TIMESTAMPTZ IS NULL OR languages.created_at > $3)
+                AND ($7::TEXT IS NULL OR languages.id IN (
+                    SELECT language_family_members.language_id
+                    FROM language_family_members
+                    JOIN language_families ON language_families.id = language_family_members.family_id
+                    WHERE language_families.code = $7
+                ))
                 ORDER BY (
                     CASE
                         WHEN $4::TEXT IS NOT NULL AND languages.name ILIKE '%' || $4 || '%' THEN 100.0
@@ -518,7 +569,8 @@ impl LanguageRepository {
             search.created_after,
             search.text_query,
             i64::from(pagination.limit),
-            i64::from(pagination.offset)
+            i64::from(pagination.offset),
+            search.in_family,
         )
         .fetch_all(&self.state.pool);
 
@@ -531,10 +583,17 @@ impl LanguageRepository {
                 ($1::TEXT IS NULL OR users.username = $1)
                 AND ($2::TIMESTAMPTZ IS NULL OR languages.created_at < $2)
                 AND ($3::TIMESTAMPTZ IS NULL OR languages.created_at > $3)
+                AND ($4::TEXT IS NULL OR languages.id IN (
+                    SELECT language_family_members.language_id
+                    FROM language_family_members
+                    JOIN language_families ON language_families.id = language_family_members.family_id
+                    WHERE language_families.code = $4
+                ))
             "#,
             search.owned_by,
             search.created_before,
-            search.created_after
+            search.created_after,
+            search.in_family,
         )
         .fetch_one(&self.state.pool);
 
@@ -799,6 +858,7 @@ pub struct LanguageSearch {
     pub edited_by: Option<Vec<String>>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
+    pub in_family: Option<String>,
 }
 
 crate::util::repo_from_parts!(LanguageRepository);

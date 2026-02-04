@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, family, sender, recipient, permissions as \"permissions: PermissionLevel\", sent_at, accepted_at FROM language_family_invites WHERE family = $1 AND recipient = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "permissions: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "26023cf24074ba32b6ebe8ea4f022f02c6e0f385a8082b69efc2dde4fc99c948"
+}

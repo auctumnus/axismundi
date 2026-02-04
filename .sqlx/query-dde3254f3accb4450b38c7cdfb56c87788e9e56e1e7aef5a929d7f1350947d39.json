@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_verification_tokens\n                SET invalidated_at = NOW()\n                WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dde3254f3accb4450b38c7cdfb56c87788e9e56e1e7aef5a929d7f1350947d39"
+}

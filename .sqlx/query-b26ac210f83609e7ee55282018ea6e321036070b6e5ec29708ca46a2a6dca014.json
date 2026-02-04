@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    id,\n                    family,\n                    sender,\n                    recipient,\n                    permissions as \"permissions: PermissionLevel\",\n                    sent_at,\n                    accepted_at\n                FROM language_family_invites\n                WHERE\n                family = $1\n                AND ($2::UUID IS NULL OR sender = $2)\n                AND ($3::UUID IS NULL OR recipient = $3)\n                AND ($4::TIMESTAMPTZ IS NULL OR sent_at <= $4)\n                AND ($5::TIMESTAMPTZ IS NULL OR sent_at >= $5)\n                AND ($6::TIMESTAMPTZ IS NULL OR accepted_at <= $6)\n                AND ($7::TIMESTAMPTZ IS NULL OR accepted_at >= $7)\n                ORDER BY sent_at DESC, id\n                LIMIT $8\n                OFFSET $9\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "permissions: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b26ac210f83609e7ee55282018ea6e321036070b6e5ec29708ca46a2a6dca014"
+}

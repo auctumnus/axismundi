@@ -69,6 +69,7 @@ pub struct LanguageSearchQuery {
     pub q: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
+    pub in_family: Option<String>,
 }
 
 pub async fn list_languages(
@@ -88,6 +89,7 @@ pub async fn list_languages(
         edited_by,
         created_before: query.created_before,
         created_after: query.created_after,
+        in_family: query.in_family,
     };
 
     languages.search(pagination, search).await.map(Json)

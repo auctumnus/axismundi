@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO translatable_likes (translatable_id, user_id)\n                VALUES ($1, $2)\n                ON CONFLICT DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d0d29577a2adaf71debfb9d2266a2b2de23e6a816c2796525a5c514a7c9c27af"
+}

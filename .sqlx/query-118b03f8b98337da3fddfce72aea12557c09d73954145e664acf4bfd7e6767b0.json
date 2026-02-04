@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE language_family_permissions\n                SET permission = $2\n                WHERE id = $1\n                RETURNING id, family, \"user\", permission as \"permission: PermissionLevel\", via, invited_by, invited_at, accepted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "permission: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "via",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "invited_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "invited_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "118b03f8b98337da3fddfce72aea12557c09d73954145e664acf4bfd7e6767b0"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*)\n                FROM user_activities\n                WHERE user_id = $1\n                AND ($2::UUID IS NULL OR related_entity_id = $2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "014c5a281a64d3291b90fb3534c6b53e5cfdcdedec6f1d54ad872e40a51a0fb0"
+}

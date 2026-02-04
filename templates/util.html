@@ -80,42 +80,12 @@
 </time>
 {% endmacro %}
 
-{% macro make_activity(activity) %}
-<li class="activity-item">
-    {% call badge(activity.user) %}
-    <span class="activity-description">
-        {{ activity.verb() }}
-        {% match activity.entity %}
-            {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                the language <a href="/languages/{{ language.code }}">{{ language.name }}</a>
-            {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
-                the word <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
-            {% when crate::model::user_activities::ActivityEntity::User(user) %}
-                the user <a href="/users/{{ user.username }}">{{ user.username }}</a>
-            {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
-                the translatable <a href="/translatable/{{ translatable.slug }}">{{ translatable.slug }}</a>
-            {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
-                the translation <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ lang_code }}">{{ translation.translatable_slug }}</a>
-        {% endmatch %}
-    </span>
-    {% if let Some(related) = &activity.related_entity %}
-        <span class="activity-related">
-            {% match related %}
-                {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                    in <a href="/languages/{{ language.code }}">{{ language.name }}</a>
-            {% endmatch %}
-        </span>
-    {% endif %}
-</li>
-
-{% endmacro %}
-
 {% macro language_summary(language) %}
 {% set description = crate::util::first_sentence(&language.description) %}
 {% if description == "" %}
-    <span class="ellipse language-summary empty-description">no description yet</span>
+    <span class="ellipse summary language-summary empty-description">no description yet</span>
 {% else %}
-    <span class="ellipse language-summary">{{ description }}</span>
+    <span class="ellipse summary language-summary">{{ description }}</span>
 {% endif %}
 {% endmacro %}
 
@@ -144,16 +114,16 @@
 
 {% macro render_activity(activity, show_user=true) %}
 <li class="activity-item">
-    <span class="activity-type">
+    <div class="top">
         {% if show_user %}
             {% call badge(&activity.user, "small") %}
         {% endif %}
-        {{ activity.activity.verb() }}
+        <span class="verb">{{ activity.activity.verb() }}</span>
         {% match activity.entity %}
             {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
-                <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+                <a href="/languages/{{ lang_code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}">{{ word.word.word }}</a>
             {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+                <a href="/languages/{{ language.language.code }}">{{ language.language.name }}</a>
             {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
                 <a href="/translatable/{{ translatable.slug }}">{{ translatable.title }}</a>
             {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
@@ -166,21 +136,30 @@
             <span>in</span>
             {% match entity %}
                 {% when crate::model::user_activities::ActivityEntity::Language(language) %}
-                    <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+                    <a href="/languages/{{ language.language.code }}">{{ language.language.name }}</a>
                 {% else %}
                     <span>an unknown entity</span>
             {% endmatch %}
         {% endif %}
-    </span>
-    {% call relative(&activity.timestamp) %}
+        {% call relative(&activity.timestamp) %}
+    </div>
+    <ul>
+        {% match activity.entity %}
+            {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                {% call render_language_card(language) %}
+            {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
+                {% call render_word_card(word) %}
+            {% else %}
+        {% endmatch %}
+    </ul>
 </li>
 {% endmacro %}
 
 {% macro render_language_card(language_with_contributors) %}
-    <li class="language-card">
+    <li class="language-card preview-card">
         <a href="/languages/{{ language_with_contributors.language.code }}">
             <span class="left">
-                <span class="language-name">{{ language_with_contributors.language.name }}</span>
+                <span class="title">{{ language_with_contributors.language.name }}</span>
                 {% call language_summary(&language_with_contributors.language) %}
                 <ul class="contributor-list">
                     {% for contributor in language_with_contributors.top_contributors %}
@@ -199,6 +178,67 @@
             </span>
         </a>
     </li>
+{% endmacro %}
+
+{% macro render_language_family_card(family_with_contributors) %}
+<li class="language-family-card preview-card">
+    <a href="/language-families/{{ family_with_contributors.family.code }}">
+        <span class="left">
+            <span class="title">{{ family_with_contributors.family.name }}</span>
+            {% if !family_with_contributors.family.description.is_empty() %}
+                <span class="summary ellipse">{{ crate::util::first_sentence(&family_with_contributors.family.description) }}</span>
+            {% else %}
+                <span class="summary ellipse empty-description">no description yet</span>
+            {% endif %}
+            <ul class="contributor-list">
+                {% for contributor in family_with_contributors.contributors %}
+                <li class="compressed-pfps">
+                    {% call pfp(&contributor, size="small") %}
+                </li>
+                {% endfor %}
+            </ul>
+        </span>
+        <span class="likes like-button {% if family_with_contributors.family.like_count > 0 %}liked{% endif %}" data-target="/api/language-families/{{ family_with_contributors.family.code }}" data-tooltip="Like this language family" role="button">
+            <span class="icon-button-container yellow">
+                <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
+                <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
+            </span>
+            <span class="like-count">{{ family_with_contributors.family.like_count }}</span>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% macro render_language_family_member(member_with_languages, can_edit_language_family) %}
+<li class="language-family-member-card preview-card">
+    <a href="/language-families/{{ member_with_languages.family.code }}/members/{{ member_with_languages.member.id }}">
+        <span class="left">
+        {% if let Some(language) = member_with_languages.language %}
+            <span class="language title">{{ language.name }}</span>
+            {% if let Some(parent_language) = member_with_languages.parent_language %}
+                <span>from</span>
+                <span class="parent-language">{{ parent_language.name }}</span>
+            {% endif %}
+            {% if !member_with_languages.member.notes.is_empty() %}
+                <span class="summary notes ellipse">{{ member_with_languages.member.notes }}</span>
+            {% endif %}
+        {% else %}
+            {% if !member_with_languages.member.notes.is_empty() %}
+                <span class="title notes ellipse">{{ member_with_languages.member.notes }}</span>
+            {% else %}
+                <span class="title notes empty-notes">(anonymous grouping)</span>
+            {% endif %}
+            {% if let Some(parent_language) = member_with_languages.parent_language %}
+                <span>from</span>
+                <span class="parent-language">{{ parent_language.name }}</span>
+            {% endif %}
+        {% endif %}
+        <span class="creator">
+            added by {% call user_display(&member_with_languages.creator, size="small") %}
+        </span>
+        </span>
+    </a>
+</li>
 {% endmacro %}
 
 {% macro render_translation_card(translation_with_author, language_code) %}
@@ -237,7 +277,7 @@
                 created by {% call user_display(&word_with_meta.creator, "small") %} {% call relative(&word_with_meta.word.created_at) %}
             </span>
         </span>
-        <span class="likes like-button {% if word_with_meta.word.like_count > 0 %}liked{% endif %}" data-target="/api/languages/{{ word_with_meta.word.language_code.as_ref().unwrap() }}/words/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}" data-tooltip="Like this word" role="button">
+        <span class="likes like-button {% if word_with_meta.is_liked %}liked{% endif %}" data-target="/api/languages/{{ word_with_meta.word.language_code.as_ref().unwrap() }}/words/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}" data-tooltip="Like this word" role="button">
             <span class="icon-button-container yellow">
                 <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
                 <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
@@ -510,6 +550,21 @@
             <li><a href="/translatable/{{ translatable.slug }}/edit-translation/{{ language.code }}">edit translation</a></li>
         {% endif %}
         <li><a href="/report/new?resource_type=translation&resource_id={{ translation.id }}">report</a></li>
+    </ul>
+</li>
+{% endmacro %}
+
+{% macro family_section(family, can_edit_family) %}
+<li>
+    <h2>{{ family.name }}</h2>
+    <ul>
+        <li><a href="/language-families/{{ family.code }}">view language family</a></li>
+        <li><a href="/language-families/{{ family.code }}/members">members</a></li>
+        {% if can_edit_family %}
+            <li><a href="/language-families/{{ family.code }}/edit">edit language family</a></li>
+            <li><a href="/language-families/{{ family.code }}/add-member">add member</a></li>
+            <li><a href="/language-families/{{ family.code }}/invites">invites</a></li>
+        {% endif %}
     </ul>
 </li>
 {% endmacro %}

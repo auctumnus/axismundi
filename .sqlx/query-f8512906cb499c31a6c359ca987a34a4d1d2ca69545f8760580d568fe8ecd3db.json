@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(DISTINCT user_id) FROM (\n                    SELECT created_by as user_id FROM words WHERE id = $1\n                    UNION\n                    SELECT updated_by as user_id FROM words WHERE id = $1\n                    UNION\n                    SELECT created_by as user_id FROM definitions WHERE word = $1\n                    UNION\n                    SELECT updated_by as user_id FROM definitions WHERE word = $1\n                ) contributors\n                WHERE user_id != (SELECT created_by FROM words WHERE id = $1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f8512906cb499c31a6c359ca987a34a4d1d2ca69545f8760580d568fe8ecd3db"
+}

@@ -1,74 +1,75 @@
 ul.invite-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 
-    li {
-        list-style: none;
-    }
+  li {
+    list-style: none;
+  }
 }
 
 .invite-card {
+  display: flex;
+  flex-direction: row;
+  border: var(--border);
+  border-radius: var(--rounding);
+  background-color: var(--background-panel);
+  gap: 0.5rem;
+  align-items: center;
+  padding: 1rem;
+
+  transition:
+    border-color var(--duration-very-fast) ease-in-out,
+    box-shadow var(--duration-very-fast) ease-in-out;
+
+  &:hover {
+    border-color: var(--foreground-secondary);
+  }
+
+  .invite-meta {
     display: flex;
     flex-direction: row;
-    border: var(--border);
-    border-radius: var(--rounding);
-    background-color: var(--background-panel);
-    gap: .5rem;
     align-items: center;
-    padding: 1rem;
+    color: var(--foreground-secondary);
 
-    transition: border-color var(--duration-very-fast) ease-in-out, box-shadow var(--duration-very-fast) ease-in-out;
+    & :not(:first-child) {
+      margin-left: 0.5rem;
 
-    &:hover {
-        border-color: var(--foreground-secondary);
-    }
-
-    .invite-meta {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
+      &::before {
+        content: "·";
         color: var(--foreground-secondary);
-
-        & :not(:first-child) {
-            margin-left: .5rem;
-
-            &::before {
-                content: "·";
-                color: var(--foreground-secondary);
-                margin-right: .5rem;
-            }
-        }
+        margin-right: 0.5rem;
+      }
     }
+  }
 
+  .left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-grow: 1;
+    justify-content: space-between;
+  }
 
-    .left {
-        display: flex;
-        flex-direction: column;
-        gap: .5rem;
-        flex-grow: 1;
-        justify-content: space-between;
+  .invite-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+
+    &:not(a) {
+      color: var(--foreground-secondary);
     }
+  }
 
-    .invite-info {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: .5rem;
+  .invite-permissions {
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
 
-        &:not(a) {
-            color: var(--foreground-secondary);
-        }
-    }
-
-    .invite-permissions {
-        font-size: .875rem;
-        color: var(--foreground-secondary);
-    }
-
-    .invite-actions {
-        display: flex;
-        gap: .5rem;
-        align-items: center;
-    }
+  .invite-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
 }

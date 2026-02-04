@@ -23,11 +23,14 @@ use axum::{
     routing::get,
 };
 use governor::middleware::NoOpMiddleware;
+use serde::Serialize;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
 
 mod audit_logs;
 mod bookmarks;
+mod language_families;
+mod language_family_members;
 mod language_invites;
 mod languages;
 mod reports;
@@ -56,6 +59,7 @@ pub fn create_html_controller() -> Router<AppState> {
 
     let (secure_user_routes, normal_user_routes) = users::create_router();
     let (secure_language_routes, normal_language_routes) = languages::create_router();
+    let (secure_language_family_routes, normal_language_family_routes) = language_families::create_router();
     let (secure_word_routes, normal_word_routes) = words::create_router();
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
@@ -69,6 +73,8 @@ pub fn create_html_controller() -> Router<AppState> {
     let secure_routes = Router::<AppState>::new()
         .merge(secure_user_routes)
         .merge(secure_language_routes)
+        .merge(secure_language_family_routes)
+        .merge(language_family_members::create_router())
         .merge(secure_word_routes)
         .merge(secure_word_class_routes)
         .merge(secure_translatable_routes)
@@ -86,6 +92,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .nest_service("/assets", ServeDir::new("assets"))
         .merge(normal_user_routes)
         .merge(normal_language_routes)
+        .merge(normal_language_family_routes)
         .merge(normal_word_routes)
         .merge(normal_word_class_routes)
         .merge(normal_translatable_routes)
@@ -129,6 +136,7 @@ async fn landing(s: Session) -> impl IntoResponse {
     render_template(LandingTemplate { current_user })
 }
 
+#[derive(Debug, Clone, Serialize)]
 pub struct LanguagesWithContributors {
     pub language: Language,
     pub top_contributors: Vec<User>,
@@ -206,7 +214,7 @@ async fn home(
         vec
     };
 
-    let Ok(activities) = activities_repo.list_site_wide().await else {
+    let Ok(activities) = activities_repo.list_site_wide(s.user()).await else {
         return render_generic_error(s, internal_error("Failed to load user activities")).await;
     };
 

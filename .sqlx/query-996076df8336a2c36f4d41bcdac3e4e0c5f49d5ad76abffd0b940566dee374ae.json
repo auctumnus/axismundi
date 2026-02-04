@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT id, family, \"user\", permission as \"permission: PermissionLevel\", via, invited_by, invited_at, accepted_at\n                FROM language_family_permissions\n                WHERE permission = $1\n                ORDER BY invited_at DESC\n                LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "permission: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "via",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "invited_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "invited_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "996076df8336a2c36f4d41bcdac3e4e0c5f49d5ad76abffd0b940566dee374ae"
+}

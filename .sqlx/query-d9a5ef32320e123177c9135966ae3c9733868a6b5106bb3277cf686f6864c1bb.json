@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE translation\n                    SET like_count = like_count + 1\n                    WHERE id = $1\n                    RETURNING like_count\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "like_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d9a5ef32320e123177c9135966ae3c9733868a6b5106bb3277cf686f6864c1bb"
+}

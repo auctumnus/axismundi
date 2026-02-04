@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, $3) RETURNING id, slug, item, resource as \"resource: ResourceType\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "item",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "resource: ResourceType",
+        "type_info": {
+          "Custom": {
+            "name": "resource_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "lemma",
+                "invite",
+                "permission",
+                "word_class",
+                "user_session",
+                "translation",
+                "translatable"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "resource_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "lemma",
+                "invite",
+                "permission",
+                "word_class",
+                "user_session",
+                "translation",
+                "translatable"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1134529faf7d7200e2d6b3cb70748d65721d8366cbd7005b70d50ecd0a2c7e45"
+}

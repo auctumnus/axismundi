@@ -61,7 +61,7 @@
     </ul>
 </div>
 
-<ul id="translation-list">
+<ul class="card-list">
 {% for translation in translations %}
     {% call u::render_translation_card(&translation, &translation.language.code) %}
 {% endfor %}

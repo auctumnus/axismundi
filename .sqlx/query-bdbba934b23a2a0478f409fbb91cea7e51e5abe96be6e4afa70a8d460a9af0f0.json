@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            select count(*)\n            from reports\n            where\n                reporter = $1\n                and ($2::text is null or reason ilike '%' || $2 || '%')\n                and ($3::reportable_resource is null or resource_type = $3)\n                and ($4::uuid is null or resource_id = $4)\n                and ($5::resolution_status_type is null or resolution_status = $5)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "reportable_resource",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "word",
+                "translation",
+                "translatable",
+                "word_relation",
+                "invite",
+                "permission",
+                "language_family",
+                "language_family_member"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        {
+          "Custom": {
+            "name": "resolution_status_type",
+            "kind": {
+              "Enum": [
+                "pending",
+                "in_progress",
+                "dismissed",
+                "action_taken"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bdbba934b23a2a0478f409fbb91cea7e51e5abe96be6e4afa70a8d460a9af0f0"
+}

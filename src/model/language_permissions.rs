@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
-use validator::Validate;
 
 use crate::err::{AppResult, bad_request, not_found};
 use crate::model::language_invites::LanguageInvite;
@@ -23,7 +22,7 @@ pub struct LanguagePermission {
     pub accepted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateLanguagePermission {
     pub language: Uuid,
     pub user: Uuid,
@@ -46,7 +45,6 @@ impl LanguagePermissionRepository {
         permission: CreateLanguagePermission,
         invited_by: Uuid,
     ) -> AppResult<LanguagePermission> {
-        permission.validate()?;
 
         let result = sqlx::query_as!(
             LanguagePermission,

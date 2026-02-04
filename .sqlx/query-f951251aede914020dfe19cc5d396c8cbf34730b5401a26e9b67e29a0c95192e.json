@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM language_family_invites WHERE family = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f951251aede914020dfe19cc5d396c8cbf34730b5401a26e9b67e29a0c95192e"
+}

@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO words (language, word_class, word, slug, lemma, ipa, notes, extra, created_by, updated_by)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)\n                RETURNING words.*\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "word_class",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "word",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "lemma",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "ipa",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "cognacy",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "extra",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "like_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "d48a9b6ea4baf0c9768c39a0b4bf442d6d9298e32c99709b965f270a7e3cc0d3"
+}

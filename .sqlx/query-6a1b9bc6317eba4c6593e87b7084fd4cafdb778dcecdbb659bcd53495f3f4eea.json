@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO contribution_stats (language_id, user_id, word_count, translation_count)\n                VALUES ($1, $2, 0, 0)\n                ON CONFLICT (language_id, user_id)\n                DO UPDATE SET\n                translation_count = GREATEST(contribution_stats.translation_count - 1, 0)\n                RETURNING language_id, user_id, word_count, translation_count\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "language_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "word_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "translation_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6a1b9bc6317eba4c6593e87b7084fd4cafdb778dcecdbb659bcd53495f3f4eea"
+}

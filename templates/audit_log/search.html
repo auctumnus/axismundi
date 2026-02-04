@@ -99,7 +99,7 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul id="log-list">
+        <ul class="card-list">
             {% for item in results.items %}
                 {% call u::audit_log_card(&item) %}
             {% endfor %}

@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}remove member from {{ family.family.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>remove member from {{ family.family.name }}</h1>
+
+<div class="context-cards">
+    <div class="context-card family-context">
+        <span class="context-label">in family</span>
+        <ul class="standalone-card">
+            {% call u::render_language_family_card(&family) %}
+        </ul>
+    </div>
+    <div class="context-card family-member-context">
+        <span class="context-label">member to delete</span>
+        <ul class="standalone-card">
+            {% call u::render_language_family_member(&member, can_edit_family) %}
+        </ul>
+    </div>
+</div>
+
+
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id }}/delete">
+    <section>
+        <p>Are you sure you want to remove this member from the family <strong>{{ family.family.name }}</strong>?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Remove member</button>
+    </section>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ family.family.code }}" class="breadcrumb">{{ family.family.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::family_section(&family.family, can_edit_family) %}
+{% endblock %}

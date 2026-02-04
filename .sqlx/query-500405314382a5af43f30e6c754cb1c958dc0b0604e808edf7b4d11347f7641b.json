@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        words.id,\n                        words.word,\n                        words.slug,\n                        words.lemma,\n                        COALESCE(bookmarks.slug, '')::text as \"bookmark!\",\n                        languages.code as \"language_code!\",\n                        word_classes.abbreviation as \"word_class_abbreviation?\",\n                        words.ipa as \"ipa?\"\n                    FROM words\n                    LEFT JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'\n                    LEFT JOIN languages ON languages.id = words.language\n                    LEFT JOIN word_classes ON word_classes.id = words.word_class\n                    WHERE words.language = $1\n                      AND ($2::UUID IS NULL OR words.id != $2)\n                      AND (\n                          words.word ILIKE '%' || $3 || '%'\n                          OR similarity(words.word, $3) > 0.3\n                      )\n                    ORDER BY\n                        CASE WHEN words.word ILIKE $3 || '%' THEN 0 ELSE 1 END,\n                        similarity(words.word, $3) DESC,\n                        words.word\n                    LIMIT $4\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "word",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "lemma",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "bookmark!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "language_code!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "word_class_abbreviation?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "ipa?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "500405314382a5af43f30e6c754cb1c958dc0b0604e808edf7b4d11347f7641b"
+}

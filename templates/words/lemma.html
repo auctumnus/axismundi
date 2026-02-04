@@ -92,7 +92,7 @@
     </ul>
 </div>
 
-<ul id="relation-list">
+<ul class="card-list">
     {% for relation in recent_relations %}
         {% call u::render_relation_card(&relation, "", &language.code, &word.slug, word.lemma, user_has_permission) %}
     {% endfor %}

@@ -76,5 +76,7 @@ pub fn render_md(input: &str) -> Result<String, sqlx::Error> {
 
     let ast = md.parse(input);
 
-    Ok(ast.render())
+    let sanitized = ammonia::clean(&ast.render());
+
+    Ok(sanitized)
 }

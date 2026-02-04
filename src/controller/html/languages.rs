@@ -15,15 +15,7 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        contribution_stats::{ContributionStatsRepository, ContributionsSearch},
-        definitions::{Definition, DefinitionRepository},
-        language_invites::PermissionLevel,
-        language_permissions::LanguagePermissionRepository,
-        languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch},
-        translatable::TranslatableRepository,
-        translations::TranslationRepository,
-        users::{User, UserRepository},
-        words::{Word, WordRepository, WordSearch},
+        contribution_stats::{ContributionStatsRepository, ContributionsSearch}, definitions::{Definition, DefinitionRepository}, language_families::{self, FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{Word, WordRepository, WordSearch, WordWithMeta}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
@@ -228,13 +220,7 @@ async fn new_language_submit(
     }
 }
 
-struct WordWithMeta {
-    word: Word,
-    first_definition: Option<Definition>,
-    creator: User,
-}
-
-struct TranslationWithAuthor {
+pub struct TranslationWithAuthor {
     translation: crate::model::translations::Translation,
     translatable: crate::model::translatable::Translatable,
     author: User,
@@ -247,6 +233,8 @@ struct ViewLanguageTemplate {
     recent_words: Vec<WordWithMeta>,
     recent_translations: Vec<TranslationWithAuthor>,
     language: Language,
+    primary_family: Option<FamilyWithContributors>,
+    other_families: Vec<FamilyWithContributors>,
     owner: User,
     contributor_count: i64,
     rendered_description: String,
@@ -261,6 +249,7 @@ async fn view_language(
     s: Session,
     languages: LanguageRepository,
     definitions: DefinitionRepository,
+    language_families: LanguageFamilyRepository,
     users: UserRepository,
     words: WordRepository,
     translations: TranslationRepository,
@@ -325,13 +314,8 @@ async fn view_language(
     // Fetch authors for each word
     let mut words_with_meta = Vec::new();
     for word in recent_words.items {
-        let creator = attempt!(s, words.find_creator(&word.id).await);
-        let first_definition = attempt!(s, definitions.get_first_by_word(&word.id).await);
-        words_with_meta.push(WordWithMeta {
-            word,
-            first_definition,
-            creator,
-        });
+        let word = attempt!(s, words.materialize(word, s.user()).await);
+        words_with_meta.push(word);
     }
 
     // Fetch authors and translatables for each translation
@@ -364,6 +348,54 @@ async fn view_language(
         None
     };
 
+    let primary_family = attempt!(
+        s,
+        language_families
+            .find_primary_family(&language)
+            .await
+    );
+
+    let primary_family = if let Some(family) = &primary_family {
+        Some(attempt!(
+            s,
+            language_families
+                .materialize(family.clone(), s.user()).await
+        ))
+    } else {
+        None
+    };
+
+    let other_families = attempt!(
+        s,
+        language_families
+            .search(SearchLanguageFamilies {
+                has_language: Some(language.code.clone()),
+                q: None,
+                owner: None,
+            }, PaginatedRequest { limit: if primary_family.is_some() { 4 } else { 5 }, offset: 0 }).await
+    );
+
+    let other_families = if let Some(primary) = &primary_family {
+        other_families
+            .items
+            .into_iter()
+            .filter(|f| f.id != primary.family.id)
+            .collect()
+    } else {
+        other_families.items
+    };
+
+    let mut other_families_materialized = vec![];
+    for family in other_families {
+        let materialized = attempt!(
+            s,
+            language_families
+                .materialize(family, s.user()).await
+        );
+        other_families_materialized.push(materialized);
+    }
+
+
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
         recent_words: words_with_meta,
@@ -376,6 +408,8 @@ async fn view_language(
         can_delete_language,
         is_liked,
         pending_invite,
+        primary_family,
+        other_families: other_families_materialized,
     };
 
     okay(render_template(template))

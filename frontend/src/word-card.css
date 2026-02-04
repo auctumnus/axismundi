@@ -1,63 +1,65 @@
 ul#word-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 
-    li {
-        list-style: none;
-    }
+  li {
+    list-style: none;
+  }
 }
 
 .word-card a {
+  display: flex;
+  flex-direction: row;
+  border: var(--border);
+  border-radius: var(--rounding);
+  background-color: var(--background-panel);
+  padding: 1rem;
+  gap: 0.5rem;
+  align-items: center;
+
+  text-decoration: none;
+
+  transition:
+    border-color var(--duration-very-fast) ease-in-out,
+    box-shadow var(--duration-very-fast) ease-in-out;
+
+  &:hover {
+    border-color: var(--foreground-secondary);
+  }
+
+  .left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-grow: 1;
+    justify-content: space-between;
+  }
+
+  .word-text {
+    font-weight: 600;
+    color: var(--foreground-primary);
+  }
+
+  .word-definition {
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
+
+  .creator {
     display: flex;
     flex-direction: row;
-    border: var(--border);
-    border-radius: var(--rounding);
-    background-color: var(--background-panel);
-    padding: 1rem;
-    gap: .5rem;
     align-items: center;
-
-    text-decoration: none;
-
-    transition: border-color var(--duration-very-fast) ease-in-out, box-shadow var(--duration-very-fast) ease-in-out;
-
-    &:hover {
-        border-color: var(--foreground-secondary);
-    }
-
-    .left {
-        display: flex;
-        flex-direction: column;
-        gap: .5rem;
-        flex-grow: 1;
-        justify-content: space-between;
-    }
-
-    .word-text {
-        font-weight: 600;
-        color: var(--foreground-primary);
-    }
-
-    .word-definition {
-        font-size: .875rem;
-        color: var(--foreground-secondary);
-    }
-
-    .creator {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: .25rem;
-        font-size: .875rem;
-        color: var(--foreground-secondary)
-    }
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
 }
 
 .word-class-abbreviation {
-    font-style: italic;
+  font-style: italic;
 }
 
 .word-class-abbreviation-container {
-    font-weight: normal;
+  font-weight: normal;
 }

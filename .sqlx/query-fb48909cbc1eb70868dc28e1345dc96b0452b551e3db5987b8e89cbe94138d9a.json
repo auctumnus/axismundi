@@ -1,0 +1,186 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            update reports\n            set\n                priority = $1,\n                resolution_status = $2,\n                resolved_at = $3,\n                resolved_by = $4,\n                resolution_note = $5,\n                resolution_status_hidden = $6,\n                resolution_note_hidden = $7,\n                mods_updated_at = current_timestamp,\n                mods_updated_by = $8\n            where id = $9\n            returning\n                id,\n                reporter,\n                resource_type as \"resource_type: ReportableResource\",\n                resource_id,\n                reason,\n                reported_at,\n                priority as \"priority: ReportPriority\",\n                resolved_by,\n                resolution_status as \"resolution_status: ResolutionStatus\",\n                resolved_at,\n                resolution_note,\n                user_updated_at,\n                mods_updated_at,\n                mods_updated_by,\n                resolution_status_hidden,\n                resolution_note_hidden\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reporter",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "resource_type: ReportableResource",
+        "type_info": {
+          "Custom": {
+            "name": "reportable_resource",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "word",
+                "translation",
+                "translatable",
+                "word_relation",
+                "invite",
+                "permission",
+                "language_family",
+                "language_family_member"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "resource_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "priority: ReportPriority",
+        "type_info": {
+          "Custom": {
+            "name": "report_priority",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "resolved_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolution_status: ResolutionStatus",
+        "type_info": {
+          "Custom": {
+            "name": "resolution_status_type",
+            "kind": {
+              "Enum": [
+                "pending",
+                "in_progress",
+                "dismissed",
+                "action_taken"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "resolved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "resolution_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "user_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "mods_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "mods_updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "resolution_status_hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "resolution_note_hidden",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "report_priority",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "resolution_status_type",
+            "kind": {
+              "Enum": [
+                "pending",
+                "in_progress",
+                "dismissed",
+                "action_taken"
+              ]
+            }
+          }
+        },
+        "Timestamptz",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "fb48909cbc1eb70868dc28e1345dc96b0452b551e3db5987b8e89cbe94138d9a"
+}

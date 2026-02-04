@@ -4,10 +4,10 @@ default:
 dev:
   just dev-full
   @echo "Starting the app..."
-  concurrently --names 後,前 "just dev-backend" "just dev-frontend"
+  concurrently --names 後,前 --prefix-colors green,blue "just dev-backend" "just dev-frontend"
 
 dev-backend:
-  watchexec -w templates -w src -r cargo run
+  CARGO_TERM_COLOR=always watchexec -w templates -w src -r cargo run
 
 dev-frontend:
   cd frontend && bun run dev
@@ -17,9 +17,13 @@ make-test-user:
     curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"aaa@aaa.com","password":"kitty paw fuzzy socks","username":"autumn"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'aaa@aaa.com'"
 
+    sleep 3
+
     @echo "Creating second test user..."
     curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"bbb@bbb.com","password":"kitty paw fuzzy socks","username":"winter"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'bbb@bbb.com'"
+
+    sleep 3
 
     @echo "Creating admin user..."
     curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"kitty paw fuzzy socks","username":"admin"}'
@@ -74,7 +78,7 @@ test_teardown:
     @echo "Tearing down test services..."
     docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml down -v --timeout 0 2>/dev/null >/dev/null
 
-test flags="" cov="" $RUST_BACKTRACE="1":
+test flags="" cov="" $RUST_BACKTRACE="0":
     #!/usr/bin/env sh
     echo "Bringing up test services..."
     docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml up -d 2>/dev/null >/dev/null
@@ -240,3 +244,13 @@ minio-stop:
 # View Minio logs
 minio-logs:
     docker compose -f docker-compose.minio.yml logs -f
+
+export postgres_url := "postgres://user:password@localhost:5432/axismundi"
+
+# Seed the database with test data (scale: 0.25 = small, 1.0 = default, 5.0 = large)
+seed scale="1.0":
+    DATABASE_URL={{postgres_url}} SEED_SCALE={{scale}} cargo run --bin seed
+
+# Seed with fresh db (clears first)
+seed-fresh scale="1.0":
+    DATABASE_URL={{postgres_url}} SEED_SCALE={{scale}} SEED_CLEAR=1 cargo run --bin seed

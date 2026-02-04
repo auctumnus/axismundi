@@ -7,7 +7,7 @@ use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, internal_error, not_found},
-    model::{language_invites::PermissionLevel, users::User},
+    model::{definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -34,9 +34,9 @@ pub struct Word {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
-    pub _created_by: Uuid,
+    pub _created_by: Option<Uuid>,
     #[serde(skip_serializing)]
-    pub _updated_by: Uuid,
+    pub _updated_by: Option<Uuid>,
 
     // materialized
     pub bookmark: String,
@@ -89,6 +89,14 @@ fn nfkc(input: &str) -> String {
     input.nfkc().collect()
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct WordWithMeta {
+    pub word: Word,
+    pub first_definition: Option<Definition>,
+    pub creator: User,
+    pub is_liked: bool,
+}
+
 impl WordRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
@@ -97,6 +105,27 @@ impl WordRepository {
     #[allow(dead_code)]
     pub fn make_slug(word: &str) -> String {
         nfkc(word)
+    }
+
+    pub async fn materialize(&self, word: Word, requestor: Option<&User>) -> AppResult<WordWithMeta> {
+        let creator = self.find_creator(&word.id).await?;
+
+        let first_definition = DefinitionRepository::new(self.state.clone())
+                .get_first_by_word(&word.id)
+                .await?;
+
+        let is_liked = if let Some(user) = requestor {
+            self.is_liked(&word.id, &user.id).await?
+        } else {
+            false
+        };
+
+        Ok(WordWithMeta {
+            word,
+            creator,
+            first_definition,
+            is_liked
+        })
     }
 
     pub async fn count_by_slug(&self, language: Uuid, slug: &str) -> AppResult<i64> {

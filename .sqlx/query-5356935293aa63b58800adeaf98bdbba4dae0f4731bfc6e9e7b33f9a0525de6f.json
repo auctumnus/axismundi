@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*)\n                FROM languages\n                JOIN users ON users.id = languages.created_by\n                WHERE\n                ($1::TEXT IS NULL OR users.username = $1)\n                AND ($2::TIMESTAMPTZ IS NULL OR languages.created_at < $2)\n                AND ($3::TIMESTAMPTZ IS NULL OR languages.created_at > $3)\n                AND ($4::TEXT IS NULL OR languages.id IN (\n                    SELECT language_family_members.language_id\n                    FROM language_family_members\n                    JOIN language_families ON language_families.id = language_family_members.family_id\n                    WHERE language_families.code = $4\n                ))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5356935293aa63b58800adeaf98bdbba4dae0f4731bfc6e9e7b33f9a0525de6f"
+}

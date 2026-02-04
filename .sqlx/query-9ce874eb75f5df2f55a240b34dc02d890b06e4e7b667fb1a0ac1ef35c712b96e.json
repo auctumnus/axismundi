@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*)\n                FROM language_families\n                JOIN users ON users.id = language_families.created_by\n                WHERE\n                ($1::TEXT IS NULL OR users.username = $1)\n                AND ($2::TEXT IS NULL OR language_families.id IN (\n                    SELECT language_family_members.family_id\n                    FROM language_family_members\n                    JOIN languages ON languages.id = language_family_members.language_id\n                    WHERE languages.code = $2\n                ))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9ce874eb75f5df2f55a240b34dc02d890b06e4e7b667fb1a0ac1ef35c712b96e"
+}

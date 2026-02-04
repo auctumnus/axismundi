@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE quotation_suggestion\n                SET span_content = COALESCE($2, span_content),\n                    updated_by = $3,\n                    updated_at = CURRENT_TIMESTAMP\n                WHERE id = $1\n                RETURNING id, language, definition, span_content, created_at, updated_at, created_by, updated_by\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "definition",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "span_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9b64cfafdcac74814efe62c55137283a5d035b66eb061960c77213d8053918e6"
+}

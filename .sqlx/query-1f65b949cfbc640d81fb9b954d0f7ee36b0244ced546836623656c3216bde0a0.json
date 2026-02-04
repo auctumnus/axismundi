@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, user_id, tag, hidden, created_at from user_tags where user_id = $1 and tag = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tag",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1f65b949cfbc640d81fb9b954d0f7ee36b0244ced546836623656c3216bde0a0"
+}

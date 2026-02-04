@@ -36,13 +36,19 @@ html,
     ui-sans-serif,
     system-ui,
     sans-serif,
-    'Apple Color Emoji',
-    'Segoe UI Emoji',
-    'Segoe UI Symbol',
-    'Noto Color Emoji'
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji"
   ); /* 4 */
-  font-feature-settings: --theme(--default-font-feature-settings, normal); /* 5 */
-  font-variation-settings: --theme(--default-font-variation-settings, normal); /* 6 */
+  font-feature-settings: --theme(
+    --default-font-feature-settings,
+    normal
+  ); /* 5 */
+  font-variation-settings: --theme(
+    --default-font-variation-settings,
+    normal
+  ); /* 6 */
   -webkit-tap-highlight-color: transparent; /* 7 */
 }
 
@@ -118,12 +124,18 @@ pre {
     Menlo,
     Monaco,
     Consolas,
-    'Liberation Mono',
-    'Courier New',
+    "Liberation Mono",
+    "Courier New",
     monospace
   ); /* 1 */
-  font-feature-settings: --theme(--default-mono-font-feature-settings, normal); /* 2 */
-  font-variation-settings: --theme(--default-mono-font-variation-settings, normal); /* 3 */
+  font-feature-settings: --theme(
+    --default-mono-font-feature-settings,
+    normal
+  ); /* 2 */
+  font-variation-settings: --theme(
+    --default-mono-font-variation-settings,
+    normal
+  ); /* 3 */
   font-size: 1em; /* 4 */
 }
 
@@ -371,7 +383,7 @@ textarea {
 */
 
 button,
-input:where([type='button'], [type='reset'], [type='submit']),
+input:where([type="button"], [type="reset"], [type="submit"]),
 ::file-selector-button {
   appearance: button;
 }
@@ -389,6 +401,6 @@ input:where([type='button'], [type='reset'], [type='submit']),
   Make elements with the HTML hidden attribute stay hidden by default.
 */
 
-[hidden]:where(:not([hidden='until-found'])) {
+[hidden]:where(:not([hidden="until-found"])) {
   display: none !important;
 }

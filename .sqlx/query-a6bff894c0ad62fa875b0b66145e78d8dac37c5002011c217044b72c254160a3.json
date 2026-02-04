@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, slug, item, resource as \"resource: ResourceType\" FROM bookmarks WHERE item = $1 AND resource = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "item",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "resource: ResourceType",
+        "type_info": {
+          "Custom": {
+            "name": "resource_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "lemma",
+                "invite",
+                "permission",
+                "word_class",
+                "user_session",
+                "translation",
+                "translatable"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "resource_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "lemma",
+                "invite",
+                "permission",
+                "word_class",
+                "user_session",
+                "translation",
+                "translatable"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a6bff894c0ad62fa875b0b66145e78d8dac37c5002011c217044b72c254160a3"
+}

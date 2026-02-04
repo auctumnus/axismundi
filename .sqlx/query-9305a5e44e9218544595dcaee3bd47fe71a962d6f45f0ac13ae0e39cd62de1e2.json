@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE users\n            SET profile_picture_object_id = $2,\n                updated_at = CURRENT_TIMESTAMP\n            WHERE id = $1\n            RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as \"bookmark!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "password_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 13,
+        "name": "bookmark!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "9305a5e44e9218544595dcaee3bd47fe71a962d6f45f0ac13ae0e39cd62de1e2"
+}

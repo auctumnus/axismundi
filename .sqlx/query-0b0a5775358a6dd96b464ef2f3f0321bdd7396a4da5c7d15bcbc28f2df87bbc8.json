@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO language_family_permissions (family, \"user\", permission, via, invited_by, invited_at)\n                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)\n                RETURNING id, family, \"user\", permission as \"permission: PermissionLevel\", via, invited_by, invited_at, accepted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "permission: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "via",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "invited_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "invited_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "0b0a5775358a6dd96b464ef2f3f0321bdd7396a4da5c7d15bcbc28f2df87bbc8"
+}

@@ -24,7 +24,7 @@ use crate::{
             CreateWordRelation, RelationDirection, SearchWordRelations,
             WordRelationRepository, WordRelationSearchResult, WordRelationType,
         },
-        words::{CreateWord, Word, WordRepository, WordSearch},
+        words::{CreateWord, Word, WordRepository, WordSearch, WordWithMeta},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
@@ -152,12 +152,6 @@ struct EditWordFormData {
     notes: Option<String>,
 }
 
-struct WordWithMeta {
-    word: Word,
-    first_definition: Option<Definition>,
-    creator: User,
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn word_search(
     s: Session,
@@ -232,13 +226,8 @@ async fn word_search(
 
     let mut results_with_meta = vec![];
     for word in results.items {
-        let creator = attempt!(s, words.find_creator(&word.id).await);
-        let first_definition = attempt!(s, definitions.get_first_by_word(&word.id).await);
-        results_with_meta.push(WordWithMeta {
-            word,
-            first_definition,
-            creator,
-        });
+        let word = attempt!(s, words.materialize(word, s.user()).await);
+        results_with_meta.push(word);
     }
 
     let results_with_meta = Some(PaginatedResponse {

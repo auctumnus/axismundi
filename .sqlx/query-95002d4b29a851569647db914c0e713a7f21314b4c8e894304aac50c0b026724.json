@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT language, languages.code as \"language_code!\", languages.name as \"language_name!\"\n                FROM language_permissions\n                JOIN languages ON languages.id = language_permissions.language\n                WHERE language_permissions.\"user\" = $1\n                  AND language_permissions.permission IN ('editor', 'admin', 'owner')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language_code!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "language_name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "95002d4b29a851569647db914c0e713a7f21314b4c8e894304aac50c0b026724"
+}

@@ -86,7 +86,7 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul id="translation-list">
+        <ul class="card-list">
             {% for item in results.items %}
                 <li class="translation-card">
                     <div class="translatable-title">
@@ -99,9 +99,6 @@
                     </div>
                     <div class="meta">
                         Created by <a href="/user/{{ item.creator.username }}">{{ item.creator.username }}</a>
-                        {% if let Some(ipa) = &item.translation.ipa %}
-                            &middot; IPA: {{ ipa }}
-                        {% endif %}
                     </div>
                 </li>
             {% endfor %}

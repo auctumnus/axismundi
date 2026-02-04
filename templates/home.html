@@ -8,6 +8,7 @@
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/home.css">
 <link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/word-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
 <script type="importmap">
     {
@@ -53,7 +54,7 @@
         </a></li>
     </ul>
 </div>
-<ul id="language-list">
+<ul class="card-list">
     {% for language_with_contributors in languages %}
         {% call u::render_language_card(&language_with_contributors) %}
     {% endfor %}
@@ -74,7 +75,7 @@
         </a></li>
     </ul>
 </div>
-<ul id="translatable-list">
+<ul class="card-list">
     {% for translatable_with_liked in translatables %}
         {% call u::translatable_card(&translatable_with_liked) %}
     {% endfor %}
@@ -84,7 +85,7 @@
 {% if activities.is_empty() %}
 <p>no recent activity to show.</p>
 {% else %}
-    <ul class="activity-list">
+    <ul class="card-list activities">
         {% for activity in activities %}
             {% call u::render_activity(&activity, true) %}
         {% endfor %}

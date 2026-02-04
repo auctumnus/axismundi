@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE translation\n                    SET like_count = GREATEST(like_count - 1, 0)\n                    WHERE id = $1\n                    RETURNING like_count\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "like_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b724aa9d7f0635acfa082d7a4f51ff9c7c1db092b1d8a9563acb81efc3878c5f"
+}

@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            select count(*)\n            from audit_logs\n            where\n                ($1::uuid is null or user_id = $1)\n                and ($2::audit_action_type is null or action = $2)\n                and ($3::auditable_resource is null or resource_type = $3)\n                and ($4::uuid is null or resource_id = $4)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "audit_action_type",
+            "kind": {
+              "Enum": [
+                "created",
+                "updated",
+                "deleted",
+                "updated_report",
+                "user_ban",
+                "user_unban",
+                "add_tag",
+                "remove_tag"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "auditable_resource",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "word",
+                "translation",
+                "translatable",
+                "word_relation",
+                "invite",
+                "permission",
+                "quotation",
+                "definition",
+                "quotation_suggestion",
+                "report",
+                "language_family",
+                "language_family_member",
+                "language_family_invite",
+                "language_family_permission"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "09ce123ad8f5916f3a07d5a04fc2f2e5d016c547076b95220c40305321dea37b"
+}

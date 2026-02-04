@@ -1,0 +1,166 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    ua.id,\n                    ua.user_id,\n                    ua.activity as \"activity: ActivityType\",\n                    ua.entity_id,\n                    ua.entity_type,\n                    ua.related_entity_id,\n                    ua.related_entity_type,\n                    ua.timestamp,\n                    u.id as \"u_id!\",\n                    u.username as \"u_username!\",\n                    u.email as \"u_email!\",\n                    u.password_hash as \"u_password_hash!\",\n                    u.display_name as \"u_display_name\",\n                    u.description as \"u_description\",\n                    u.pronouns as \"u_pronouns\",\n                    u.gender as \"u_gender\",\n                    u.profile_picture_object_id as \"u_profile_picture_object_id\",\n                    u.tags as \"u_tags!\",\n                    u.created_at as \"u_created_at!\",\n                    u.updated_at as \"u_updated_at!\",\n                    u.verified_at as \"u_verified_at\",\n                    COALESCE(b.slug, '')::text as \"u_bookmark!\"\n                FROM user_activities ua\n                JOIN users u ON ua.user_id = u.id\n                LEFT JOIN bookmarks b ON b.item = u.id AND b.resource = 'user'\n                WHERE ua.related_entity_id = $1\n                ORDER BY ua.timestamp DESC\n                LIMIT $2\n                OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "activity: ActivityType",
+        "type_info": {
+          "Custom": {
+            "name": "activity_type",
+            "kind": {
+              "Enum": [
+                "create_word",
+                "update_word",
+                "create_translatable",
+                "update_translatable",
+                "create_translation",
+                "update_translation",
+                "create_language",
+                "update_language"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "related_entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "related_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "u_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "u_username!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "u_email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "u_password_hash!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "u_display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "u_description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "u_pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "u_gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "u_profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "u_tags!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 18,
+        "name": "u_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "u_updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "u_verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "u_bookmark!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "fa79d903e1603c0d0c00f74fe667232c120c531893f6b4c30162330f8552f56c"
+}

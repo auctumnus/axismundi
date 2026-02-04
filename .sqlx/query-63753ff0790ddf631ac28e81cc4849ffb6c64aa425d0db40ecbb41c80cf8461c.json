@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO quotation_suggestion (language, definition, span_content, created_by, updated_by)\n                VALUES ($1, $2, $3, $4, $4)\n                RETURNING id, language, definition, span_content, created_at, updated_at, created_by, updated_by\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "definition",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "span_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "63753ff0790ddf631ac28e81cc4849ffb6c64aa425d0db40ecbb41c80cf8461c"
+}

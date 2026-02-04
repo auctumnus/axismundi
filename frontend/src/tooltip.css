@@ -1,35 +1,37 @@
 .tooltip {
-    position: absolute;
-    width: max-content;
-    top: 0;
-    left: 0;
+  position: absolute;
+  width: max-content;
+  top: 0;
+  left: 0;
 
-    background-color: var(--foreground-primary);
-    color: var(--background-page);
-    padding: .325rem .65rem;
-    border-radius: .325rem;
+  background-color: var(--foreground-primary);
+  color: var(--background-page);
+  padding: 0.325rem 0.65rem;
+  border-radius: 0.325rem;
 
-    user-select: none;
-    pointer-events: none;
+  user-select: none;
+  pointer-events: none;
 
-    font-size: .75rem;
-    font-family: var(--font-normal);
-    line-height: 1.666;
-    z-index: 1000;
+  font-size: 0.75rem;
+  font-family: var(--font-normal);
+  line-height: 1.666;
+  z-index: 1000;
 
-    display: none;
-    opacity: 0;
+  display: none;
+  opacity: 0;
 
-    transition: opacity 150ms ease-out, display 150ms ease-out allow-discrete;
+  transition:
+    opacity 150ms ease-out,
+    display 150ms ease-out allow-discrete;
 
+  &.visible {
+    display: inline-block;
+    opacity: 1;
+  }
+
+  @starting-style {
     &.visible {
-        display: inline-block;
-        opacity: 1;
+      opacity: 0;
     }
-
-    @starting-style {
-        &.visible {
-            opacity: 0;
-        }
-    }
+  }
 }

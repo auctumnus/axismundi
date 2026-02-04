@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE translatable\n                SET slug = COALESCE($2, slug),\n                    title = COALESCE($3, title),\n                    english = COALESCE($4, english),\n                    source_name = COALESCE($5, source_name),\n                    source_url = COALESCE($6, source_url),\n                    source_content = COALESCE($7, source_content),\n                    source_language = COALESCE($8, source_language),\n                    updated_by = $9,\n                    updated_at = CURRENT_TIMESTAMP\n                WHERE id = $1\n                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count,\n                    (\n                        SELECT COUNT(*)\n                        FROM translation\n                        WHERE translation.translatable = translatable.id\n                    ) AS \"translations_count!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "english",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "source_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_language",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "translations_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c50aa0baa21217a9803c857cf1e5261fc54e15f49788c490298147032a95f878"
+}

@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM word_relations\n                WHERE antecedent = $1 AND consequent = $2\n                RETURNING id, antecedent, consequent, kind as \"kind: WordRelationType\", created_at, updated_at, created_by, updated_by\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "antecedent",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "consequent",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind: WordRelationType",
+        "type_info": {
+          "Custom": {
+            "name": "word_relation_type",
+            "kind": {
+              "Enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed",
+                "related",
+                "see_also"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "44441d1b877a7512cc6bc3ddfe475fb08a9edbd2eb78c59b8084c08b414ab218"
+}

@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}add grouping in {{ family.family.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>add grouping in {{ family.family.name }}</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<div class="context-cards">
+    <div class="context-card family-member-context">
+        <span class="context-label">for parent member</span>
+        <ul class="standalone-card">
+            {% call u::render_language_family_member(&parent_member, can_edit_family) %}
+        </ul>
+    </div>
+    <div class="context-card family-context">
+        <span class="context-label">in family</span>
+        <ul class="standalone-card">
+            {% call u::render_language_family_card(&family) %}
+        </ul>
+    </div>
+</div>
+
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id }}/add-grouping">
+    <section>
+        <label for="notes">Notes</label>
+        {% call u::field_error(name="notes") %}
+        <input type="text" id="notes" name="notes" required value="{{previous_notes}}">
+    </section>
+
+    <button type="submit">Add grouping</button>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ family.family.code }}" class="breadcrumb">{{ family.family.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::family_section(&family.family, true) %}
+{% endblock %}

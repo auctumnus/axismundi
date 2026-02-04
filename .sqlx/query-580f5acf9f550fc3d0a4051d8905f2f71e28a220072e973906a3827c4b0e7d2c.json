@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE cognacies\n                        SET tree = $1, schema_version = $2\n                        WHERE id = $3\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "580f5acf9f550fc3d0a4051d8905f2f71e28a220072e973906a3827c4b0e7d2c"
+}

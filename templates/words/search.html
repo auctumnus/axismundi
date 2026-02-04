@@ -91,7 +91,7 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul id="word-list">
+        <ul class="card-list">
             {% for word in results.items %}
                 {% call u::render_word_card(&word, &crate::util::serialize_search(&previous_pagination, &previous_query)) %}
             {% endfor %}

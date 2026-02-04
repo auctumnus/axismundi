@@ -78,7 +78,7 @@
     {% if results.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul id="translatable-list">
+        <ul class="card-list">
             {% for translatable_with_liked in results %}
                 {% call u::translatable_card(translatable_with_liked) %}
             {% endfor %}

@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}add root language to {{ family.family.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>add root language to {{ family.family.name }}</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<div class="context-cards">
+    <div class="context-card family-context">
+        <span class="context-label">in family</span>
+        <ul class="standalone-card">
+            {% call u::render_language_family_card(&family) %}
+        </ul>
+    </div>
+</div>
+
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/add-root">
+    <section>
+        <label for="language_code">Root language for {{ family.family.name }}</label>
+        {% call u::field_error(name="language_code") %}
+        <div class="select-container">
+            <select id="language_code" name="language_code" required>
+                <option value="" disabled selected>-- select a language --</option>
+                {% for language in available_languages %}
+                    <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
+                {% endfor %}
+            </select>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+        </div>
+    </section>
+
+    <button type="submit">Add root</button>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ family.family.code }}" class="breadcrumb">{{ family.family.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::family_section(&family.family, true) %}
+{% endblock %}

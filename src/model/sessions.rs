@@ -26,7 +26,7 @@ pub struct SessionRepository {
 
 const SESSION_LENGTH: Duration = Duration::days(30);
 
-const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$jQqBDrgAdo78QFToYmEz0w$X30JfwfGVY+VfGN2xgJvUMLY4oXuXoHiC3+AXJBLg7w";
+const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$jQqBDrgAdo78QFToYmez0w$X30JfwfGVY+VfGN2xgJvUMLY4oXuXoHiC3+AXJBLg7w";
 
 impl SessionRepository {
     pub fn new(state: AppState) -> Self {

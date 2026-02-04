@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'lemma')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a3f5ea2c4dc1568f948f7d182816558785d6490fe028cd61380208664577752"
+}

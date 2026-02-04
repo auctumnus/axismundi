@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE language_family_invites\n                SET accepted_at = CURRENT_TIMESTAMP\n                WHERE family = $1 AND recipient = $2 AND accepted_at IS NULL\n                RETURNING id, family, sender, recipient, permissions as \"permissions: PermissionLevel\", sent_at, accepted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "permissions: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "246e386f49a1314ebc4fd6bc2d6c6a31d046adf59676b8d22d558cb5aab82d67"
+}

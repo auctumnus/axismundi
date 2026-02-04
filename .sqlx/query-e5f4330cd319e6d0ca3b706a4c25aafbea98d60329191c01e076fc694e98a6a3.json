@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            UPDATE cognacies\n                            SET tree = $1\n                            WHERE id = $2\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5f4330cd319e6d0ca3b706a4c25aafbea98d60329191c01e076fc694e98a6a3"
+}

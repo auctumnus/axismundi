@@ -12,6 +12,10 @@ mod audit_logs;
 mod bookmarks;
 mod definitions;
 mod language_invites;
+mod language_families;
+mod language_family_invites;
+mod language_family_members;
+mod language_family_permissions;
 mod language_permissions;
 mod languages;
 mod quotation_suggestions;
@@ -63,7 +67,11 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(translations::create_router())
         .merge(quotations::create_router())
         .merge(quotation_suggestions::create_router())
-        .merge(user_activities::create_router());
+        .merge(user_activities::create_router())
+        .merge(language_families::create_router())
+        .merge(language_family_members::create_router())
+        .merge(language_family_invites::create_router())
+        .merge(language_family_permissions::create_router());
 
     // Only apply rate limiting in non-test builds
     #[cfg(not(test))]

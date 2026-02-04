@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    lfm.id,\n                    lfm.family_id,\n                    lfm.language_id,\n                    lfm.parent_member_id,\n                    lfm.relation_type as \"relation_type: LanguageFamilyRelationType\",\n                    lfm.created_at,\n                    lfm.updated_at,\n                    lfm.created_by,\n                    lfm.updated_by,\n                    lfm.notes\n                FROM language_family_members lfm\n                JOIN language_families lf ON lf.id = lfm.family_id\n                JOIN languages l ON l.id = lfm.language_id\n                LEFT JOIN language_family_members pmpl ON pmpl.id = lfm.parent_member_id\n                LEFT JOIN languages pl ON pl.id = pmpl.language_id\n                WHERE\n                ($1::TEXT IS NULL OR lf.code = $1)\n                AND ($2::TEXT IS NULL OR pl.code = $2)\n                AND ($3::TEXT IS NULL OR l.code = $3)\n                AND ($4::language_family_relation_type IS NULL OR lfm.relation_type = $4)\n                AND ($8::UUID IS NULL OR lfm.parent_member_id = $8)\n                ORDER BY (\n                    CASE\n                        WHEN $5::TEXT IS NOT NULL AND l.name ILIKE '%' || $5 || '%' THEN 100.0\n                        WHEN $5::TEXT IS NOT NULL AND l.code ILIKE '%' || $5 || '%' THEN 90.0\n                        WHEN $5::TEXT IS NOT NULL AND l.description ILIKE '%' || $5 || '%' THEN 80.0\n                        WHEN $5::TEXT IS NOT NULL AND lfm.notes ILIKE '%' || $5 || '%' THEN 70.0\n                        ELSE 0.0\n                    END +\n                    CASE WHEN $5::TEXT IS NOT NULL THEN\n                        similarity(l.name, $5) * 3.0 +\n                        similarity(l.code, $5) * 2.0 +\n                        similarity(l.description, $5) * 1.0 +\n                        similarity(lfm.notes, $5) * 1.0\n                    ELSE 0.0\n                    END\n                ) DESC, lfm.id\n                LIMIT $6\n                OFFSET $7\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "language_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "relation_type: LanguageFamilyRelationType",
+        "type_info": {
+          "Custom": {
+            "name": "language_family_relation_type",
+            "kind": {
+              "Enum": [
+                "descendant",
+                "hybrid"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "language_family_relation_type",
+            "kind": {
+              "Enum": [
+                "descendant",
+                "hybrid"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1a0e50d42dfe5c28968e9f0b579f3259f1c10b9f292b2483c61a3cb29f080dec"
+}

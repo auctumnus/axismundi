@@ -72,7 +72,7 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul id="relation-list">
+        <ul class="card-list">
             {% for relation in results.items %}
                 {% call u::render_relation_card(&relation, &crate::util::serialize_search(&previous_pagination, &previous_query), &language.code, &word.slug, word.lemma, user_has_permission) %}
             {% endfor %}

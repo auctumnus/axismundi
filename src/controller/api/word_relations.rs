@@ -9,12 +9,13 @@ use crate::{
         words::WordRepository,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::extract_session::Session,
+    util::{extract_session::Session, graph_svg},
 };
 use axum::{
     Json,
     extract::Path,
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use serde::Deserialize;
@@ -25,6 +26,7 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
         .route("/languages/{code}/words/{slug}/{lemma}/relations", get(search_relations))
         .route("/languages/{code}/words/{slug}/{lemma}/relations/{related_code}/{related_slug}/{related_lemma}", delete(delete_relation))
         .route("/languages/{code}/words/{slug}/{lemma}/etymology", get(get_etymology))
+        .route("/languages/{code}/words/{slug}/{lemma}/etymology.svg", get(get_etymology_svg))
 }
 type ApiResponse<T> = AppResult<T>;
 type PaginatedApiResponse<T> = AppResult<PaginatedResponse<T>>;
@@ -148,6 +150,32 @@ pub async fn get_etymology(
 
     match cognacy {
         Some(cognacy) => Ok(Json(cognacy)),
+        None => Err(not_found("cognacy graph")),
+    }
+}
+
+pub async fn get_etymology_svg(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_relations: WordRelationRepository,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
+) -> AppResult<Response> {
+    let language = languages.find_by_code(&code).await?;
+    let word = words
+        .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
+        .await?;
+
+    let leveled_cognacy = word_relations.get_leveled_cognacy(&word).await?;
+
+    match leveled_cognacy {
+        Some(cognacy) => {
+            let svg = graph_svg::cognacy_to_svg(&cognacy)?;
+            Ok((
+                [(axum::http::header::CONTENT_TYPE, "image/svg+xml")],
+                svg,
+            ).into_response())
+        }
         None => Err(not_found("cognacy graph")),
     }
 }

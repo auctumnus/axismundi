@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/profile.css">
 <link rel="stylesheet" href="/static/activity.css">
 <link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/word-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
 <script type="importmap">
     {
@@ -22,6 +23,8 @@
 {% endblock %}
 
 {% block content %}
+{% call u::back_button(url="/", towards="to search") %}
+
 <div class="card profile-card">
     <div class="banner"></div>
     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
@@ -109,7 +112,7 @@
         </a></li>
     </ul>
 </div>
-<ul id="language-list">
+<ul class="card-list">
     {% for language_with_contributors in languages %}
         {% call u::render_language_card(&language_with_contributors) %}
     {% endfor %}
@@ -117,15 +120,21 @@
 {% endif %}
 
 {% if translatables.is_empty() %}
-<h2>translatables</h2>
-{% if let Some(current_user) = current_user %}
+    {% if let Some(current_user) = current_user %}
         {% if current_user.id == user.id %}
-            <p>you haven't added any translatables yet.</p>
-            <a href="/new-translatable" class="button">get started</a>
+            <div class="card first-interaction-card">
+                <h2>no translatables yet</h2>
+                <p>create your first translatable to get started</p>
+                <div class="actions">
+                    <a class="button primary-button" href="/new-translatable">new translatable</a>
+                </div>
+            </div>
         {% else %}
+        <h2>translatables</h2>
             <p class="empty-description">no translatables yet</p>
         {% endif %}
     {% else %}
+        <h2>translatables</h2>
         <p class="empty-description">no translatables yet</p>
     {% endif %}
 {% else %}
@@ -146,7 +155,7 @@
         </a></li>
     </ul>
 </div>
-    <ul id="translatable-list">
+    <ul class="card-list">
         {% for translatable_with_liked in translatables %}
             {% call u::translatable_card(translatable_with_liked) %}
         {% endfor %}
@@ -158,7 +167,7 @@
 {% if activities.is_empty() %}
 <p class="empty-description">no recent activity.</p>
 {% else %}
-    <ul class="activity-list">
+    <ul class="card-list activities">
         {% for activity in activities %}
             {% call u::render_activity(&activity, false) %}
         {% endfor %}

@@ -51,7 +51,7 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul class="user-list">
+        <ul class="card-list">
             {% for user in results.items %}
                 {% call u::render_user_card(&user, previous_search) %}
             {% endfor %}

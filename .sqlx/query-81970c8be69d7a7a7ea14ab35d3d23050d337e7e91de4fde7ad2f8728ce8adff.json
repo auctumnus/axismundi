@@ -1,0 +1,97 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO word_relations (antecedent, consequent, kind, created_by, updated_by)\n                    VALUES ($1, $2, $3 :: word_relation_type, $4, $4)\n                    RETURNING id, antecedent, consequent, kind as \"kind: WordRelationType\", created_at, updated_at, created_by, updated_by\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "antecedent",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "consequent",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind: WordRelationType",
+        "type_info": {
+          "Custom": {
+            "name": "word_relation_type",
+            "kind": {
+              "Enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed",
+                "related",
+                "see_also"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "word_relation_type",
+            "kind": {
+              "Enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed",
+                "related",
+                "see_also"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "81970c8be69d7a7a7ea14ab35d3d23050d337e7e91de4fde7ad2f8728ce8adff"
+}

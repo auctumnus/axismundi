@@ -8,30 +8,61 @@
   --light-foreground-primary: var(--color-slate-900);
   --dark-foreground-primary: var(--color-slate-100);
 
-  --background-panel: light-dark(var(--light-background-panel), var(--dark-background-panel));
-  --background-page: light-dark(var(--light-background-page), var(--dark-background-page));
+  --background-panel: light-dark(
+    var(--light-background-panel),
+    var(--dark-background-panel)
+  );
+  --background-page: light-dark(
+    var(--light-background-page),
+    var(--dark-background-page)
+  );
 
-  --foreground-primary: light-dark(var(--light-foreground-primary), var(--dark-foreground-primary));
-  --foreground-secondary: light-dark(var(--color-slate-500), var(--color-slate-400));
-  --foreground-tertiary: light-dark(var(--color-slate-400), var(--color-slate-600));
-  --foreground-quaternary: light-dark(var(--color-slate-300), var(--color-slate-700));
+  --foreground-primary: light-dark(
+    var(--light-foreground-primary),
+    var(--dark-foreground-primary)
+  );
+  --foreground-secondary: light-dark(
+    var(--color-slate-500),
+    var(--color-slate-400)
+  );
+  --foreground-tertiary: light-dark(
+    var(--color-slate-400),
+    var(--color-slate-600)
+  );
+  --foreground-quaternary: light-dark(
+    var(--color-slate-300),
+    var(--color-slate-700)
+  );
   --foreground-accent: var(--color-sky-500);
 
-  --error-background: light-dark(color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel)), oklch(7.8% 0.092 26.042));
+  --error-background: light-dark(
+    color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel)),
+    oklch(7.8% 0.092 26.042)
+  );
   --error-foreground: var(--color-red-700);
   --error-border: var(--color-red-500);
 
-  --focus-ring: light-dark(color-mix(in oklab, var(--color-sky-500) 40%, transparent), color-mix(in oklab, var(--color-sky-400) 40%, transparent));
-  --focus-ring-error: light-dark(color-mix(in oklab, var(--color-red-500) 40%, transparent), color-mix(in oklab, var(--color-red-400) 40%, transparent));
+  --focus-ring: light-dark(
+    color-mix(in oklab, var(--color-sky-500) 40%, transparent),
+    color-mix(in oklab, var(--color-sky-400) 40%, transparent)
+  );
+  --focus-ring-error: light-dark(
+    color-mix(in oklab, var(--color-red-500) 40%, transparent),
+    color-mix(in oklab, var(--color-red-400) 40%, transparent)
+  );
 
-  --color-shadow: light-dark(color-mix(in oklab,var(--color-slate-900) 10%,transparent), color-mix(in oklab, black 30%, transparent));
-  --shadow-hover: 0 10px 15px -3px var(--color-shadow), 0 4px 6px -4px var(--color-shadow);
+  --color-shadow: light-dark(
+    color-mix(in oklab, var(--color-slate-900) 10%, transparent),
+    color-mix(in oklab, black 30%, transparent)
+  );
+  --shadow-hover:
+    0 10px 15px -3px var(--color-shadow), 0 4px 6px -4px var(--color-shadow);
 
-  --font-normal: 'Roboto', 'Noto Sans', Arial, sans-serif;
-  --font-heading: 'Roboto Slab', 'Roboto', 'Noto Sans', Arial, sans-serif;
+  --font-normal: "Roboto", "Noto Sans", Arial, sans-serif;
+  --font-heading: "Roboto Slab", "Roboto", "Noto Sans", Arial, sans-serif;
   /* we don't actually ship berkeley mono; this only uses it if you have it installed,
     but i like that font too much to not use it */
-  --font-monospace: 'Berkeley Mono', 'Roboto Mono', monospace;
+  --font-monospace: "Berkeley Mono", "Roboto Mono", monospace;
 
   --duration-very-fast: 75ms;
   --duration-fast: 150ms;
@@ -40,13 +71,15 @@
   --header-height: 3rem;
   --user-panel-width: 200px;
 
-  --page-width: 600px;
+  --page-width: 800px;
 
   --rounding: 4px;
 
   --padding-right: calc((100dvh - var(--page-width)) / 2);
 
-  --border: 1px solid light-dark(var(--color-slate-300), var(--color-slate-700));
+  --border-color: light-dark(var(--color-slate-300), var(--color-slate-700));
+
+  --border: 1px solid var(--border-color);
 }
 
 #icon-store {
@@ -82,13 +115,16 @@ body {
   :root {
     --page-width: calc(100dvw - 2rem);
   }
-  
-  body, header {
+
+  body,
+  header {
     padding: 0 1rem;
   }
 }
 
-a:focus-visible, a.button:focus-visible, button:focus-visible {
+a:focus-visible,
+a.button:focus-visible,
+button:focus-visible {
   outline: 2px solid var(--focus-ring);
   border-radius: var(--rounding);
 }
@@ -117,13 +153,14 @@ header {
     isolation: isolate;
   }
 
-  .left, .right {
+  .left,
+  .right {
     display: flex;
     align-items: center;
   }
 
   .left {
-    gap: .5rem;
+    gap: 0.5rem;
     a.breadcrumb {
       max-width: 60vw;
       text-overflow: ellipsis;
@@ -152,9 +189,8 @@ header {
     color: inherit;
 
     svg {
-
       height: 1.25rem;
-      margin-right: .5rem;
+      margin-right: 0.5rem;
     }
 
     span {
@@ -174,20 +210,20 @@ img.pfp {
 
   &.small {
     --size: 1.25rem;
-  width: var(--size);
-  height: var(--size);
+    width: var(--size);
+    height: var(--size);
   }
-  
+
   &.medium {
     --size: 1.75rem;
-  width: var(--size);
-  height: var(--size);
+    width: var(--size);
+    height: var(--size);
   }
 
   &.large {
     --size: 3.5rem;
-  width: var(--size);
-  height: var(--size);
+    width: var(--size);
+    height: var(--size);
   }
 }
 
@@ -213,7 +249,12 @@ svg.icon {
   height: var(--height);
   display: inline-flex;
   /* so-called triangles when they have 4 vertices */
-  clip-path: polygon(0 var(--height), var(--width) var(--height), var(--width) 0, calc(var(--width) - var(--pfp-width)) 0);
+  clip-path: polygon(
+    0 var(--height),
+    var(--width) var(--height),
+    var(--width) 0,
+    calc(var(--width) - var(--pfp-width)) 0
+  );
   user-select: none;
 }
 
@@ -229,19 +270,22 @@ svg.icon {
   border-radius: var(--rounding);
   border: var(--border);
   background-color: var(--background-panel);
-  box-shadow: 0 4px 6px -1px var(--color-shadow), 0 2px 4px -2px var(--color-shadow);
+  box-shadow:
+    0 4px 6px -1px var(--color-shadow),
+    0 2px 4px -2px var(--color-shadow);
   z-index: 1000;
-  padding: .325rem;
+  padding: 0.325rem;
   visibility: hidden;
   opacity: 0;
   transform: scale(0.8) translateY(-20px) translateX(20px);
-  font-size: .9rem;
+  font-size: 0.9rem;
 
-  --curve: cubic-bezier(0.3, 0.0, 0.8, 0.15);
+  --curve: cubic-bezier(0.3, 0, 0.8, 0.15);
 
-  transition: opacity var(--duration-fast) var(--curve),
-              visibility var(--duration-fast) var(--curve),
-              transform var(--duration-fast) var(--curve);
+  transition:
+    opacity var(--duration-fast) var(--curve),
+    visibility var(--duration-fast) var(--curve),
+    transform var(--duration-fast) var(--curve);
 
   &.active {
     visibility: visible;
@@ -253,8 +297,8 @@ svg.icon {
     display: flex;
     flex-direction: row;
     border-bottom: var(--border);
-    padding: .325rem .5rem .5rem .5rem;
-    gap: .5rem;
+    padding: 0.325rem 0.5rem 0.5rem 0.5rem;
+    gap: 0.5rem;
 
     .pfp-container {
       display: flex;
@@ -265,7 +309,7 @@ svg.icon {
     .user-info {
       display: flex;
       flex-direction: column;
-      gap: .25rem;
+      gap: 0.25rem;
       justify-content: center;
 
       .display-name {
@@ -277,16 +321,14 @@ svg.icon {
   ul {
     display: flex;
     flex-direction: column;
-    margin-top: .25rem;
+    margin-top: 0.25rem;
 
     a {
       display: flex;
       flex-direction: row;
       align-items: center;
-      padding: .325rem .5rem;
+      padding: 0.325rem 0.5rem;
       border-radius: var(--rounding);
-
-
 
       transition: background-color var(--duration-very-fast) var(--curve);
 
@@ -296,7 +338,7 @@ svg.icon {
       svg.icon {
         position: relative;
         top: -1px;
-        margin-right: .5rem;
+        margin-right: 0.5rem;
       }
     }
   }
@@ -344,7 +386,7 @@ main {
     padding-left: 1.5rem;
 
     li {
-      margin-bottom: .5rem;
+      margin-bottom: 0.5rem;
       list-style: disc;
     }
   }
@@ -355,10 +397,10 @@ main {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: .5rem;
+  padding: 0.5rem;
   text-align: center;
   font-weight: 600;
-  font-size: .9rem;
+  font-size: 0.9rem;
   z-index: 9999;
 
   &.error {
@@ -368,9 +410,10 @@ main {
   }
 }
 
-a.button, form.default button[type="submit"] {
+a.button,
+form.default button[type="submit"] {
   font-family: var(--font-heading);
-  padding: .75rem;
+  padding: 0.75rem;
   border: none;
   border-radius: var(--rounding);
   background-color: var(--foreground-primary);
@@ -378,9 +421,10 @@ a.button, form.default button[type="submit"] {
   font-size: 1rem;
   cursor: pointer;
   text-decoration: none;
-  font-size: .875rem;
+  font-size: 0.875rem;
 
-  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+  transition: background-color var(--duration-fast)
+    cubic-bezier(0.3, 0, 0.8, 0.15);
 
   &.secondary {
     border: 1px solid var(--foreground-primary);
@@ -388,7 +432,11 @@ a.button, form.default button[type="submit"] {
     color: var(--foreground-primary);
 
     &:hover {
-      background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+      background-color: color-mix(
+        in oklab,
+        var(--foreground-primary) 10%,
+        transparent
+      );
     }
   }
 
@@ -399,12 +447,14 @@ a.button, form.default button[type="submit"] {
 
 a.button {
   display: inline-block;
-  margin-bottom: .5rem;
+  margin-bottom: 0.5rem;
 }
 
-a.button-secondary, form.default button[type="reset"], button.clear {
+a.button-secondary,
+form.default button[type="reset"],
+button.clear {
   font-family: var(--font-heading);
-  padding: .75rem;
+  padding: 0.75rem;
   border: none;
   border-radius: var(--rounding);
   background-color: transparent;
@@ -415,18 +465,22 @@ a.button-secondary, form.default button[type="reset"], button.clear {
   cursor: pointer;
   text-decoration: none;
 
-  transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+  transition: background-color var(--duration-fast)
+    cubic-bezier(0.3, 0, 0.8, 0.15);
 
   &:hover {
-    background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+    background-color: color-mix(
+      in oklab,
+      var(--foreground-primary) 10%,
+      transparent
+    );
   }
 }
-
 
 .badge {
   display: inline-flex;
   flex-direction: row;
-  gap: .375rem;
+  gap: 0.375rem;
   align-items: center;
   text-decoration: none;
 }
@@ -450,14 +504,14 @@ footer {
 
     li h2 {
       font-weight: 600;
-      margin-bottom: .5rem;
+      margin-bottom: 0.5rem;
       font-family: var(--font-heading);
     }
 
     a {
       color: var(--foreground-secondary);
 
-      margin-top: .5rem;
+      margin-top: 0.5rem;
 
       &:hover {
         color: var(--foreground-primary);
@@ -474,7 +528,7 @@ footer {
     padding: 0;
     margin-top: 2rem;
 
-    font-size: .9rem;
+    font-size: 0.9rem;
 
     li {
       margin-bottom: 0;
@@ -493,60 +547,58 @@ footer {
 
 :is(.language-card, .translatable-card) .likes {
   position: relative;
-  top: -.325rem;
-
+  top: -0.325rem;
 }
 
 .likes {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        color: var(--foreground-secondary);
-        font-size: .875rem;
-        margin-right: .25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  color: var(--foreground-secondary);
+  font-size: 0.875rem;
+  margin-right: 0.25rem;
 
-        cursor: pointer;
+  cursor: pointer;
 
-        svg {
-            transition: transform var(--duration-fast) ease-in-out;
-        }
+  svg {
+    transition: transform var(--duration-fast) ease-in-out;
+  }
 
-        .when-liked {
-            display: none;
-            transition: color var(--duration-very-fast) ease-in-out;
-        }
+  .when-liked {
+    display: none;
+    transition: color var(--duration-very-fast) ease-in-out;
+  }
 
+  .like-count {
+    font-family: var(--font-monospace);
+  }
 
-        .like-count {
-          font-family: var(--font-monospace);
-        }
-
-        &.liked {
-            svg {
-                animation-duration: 400ms;
-                animation-name: like;
-            }
-            .when-liked {
-                display: inline;
-                color: var(--color-amber-400);
-            }
-            .when-unliked {
-                display: none;
-            }
-        }
+  &.liked {
+    svg {
+      animation-duration: 400ms;
+      animation-name: like;
     }
+    .when-liked {
+      display: inline;
+      color: var(--color-amber-400);
+    }
+    .when-unliked {
+      display: none;
+    }
+  }
+}
 
 @keyframes like {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.2);
-    }
-    100% {
-        transform: scale(1);
-    }
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .card {
@@ -556,12 +608,16 @@ footer {
   padding: 1rem;
   margin-bottom: 1rem;
 
+  &:has(.header-with-actions:first-child) {
+    padding-top: 0;
+  }
+
   &:has(.contributors) .header-with-actions {
     margin-bottom: 0rem;
   }
 
   .contributors {
-    margin-bottom: .5rem;
+    margin-bottom: 0.5rem;
   }
 
   &:first-child {
@@ -575,12 +631,133 @@ footer {
   div.actions {
     display: flex;
     flex-direction: row;
-    gap: .5rem;
-    margin-bottom: .5rem;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
 
-    a.button, button {
+    a.button,
+    button {
       margin-bottom: 0;
     }
+  }
+}
+
+.preview-card {
+  a {
+    text-decoration: none;
+    color: inherit;
+
+    display: flex;
+    flex-direction: row;
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+    gap: 0.5rem;
+    align-items: center;
+
+    text-decoration: none;
+
+    transition:
+      border-color var(--duration-very-fast) ease-in-out,
+      box-shadow var(--duration-very-fast) ease-in-out;
+
+    &:hover {
+      border-color: var(--foreground-secondary);
+    }
+  }
+
+  .left {
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+
+    .title {
+      color: var(--foreground-primary);
+      font-weight: 600;
+    }
+
+    .summary {
+      color: var(--foreground-secondary);
+      font-size: 0.875rem;
+
+      &.empty-description {
+        font-style: italic;
+      }
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .creator {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
+
+  ul.contributor-list {
+    display: flex;
+    flex-direction: row;
+    padding: 0;
+    margin: 0;
+
+    li {
+      list-style: none;
+    }
+  }
+
+  li.compressed-pfps {
+    margin-bottom: 0;
+
+    &:not(:first-child) {
+      position: relative;
+      margin-left: -8px;
+      &::before {
+        content: "\00A0";
+        display: inline-block;
+        width: 22px;
+        height: 22px;
+        background-color: var(--background-panel);
+        border-radius: 100%;
+        position: absolute;
+        left: -12px;
+        top: -0.5px;
+      }
+    }
+
+    &:nth-child(1) {
+      z-index: 5;
+    }
+    &:nth-child(2) {
+      z-index: 4;
+    }
+    &:nth-child(3) {
+      z-index: 3;
+    }
+    &:nth-child(4) {
+      z-index: 2;
+    }
+    &:nth-child(5) {
+      z-index: 1;
+    }
+  }
+}
+
+ul.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    list-style: none;
   }
 }
 
@@ -597,28 +774,56 @@ footer {
   font-style: italic;
 }
 
+.card > .header-with-actions:first-child:has(.icons) {
+  margin-top: .5rem;
+}
+
+main > :is(.header-with-actions, h1, h2) {
+  --side-spacing: .125rem;
+  padding-left: var(--side-spacing);
+  padding-right: var(--side-spacing);
+}
+
 .header-with-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1rem 0;
+
+  .with-subtitle {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  h1,
+  h2 {
+    line-height: 1.5rem;
+    margin: 0;
+  }
+
+  &:has(ul.icons) {
+    align-items: flex-start;
+    h1, h2 {
+      line-height: initial;
+      margin-top: .125rem;
+    }
+  }
+
+  ul {
     display: flex;
     flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: .5rem;
+    align-items: end;
+    gap: 0.5rem;
+    padding: 0;
+  }
 
-    max-height: 2lh;
+  ul.icons {
+    align-items: flex-start;
+  }
 
-
-    h1, h2 {
-      margin: 0;
-    }
-
-    ul {
-      display: flex;
-      flex-direction: row;
-      align-items: end;
-      gap: .5rem;
-      padding: 0;
-    }
-
+  ul:not(.icons) {
     li {
       display: inline-flex;
       flex-direction: row;
@@ -630,7 +835,7 @@ footer {
       user-select: none;
       pointer-events: none;
       color: var(--foreground-secondary);
-      margin-left: .5rem;
+      margin-left: 0.5rem;
     }
 
     a {
@@ -644,31 +849,36 @@ footer {
         color: var(--foreground-primary);
       }
     }
+  }
 
-    ul, li {
-      list-style: none;
-      margin: 0;
-    }
+  ul,
+  li {
+    list-style: none;
+    margin: 0;
+  }
 }
 
-a.icon.button, button.icon, .icon-button-container {
+a.icon.button,
+button.icon,
+.icon-button-container {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-width: 32px;
   min-height: 32px;
-  padding: .75rem;
+  padding: 0.75rem;
   border: 1px solid transparent;
   border-radius: 100%;
   cursor: pointer;
 
   background-color: transparent;
   color: var(--foreground-secondary);
-  font-size: .875rem;
+  font-size: 0.875rem;
 
-  transition: background-color var(--duration-very-fast) ease-in-out,
-              color var(--duration-very-fast) ease-in-out;
+  transition:
+    background-color var(--duration-very-fast) ease-in-out,
+    color var(--duration-very-fast) ease-in-out;
 
   svg {
     width: 24px;
@@ -677,12 +887,20 @@ a.icon.button, button.icon, .icon-button-container {
   }
 
   &.yellow:hover {
-    background-color: color-mix(in oklab, var(--color-amber-400) 10%, transparent 90%);
+    background-color: color-mix(
+      in oklab,
+      var(--color-amber-400) 10%,
+      transparent 90%
+    );
     color: var(--color-amber-400);
   }
 
   &.gray:hover {
-    background-color: color-mix(in oklab, var(--foreground-secondary) 10%, transparent 90%);
+    background-color: color-mix(
+      in oklab,
+      var(--foreground-secondary) 10%,
+      transparent 90%
+    );
     color: var(--foreground-secondary);
   }
 }
@@ -694,17 +912,18 @@ a.icon.button, button.icon, .icon-button-container {
   max-width: calc(var(--page-width) - 8rem);
 }
 
-a.with-icon, button.with-icon {
+a.with-icon,
+button.with-icon {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  gap: .25rem;
+  gap: 0.25rem;
   color: var(--foreground-secondary);
   cursor: pointer;
 
   svg.icon {
     position: relative;
-    top: .5px;
+    top: 0.5px;
     z-index: 0;
   }
 
@@ -728,16 +947,17 @@ a.with-icon, button.with-icon {
   display: flex;
   flex-direction: column;
   color: var(--foreground-secondary);
-  .pages, .meta {
+  .pages,
+  .meta {
     display: flex;
     flex-direction: row;
-    gap: .5rem;
+    gap: 0.5rem;
     justify-content: center;
     align-items: center;
   }
 
   .meta {
-    font-size: .875rem;
+    font-size: 0.875rem;
   }
 
   .empty-pagination-button {
@@ -761,13 +981,14 @@ a.with-icon, button.with-icon {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: .5rem;
+  gap: 0.5rem;
 }
 
-.context-label, label.small {
-  font-size: .75rem;
+.context-label,
+label.small {
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: 0.05em;
   color: var(--foreground-secondary);
   font-weight: 600;
 }
@@ -775,7 +996,7 @@ a.with-icon, button.with-icon {
 .context-card-link {
   display: flex;
   flex-direction: column;
-  gap: .5rem;
+  gap: 0.5rem;
   border: var(--border);
   border-radius: var(--rounding);
   background-color: var(--background-panel);
@@ -794,7 +1015,7 @@ a.with-icon, button.with-icon {
 }
 
 .context-text {
-  font-size: .875rem;
+  font-size: 0.875rem;
   color: var(--foreground-secondary);
   display: -webkit-box;
   line-clamp: 3;
@@ -804,7 +1025,7 @@ a.with-icon, button.with-icon {
 }
 
 .context-card .language-summary {
-  font-size: .875rem;
+  font-size: 0.875rem;
   color: var(--foreground-secondary);
 }
 
@@ -824,28 +1045,32 @@ code {
 }
 
 .back-link {
-    display: inline-flex;
-    flex-direction: row;
-    align-items: center;
-    gap: .25rem;
-    margin-bottom: 1.75rem;
-    color: var(--foreground-secondary);
-    text-decoration: none;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1.75rem;
+  color: var(--foreground-secondary);
+  text-decoration: none;
 
+  transition: color var(--duration-very-fast) ease-in-out;
+
+  svg.icon {
     transition: color var(--duration-very-fast) ease-in-out;
+    position: relative;
+    top: 0.5px;
+  }
+
+  &:hover {
+    text-decoration: underline;
+    color: var(--foreground-primary);
 
     svg.icon {
-      transition: color var(--duration-very-fast) ease-in-out;
-      position: relative;
-      top: .5px;
-    }
-
-    &:hover {
-      text-decoration: underline;
       color: var(--foreground-primary);
-
-      svg.icon {
-        color: var(--foreground-primary);
-      }
     }
+  }
+}
+
+.first-interaction-card {
+  margin-top: 2rem;
 }

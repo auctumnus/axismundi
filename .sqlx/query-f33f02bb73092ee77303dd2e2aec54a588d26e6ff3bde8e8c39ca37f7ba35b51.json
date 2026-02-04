@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE language_invites\n                SET accepted_at = CURRENT_TIMESTAMP\n                WHERE language = $1 AND recipient = $2 AND accepted_at IS NULL\n                RETURNING id, language, sender, recipient, permissions as \"permissions: PermissionLevel\", sent_at, accepted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "permissions: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f33f02bb73092ee77303dd2e2aec54a588d26e6ff3bde8e8c39ca37f7ba35b51"
+}

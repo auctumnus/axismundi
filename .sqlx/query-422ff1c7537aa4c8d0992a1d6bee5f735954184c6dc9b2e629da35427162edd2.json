@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                select\n                    users.id,\n                    users.username,\n                    users.email,\n                    users.password_hash,\n                    users.display_name,\n                    users.description,\n                    users.pronouns,\n                    users.gender,\n                    users.profile_picture_object_id,\n                    users.tags,\n                    users.created_at,\n                    users.updated_at,\n                    users.verified_at,\n                    COALESCE(b.slug, '')::text as \"bookmark!\"\n                from users\n                left join bookmarks b on b.item = users.id and b.resource = 'user'\n                where users.id = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "password_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "bookmark!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "422ff1c7537aa4c8d0992a1d6bee5f735954184c6dc9b2e629da35427162edd2"
+}

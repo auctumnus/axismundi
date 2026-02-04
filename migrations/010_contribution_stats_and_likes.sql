@@ -1,10 +1,10 @@
 create table contribution_stats (
-    language_id uuid primary key references languages(id) on delete cascade,
+    language_id uuid not null references languages(id) on delete cascade,
     user_id uuid not null references users(id) on delete cascade,
     word_count bigint not null default 0,
     translation_count bigint not null default 0,
 
-    unique (language_id, user_id)
+    primary key (language_id, user_id)
 );
 
 create index idx_contribution_stats_language_id_user_id on contribution_stats(language_id, user_id);

@@ -36,11 +36,14 @@
           bun
           sqlx-cli
           minio-client
-          just  
+          just
           cargo-llvm-cov
           pstree
           watchexec
           concurrently
+          clang
+          llvmPackages.libclang
+          graphviz
         ];
 
         buildInputs =
@@ -48,6 +51,7 @@
           [
             openssl
             postgresql
+            graphviz
           ]
           ++ lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Security
@@ -58,8 +62,8 @@
       {
         devShells.default = pkgs.mkShell {
           inherit nativeBuildInputs buildInputs;
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
       }
     );
 }
-

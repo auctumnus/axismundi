@@ -7,6 +7,7 @@
     "build": "bun build.ts",
     "build:annotation": "parcel build",
     "dev": "bun build.ts -- --watch",
+    "format": "prettier --write src/**/*.ts src/**/*.tsx src/**/*.css",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "typecheck": "tsc"
@@ -30,7 +31,8 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
-    "parcel": "^2.13.3"
+    "parcel": "^2.13.3",
+    "prettier": "^3.8.1"
   },
   "peerDependencies": {
     "typescript": "^5.8.3"

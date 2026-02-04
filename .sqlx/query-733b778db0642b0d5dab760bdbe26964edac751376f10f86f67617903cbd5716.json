@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                select count(*)\n                from user_bans\n                where\n                    ($1::TEXT IS NULL OR reason ILIKE '%' || $1 || '%')\n                    and ($2::UUID IS NULL OR banned_by = $2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "733b778db0642b0d5dab760bdbe26964edac751376f10f86f67617903cbd5716"
+}

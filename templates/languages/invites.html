@@ -21,7 +21,7 @@
 {% if invites.is_empty() %}
     <p>No invites found.</p>
 {% else %}
-    <ul class="invite-list">
+    <ul class="card-list">
         {% for invite_data in invites %}
             {% call u::render_invite_card(&invite_data.invite, &invite_data.inviting_user, &invite_data.invited_user, &invite_data.invite.permissions, &language, invite_data.can_revoke) %}
         {% endfor %}

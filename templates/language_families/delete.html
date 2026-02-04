@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete {{ family.name }}? - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete language family</h1>
+
+<form class="default" method="post" action="/language-families/{{ family.code }}/delete">
+    <section>
+        <p>Are you sure you want to delete the language family <strong>{{ family.name }}</strong>?</p>
+        <p>This action cannot be undone. No languages will be deleted in the process, but the family's structure will be.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete language family</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ family.code }}" class="breadcrumb">{{ family.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::family_section(&family, can_delete_family) %}
+{% endblock %}

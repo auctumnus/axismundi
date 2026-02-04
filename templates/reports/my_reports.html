@@ -91,7 +91,7 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
-        <ul id="report-list">
+        <ul class="card-list">
             {% for item in results.items %}
                 {% call u::report_card(&item) %}
             {% endfor %}

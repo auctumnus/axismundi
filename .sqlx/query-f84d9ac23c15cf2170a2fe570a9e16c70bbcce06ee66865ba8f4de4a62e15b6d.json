@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO word_classes (language, name, abbreviation, created_by, updated_by)\n                    VALUES ($1, $2, $3, $4, $4)\n                    RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f84d9ac23c15cf2170a2fe570a9e16c70bbcce06ee66865ba8f4de4a62e15b6d"
+}

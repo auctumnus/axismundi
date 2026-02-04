@@ -68,8 +68,8 @@ pub struct WordRelation {
     pub kind: WordRelationType,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub created_by: Uuid,
-    pub updated_by: Uuid,
+    pub created_by: Option<Uuid>,
+    pub updated_by: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -116,32 +116,6 @@ impl CognacySchemaV1 {
         // A cognacy is a DAG, so to merge two cognacies we need to ensure that adding the new edge does not create a cycle.
         // We can do this by performing a DFS from the consequent node and ensuring we do not reach the antecedent node.
 
-        // look ma, Introduction to Algorithms, fourth edition by Cormen et al!
-        fn dfs(
-            adjacency_list: &HashMap<Uuid, Vec<Uuid>>,
-            current: Uuid,
-            target: Uuid,
-            visited: &mut HashMap<Uuid, bool>,
-        ) -> bool {
-            if current == target {
-                return true;
-            }
-            if let Some(&was_visited) = visited.get(&current) {
-                if was_visited {
-                    return false;
-                }
-            }
-            visited.insert(current, true);
-            if let Some(neighbors) = adjacency_list.get(&current) {
-                for &neighbor in neighbors {
-                    if dfs(adjacency_list, neighbor, target, visited) {
-                        return true;
-                    }
-                }
-            }
-            false
-        }
-
         let mut adjacency_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
         for e in &self.edges {
             adjacency_list
@@ -169,7 +143,7 @@ impl CognacySchemaV1 {
             .push(edge.consequent);
 
         let mut visited = HashMap::new();
-        if dfs(
+        if crate::util::dfs(
             &adjacency_list,
             edge.consequent,
             edge.antecedent,

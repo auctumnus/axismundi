@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*) as \"count!\"\n                FROM users u\n                LEFT JOIN language_family_permissions lfp ON lfp.\"user\" = u.id AND lfp.family = $1\n                LEFT JOIN LATERAL (\n                    SELECT\n                        SUM(cs.word_count) as total_words,\n                        SUM(cs.translation_count) as total_translations\n                    FROM contribution_stats cs\n                    JOIN language_family_members lfm ON lfm.language_id = cs.language_id\n                    WHERE lfm.family_id = $1 AND cs.user_id = u.id\n                ) stats ON true\n                WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)\n                AND (lfp.permission IS NULL OR lfp.permission >= $3)\n                AND (COALESCE(stats.total_words, 0) > 0 OR COALESCE(stats.total_translations, 0) > 0 OR lfp.permission IS NOT NULL)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0fd323cd4455ae33a7b758b76843cc02611701660147afef7a3970c7a1d020f3"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE user_sessions\n                SET invalidated_at = NOW()\n                WHERE user_id = $1 AND invalidated_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "13ea66d18be135c5c31bb843989bff59585929e96382ff30913fcb316776ec62"
+}

@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(DISTINCT words.id)\n                FROM word_relations\n                JOIN words ON\n                    (CASE\n                        WHEN $1 = 'antecedent' THEN word_relations.consequent = words.id\n                        WHEN $1 = 'consequent' THEN word_relations.antecedent = words.id\n                        ELSE word_relations.consequent = words.id OR word_relations.antecedent = words.id\n                    END)\n                WHERE\n                    (CASE\n                        WHEN $1 = 'antecedent' THEN word_relations.antecedent = $2\n                        WHEN $1 = 'consequent' THEN word_relations.consequent = $2\n                        ELSE word_relations.antecedent = $2 OR word_relations.consequent = $2\n                    END)\n                    AND ($3::word_relation_type IS NULL OR word_relations.kind = $3)\n                    AND words.id <> $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "word_relation_type",
+            "kind": {
+              "Enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed",
+                "related",
+                "see_also"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "863bb93f4aacdbbc1e4c6148c42e1ba07bf40f7896f1df288a63dfa355c67b61"
+}

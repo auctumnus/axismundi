@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            select\n                id,\n                user_id,\n                action as \"action: AuditActionType\",\n                action_at,\n                resource_type as \"resource_type: AuditableResource\",\n                resource_id,\n                details\n            from audit_logs\n            order by action_at desc\n            limit $1 offset $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "action: AuditActionType",
+        "type_info": {
+          "Custom": {
+            "name": "audit_action_type",
+            "kind": {
+              "Enum": [
+                "created",
+                "updated",
+                "deleted",
+                "updated_report",
+                "user_ban",
+                "user_unban",
+                "add_tag",
+                "remove_tag"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "action_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "resource_type: AuditableResource",
+        "type_info": {
+          "Custom": {
+            "name": "auditable_resource",
+            "kind": {
+              "Enum": [
+                "user",
+                "language",
+                "word",
+                "translation",
+                "translatable",
+                "word_relation",
+                "invite",
+                "permission",
+                "quotation",
+                "definition",
+                "quotation_suggestion",
+                "report",
+                "language_family",
+                "language_family_member",
+                "language_family_invite",
+                "language_family_permission"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "resource_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "details",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f776c8a37fbe08d2f8bed503f0b67155aab1b8f67340c7e34b433ee2fbcee11f"
+}

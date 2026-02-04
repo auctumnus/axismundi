@@ -87,6 +87,29 @@ impl UserTagRepository {
         Ok(user_tag)
     }
 
+    pub async fn create_unchecked(
+        &self,
+        user_id: Uuid,
+        tag: String,
+        hidden: bool,
+    ) -> AppResult<UserTag> {
+        let user_tag = sqlx::query_as!(
+            UserTag,
+            r#"
+            insert into user_tags (user_id, tag, hidden)
+            values ($1, $2, $3)
+            returning id, user_id, tag, hidden, created_at
+            "#,
+            user_id,
+            tag,
+            hidden
+        )
+        .fetch_one(&self.state.pool)
+        .await?;
+
+        Ok(user_tag)
+    }
+
     async fn find(&self, user: &User, tag: &str) -> AppResult<Option<UserTag>> {
         let user_tag = sqlx::query_as!(
             UserTag,

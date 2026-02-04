@@ -1,17 +1,34 @@
 :root {
-
-  --input-background: light-dark(var(--color-slate-200), var(--color-slate-800));
+  --input-background: light-dark(
+    var(--color-slate-200),
+    var(--color-slate-800)
+  );
   --input-border: light-dark(var(--color-slate-400), var(--color-slate-600));
-  --input-background-error: light-dark(color-mix(in oklab, var(--color-red-600) 10%, var(--input-background)), color-mix(in oklab, var(--color-red-800) 10%, var(--input-background)));
+  --input-background-error: light-dark(
+    color-mix(in oklab, var(--color-red-600) 10%, var(--input-background)),
+    color-mix(in oklab, var(--color-red-800) 10%, var(--input-background))
+  );
 
-  --input-background-focus: light-dark(color-mix(in oklab, var(--color-sky-500) 5%, var(--input-background)), color-mix(in oklab, var(--color-sky-400) 10%, var(--input-background)));
+  --input-background-focus: light-dark(
+    color-mix(in oklab, var(--color-sky-500) 5%, var(--input-background)),
+    color-mix(in oklab, var(--color-sky-400) 10%, var(--input-background))
+  );
   --input-border-focus: light-dark(var(--color-sky-500), var(--color-sky-400));
-  --input-background-error-focus: light-dark(color-mix(in oklab, var(--color-red-500) 10%, var(--input-background)), color-mix(in oklab, var(--color-red-400) 10%, var(--input-background)));
-  --input-border-error-focus: light-dark(var(--color-red-500), var(--color-red-400));
+  --input-background-error-focus: light-dark(
+    color-mix(in oklab, var(--color-red-500) 10%, var(--input-background)),
+    color-mix(in oklab, var(--color-red-400) 10%, var(--input-background))
+  );
+  --input-border-error-focus: light-dark(
+    var(--color-red-500),
+    var(--color-red-400)
+  );
 
-  --warning-background: light-dark(color-mix(in oklab, var(--color-yellow-400) 10%, var(--background-panel)), oklch(85% 0.1 90));
-    --warning-foreground: var(--color-yellow-700);
-    --warning-border: var(--color-yellow-500);
+  --warning-background: light-dark(
+    color-mix(in oklab, var(--color-yellow-400) 10%, var(--background-panel)),
+    oklch(85% 0.1 90)
+  );
+  --warning-foreground: var(--color-yellow-700);
+  --warning-border: var(--color-yellow-500);
 }
 
 form.default {
@@ -26,11 +43,11 @@ form.default {
   }
 
   section {
-    gap: .5rem;
+    gap: 0.5rem;
 
     &:has(.field-errors) {
       box-shadow:
-        -.5rem 0 0 0 var(--background-page),
+        -0.5rem 0 0 0 var(--background-page),
         -1rem 0 0 0 var(--error-border);
 
       input[type="text"],
@@ -55,7 +72,7 @@ form.default {
     }
 
     .hint {
-      font-size: .85rem;
+      font-size: 0.85rem;
       color: var(--foreground-secondary);
     }
   }
@@ -64,15 +81,15 @@ form.default {
     background-color: var(--error-background);
     color: var(--error-foreground);
     border: 1px solid var(--error-border);
-    margin-bottom: .375rem;
+    margin-bottom: 0.375rem;
     padding: 1rem;
     border-radius: var(--rounding);
-    gap: .5rem;
+    gap: 0.5rem;
     flex-direction: column;
     display: flex;
 
     li {
-      font-size: .9rem;
+      font-size: 0.9rem;
       list-style: none;
       margin: 0;
     }
@@ -88,7 +105,7 @@ form.default {
   input[type="password"],
   textarea {
     font-family: var(--font-normal);
-    padding: .5rem;
+    padding: 0.5rem;
     border: 1px solid var(--input-border);
     border-radius: var(--rounding);
     background-color: var(--input-background);
@@ -97,8 +114,9 @@ form.default {
     outline: 0;
     outline-color: transparent;
 
-    transition: background-color 250ms ease-in-out,
-                border-color 250ms ease-in-out;
+    transition:
+      background-color 250ms ease-in-out,
+      border-color 250ms ease-in-out;
 
     &:focus-visible {
       outline: 2px solid var(--focus-ring);
@@ -124,8 +142,9 @@ form.default {
     border: 1px solid var(--input-border);
     color: var(--foreground-primary);
     font-size: 1rem;
-    transition: background-color var(--duration-very-fast) ease-in-out,
-                border-color var(--duration-very-fast) ease-in-out;
+    transition:
+      background-color var(--duration-very-fast) ease-in-out,
+      border-color var(--duration-very-fast) ease-in-out;
     border-radius: var(--rounding);
     cursor: pointer;
 
@@ -142,7 +161,7 @@ form.default {
 
     &::file-selector-button {
       font-family: var(--font-normal);
-      padding: .5rem 1rem;
+      padding: 0.5rem 1rem;
       margin-right: 1rem;
       border-right: 1px solid var(--input-border);
       background-color: var(--background-panel);
@@ -152,7 +171,7 @@ form.default {
   label:has(input[type="checkbox"]) {
     display: flex;
     flex-direction: row;
-    gap: .5rem;
+    gap: 0.5rem;
   }
 
   .select-container {
@@ -163,7 +182,7 @@ form.default {
       appearance: none;
       width: 100%;
       font-family: var(--font-normal);
-      padding: .5rem;
+      padding: 0.5rem;
       padding-right: 2.5rem;
       border: 1px solid var(--input-border);
       border-radius: var(--rounding);
@@ -173,14 +192,16 @@ form.default {
       outline: 0;
       outline-color: transparent;
 
-      transition: background-color 250ms ease-in-out,
-                  border-color 250ms ease-in-out;
+      transition:
+        background-color 250ms ease-in-out,
+        border-color 250ms ease-in-out;
 
       &:invalid {
         color: var(--foreground-secondary);
       }
 
-      &:focus-visible, &:focus {
+      &:focus-visible,
+      &:focus {
         outline: 2px solid var(--focus-ring);
         border: 1px solid var(--input-border-focus);
         background-color: var(--input-background-focus);
@@ -194,7 +215,7 @@ form.default {
 
     svg.icon {
       position: absolute;
-      right: .75rem;
+      right: 0.75rem;
       top: 50%;
       transform: translateY(-50%);
       pointer-events: none;
@@ -214,7 +235,7 @@ div.error {
   h2 {
     margin-top: 0;
     font-family: var(--font-heading);
-    margin-bottom: .5rem;
+    margin-bottom: 0.5rem;
   }
 
   p {
@@ -233,7 +254,7 @@ div.warning {
   h2 {
     margin-top: 0;
     font-family: var(--font-heading);
-    margin-bottom: .5rem;
+    margin-bottom: 0.5rem;
   }
 
   p {
@@ -245,7 +266,7 @@ div.warning {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: .5rem;
+  margin-bottom: 0.5rem;
 
   label {
     margin: 0;
@@ -255,7 +276,7 @@ div.warning {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: .5rem;
+    gap: 0.5rem;
     padding: 0;
     margin: 0;
   }
@@ -273,14 +294,15 @@ div.warning {
     user-select: none;
     pointer-events: none;
     color: var(--foreground-secondary);
-    margin-left: .5rem;
+    margin-left: 0.5rem;
   }
 
-  a, .button-small {
+  a,
+  .button-small {
     display: inline-flex;
     flex-direction: row;
     align-items: center;
-    gap: .25rem;
+    gap: 0.25rem;
     text-decoration: none;
     color: var(--foreground-secondary);
     background: none;
@@ -298,7 +320,7 @@ div.warning {
 
     svg.icon {
       position: relative;
-      top: .5px;
+      top: 0.5px;
     }
 
     &:hover svg.icon {
@@ -310,14 +332,14 @@ div.warning {
 #definitions-container {
   display: flex;
   flex-direction: column;
-  gap: .75rem;
+  gap: 0.75rem;
 }
 
 .first-definition {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: .5rem;
-  padding-right: calc(44px + .5rem);
+  gap: 0.5rem;
+  padding-right: calc(44px + 0.5rem);
 }
 
 .definition-item {
@@ -325,7 +347,7 @@ div.warning {
 
   display: flex;
   flex-direction: row;
-  gap: .5rem;
+  gap: 0.5rem;
 
   .definition-input {
     flex: 1;
@@ -340,7 +362,7 @@ div.warning {
     justify-self: flex-end;
     min-width: 32px;
     min-height: 32px;
-    padding: .75rem;
+    padding: 0.75rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -350,11 +372,16 @@ div.warning {
     color: var(--foreground-secondary);
     cursor: pointer;
 
-    transition: background-color var(--duration-fast) ease-in-out,
-                color var(--duration-fast) ease-in-out;
+    transition:
+      background-color var(--duration-fast) ease-in-out,
+      color var(--duration-fast) ease-in-out;
 
     &:hover {
-      background-color: color-mix(in oklab, var(--color-red-500) 15%, transparent);
+      background-color: color-mix(
+        in oklab,
+        var(--color-red-500) 15%,
+        transparent
+      );
       color: var(--color-red-500);
     }
 
@@ -364,7 +391,6 @@ div.warning {
     }
   }
 }
-
 
 button.search.button[type="submit"] {
   display: inline-block;
@@ -377,7 +403,7 @@ button.search.button[type="submit"] {
     transition: color var(--duration-very-fast) ease-in-out;
 
     &:hover {
-      color:var(--background-panel);
+      color: var(--background-panel);
     }
   }
 }
@@ -399,30 +425,34 @@ section.search-controls {
   }
 
   #advanced-search-toggle-label {
-    margin-left: .5rem;
+    margin-left: 0.5rem;
     appearance: none;
-    padding: .75rem;
+    padding: 0.75rem;
     border: none;
     border-radius: var(--rounding);
     font-size: 1rem;
     cursor: pointer;
     text-decoration: none;
 
-    transition: background-color var(--duration-fast) cubic-bezier(0.3, 0.0, 0.8, 0.15);
+    transition: background-color var(--duration-fast)
+      cubic-bezier(0.3, 0, 0.8, 0.15);
 
     border: 1px solid var(--foreground-primary);
     background-color: transparent;
     color: var(--foreground-primary);
 
     &:hover {
-      background-color: color-mix(in oklab, var(--foreground-primary) 10%, transparent);
+      background-color: color-mix(
+        in oklab,
+        var(--foreground-primary) 10%,
+        transparent
+      );
     }
 
     svg.icon {
       color: var(--foreground-primary);
     }
   }
-
 }
 
 .advanced-search-panel {
@@ -443,14 +473,15 @@ section.search-controls {
   }
 }
 
-.search-bar-container:has(#advanced-search-toggle:checked) ~ .advanced-search-panel {
+.search-bar-container:has(#advanced-search-toggle:checked)
+  ~ .advanced-search-panel {
   grid-template-rows: 1fr;
 }
 
 details.permission-level-helptext {
   overflow: hidden; /* Prevents odd blue outline in Safari */
   width: 100%;
-  font-size: .9rem;
+  font-size: 0.9rem;
 }
 
 details.permission-level-helptext summary {
@@ -485,11 +516,13 @@ div.permission-level-helptext-content {
   padding: 0 1rem;
   border: 1px solid transparent;
   border-top: 0px;
-  transition: max-height 400ms ease-out, border 0ms 400ms linear;
+  transition:
+    max-height 400ms ease-out,
+    border 0ms 400ms linear;
   border-bottom-left-radius: var(--rounding);
   border-bottom-right-radius: var(--rounding);
   padding-bottom: 1rem;
-  font-size: .9rem;
+  font-size: 0.9rem;
 }
 
 details.permission-level-helptext[open] {
@@ -502,10 +535,13 @@ details.permission-level-helptext[open] {
   }
 }
 
-details.permission-level-helptext[open] + div.permission-level-helptext-content {
+details.permission-level-helptext[open]
+  + div.permission-level-helptext-content {
   max-height: 800px; /* Set high enough to show all content */
   border-color: var(--foreground-secondary);
-  transition: max-height 400ms ease-out, border 0ms linear;
+  transition:
+    max-height 400ms ease-out,
+    border 0ms linear;
 }
 
 details.permission-level-helptext[open] summary svg.chevron-icon {
@@ -516,7 +552,6 @@ details.permission-level-helptext[open] summary svg.chevron-icon {
 div.permission-level-helptext-container {
   display: flex;
   flex-direction: column;
-
 }
 
 #permission-levels-info {
@@ -524,12 +559,12 @@ div.permission-level-helptext-container {
 }
 
 #permission-levels-info dl {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: .5rem 1rem;
-    margin: 1rem 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0;
 
-    dt {
-      font-weight: bold;
-    }
+  dt {
+    font-weight: bold;
   }
+}

@@ -28,6 +28,10 @@ const fn default_port() -> u16 {
     3000
 }
 
+fn default_public_url_base() -> String {
+    format!("http://localhost:{}", default_port())
+}
+
 const fn default_file_upload_limit() -> usize {
     5 * 1024 * 1024 // 5 MB
 }
@@ -55,6 +59,7 @@ pub struct MaidConfig {
     #[serde(default = "default_task_timeout_ms")]
     pub task_timeout_ms: u64,
 }
+
 
 const fn default_maid_port() -> u16 {
     3003
@@ -91,10 +96,29 @@ pub struct AppConfig {
     pub file_upload_limit_bytes: usize,
     #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default = "default_public_url_base")]
+    pub public_url_base: String,
     #[serde(default = "default_environment")]
     pub environment: Environment,
     #[serde(default)]
     pub banner: BannerConfig,
+}
+
+impl AppConfig {
+    pub fn is_production(&self) -> bool {
+        self.environment == Environment::Prod
+    }
+    pub fn is_development(&self) -> bool {
+        self.environment == Environment::Dev
+    }
+
+    pub fn url(&self, path: &str) -> String {
+        if self.public_url_base.ends_with('/') {
+            format!("{}{}", self.public_url_base, path.trim_start_matches('/'))
+        } else {
+            format!("{}/{}", self.public_url_base, path.trim_start_matches('/'))
+        }
+    }
 }
 
 pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
@@ -126,6 +150,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
             },
             file_upload_limit_bytes: default_file_upload_limit(),
             port: 3001,
+            public_url_base: "http://localhost:3001".to_string(),
             banner: BannerConfig {
                 message: "This is a test banner".to_string(),
                 kind: "info".to_string(),

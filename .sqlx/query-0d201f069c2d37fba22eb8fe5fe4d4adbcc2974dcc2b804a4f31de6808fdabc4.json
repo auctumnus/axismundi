@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            UPDATE words\n                            SET cognacy = $1\n                            WHERE id = $2 OR id = $3\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d201f069c2d37fba22eb8fe5fe4d4adbcc2974dcc2b804a4f31de6808fdabc4"
+}

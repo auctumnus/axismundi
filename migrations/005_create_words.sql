@@ -40,8 +40,8 @@ create table words (
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
-    created_by uuid not null references users(id) on delete set null,
-    updated_by uuid not null references users(id) on delete set null
+    created_by uuid references users(id) on delete set null,
+    updated_by uuid references users(id) on delete set null
 );
 
 create type word_relation_type as enum (
@@ -64,8 +64,8 @@ create table word_relations (
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
-    created_by uuid not null references users(id) on delete set null,
-    updated_by uuid not null references users(id) on delete set null,
+    created_by uuid references users(id) on delete set null,
+    updated_by uuid references users(id) on delete set null,
 
     constraint word_relations_antecedent_consequent_unique unique (antecedent, consequent),
     constraint word_relations_no_self_reference check (antecedent <> consequent)

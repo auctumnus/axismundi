@@ -183,6 +183,20 @@ pub(crate) mod tests {
         Ok(app)
     }
 
+    pub(crate) async fn test_app_with_email_service_state(
+        email_service: &std::sync::Arc<dyn crate::email::EmailService>,
+    ) -> Result<(RouterIntoService<axum::body::Body>, AppState), sqlx::Error> {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = email_service.clone();
+        let app_state = AppState {
+            pool,
+            email_service,
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        Ok((app, app_state))
+    }
+
     pub(crate) async fn response_to_value(body: axum::body::Body) -> serde_json::Value {
         let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
         serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()
