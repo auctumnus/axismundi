@@ -1,20 +1,4 @@
-create table definitions (
-    id uuid primary key default uuidv7(),
-
-    word uuid not null references words(id) on delete cascade,
-
-    definition text not null,
-    context text,
-
-    created_at timestamp with time zone not null default current_timestamp,
-    updated_at timestamp with time zone not null default current_timestamp,
-    created_by uuid not null references users(id) on delete set null,
-    updated_by uuid not null references users(id) on delete set null
-);
-
-CREATE INDEX definitions_definition_trgm_idx ON definitions USING GIN (definition gin_trgm_ops);
-
-create index idx_definitions_word on definitions(word);
+-- Translatables, translations, quotations, and related tables
 
 create table translatable (
     id uuid primary key default uuidv7(),
@@ -28,14 +12,13 @@ create table translatable (
     source_content text,
     source_language text,
 
+    like_count bigint not null default 0,
+
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
     created_by uuid not null references users(id) on delete set null,
     updated_by uuid not null references users(id) on delete set null
 );
-
-CREATE INDEX translatable_title_trgm_idx ON translatable USING GIN (title gin_trgm_ops);
-CREATE INDEX translatable_english_trgm_idx ON translatable USING GIN (english gin_trgm_ops);
 
 create index idx_created_by_translatable on translatable(created_by);
 create index idx_updated_by_translatable on translatable(updated_by);
@@ -54,13 +37,13 @@ create table translation (
     gloss text,
     notes text,
 
+    like_count bigint not null default 0,
+
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
     created_by uuid not null references users(id) on delete set null,
     updated_by uuid not null references users(id) on delete set null
 );
-
-CREATE INDEX translation_translated_text_trgm_idx ON translation USING GIN (translated_text gin_trgm_ops);
 
 create index idx_translation_translatable on translation(translatable);
 create index idx_translation_language on translation(language);
@@ -98,3 +81,28 @@ create table quotation_suggestion (
 
 create index idx_quotation_suggestion_language on quotation_suggestion(language);
 
+-- Translatable likes
+create table translatable_likes (
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
+    translatable_id uuid not null references translatable(id) on delete cascade,
+
+    created_at timestamp with time zone not null default current_timestamp,
+
+    unique(user_id, translatable_id)
+);
+
+create index idx_translatable_likes_translatable_id on translatable_likes(translatable_id);
+
+-- Translation likes
+create table translation_likes (
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
+    translation_id uuid not null references translation(id) on delete cascade,
+
+    created_at timestamp with time zone not null default current_timestamp,
+
+    unique(user_id, translation_id)
+);
+
+create index idx_translation_likes_translation_id on translation_likes(translation_id);

@@ -1,3 +1,5 @@
+-- Words, word classes, cognacies, and word relations
+
 create table word_classes (
     id uuid primary key default uuidv7(),
 
@@ -5,6 +7,7 @@ create table word_classes (
 
     name text not null,
     abbreviation text not null,
+    notes text,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
@@ -12,7 +15,7 @@ create table word_classes (
     updated_by uuid not null references users(id) on delete set null
 );
 
--- stores cognate trees
+-- Stores cognate trees
 create table cognacies (
     id uuid primary key default uuidv7(),
 
@@ -20,7 +23,6 @@ create table cognacies (
 
     schema_version integer not null default 1
 );
-
 
 create table words (
     id uuid primary key default uuidv7(),
@@ -37,6 +39,8 @@ create table words (
     cognacy uuid references cognacies(id) on delete set null,
 
     extra jsonb,
+
+    like_count bigint not null default 0,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
@@ -74,3 +78,15 @@ create table word_relations (
 create index idx_word_relations_antecedent on word_relations(antecedent);
 create index idx_word_relations_consequent on word_relations(consequent);
 
+-- Word likes
+create table word_likes (
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
+    word_id uuid not null references words(id) on delete cascade,
+
+    created_at timestamp with time zone not null default current_timestamp,
+
+    unique(user_id, word_id)
+);
+
+create index idx_word_likes_word_id on word_likes(word_id);

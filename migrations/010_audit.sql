@@ -1,5 +1,7 @@
--- any resource which can be mutated and should have an audit log entry
--- audit log entries are produced when a moderator acts on a resource
+-- Audit logging system
+
+-- Any resource which can be mutated and should have an audit log entry
+-- Audit log entries are produced when a moderator acts on a resource
 -- they do not normally have access to
 create type auditable_resource as enum (
     'user',
@@ -14,6 +16,8 @@ create type auditable_resource as enum (
     'definition',
     'quotation_suggestion',
     'report'
+    -- language_family, language_family_member, language_family_invite,
+    -- language_family_permission are added in 011_language_families.sql
 );
 
 create type audit_action_type as enum (

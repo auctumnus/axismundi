@@ -1,4 +1,5 @@
--- language families (like Indo-European, Sino-Tibetan, etc.)
+-- Language families (like Indo-European, Sino-Tibetan, etc.)
+
 create table language_families (
     id uuid primary key default uuidv7(),
     code text not null unique,
@@ -9,6 +10,8 @@ create table language_families (
     -- schema: { edges: [{ parent_member_id, child_member_id, family_id, relation_kind }], schema_version: 1 }
     tree jsonb not null default '{"edges": [], "schema_version": 1}',
 
+    like_count bigint not null default 0,
+
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
     created_by uuid not null references users(id) on delete set null,
@@ -17,12 +20,12 @@ create table language_families (
 
 create index language_families_created_by_idx on language_families(created_by);
 
--- relation type for family membership
+-- Relation type for family membership
 create type language_family_relation_type as enum ('descendant', 'hybrid');
 
--- links languages to families
--- a language has exactly ONE 'descendant' relation (its primary family lineage)
--- a language can have zero or more 'hybrid' relations (for creoles, pidgins, mixed languages)
+-- Links languages to families
+-- A language has exactly ONE 'descendant' relation (its primary family lineage)
+-- A language can have zero or more 'hybrid' relations (for creoles, pidgins, mixed languages)
 create table language_family_members (
     id uuid primary key default uuidv7(),
 
@@ -55,14 +58,14 @@ create index language_family_members_family_id_idx on language_family_members(fa
 create index language_family_members_language_id_idx on language_family_members(language_id);
 create index language_family_members_parent_member_id_idx on language_family_members(parent_member_id);
 
--- ensure a language has at most one 'descendant' relation across all families
+-- Ensure a language has at most one 'descendant' relation across all families
 -- (a language belongs to exactly one family tree as a descendant)
 create unique index language_family_members_one_descendant_idx
     on language_family_members(language_id)
     where relation_type = 'descendant';
 
--- invites for language families (mirrors language_invites)
--- defined before permissions because permissions references invites
+-- Invites for language families (mirrors language_invites)
+-- Defined before permissions because permissions references invites
 create table language_family_invites (
     id uuid primary key default uuidv7(),
 
@@ -79,7 +82,7 @@ create table language_family_invites (
 create index language_family_invites_family_idx on language_family_invites(family);
 create index language_family_invites_recipient_idx on language_family_invites(recipient);
 
--- permissions for language families (mirrors language_permissions)
+-- Permissions for language families (mirrors language_permissions)
 create table language_family_permissions (
     id uuid primary key default uuidv7(),
 
@@ -98,11 +101,24 @@ create table language_family_permissions (
 create index language_family_permissions_family_idx on language_family_permissions(family);
 create index language_family_permissions_user_idx on language_family_permissions("user");
 
--- add language_family to reportable resources
+-- Language family likes
+create table language_family_likes (
+    id uuid primary key default uuidv7(),
+    user_id uuid not null references users(id) on delete cascade,
+    family_id uuid not null references language_families(id) on delete cascade,
+
+    created_at timestamp with time zone not null default current_timestamp,
+
+    unique(user_id, family_id)
+);
+
+create index idx_language_family_likes_family_id on language_family_likes(family_id);
+
+-- Add language_family resources to reportable_resource enum
 alter type reportable_resource add value 'language_family';
 alter type reportable_resource add value 'language_family_member';
 
--- add language_family resources to auditable_resource
+-- Add language_family resources to auditable_resource enum
 alter type auditable_resource add value 'language_family';
 alter type auditable_resource add value 'language_family_member';
 alter type auditable_resource add value 'language_family_invite';

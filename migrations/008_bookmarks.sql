@@ -1,4 +1,16 @@
-create type resource_type as enum ('user', 'language', 'lemma', 'invite', 'permission', 'word_class', 'user_session', 'translation', 'translatable');
+-- Bookmarks for user-friendly slugs
+
+create type resource_type as enum (
+    'user',
+    'language',
+    'lemma',
+    'invite',
+    'permission',
+    'word_class',
+    'user_session',
+    'translation',
+    'translatable'
+);
 
 create table bookmarks (
     id uuid primary key default uuidv7(),

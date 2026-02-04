@@ -1,3 +1,5 @@
+-- Reports system
+
 create type reportable_resource as enum (
     'user',
     'language',
@@ -9,6 +11,7 @@ create type reportable_resource as enum (
     -- 'this is a spam invite'
     'invite',
     'permission'
+    -- language_family and language_family_member are added in 011_language_families.sql
 );
 
 create type resolution_status_type as enum (
@@ -32,7 +35,7 @@ create table reports (
     resource_id uuid not null,
     reason text not null,
     reported_at timestamp with time zone not null default current_timestamp,
-    
+
     priority report_priority not null default 'medium',
 
     resolved_by uuid references users(id) on delete set null,
@@ -41,7 +44,7 @@ create table reports (
     -- whether the resolution status is visible to the reporter
     -- resolution status is always available to mods/admins
     resolution_status_hidden boolean not null default false,
-    
+
     -- optional note about the resolution; e.g. 'user warned'
     resolution_note text,
     -- whether the resolution note is visible to the reporter
