@@ -33,6 +33,12 @@ pub struct Translatable {
     pub updated_by: Uuid,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct TranslatableWithLiked {
+    pub translatable: Translatable,
+    pub is_liked: bool,
+}
+
 impl Translatable {
     pub fn words_count(&self) -> usize {
         self.english.split_whitespace().count()
@@ -93,6 +99,18 @@ pub struct TranslatableRepository {
 impl TranslatableRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
+    }
+
+    pub async fn materialize(&self, translatable: Translatable, requestor: Option<&User>) -> AppResult<TranslatableWithLiked> {
+        let is_liked = if let Some(user) = requestor {
+            self.is_liked(&translatable.id, &user.id).await?
+        } else {
+            false
+        };
+        Ok(TranslatableWithLiked {
+            translatable,
+            is_liked,
+        })
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Translatable> {

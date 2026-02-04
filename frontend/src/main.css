@@ -495,7 +495,7 @@ footer {
 
   width: var(--page-width);
 
-  > ul:not(.last) {
+  ul.sections {
     display: flex;
     flex-direction: row;
     gap: 1rem;
@@ -520,13 +520,13 @@ footer {
     }
   }
 
-  ul.last {
+  ul.last, ul.socials {
     display: flex;
     flex-direction: row;
     gap: 1rem;
     list-style: none;
     padding: 0;
-    margin-top: 2rem;
+    margin-top: 1rem;
 
     font-size: 0.9rem;
 
@@ -540,6 +540,22 @@ footer {
       &:hover {
         color: var(--foreground-primary);
         text-decoration: underline;
+      }
+    }
+  }
+
+  ul.socials {
+    margin-top: 2rem;
+    li a {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.25rem;
+
+      .bluesky {
+        width: 1.125rem;
+        height: 1.125rem;
+        margin-right: .125rem;
       }
     }
   }

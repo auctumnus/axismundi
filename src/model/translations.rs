@@ -8,7 +8,7 @@ use validator::Validate;
 
 use crate::{
     err::{AppError, AppResult, bad_request, not_found},
-    model::{language_invites::PermissionLevel, users::User},
+    model::{language_invites::PermissionLevel, languages::Language, translatable::{Translatable, TranslatableRepository}, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -39,6 +39,16 @@ pub struct Translation {
     pub translatable_slug: String,
     pub translatable_title: String,
     pub language_code: String,
+}
+
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TranslationWithLanguageAndContributor {
+    pub translation: Translation,
+    pub translatable: Translatable,
+    pub language: Language,
+    pub author: User,
+    pub is_liked: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -92,6 +102,32 @@ pub struct TranslationRepository {
 impl TranslationRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
+    }
+
+    pub async fn materialize(&self, translation: Translation, requestor: Option<&User>) -> AppResult<TranslationWithLanguageAndContributor> {
+        let translatable_repo = TranslatableRepository::new(self.state.clone());
+        let language_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let user_repo = crate::model::users::UserRepository::new(self.state.clone());
+
+        let translatable = translatable_repo
+            .find_by_id(translation.translatable)
+            .await?;
+        let language = language_repo.find_by_id(translation.language).await?;
+        let author = user_repo.find_by_id(translation.created_by).await?;
+
+        let is_liked = if let Some(requestor) = requestor {
+            self.is_liked(&translation.id, &requestor.id).await?
+        } else {
+            false
+        };
+
+        Ok(TranslationWithLanguageAndContributor {
+            translation,
+            translatable,
+            language,
+            author,
+            is_liked,
+        })
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Translation> {

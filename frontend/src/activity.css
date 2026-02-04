@@ -27,7 +27,7 @@ ul.activities {
       }
     }
 
-    time, .verb {
+    time, .verb, .preposition {
       color: var(--foreground-secondary);
     }
   }

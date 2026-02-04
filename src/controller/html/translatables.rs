@@ -19,7 +19,7 @@ use crate::{
             CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch,
             UpdateTranslatable,
         },
-        translations::TranslationRepository,
+        translations::{TranslationRepository, TranslationWithLanguageAndContributor},
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
@@ -194,13 +194,6 @@ async fn search_translatables(
     okay(body)
 }
 
-#[derive(Clone)]
-struct TranslationWithLanguageAndContributor {
-    translation: crate::model::translations::Translation,
-    translatable: Translatable,
-    language: Language,
-    author: User,
-}
 
 #[derive(Template)]
 #[template(path = "translatables/view.html")]
@@ -245,15 +238,9 @@ async fn view_translatable(
     // For each translation, fetch the language and contributor
     let mut translations_with_info = Vec::new();
     for translation in translations_list.items {
-        let language = attempt!(s, languages.find_by_id(translation.language).await);
-        let contributor = attempt!(s, users.find_by_id(translation.created_by).await);
+        let translation = attempt!(s, translations.materialize(translation, s.user()).await);
 
-        translations_with_info.push(TranslationWithLanguageAndContributor {
-            translation,
-            translatable: translatable.clone(),
-            language,
-            author: contributor,
-        });
+        translations_with_info.push(translation);
     }
 
     // Check if the user has liked this translatable

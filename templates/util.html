@@ -125,15 +125,15 @@
             {% when crate::model::user_activities::ActivityEntity::Language(language) %}
                 <a href="/languages/{{ language.language.code }}">{{ language.language.name }}</a>
             {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
-                <a href="/translatable/{{ translatable.slug }}">{{ translatable.title }}</a>
+                <a href="/translatable/{{ translatable.translatable.slug }}">{{ translatable.translatable.title }}</a>
             {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
                 <span>a</span>
-                <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ lang_code }}">translation for {{ translation.translatable_title }}</a>
+                <a href="/translatable/{{ translation.translatable.slug }}/translation/{{ lang_code }}">translation for {{ translation.translatable.title }}</a>
             {% else %}
                 <span>something unknown</span>
         {% endmatch %}
         {% if let Some(entity) = activity.related_entity %}
-            <span>in</span>
+            <span class="preposition">in</span>
             {% match entity %}
                 {% when crate::model::user_activities::ActivityEntity::Language(language) %}
                     <a href="/languages/{{ language.language.code }}">{{ language.language.name }}</a>
@@ -149,7 +149,12 @@
                 {% call render_language_card(language) %}
             {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
                 {% call render_word_card(word) %}
+            {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
+                {% call translatable_card(translatable) %}
+            {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
+                {% call render_translation_card(translation, lang_code) %}
             {% else %}
+                <li><div class="preview-card">Details not available.</div></li>
         {% endmatch %}
     </ul>
 </li>

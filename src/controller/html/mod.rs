@@ -6,7 +6,7 @@ use crate::{
     model::{
         contribution_stats::ContributionStatsRepository,
         languages::{Language, LanguageRepository},
-        translatable::{TranslatableRepository, TranslatableSearch},
+        translatable::{TranslatableRepository, TranslatableSearch, TranslatableWithLiked},
         user_activities::{UserActivity, UserActivityRepository},
         users::{User, UserRepository},
     },
@@ -144,10 +144,6 @@ pub struct LanguagesWithContributors {
     pub is_liked: bool,
 }
 
-pub struct TranslatableWithLiked {
-    pub translatable: crate::model::translatable::Translatable,
-    pub is_liked: bool,
-}
 
 #[derive(Template)]
 #[template(path = "home.html")]

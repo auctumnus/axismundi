@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     controller::html::LanguagesWithContributors, err::{AppResult, bad_request, forbidden, not_found}, model::{
-        languages::Language, translatable::Translatable, translations::Translation, users::{User, UserRepository},
+        languages::Language, translatable::{Translatable, TranslatableWithLiked}, translations::{Translation, TranslationWithLanguageAndContributor}, users::{User, UserRepository},
         words::{Word, WordWithMeta},
     }, pagination::{PaginatedRequest, PaginatedResponse}, util::AppState
 };
@@ -39,12 +39,13 @@ impl ActivityType {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ActivityEntity {
     Word(WordWithMeta, String),
     Language(LanguagesWithContributors),
     User(User),
-    Translatable(Translatable),
-    Translation(Translation, String),
+    Translatable(TranslatableWithLiked),
+    Translation(TranslationWithLanguageAndContributor, String),
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -55,7 +56,9 @@ pub struct UserActivity {
     pub activity: ActivityType,
     pub entity_id: Uuid,
     pub entity_type: String,
+    #[serde(skip_serializing)]
     pub related_entity_id: Option<Uuid>,
+    #[serde(skip_serializing)]
     pub related_entity_type: Option<String>,
     pub timestamp: DateTime<Utc>,
     pub user: User,
@@ -709,6 +712,7 @@ impl UserActivityRepository {
                 let translatables_repo =
                     crate::model::translatable::TranslatableRepository::new(self.state.clone());
                 if let Ok(translatable) = translatables_repo.find_by_id(entity_id).await {
+                    let translatable = translatables_repo.materialize(translatable, requestor).await?;
                     Ok(ActivityEntity::Translatable(translatable))
                 } else {
                     Err(bad_request(format!(
@@ -723,6 +727,9 @@ impl UserActivityRepository {
                 if let Ok(translation) = translations_repo.find_by_id(entity_id).await {
                     let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
                         .find_by_id(translation.language)
+                        .await?;
+                    let translation = translations_repo
+                        .materialize(translation, requestor)
                         .await?;
                     Ok(ActivityEntity::Translation(translation, lang.code))
                 } else {
