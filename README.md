@@ -11,9 +11,9 @@
 
 ## Screenshots
 
-<img width="333" height="333" alt="a screenshot of the axismundi homepage, featuring recent activity" src="https://github.com/user-attachments/assets/3c175619-cb88-4888-8bb4-42e630f47eb0" />
-<img width="333" height="333" alt="a screenshot of a language's page in axismundi, showing recently-added words and translations" src="https://github.com/user-attachments/assets/36c9fd85-d3fb-4069-a0ac-d23d92d514cf" />
-<img width="333" height="333" alt="a screenshot of a user's profile in axismundi, showing their languages and translatables" src="https://github.com/user-attachments/assets/17a657fb-8eac-4391-bfbd-11f5ec351f57" />
+<img width="33%" alt="a screenshot of the axismundi homepage, featuring recent activity" src="https://github.com/user-attachments/assets/3c175619-cb88-4888-8bb4-42e630f47eb0" />
+<img width="33%" alt="a screenshot of a language's page in axismundi, showing recently-added words and translations" src="https://github.com/user-attachments/assets/36c9fd85-d3fb-4069-a0ac-d23d92d514cf" />
+<img width="33%" alt="a screenshot of a user's profile in axismundi, showing their languages and translatables" src="https://github.com/user-attachments/assets/17a657fb-8eac-4391-bfbd-11f5ec351f57" />
 
 ## Features
 
