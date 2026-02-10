@@ -11,9 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-compose-action@v1
-      - uses: actions-rs/toolchain@v1
+      - uses: cachix/install-nix-action@v31
         with:
-          toolchain: stable
-      - run: sudo apt install just libgraphviz-dev
-      - run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
-      - run: just test
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix develop --command just test
