@@ -58,7 +58,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 }
 
 #[derive(Template)]
-#[template(path = "languages/new_invite.html")]
+#[template(path = "languages/invites/new.html")]
 struct NewInvitationTemplate {
     current_user: Option<User>,
     language: Language,
@@ -203,7 +203,7 @@ struct InviteWithUsers {
 }
 
 #[derive(Template)]
-#[template(path = "languages/invites.html")]
+#[template(path = "languages/invites/new.html")]
 struct ListInvitesTemplate {
     current_user: Option<User>,
     language: Language,
@@ -293,7 +293,7 @@ async fn list_invites(
 }
 
 #[derive(Template)]
-#[template(path = "languages/revoke_invite.html")]
+#[template(path = "languages/invites/revoke.html")]
 struct RevokeInvitationTemplate {
     current_user: Option<User>,
     language: Language,

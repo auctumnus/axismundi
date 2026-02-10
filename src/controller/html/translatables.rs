@@ -14,7 +14,6 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        languages::Language,
         translatable::{
             CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch,
             UpdateTranslatable,
