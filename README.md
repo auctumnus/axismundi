@@ -57,3 +57,8 @@ and processes the CSS files with LightningCSS.
 
 We use integration testing with real Postgres and real MinIO, and a mocked email module. The justfile
 will just set this up for you so long as you have Docker (or some compatible runtime).
+
+## License
+
+Axismundi is distributed under the [Non-violent Public License](./LICENSE.md).
+The source for the NVPL can be found at [its repo](https://git.pixie.town/thufie/npl-builder).
