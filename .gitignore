@@ -39,6 +39,7 @@ Thumbs.db
 .direnv
 
 config.json
+!resources/config.json
 session.json
 
 .letta

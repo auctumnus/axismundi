@@ -1,0 +1,23 @@
+{
+  "database_url": "postgres://user:password@localhost:5432/axismundi",
+  "s3": {
+    "bucket": "axismundi",
+    "region": "us-east-1",
+    "access_key": "minioadmin",
+    "secret_key": "minioadmin123",
+    "endpoint": "http://localhost:9000",
+    "public_url_base": "http://localhost:8888",
+    "thumbor_url_base": "http://localhost:8888",
+    "thumbor_security_key": "change_me_in_production"
+  },
+  "email": {
+    "resend": {
+      "api_key": "re_blahblahblahblahblahblahblahblah",
+      "from_email": "admin@axismundi.app"
+    }
+  },
+  "file_upload_limit_bytes": 5242880,
+  "port": 3000,
+  "public_url_base": "http://axismundi.app",
+  "environment": "Dev"
+}

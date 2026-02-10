@@ -62,7 +62,7 @@ make-admin identifier:
 # Start only the database
 db:
     @echo "Starting PostgreSQL database..."
-    docker compose -f docker-compose.db.yml up -d
+    docker compose up postgres -d
     @echo "Waiting for database to be ready..."
     @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
         echo "Database is unavailable - sleeping"; \
@@ -76,12 +76,12 @@ export postgres_test_url := "postgres://user_test:password@localhost:2435/axismu
 
 test_teardown:
     @echo "Tearing down test services..."
-    docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml down -v --timeout 0 2>/dev/null >/dev/null
+    docker compose -f docker-compose.test.yml down -v --timeout 0 2>/dev/null >/dev/null
 
 test flags="" cov="" $RUST_BACKTRACE="0":
     #!/usr/bin/env sh
     echo "Bringing up test services..."
-    docker compose -f docker-compose.db.test.yml -f docker-compose.minio.test.yml up -d 2>/dev/null >/dev/null
+    docker compose -f docker-compose.test.yml up -d 2>/dev/null >/dev/null
     if [ $? -ne 0 ]; then \
         echo "Failed to start test services"; \
         exit 1; \
@@ -138,7 +138,7 @@ db-migrate:
 
 # Stop the database
 db-stop:
-    docker compose -f docker-compose.db.yml down
+    docker compose down postgres
 
 # Start both database and application
 up:
@@ -209,17 +209,17 @@ logs:
 
 # View database logs only
 db-logs:
-    docker compose -f docker-compose.db.yml logs -f
+    docker compose logs -f postgres
 
 # Clean up all containers and volumes
 clean:
     docker compose down -v
-    docker compose -f docker-compose.db.yml down -v
+    docker compose down postgres -v
     docker system prune -f
 
 # Reset database (stop, remove volume, start fresh)
 db-reset:
-    docker compose -f docker-compose.db.yml down -v
+    docker compose down postgres -v
     just db
     sqlx database create
     just db-migrate
@@ -227,7 +227,7 @@ db-reset:
 # Start Minio S3 storage
 minio:
     @echo "Starting Minio S3 storage..."
-    docker compose -f docker-compose.minio.yml up -d
+    docker compose up minio createbuckets thumbor -d
     @echo "Waiting for Minio to be ready..."
     @until curl -f http://localhost:9000/minio/health/live >/dev/null 2>&1; do \
         echo "Minio is unavailable - sleeping"; \
@@ -239,11 +239,7 @@ minio:
 
 # Stop Minio
 minio-stop:
-    docker compose -f docker-compose.minio.yml down
-
-# View Minio logs
-minio-logs:
-    docker compose -f docker-compose.minio.yml logs -f
+    docker compose down minio createbuckets thumbor
 
 export postgres_url := "postgres://user:password@localhost:5432/axismundi"
 

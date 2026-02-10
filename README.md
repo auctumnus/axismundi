@@ -30,6 +30,8 @@ Axismundi is written in Rust, with a simple frontend using Typescript (and some 
 If you want a full dev environment, run `just dev`; this will run all the required Docker containers
 and start the app, auto-reloading on changes.
 
+You will need to fill out a `config.json`; an example one is provided in [`./resources/config.json`](./resources/config.json).
+
 ### Backend
 
 Run the backend with `just run` (or inspect the `justfile` any other time a `just` command is needed).
