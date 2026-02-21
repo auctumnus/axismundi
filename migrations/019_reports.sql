@@ -1,6 +1,7 @@
 create type reportable_resource as enum (
     'user',
     'language',
+    'language_family_res',
     'word',
     'translation',
     'translatable',

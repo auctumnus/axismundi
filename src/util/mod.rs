@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    err::{AppError, AppResult, internal_error},
-    model::users::User,
+    err::{AppError, AppResult, internal_error, user_banned},
+    model::{user_bans::UserBanRepository, users::User},
     pagination::PaginatedRequest,
 };
 use argon2::{
@@ -104,13 +104,11 @@ pub async fn will_create_audit_log_for_family(
     user: &User,
     family_id: uuid::Uuid,
 ) -> bool {
-    use crate::model::language_invites::PermissionLevel;
     use crate::model::language_family_permissions::LanguageFamilyPermissionRepository;
+    use crate::model::language_invites::PermissionLevel;
 
     // Check if user is admin/mod
-    let is_admin_or_mod = is_admin_or_mod(state, user.id)
-        .await
-        .unwrap_or(false);
+    let is_admin_or_mod = is_admin_or_mod(state, user.id).await.unwrap_or(false);
 
     if !is_admin_or_mod {
         return false;
@@ -138,9 +136,7 @@ pub async fn will_create_audit_log_for_language(
     use crate::model::language_permissions::LanguagePermissionRepository;
 
     // Check if user is admin/mod
-    let is_admin_or_mod = is_admin_or_mod(state, user.id)
-        .await
-        .unwrap_or(false);
+    let is_admin_or_mod = is_admin_or_mod(state, user.id).await.unwrap_or(false);
 
     if !is_admin_or_mod {
         return false;
@@ -253,4 +249,13 @@ pub fn dfs(
         }
     }
     false
+}
+
+pub async fn ensure_can_mutate(state: &AppState, requestor: &User) -> AppResult<()> {
+    ensure_verified(requestor)?;
+    let banned = UserBanRepository::new(state.clone())
+        .is_banned(requestor.id)
+        .await
+        .map_err(|_| internal_error("Failed to check if user is banned"))?;
+    if banned { Err(user_banned()) } else { Ok(()) }
 }

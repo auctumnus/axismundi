@@ -5,9 +5,16 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    controller::html::LanguagesWithContributors, err::{AppResult, bad_request, forbidden, not_found}, model::{
-        contribution_stats::ContributionStatsRepository, language_invites::PermissionLevel, user_bans::UserBanRepository, users::{USERNAME_REGEX, User, UserSearch}
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified}
+    controller::html::LanguagesWithContributors,
+    err::{AppResult, bad_request, forbidden, not_found},
+    model::{
+        contribution_stats::ContributionStatsRepository,
+        language_invites::PermissionLevel,
+        user_bans::UserBanRepository,
+        users::{USERNAME_REGEX, User, UserSearch},
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, ensure_verified},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -70,11 +77,15 @@ impl LanguageRepository {
         Ok(rendered)
     }
 
-    pub async fn materialize(&self, language: Language, requestor: Option<&User>) -> AppResult<LanguagesWithContributors> {
+    pub async fn materialize(
+        &self,
+        language: Language,
+        requestor: Option<&User>,
+    ) -> AppResult<LanguagesWithContributors> {
         let top_contributors = ContributionStatsRepository::new(self.state.clone())
             .get_top_contributors(&language.id, 5)
             .await?;
-        
+
         let is_liked = if let Some(user) = requestor {
             self.is_liked(&language.id, &user.id).await?
         } else {
@@ -317,33 +328,6 @@ impl LanguageRepository {
 
         ensure_verified(requestor)?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, id)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has Editor+ permission, check if they're trying to change privacy without being Owner
-                if updates.private.is_some() && perm.permission != PermissionLevel::Owner {
-                    return Err(forbidden("only owners can change language privacy"));
-                }
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(forbidden("you don't have permission to edit this language"));
-            }
-        }
-
         let code_lower = updates.code.as_ref().map(|c| c.to_lowercase());
 
         if let Some(code) = &code_lower {
@@ -355,6 +339,46 @@ impl LanguageRepository {
         if let Some(code) = &code_lower {
             if self.code_exists(code).await? {
                 return Err(bad_request("language code is already in use"));
+            }
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Updated,
+                    resource_type: crate::model::audit_log::AuditableResource::Language,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "updates": updates
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(forbidden("you don't have permission to edit this language"));
+        }
+
+        // Additional owner check for privacy changes
+        if updates.private.is_some() {
+            let user_perm = permissions
+                .find_by_user_and_language(requestor.id, id)
+                .await?;
+            if let Some(perm) = user_perm {
+                if perm.permission != PermissionLevel::Owner
+                    && perm_check != crate::model::audit_log::PermissionCheck::Audited
+                {
+                    return Err(forbidden("only owners can change language privacy"));
+                }
             }
         }
 
@@ -376,25 +400,12 @@ impl LanguageRepository {
             updates.description,
             requestor.id
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut *tx)
         .await?;
 
         let updated_lang = result.ok_or_else(|| not_found(format!("language with id '{id}'")))?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Updated,
-                resource_type: crate::model::audit_log::AuditableResource::Language,
-                resource_id: id,
-                details: serde_json::json!({
-                    "updates": updates
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         // Create activity if language is public
         if !updated_lang.private {
@@ -419,62 +430,55 @@ impl LanguageRepository {
         tracing::debug!("Deleting language {id}");
         ensure_verified(requestor)?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
+        // Get language details before deleting for audit log context
+        let language = self.find_by_id(id).await?;
+
+        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, id)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: id,
+                    required_level: PermissionLevel::Owner,
+                    action_type: crate::model::audit_log::AuditActionType::Deleted,
+                    resource_type: crate::model::audit_log::AuditableResource::Language,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "language_code": language.code,
+                        "language_name": language.name
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission == PermissionLevel::Owner => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(forbidden(
-                    "you don't have permission to delete this language",
-                ));
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(forbidden(
+                "you don't have permission to delete this language",
+            ));
         }
-
-        // Get language details before deleting for audit log
-        let language = self.find_by_id(id).await?;
 
         let result = sqlx::query!("DELETE FROM languages WHERE id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log && result.rows_affected() > 0 {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Deleted,
-                resource_type: crate::model::audit_log::AuditableResource::Language,
-                resource_id: id,
-                details: serde_json::json!({
-                    "language_code": language.code,
-                    "language_name": language.name
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
 
     pub async fn code_exists(&self, code: &str) -> AppResult<bool> {
         let code_lower = code.to_lowercase();
-        let result = sqlx::query!("SELECT 1 as exists FROM languages WHERE code = $1", code_lower)
-            .fetch_optional(&self.state.pool)
-            .await?;
+        let result = sqlx::query!(
+            "SELECT 1 as exists FROM languages WHERE code = $1",
+            code_lower
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
 
         Ok(result.is_some())
     }

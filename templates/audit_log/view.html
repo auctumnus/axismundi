@@ -78,7 +78,10 @@
                     <td>{% match entry.resource_type %}
                         {% when crate::model::audit_log::AuditableResource::User %}user
                         {% when crate::model::audit_log::AuditableResource::Language %}language
+                        {% when crate::model::audit_log::AuditableResource::LanguageFamily %}language family
+                        {% when crate::model::audit_log::AuditableResource::LanguageFamilyMember %}language family member
                         {% when crate::model::audit_log::AuditableResource::Word %}word
+                        {% when crate::model::audit_log::AuditableResource::WordClass %}word class
                         {% when crate::model::audit_log::AuditableResource::Translation %}translation
                         {% when crate::model::audit_log::AuditableResource::Translatable %}translatable
                         {% when crate::model::audit_log::AuditableResource::WordRelation %}word relation

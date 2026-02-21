@@ -4,10 +4,16 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::{
-    controller::html::LanguagesWithContributors, err::{AppResult, bad_request, forbidden, not_found}, model::{
-        languages::Language, translatable::{Translatable, TranslatableWithLiked}, translations::{Translation, TranslationWithLanguageAndContributor}, users::{User, UserRepository},
-        words::{Word, WordWithMeta},
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::AppState
+    controller::html::LanguagesWithContributors,
+    err::{AppResult, bad_request, forbidden, not_found},
+    model::{
+        translatable::TranslatableWithLiked,
+        translations::TranslationWithLanguageAndContributor,
+        users::{User, UserRepository},
+        words::WordWithMeta,
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::AppState,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
@@ -56,8 +62,10 @@ pub struct UserActivity {
     pub activity: ActivityType,
     pub entity_id: Uuid,
     pub entity_type: String,
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub related_entity_id: Option<Uuid>,
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub related_entity_type: Option<String>,
     pub timestamp: DateTime<Utc>,
@@ -211,7 +219,9 @@ impl UserActivityRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
-        let user = UserRepository::new(self.state.clone()).find_by_id(user_id).await?;
+        let user = UserRepository::new(self.state.clone())
+            .find_by_id(user_id)
+            .await?;
 
         Ok(UserActivity {
             id: record.id,
@@ -667,7 +677,12 @@ impl UserActivityRepository {
         Ok(activities)
     }
 
-    pub async fn resolve_entity(&self, entity_id: Uuid, kind: &str, requestor: Option<&User>) -> AppResult<ActivityEntity> {
+    pub async fn resolve_entity(
+        &self,
+        entity_id: Uuid,
+        kind: &str,
+        requestor: Option<&User>,
+    ) -> AppResult<ActivityEntity> {
         match kind {
             "word" => {
                 let words_repo = crate::model::words::WordRepository::new(self.state.clone());
@@ -712,7 +727,9 @@ impl UserActivityRepository {
                 let translatables_repo =
                     crate::model::translatable::TranslatableRepository::new(self.state.clone());
                 if let Ok(translatable) = translatables_repo.find_by_id(entity_id).await {
-                    let translatable = translatables_repo.materialize(translatable, requestor).await?;
+                    let translatable = translatables_repo
+                        .materialize(translatable, requestor)
+                        .await?;
                     Ok(ActivityEntity::Translatable(translatable))
                 } else {
                     Err(bad_request(format!(

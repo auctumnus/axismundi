@@ -3,7 +3,10 @@ use uuid::Uuid;
 
 use crate::{
     err::AppResult,
-    model::{language_families::LanguageFamilyRepository, language_invites::PermissionLevel, languages::LanguageRepository, users::User},
+    model::{
+        language_families::LanguageFamilyRepository, language_invites::PermissionLevel,
+        languages::LanguageRepository, users::User,
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, repo_from_parts},
 };
@@ -301,8 +304,7 @@ impl ContributionStatsRepository {
         family_code: &str,
         query: &ContributionsSearch,
         paginated_request: &PaginatedRequest,
-    ) -> AppResult<PaginatedResponse<User>>
-    {
+    ) -> AppResult<PaginatedResponse<User>> {
         let families = LanguageFamilyRepository::new(self.state.clone());
         let family = families.find_by_code(family_code).await?;
 

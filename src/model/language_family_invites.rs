@@ -50,15 +50,24 @@ impl LanguageFamilyInviteRepository {
         Self { state }
     }
 
-    pub async fn create(&self, sender: User, invite: CreateLanguageFamilyInvite) -> AppResult<LanguageFamilyInvite> {
+    pub async fn create(
+        &self,
+        sender: User,
+        invite: CreateLanguageFamilyInvite,
+    ) -> AppResult<LanguageFamilyInvite> {
         ensure_verified(&sender)?;
 
         let language_families = LanguageFamilyRepository::new(self.state.clone());
-        let language_family = language_families.find_by_code(&invite.language_family).await?;
+        let language_family = language_families
+            .find_by_code(&invite.language_family)
+            .await?;
 
         let permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
 
-        let Some(sender_permission) = permissions.find_by_family_and_user(language_family.id, sender.id).await? else {
+        let Some(sender_permission) = permissions
+            .find_by_family_and_user(language_family.id, sender.id)
+            .await?
+        else {
             return Err(not_found("sender's language permission"));
         };
 
@@ -347,9 +356,12 @@ impl LanguageFamilyInviteRepository {
 
         // recipients can delete invites sent to them
         if requestor.id == invite.recipient {
-            sqlx::query!("DELETE FROM language_family_invites WHERE id = $1", invite.id)
-                .execute(&self.state.pool)
-                .await?;
+            sqlx::query!(
+                "DELETE FROM language_family_invites WHERE id = $1",
+                invite.id
+            )
+            .execute(&self.state.pool)
+            .await?;
             return Ok(());
         }
 
@@ -392,9 +404,12 @@ impl LanguageFamilyInviteRepository {
             return Err(not_found("requestor's language family permission"));
         }
 
-        sqlx::query!("DELETE FROM language_family_invites WHERE id = $1", invite.id)
-            .execute(&self.state.pool)
-            .await?;
+        sqlx::query!(
+            "DELETE FROM language_family_invites WHERE id = $1",
+            invite.id
+        )
+        .execute(&self.state.pool)
+        .await?;
 
         Ok(())
     }

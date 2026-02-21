@@ -58,9 +58,7 @@ mod tests {
     use axum::http::StatusCode;
     use tower::Service;
 
-    use crate::controller::api::tests::{
-        get, get_with_auth,
-    };
+    use crate::controller::api::tests::{get, get_with_auth};
     use sqlx::PgPool;
 
     use crate::{config::CONFIG, create_router, email, util::AppState};

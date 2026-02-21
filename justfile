@@ -88,13 +88,13 @@ test flags="" cov="" $RUST_BACKTRACE="0":
     fi
     echo "Waiting for database to be ready..."
     while ! docker exec axismundi-db-test pg_isready -U user_test -d axismundi_test >/dev/null 2>&1; do \
-        echo "Database is unavailable - sleeping"; \
+        echo {{ if flags == "-q" { "" } else { "Database is unavailable - sleeping" } }}; \
         sleep .5; \
     done
     echo "Database is ready!"
     echo "Waiting for Thumbor to be ready..."
     while ! curl -sf http://localhost:7888/healthcheck >/dev/null 2>&1; do \
-        echo "Thumbor is unavailable - sleeping"; \
+        echo {{ if flags == "-q" { "" } else { "Thumbor is unavailable - sleeping" } }}; \
         sleep .5; \
     done
     echo "Thumbor is ready!"
@@ -115,7 +115,7 @@ test flags="" cov="" $RUST_BACKTRACE="0":
     echo "Running tests..."
 
     if [ -z "{{cov}}" ]; then
-        DATABASE_URL={{postgres_test_url}} cargo test {{flags}}
+        DATABASE_URL={{postgres_test_url}} {{ if flags == "-q" { "RUSTFLAGS='-Awarnings' cargo test" } else { "cargo test" } }} {{flags}}
         return_code=$?
     else
         DATABASE_URL={{postgres_test_url}} cargo llvm-cov --ignore-filename-regex "nix/store" {{flags}}

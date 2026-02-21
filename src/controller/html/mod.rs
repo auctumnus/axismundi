@@ -32,8 +32,8 @@ mod bookmarks;
 mod language_families;
 mod language_family_members;
 mod language_invites;
-mod languages;
 mod language_permissions;
+mod languages;
 mod reports;
 mod translatables;
 mod translations;
@@ -60,8 +60,10 @@ pub fn create_html_controller() -> Router<AppState> {
 
     let (secure_user_routes, normal_user_routes) = users::create_router();
     let (secure_language_routes, normal_language_routes) = languages::create_router();
-    let (secure_language_family_routes, normal_language_family_routes) = language_families::create_router();
-    let (secure_language_permission_routes, normal_language_permission_routes) = language_permissions::create_router();
+    let (secure_language_family_routes, normal_language_family_routes) =
+        language_families::create_router();
+    let (secure_language_permission_routes, normal_language_permission_routes) =
+        language_permissions::create_router();
     let (secure_word_routes, normal_word_routes) = words::create_router();
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
@@ -148,7 +150,6 @@ pub struct LanguagesWithContributors {
     pub is_liked: bool,
 }
 
-
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
@@ -200,7 +201,7 @@ async fn home(
             TranslatableSearch::default(),
         )
         .await
-        .map_or_else( |_| vec![], |res| res.items);
+        .map_or_else(|_| vec![], |res| res.items);
 
     let translatables_with_liked = {
         let mut vec = Vec::with_capacity(translatables_res.len());

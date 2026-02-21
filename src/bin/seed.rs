@@ -7,14 +7,14 @@
 //!   just seed-fresh     # wipe and reseed
 
 use chrono::{DateTime, Duration, Utc};
+use fake::Fake;
 use fake::faker::lorem::en::{Paragraph, Sentence};
 use fake::faker::name::en::Name;
-use fake::Fake;
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -26,26 +26,26 @@ const SEED_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c2VlZHNhbHQxMjM
 
 // Conlang-style name parts for generating language names
 const NAME_PREFIXES: &[&str] = &[
-    "Tol", "Vir", "Kel", "Dra", "Myr", "Zan", "Qel", "Niv", "Syl", "Eth",
-    "Arn", "Bel", "Cor", "Dur", "Fen", "Gor", "Hel", "Ith", "Jor", "Kyr",
-    "Lor", "Mor", "Ner", "Oph", "Per", "Ral", "Sen", "Ter", "Uth", "Val",
+    "Tol", "Vir", "Kel", "Dra", "Myr", "Zan", "Qel", "Niv", "Syl", "Eth", "Arn", "Bel", "Cor",
+    "Dur", "Fen", "Gor", "Hel", "Ith", "Jor", "Kyr", "Lor", "Mor", "Ner", "Oph", "Per", "Ral",
+    "Sen", "Ter", "Uth", "Val",
 ];
 
 const NAME_MIDS: &[&str] = &[
-    "an", "ar", "en", "ir", "or", "ur", "al", "el", "il", "ol",
-    "ae", "ie", "oe", "ue", "ai", "ei", "oi", "au", "eu", "ou",
+    "an", "ar", "en", "ir", "or", "ur", "al", "el", "il", "ol", "ae", "ie", "oe", "ue", "ai", "ei",
+    "oi", "au", "eu", "ou",
 ];
 
 const NAME_SUFFIXES: &[&str] = &[
-    "ish", "ian", "ese", "ic", "ean", "an", "ine", "ene", "ite", "oid",
-    "ar", "er", "ir", "or", "a", "o", "i", "u", "e", "y",
+    "ish", "ian", "ese", "ic", "ean", "an", "ine", "ene", "ite", "oid", "ar", "er", "ir", "or",
+    "a", "o", "i", "u", "e", "y",
 ];
 
 // Syllable parts for generating words
 const ONSETS: &[&str] = &[
     "", "b", "c", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "r", "s", "t", "v", "w", "z",
-    "br", "cr", "dr", "fr", "gr", "pr", "tr", "bl", "cl", "fl", "gl", "pl", "sl",
-    "ch", "sh", "th", "sk", "sp", "st", "sw", "kn", "wr", "qu",
+    "br", "cr", "dr", "fr", "gr", "pr", "tr", "bl", "cl", "fl", "gl", "pl", "sl", "ch", "sh", "th",
+    "sk", "sp", "st", "sw", "kn", "wr", "qu",
 ];
 
 const NUCLEI: &[&str] = &[
@@ -53,8 +53,8 @@ const NUCLEI: &[&str] = &[
 ];
 
 const CODAS: &[&str] = &[
-    "", "b", "d", "f", "g", "k", "l", "m", "n", "p", "r", "s", "t", "x", "z",
-    "ch", "ck", "ff", "ll", "ng", "nk", "nt", "rd", "rk", "rm", "rn", "rt", "sh", "sk", "st", "th",
+    "", "b", "d", "f", "g", "k", "l", "m", "n", "p", "r", "s", "t", "x", "z", "ch", "ck", "ff",
+    "ll", "ng", "nk", "nt", "rd", "rk", "rm", "rn", "rt", "sh", "sk", "st", "th",
 ];
 
 // Standard word classes
@@ -71,56 +71,168 @@ const WORD_CLASSES: &[(&str, &str)] = &[
 
 // Famous quotes for translatables
 const QUOTES: &[(&str, &str, &str)] = &[
-    ("The only thing we have to fear is fear itself", "Franklin D. Roosevelt", "Inaugural Address"),
-    ("To be or not to be, that is the question", "William Shakespeare", "Hamlet"),
+    (
+        "The only thing we have to fear is fear itself",
+        "Franklin D. Roosevelt",
+        "Inaugural Address",
+    ),
+    (
+        "To be or not to be, that is the question",
+        "William Shakespeare",
+        "Hamlet",
+    ),
     ("I think, therefore I am", "Rene Descartes", "Meditations"),
-    ("The unexamined life is not worth living", "Socrates", "Apology"),
+    (
+        "The unexamined life is not worth living",
+        "Socrates",
+        "Apology",
+    ),
     ("In the beginning was the Word", "Bible", "Gospel of John"),
-    ("All that glitters is not gold", "William Shakespeare", "The Merchant of Venice"),
+    (
+        "All that glitters is not gold",
+        "William Shakespeare",
+        "The Merchant of Venice",
+    ),
     ("Knowledge is power", "Francis Bacon", "Meditationes Sacrae"),
-    ("I have a dream", "Martin Luther King Jr.", "March on Washington"),
+    (
+        "I have a dream",
+        "Martin Luther King Jr.",
+        "March on Washington",
+    ),
     ("The truth will set you free", "Bible", "Gospel of John"),
     ("Love conquers all", "Virgil", "Eclogues"),
     ("Time flies", "Virgil", "Georgics"),
     ("Fortune favors the bold", "Virgil", "Aeneid"),
     ("Know thyself", "Delphic maxim", "Temple of Apollo"),
     ("Nothing in excess", "Delphic maxim", "Temple of Apollo"),
-    ("Where there is love there is life", "Mahatma Gandhi", "Writings"),
-    ("The journey of a thousand miles begins with a single step", "Lao Tzu", "Tao Te Ching"),
+    (
+        "Where there is love there is life",
+        "Mahatma Gandhi",
+        "Writings",
+    ),
+    (
+        "The journey of a thousand miles begins with a single step",
+        "Lao Tzu",
+        "Tao Te Ching",
+    ),
     ("Hell is other people", "Jean-Paul Sartre", "No Exit"),
-    ("One cannot step twice into the same river", "Heraclitus", "Fragments"),
-    ("Man is the measure of all things", "Protagoras", "Fragments"),
+    (
+        "One cannot step twice into the same river",
+        "Heraclitus",
+        "Fragments",
+    ),
+    (
+        "Man is the measure of all things",
+        "Protagoras",
+        "Fragments",
+    ),
     ("I know that I know nothing", "Socrates", "Apology"),
-    ("Beauty is truth, truth beauty", "John Keats", "Ode on a Grecian Urn"),
+    (
+        "Beauty is truth, truth beauty",
+        "John Keats",
+        "Ode on a Grecian Urn",
+    ),
     ("The road not taken", "Robert Frost", "Mountain Interval"),
-    ("Do not go gentle into that good night", "Dylan Thomas", "Collected Poems"),
-    ("The world is my oyster", "William Shakespeare", "The Merry Wives of Windsor"),
-    ("All the world's a stage", "William Shakespeare", "As You Like It"),
-    ("What's in a name? A rose by any other name would smell as sweet", "William Shakespeare", "Romeo and Juliet"),
-    ("The course of true love never did run smooth", "William Shakespeare", "A Midsummer Night's Dream"),
-    ("Brevity is the soul of wit", "William Shakespeare", "Hamlet"),
-    ("This above all: to thine own self be true", "William Shakespeare", "Hamlet"),
-    ("There are more things in heaven and earth than are dreamt of in your philosophy", "William Shakespeare", "Hamlet"),
-    ("The pen is mightier than the sword", "Edward Bulwer-Lytton", "Richelieu"),
+    (
+        "Do not go gentle into that good night",
+        "Dylan Thomas",
+        "Collected Poems",
+    ),
+    (
+        "The world is my oyster",
+        "William Shakespeare",
+        "The Merry Wives of Windsor",
+    ),
+    (
+        "All the world's a stage",
+        "William Shakespeare",
+        "As You Like It",
+    ),
+    (
+        "What's in a name? A rose by any other name would smell as sweet",
+        "William Shakespeare",
+        "Romeo and Juliet",
+    ),
+    (
+        "The course of true love never did run smooth",
+        "William Shakespeare",
+        "A Midsummer Night's Dream",
+    ),
+    (
+        "Brevity is the soul of wit",
+        "William Shakespeare",
+        "Hamlet",
+    ),
+    (
+        "This above all: to thine own self be true",
+        "William Shakespeare",
+        "Hamlet",
+    ),
+    (
+        "There are more things in heaven and earth than are dreamt of in your philosophy",
+        "William Shakespeare",
+        "Hamlet",
+    ),
+    (
+        "The pen is mightier than the sword",
+        "Edward Bulwer-Lytton",
+        "Richelieu",
+    ),
     ("Actions speak louder than words", "Proverb", "Traditional"),
-    ("A picture is worth a thousand words", "Proverb", "Traditional"),
-    ("When in Rome, do as the Romans do", "Proverb", "Traditional"),
+    (
+        "A picture is worth a thousand words",
+        "Proverb",
+        "Traditional",
+    ),
+    (
+        "When in Rome, do as the Romans do",
+        "Proverb",
+        "Traditional",
+    ),
     ("The early bird catches the worm", "Proverb", "Traditional"),
-    ("You can't judge a book by its cover", "Proverb", "Traditional"),
+    (
+        "You can't judge a book by its cover",
+        "Proverb",
+        "Traditional",
+    ),
     ("Every cloud has a silver lining", "Proverb", "Traditional"),
-    ("Don't count your chickens before they hatch", "Proverb", "Traditional"),
+    (
+        "Don't count your chickens before they hatch",
+        "Proverb",
+        "Traditional",
+    ),
     ("Two wrongs don't make a right", "Proverb", "Traditional"),
     ("Better late than never", "Proverb", "Traditional"),
-    ("The grass is always greener on the other side", "Proverb", "Traditional"),
-    ("A journey of a thousand miles begins with a single step", "Proverb", "Traditional"),
+    (
+        "The grass is always greener on the other side",
+        "Proverb",
+        "Traditional",
+    ),
+    (
+        "A journey of a thousand miles begins with a single step",
+        "Proverb",
+        "Traditional",
+    ),
     ("Practice makes perfect", "Proverb", "Traditional"),
-    ("Absence makes the heart grow fonder", "Proverb", "Traditional"),
+    (
+        "Absence makes the heart grow fonder",
+        "Proverb",
+        "Traditional",
+    ),
     ("Curiosity killed the cat", "Proverb", "Traditional"),
-    ("Birds of a feather flock together", "Proverb", "Traditional"),
+    (
+        "Birds of a feather flock together",
+        "Proverb",
+        "Traditional",
+    ),
     ("Look before you leap", "Proverb", "Traditional"),
     ("Honesty is the best policy", "Proverb", "Traditional"),
     ("A penny saved is a penny earned", "Proverb", "Traditional"),
-    ("The squeaky wheel gets the grease", "Proverb", "Traditional"),
+    (
+        "The squeaky wheel gets the grease",
+        "Proverb",
+        "Traditional",
+    ),
 ];
 
 // Report reasons
@@ -156,7 +268,6 @@ struct Scale {
     users: usize,
     languages: usize,
     families: usize,
-    word_classes_per_lang: usize,
     words_per_lang: usize,
     definitions_per_word_max: usize,
     translatables: usize,
@@ -173,7 +284,6 @@ impl Scale {
             users: (100.0 * factor).round() as usize,
             languages: (30.0 * factor).round() as usize,
             families: (8.0 * factor).round() as usize,
-            word_classes_per_lang: 8,
             words_per_lang: (80.0 * factor).round() as usize,
             definitions_per_word_max: 3,
             translatables: (50.0 * factor).round() as usize,
@@ -238,9 +348,7 @@ async fn clear_database(pool: &PgPool) -> anyhow::Result<()> {
     println!("Clearing database...");
 
     // Truncate in reverse dependency order
-    sqlx::query("TRUNCATE users CASCADE")
-        .execute(pool)
-        .await?;
+    sqlx::query("TRUNCATE users CASCADE").execute(pool).await?;
 
     println!("Database cleared.");
     Ok(())
@@ -251,7 +359,11 @@ async fn seed_users(pool: &PgPool, rng: &mut StdRng, scale: &Scale) -> anyhow::R
 
     let mut user_ids = Vec::with_capacity(scale.users);
     let now = Utc::now();
-    let default_pfps = ["default-pfps/1.webp", "default-pfps/2.webp", "default-pfps/3.webp"];
+    let default_pfps = [
+        "default-pfps/1.webp",
+        "default-pfps/2.webp",
+        "default-pfps/3.webp",
+    ];
 
     for i in 0..scale.users {
         let username = generate_username(rng);
@@ -295,20 +407,20 @@ async fn seed_users(pool: &PgPool, rng: &mut StdRng, scale: &Scale) -> anyhow::R
         .await?;
 
         // Create bookmark for user
-        let bookmark_alphabet = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
+        let bookmark_alphabet = [
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+            'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
+            'y', 'z',
+        ];
         let slug: String = (0..15)
             .map(|_| *bookmark_alphabet.choose(rng).unwrap())
             .collect();
 
-        sqlx::query(
-            "INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'user')"
-        )
-        .bind(&slug)
-        .bind(id)
-        .execute(pool)
-        .await?;
+        sqlx::query("INSERT INTO bookmarks (slug, item, resource) VALUES ($1, $2, 'user')")
+            .bind(&slug)
+            .bind(id)
+            .execute(pool)
+            .await?;
 
         user_ids.push(id);
     }
@@ -325,28 +437,24 @@ async fn seed_user_tags(pool: &PgPool, rng: &mut StdRng, user_ids: &[Uuid]) -> a
 
     // Make first user always admin
     if let Some(&first_user) = user_ids.first() {
-        sqlx::query(
-            "INSERT INTO user_tags (user_id, tag, hidden) VALUES ($1, 'admin', false)"
-        )
-        .bind(first_user)
-        .execute(pool)
-        .await?;
+        sqlx::query("INSERT INTO user_tags (user_id, tag, hidden) VALUES ($1, 'admin', false)")
+            .bind(first_user)
+            .execute(pool)
+            .await?;
         admin_count += 1;
     }
 
     // Give ~2% of users admin tag, ~5% moderator tag
     for &user_id in user_ids.iter().skip(1) {
         if rng.gen_bool(0.02) {
-            sqlx::query(
-                "INSERT INTO user_tags (user_id, tag, hidden) VALUES ($1, 'admin', false)"
-            )
-            .bind(user_id)
-            .execute(pool)
-            .await?;
+            sqlx::query("INSERT INTO user_tags (user_id, tag, hidden) VALUES ($1, 'admin', false)")
+                .bind(user_id)
+                .execute(pool)
+                .await?;
             admin_count += 1;
         } else if rng.gen_bool(0.05) {
             sqlx::query(
-                "INSERT INTO user_tags (user_id, tag, hidden) VALUES ($1, 'moderator', false)"
+                "INSERT INTO user_tags (user_id, tag, hidden) VALUES ($1, 'moderator', false)",
             )
             .bind(user_id)
             .execute(pool)
@@ -355,7 +463,10 @@ async fn seed_user_tags(pool: &PgPool, rng: &mut StdRng, user_ids: &[Uuid]) -> a
         }
     }
 
-    println!("Created {} admin tags, {} moderator tags.", admin_count, mod_count);
+    println!(
+        "Created {} admin tags, {} moderator tags.",
+        admin_count, mod_count
+    );
     Ok(())
 }
 
@@ -363,7 +474,7 @@ async fn seed_languages(
     pool: &PgPool,
     rng: &mut StdRng,
     scale: &Scale,
-    user_ids: &[Uuid]
+    user_ids: &[Uuid],
 ) -> anyhow::Result<Vec<Uuid>> {
     println!("Seeding {} languages...", scale.languages);
 
@@ -503,7 +614,7 @@ async fn seed_language_invites(
             INSERT INTO language_invites (language, sender, recipient, permissions, sent_at)
             VALUES ($1, $2, $3, $4::permission_level, $5)
             ON CONFLICT DO NOTHING
-            "#
+            "#,
         )
         .bind(lang)
         .bind(sender)
@@ -532,9 +643,21 @@ async fn seed_language_families(
 
     // Some real-world inspired family names
     let family_names = [
-        "Norian", "Ethelic", "Valdric", "Myrian", "Keltic",
-        "Toralian", "Sindric", "Vesperian", "Draconic", "Aetherian",
-        "Terrannic", "Celestian", "Umbral", "Solarian", "Lunarian",
+        "Norian",
+        "Ethelic",
+        "Valdric",
+        "Myrian",
+        "Keltic",
+        "Toralian",
+        "Sindric",
+        "Vesperian",
+        "Draconic",
+        "Aetherian",
+        "Terrannic",
+        "Celestian",
+        "Umbral",
+        "Solarian",
+        "Lunarian",
     ];
 
     for i in 0..scale.families {
@@ -550,7 +673,11 @@ async fn seed_language_families(
 
         while used_codes.contains(&code) {
             let suffix: u8 = rng.gen_range(0..100);
-            code = format!("{}{:02}", name.chars().take(4).collect::<String>().to_lowercase(), suffix);
+            code = format!(
+                "{}{:02}",
+                name.chars().take(4).collect::<String>().to_lowercase(),
+                suffix
+            );
         }
         used_codes.insert(code.clone());
 
@@ -649,7 +776,10 @@ async fn seed_language_family_invites(
     family_ids: &[Uuid],
     user_ids: &[Uuid],
 ) -> anyhow::Result<()> {
-    println!("Seeding {} language family invites...", scale.family_invites);
+    println!(
+        "Seeding {} language family invites...",
+        scale.family_invites
+    );
 
     let permissions = ["viewer", "editor", "admin"];
     let now = Utc::now();
@@ -671,7 +801,7 @@ async fn seed_language_family_invites(
             INSERT INTO language_family_invites (family, sender, recipient, permissions, sent_at)
             VALUES ($1, $2, $3, $4::permission_level, $5)
             ON CONFLICT DO NOTHING
-            "#
+            "#,
         )
         .bind(family)
         .bind(sender)
@@ -724,7 +854,10 @@ async fn seed_word_classes(
         word_classes_by_lang.insert(lang_id, class_ids);
     }
 
-    println!("Created word classes for {} languages.", word_classes_by_lang.len());
+    println!(
+        "Created word classes for {} languages.",
+        word_classes_by_lang.len()
+    );
     Ok(word_classes_by_lang)
 }
 
@@ -930,7 +1063,11 @@ async fn seed_translatables(
     for i in 0..scale.translatables {
         let (english, source_name, source_content) = if i < QUOTES.len() {
             let q = QUOTES[i];
-            (q.0.to_string(), Some(q.1.to_string()), Some(q.2.to_string()))
+            (
+                q.0.to_string(),
+                Some(q.1.to_string()),
+                Some(q.2.to_string()),
+            )
         } else {
             let text: String = Paragraph(1..3).fake_with_rng(rng);
             (text, None, None)
@@ -1084,7 +1221,9 @@ async fn seed_likes(
     // Word likes (~5% chance per user per word, sampled)
     let all_words: Vec<Uuid> = words_by_lang.values().flatten().copied().collect();
     let sample_size = (all_words.len() / 3).max(50);
-    let sampled_words: Vec<_> = all_words.choose_multiple(rng, sample_size.min(all_words.len())).collect();
+    let sampled_words: Vec<_> = all_words
+        .choose_multiple(rng, sample_size.min(all_words.len()))
+        .collect();
 
     for &&word_id in &sampled_words {
         for &user_id in user_ids {
@@ -1126,7 +1265,9 @@ async fn seed_likes(
     }
 
     // Translation likes
-    let sampled_translations: Vec<_> = translation_ids.choose_multiple(rng, (translation_ids.len() / 2).max(20)).collect();
+    let sampled_translations: Vec<_> = translation_ids
+        .choose_multiple(rng, (translation_ids.len() / 2).max(20))
+        .collect();
     for &&translation_id in &sampled_translations {
         for &user_id in user_ids {
             if rng.gen_bool(0.08) {
@@ -1146,16 +1287,21 @@ async fn seed_likes(
         }
     }
 
-    println!("Created likes: {} language, {} word, {} translatable, {} translation",
-             lang_likes, word_likes, translatable_likes, translation_likes);
+    println!(
+        "Created likes: {} language, {} word, {} translatable, {} translation",
+        lang_likes, word_likes, translatable_likes, translation_likes
+    );
 
     // Update like counts
     println!("Updating like counts...");
 
     sqlx::query("UPDATE languages SET like_count = (SELECT COUNT(*) FROM language_likes WHERE language_id = languages.id)")
         .execute(pool).await?;
-    sqlx::query("UPDATE words SET like_count = (SELECT COUNT(*) FROM word_likes WHERE word_id = words.id)")
-        .execute(pool).await?;
+    sqlx::query(
+        "UPDATE words SET like_count = (SELECT COUNT(*) FROM word_likes WHERE word_id = words.id)",
+    )
+    .execute(pool)
+    .await?;
     sqlx::query("UPDATE translatable SET like_count = (SELECT COUNT(*) FROM translatable_likes WHERE translatable_id = translatable.id)")
         .execute(pool).await?;
     sqlx::query("UPDATE translation SET like_count = (SELECT COUNT(*) FROM translation_likes WHERE translation_id = translation.id)")
@@ -1165,9 +1311,7 @@ async fn seed_likes(
     Ok(())
 }
 
-async fn seed_contribution_stats(
-    pool: &PgPool,
-) -> anyhow::Result<()> {
+async fn seed_contribution_stats(pool: &PgPool) -> anyhow::Result<()> {
     println!("Computing contribution stats...");
 
     // Count words per user per language
@@ -1183,7 +1327,7 @@ async fn seed_contribution_stats(
         GROUP BY w.language, w.created_by
         ON CONFLICT (language_id, user_id) DO UPDATE
         SET word_count = EXCLUDED.word_count
-        "#
+        "#,
     )
     .execute(pool)
     .await?;
@@ -1199,7 +1343,7 @@ async fn seed_contribution_stats(
             GROUP BY t.language, t.created_by
         ) subq
         WHERE cs.language_id = subq.language AND cs.user_id = subq.created_by
-        "#
+        "#,
     )
     .execute(pool)
     .await?;
@@ -1220,7 +1364,7 @@ async fn seed_contribution_stats(
         )
         GROUP BY t.language, t.created_by
         ON CONFLICT DO NOTHING
-        "#
+        "#,
     )
     .execute(pool)
     .await?;
@@ -1229,25 +1373,21 @@ async fn seed_contribution_stats(
     Ok(())
 }
 
-async fn seed_activities(
-    pool: &PgPool,
-    _rng: &mut StdRng,
-) -> anyhow::Result<()> {
+async fn seed_activities(pool: &PgPool, _rng: &mut StdRng) -> anyhow::Result<()> {
     println!("Seeding user activities...");
 
     // Create activities for languages
-    let lang_activities: Vec<(Uuid, Uuid, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT id, created_by, created_at FROM languages"
-    )
-    .fetch_all(pool)
-    .await?;
+    let lang_activities: Vec<(Uuid, Uuid, DateTime<Utc>)> =
+        sqlx::query_as("SELECT id, created_by, created_at FROM languages")
+            .fetch_all(pool)
+            .await?;
 
     for (lang_id, user_id, created_at) in lang_activities {
         sqlx::query(
             r#"
             INSERT INTO user_activities (user_id, activity, entity_id, entity_type, timestamp)
             VALUES ($1, 'create_language', $2, 'language', $3)
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(lang_id)
@@ -1264,7 +1404,7 @@ async fn seed_activities(
         FROM words
         ORDER BY random()
         LIMIT $1
-        "#
+        "#,
     )
     .bind(word_sample_size as i32)
     .fetch_all(pool)
@@ -1286,18 +1426,17 @@ async fn seed_activities(
     }
 
     // Activities for translatables
-    let translatable_activities: Vec<(Uuid, Uuid, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT id, created_by, created_at FROM translatable"
-    )
-    .fetch_all(pool)
-    .await?;
+    let translatable_activities: Vec<(Uuid, Uuid, DateTime<Utc>)> =
+        sqlx::query_as("SELECT id, created_by, created_at FROM translatable")
+            .fetch_all(pool)
+            .await?;
 
     for (trans_id, user_id, created_at) in translatable_activities {
         sqlx::query(
             r#"
             INSERT INTO user_activities (user_id, activity, entity_id, entity_type, timestamp)
             VALUES ($1, 'create_translatable', $2, 'translatable', $3)
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(trans_id)
@@ -1314,7 +1453,7 @@ async fn seed_activities(
         FROM translation
         ORDER BY random()
         LIMIT $1
-        "#
+        "#,
     )
     .bind(translation_sample_size as i32)
     .fetch_all(pool)
@@ -1352,7 +1491,14 @@ async fn seed_reports(
     let now = Utc::now();
     let resource_types = ["user", "language", "word", "translation"];
     let priorities = ["low", "medium", "high", "urgent"];
-    let statuses = ["pending", "pending", "pending", "in_progress", "dismissed", "action_taken"]; // weighted towards pending
+    let statuses = [
+        "pending",
+        "pending",
+        "pending",
+        "in_progress",
+        "dismissed",
+        "action_taken",
+    ]; // weighted towards pending
 
     let all_words: Vec<Uuid> = words_by_lang.values().flatten().copied().collect();
 
@@ -1368,7 +1514,7 @@ async fn seed_reports(
                     continue;
                 }
                 *all_words.choose(rng).unwrap()
-            },
+            }
             _ => continue,
         };
 
@@ -1377,16 +1523,23 @@ async fn seed_reports(
         let status = *statuses.choose(rng).unwrap();
         let reported_at = now - Duration::days(rng.gen_range(1..60));
 
-        let (resolved_by, resolved_at, resolution_note): (Option<Uuid>, Option<DateTime<Utc>>, Option<String>) =
-            if status != "pending" && status != "in_progress" {
-                (
-                    Some(*user_ids.choose(rng).unwrap()),
-                    Some(reported_at + Duration::days(rng.gen_range(1..14))),
-                    if rng.gen_bool(0.5) { Some("Reviewed and addressed.".to_string()) } else { None }
-                )
-            } else {
-                (None, None, None)
-            };
+        let (resolved_by, resolved_at, resolution_note): (
+            Option<Uuid>,
+            Option<DateTime<Utc>>,
+            Option<String>,
+        ) = if status != "pending" && status != "in_progress" {
+            (
+                Some(*user_ids.choose(rng).unwrap()),
+                Some(reported_at + Duration::days(rng.gen_range(1..14))),
+                if rng.gen_bool(0.5) {
+                    Some("Reviewed and addressed.".to_string())
+                } else {
+                    None
+                },
+            )
+        } else {
+            (None, None, None)
+        };
 
         sqlx::query(
             r#"
@@ -1417,8 +1570,7 @@ async fn main() -> anyhow::Result<()> {
     println!("=== Axis Mundi Database Seeder ===\n");
 
     // Get configuration from environment
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let scale_factor: f64 = std::env::var("SEED_SCALE")
         .unwrap_or_else(|_| "1.0".to_string())
@@ -1427,7 +1579,10 @@ async fn main() -> anyhow::Result<()> {
 
     let should_clear = std::env::var("SEED_CLEAR").is_ok();
 
-    println!("Database: {}", database_url.split('@').last().unwrap_or(&database_url));
+    println!(
+        "Database: {}",
+        database_url.split('@').last().unwrap_or(&database_url)
+    );
     println!("Scale factor: {}", scale_factor);
     println!("Clear first: {}\n", should_clear);
 
@@ -1460,15 +1615,48 @@ async fn main() -> anyhow::Result<()> {
     seed_language_family_invites(&pool, &mut rng, &scale, &family_ids, &user_ids).await?;
 
     let word_classes = seed_word_classes(&pool, &mut rng, &language_ids, &user_ids).await?;
-    let words_by_lang = seed_words(&pool, &mut rng, &scale, &language_ids, &word_classes, &user_ids).await?;
+    let words_by_lang = seed_words(
+        &pool,
+        &mut rng,
+        &scale,
+        &language_ids,
+        &word_classes,
+        &user_ids,
+    )
+    .await?;
     seed_definitions(&pool, &mut rng, &scale, &words_by_lang, &user_ids).await?;
     seed_word_relations(&pool, &mut rng, &scale, &words_by_lang, &user_ids).await?;
 
     let translatable_ids = seed_translatables(&pool, &mut rng, &scale, &user_ids).await?;
-    let translation_ids = seed_translations(&pool, &mut rng, &scale, &translatable_ids, &language_ids, &user_ids).await?;
+    let translation_ids = seed_translations(
+        &pool,
+        &mut rng,
+        &scale,
+        &translatable_ids,
+        &language_ids,
+        &user_ids,
+    )
+    .await?;
 
-    seed_likes(&pool, &mut rng, &user_ids, &language_ids, &words_by_lang, &translatable_ids, &translation_ids).await?;
-    seed_reports(&pool, &mut rng, &scale, &user_ids, &language_ids, &words_by_lang).await?;
+    seed_likes(
+        &pool,
+        &mut rng,
+        &user_ids,
+        &language_ids,
+        &words_by_lang,
+        &translatable_ids,
+        &translation_ids,
+    )
+    .await?;
+    seed_reports(
+        &pool,
+        &mut rng,
+        &scale,
+        &user_ids,
+        &language_ids,
+        &words_by_lang,
+    )
+    .await?;
 
     // Compute contribution stats and create activities
     seed_contribution_stats(&pool).await?;

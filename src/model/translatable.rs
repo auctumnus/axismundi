@@ -101,7 +101,11 @@ impl TranslatableRepository {
         Self { state }
     }
 
-    pub async fn materialize(&self, translatable: Translatable, requestor: Option<&User>) -> AppResult<TranslatableWithLiked> {
+    pub async fn materialize(
+        &self,
+        translatable: Translatable,
+        requestor: Option<&User>,
+    ) -> AppResult<TranslatableWithLiked> {
         let is_liked = if let Some(user) = requestor {
             self.is_liked(&translatable.id, &user.id).await?
         } else {

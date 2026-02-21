@@ -82,19 +82,21 @@ async fn new_invitation_form(
         .await
         .unwrap_or(false);
 
-    let can_grant_owner = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Owner)
-            .await
-    );
+    let can_grant_owner = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Owner)
+                .await
+        );
 
-    let user_has_permission = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Admin)
-            .await
-    );
+    let user_has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Admin)
+                .await
+        );
 
     if !user_has_permission && !can_grant_owner {
         return render_generic_error(
@@ -141,19 +143,21 @@ async fn create_invitation_submit(
         .await
         .unwrap_or(false);
 
-    let can_grant_owner = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Owner)
-            .await
-    );
+    let can_grant_owner = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Owner)
+                .await
+        );
 
-    let user_has_permission = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Admin)
-            .await
-    );
+    let user_has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Admin)
+                .await
+        );
 
     if !user_has_permission && !can_grant_owner {
         return render_generic_error(
@@ -203,7 +207,7 @@ struct InviteWithUsers {
 }
 
 #[derive(Template)]
-#[template(path = "languages/invites/new.html")]
+#[template(path = "languages/invites/list.html")]
 struct ListInvitesTemplate {
     current_user: Option<User>,
     language: Language,
@@ -324,19 +328,21 @@ async fn revoke_invitation_form(
         .await
         .unwrap_or(false);
 
-    let user_has_permission = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Admin)
-            .await
-    );
+    let user_has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Admin)
+                .await
+        );
 
-    let is_owner = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Owner)
-            .await
-    );
+    let is_owner = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Owner)
+                .await
+        );
 
     let can_revoke = is_owner || (user_has_permission && invite.sender == user.id);
 

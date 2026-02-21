@@ -119,30 +119,7 @@ impl QuotationRepository {
             ));
         }
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, translation.language)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request(
-                    "you don't have permission to create quotations",
-                ));
-            }
-        }
+        let mut tx = self.state.pool.begin().await?;
 
         // check for overlapping quotations
         let overlapping = sqlx::query!(
@@ -157,7 +134,7 @@ impl QuotationRepository {
             quotation.span_start,
             translation_id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
         if overlapping.exists.unwrap_or(false) {
@@ -177,27 +154,40 @@ impl QuotationRepository {
             quotation.span_end,
             requestor.id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Created,
-                resource_type: crate::model::audit_log::AuditableResource::Quotation,
-                resource_id: result.id,
-                details: serde_json::json!({
-                    "translation_id": translation_id,
-                    "definition_id": definition_id,
-                    "language_id": translation.language,
-                    "span_start": quotation.span_start,
-                    "span_end": quotation.span_end
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: translation.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Created,
+                    resource_type: crate::model::audit_log::AuditableResource::Quotation,
+                    resource_id: result.id,
+                    context: Some(serde_json::json!({
+                        "language_id": translation.language,
+                        "translation_id": translation_id,
+                        "definition_id": definition_id,
+                        "span_start": quotation.span_start,
+                        "span_end": quotation.span_end
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to create quotations",
+            ));
         }
+
+        tx.commit().await?;
 
         Ok(result)
     }
@@ -223,29 +213,6 @@ impl QuotationRepository {
                 .find_by_id(existing.translation)
                 .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, translation.language)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request("you don't have permission to edit quotations"));
-            }
-        }
-
         let span_end = updates.span_end.unwrap_or(existing.span_end);
         let span_start = updates.span_start.unwrap_or(existing.span_start);
 
@@ -257,8 +224,43 @@ impl QuotationRepository {
             return Err(bad_request("span_start and span_end must be non-negative"));
         }
 
-        if span_end > translation.translated_text.chars().count().try_into().unwrap_or(i32::MAX) {
+        if span_end
+            > translation
+                .translated_text
+                .chars()
+                .count()
+                .try_into()
+                .unwrap_or(i32::MAX)
+        {
             return Err(bad_request("span_end exceeds length of translated text"));
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: translation.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Updated,
+                    resource_type: crate::model::audit_log::AuditableResource::Quotation,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "language_id": translation.language,
+                        "translation_id": existing.translation,
+                        "updates": updates
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request("you don't have permission to edit quotations"));
         }
 
         // check for overlapping quotations
@@ -276,7 +278,7 @@ impl QuotationRepository {
             existing.translation,
             id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
         if overlapping.exists.unwrap_or(false) {
@@ -299,27 +301,13 @@ impl QuotationRepository {
             updates.span_end,
             requestor.id
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut *tx)
         .await?;
 
-        let quotation_result = result.ok_or_else(|| not_found(format!("quotation with id '{id}'")))?;
+        let quotation_result =
+            result.ok_or_else(|| not_found(format!("quotation with id '{id}'")))?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Updated,
-                resource_type: crate::model::audit_log::AuditableResource::Quotation,
-                resource_id: id,
-                details: serde_json::json!({
-                    "translation_id": existing.translation,
-                    "language_id": translation.language,
-                    "updates": updates
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(quotation_result)
     }
@@ -338,52 +326,42 @@ impl QuotationRepository {
                 .find_by_id(existing.translation)
                 .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
+        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, translation.language)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: translation.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Deleted,
+                    resource_type: crate::model::audit_log::AuditableResource::Quotation,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "language_id": translation.language,
+                        "translation_id": existing.translation,
+                        "span_start": existing.span_start,
+                        "span_end": existing.span_end
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request(
-                    "you don't have permission to delete quotations",
-                ));
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to delete quotations",
+            ));
         }
 
         let result = sqlx::query!("DELETE FROM quotation WHERE id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log && result.rows_affected() > 0 {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Deleted,
-                resource_type: crate::model::audit_log::AuditableResource::Quotation,
-                resource_id: id,
-                details: serde_json::json!({
-                    "translation_id": existing.translation,
-                    "language_id": translation.language,
-                    "span_start": existing.span_start,
-                    "span_end": existing.span_end
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -572,8 +550,6 @@ mod tests {
             .await
             .unwrap();
 
-        
-
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo
             .create(
@@ -732,8 +708,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        
 
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo
@@ -909,8 +883,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        
 
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo

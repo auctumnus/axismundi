@@ -14,7 +14,17 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        contribution_stats::{ContributionStatsRepository}, language_families::{FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{WordRepository, WordSearch, WordWithMeta}
+        contribution_stats::ContributionStatsRepository,
+        language_families::{
+            FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
+        },
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch},
+        translatable::TranslatableRepository,
+        translations::TranslationRepository,
+        users::{User, UserRepository},
+        words::{WordRepository, WordSearch, WordWithMeta},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
@@ -211,6 +221,7 @@ pub struct TranslationWithAuthor {
 
 #[derive(Template)]
 #[template(path = "languages/view.html")]
+#[allow(dead_code)]
 struct ViewLanguageTemplate {
     current_user: Option<User>,
     recent_words: Vec<WordWithMeta>,
@@ -244,26 +255,20 @@ async fn view_language(
     let owner = attempt!(s, languages.find_owner(language.id).await);
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
     let rendered_description = attempt!(s, LanguageRepository::render_description(&language));
-    let get_five = PaginatedRequest { limit: 5, offset: 0 };
+    let get_five = PaginatedRequest {
+        limit: 5,
+        offset: 0,
+    };
     let recent_words = attempt!(
         s,
         words
-            .search(
-                &language.id,
-                get_five.clone(),
-                WordSearch::default()
-            )
+            .search(&language.id, get_five.clone(), WordSearch::default())
             .await
     );
 
     let recent_translations = attempt!(
         s,
-        translations
-            .list_by_language(
-                language.id,
-                get_five,
-            )
-            .await
+        translations.list_by_language(language.id, get_five,).await
     );
 
     let can_edit_language = if let Some(user) = s.user() {
@@ -330,18 +335,14 @@ async fn view_language(
         None
     };
 
-    let primary_family = attempt!(
-        s,
-        language_families
-            .find_primary_family(&language)
-            .await
-    );
+    let primary_family = attempt!(s, language_families.find_primary_family(&language).await);
 
     let primary_family = if let Some(family) = &primary_family {
         Some(attempt!(
             s,
             language_families
-                .materialize(family.clone(), s.user()).await
+                .materialize(family.clone(), s.user())
+                .await
         ))
     } else {
         None
@@ -350,11 +351,18 @@ async fn view_language(
     let other_families = attempt!(
         s,
         language_families
-            .search(SearchLanguageFamilies {
-                has_language: Some(language.code.clone()),
-                q: None,
-                owner: None,
-            }, PaginatedRequest { limit: if primary_family.is_some() { 4 } else { 5 }, offset: 0 }).await
+            .search(
+                SearchLanguageFamilies {
+                    has_language: Some(language.code.clone()),
+                    q: None,
+                    owner: None,
+                },
+                PaginatedRequest {
+                    limit: if primary_family.is_some() { 4 } else { 5 },
+                    offset: 0
+                }
+            )
+            .await
     );
 
     let other_families = if let Some(primary) = &primary_family {
@@ -369,14 +377,9 @@ async fn view_language(
 
     let mut other_families_materialized = vec![];
     for family in other_families {
-        let materialized = attempt!(
-            s,
-            language_families
-                .materialize(family, s.user()).await
-        );
+        let materialized = attempt!(s, language_families.materialize(family, s.user()).await);
         other_families_materialized.push(materialized);
     }
-
 
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
@@ -426,15 +429,17 @@ async fn edit_language_form(
         .await
         .unwrap_or(false);
 
-    let can_edit_language = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
-    let can_delete_language = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Owner)
-        .await
-        .unwrap_or(false);
+    let can_delete_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Owner)
+            .await
+            .unwrap_or(false);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -476,10 +481,11 @@ async fn edit_language_submit(
         .await
         .unwrap_or(false);
 
-    let can_edit_language = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -509,10 +515,11 @@ async fn edit_language_submit(
             Redirect::to(&format!("/languages/{}", lang.code)).into_response(),
         ),
         Err(e) => {
-            let can_delete_language = is_admin_or_mod || permissions
-                .has_permission(user.id, language.id, PermissionLevel::Owner)
-                .await
-                .unwrap_or(false);
+            let can_delete_language = is_admin_or_mod
+                || permissions
+                    .has_permission(user.id, language.id, PermissionLevel::Owner)
+                    .await
+                    .unwrap_or(false);
 
             let template = EditLanguageFormTemplate {
                 can_delete_language,
@@ -558,10 +565,11 @@ async fn delete_language_form(
         .await
         .unwrap_or(false);
 
-    let can_delete_language = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Owner)
-        .await
-        .unwrap_or(false);
+    let can_delete_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Owner)
+            .await
+            .unwrap_or(false);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;

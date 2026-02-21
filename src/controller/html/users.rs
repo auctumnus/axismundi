@@ -409,7 +409,11 @@ async fn settings_submit(
 
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
-fn render_settings_error(user: &User, error: AppError, status: StatusCode) -> (StatusCode, Response) {
+fn render_settings_error(
+    user: &User,
+    error: AppError,
+    status: StatusCode,
+) -> (StatusCode, Response) {
     let template = SettingsTemplate {
         previous_username: user.username.clone(),
         previous_email: user.email.clone(),
@@ -488,7 +492,13 @@ async fn upload_and_update_profile_picture(
     let filename = S3
         .upload_profile_picture(user.id, file_data, content_type)
         .await
-        .map_err(|e| Box::new(render_settings_error(user, e, StatusCode::INTERNAL_SERVER_ERROR)))?;
+        .map_err(|e| {
+            Box::new(render_settings_error(
+                user,
+                e,
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))
+        })?;
 
     // Update user record with new profile picture filename
     match users.update_profile_picture(user, user.id, &filename).await {

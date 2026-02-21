@@ -255,6 +255,9 @@ impl WordRelationRepository {
         requestor: &User,
         relation: CreateWordRelation,
     ) -> AppResult<WordRelation> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::CheckPermissionReq;
+
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
@@ -263,26 +266,6 @@ impl WordRelationRepository {
 
         let antecedent = relation.antecedent;
         let consequent = relation.consequent;
-
-        let permissions = LanguagePermissionRepository::new(self.state.clone());
-
-        if !permissions
-            .has_permission(requestor.id, antecedent.language, PermissionLevel::Editor)
-            .await?
-        {
-            return Err(bad_request(
-                "you don't have permission to create word relations for this language",
-            ));
-        }
-
-        if !permissions
-            .has_permission(requestor.id, consequent.language, PermissionLevel::Editor)
-            .await?
-        {
-            return Err(bad_request(
-                "you don't have permission to create word relations for this language",
-            ));
-        }
 
         let mut tx = self.state.pool.begin().await?;
 
@@ -297,6 +280,54 @@ impl WordRelationRepository {
                 relation.kind as WordRelationType,
                 requestor.id,
             ).fetch_one(&mut *tx).await?;
+
+        // Check permissions on both languages with audit
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        let ante_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: antecedent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Created,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: word_relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "antecedent",
+                        "word_id": antecedent.id,
+                        "language_id": antecedent.language,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        let cons_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: consequent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Created,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: word_relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "consequent",
+                        "word_id": consequent.id,
+                        "language_id": consequent.language,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if ante_perm == PermissionCheck::NoPermission || cons_perm == PermissionCheck::NoPermission
+        {
+            return Err(bad_request(
+                "you don't have permission to create word relations for this language",
+            ));
+        }
 
         // only update cognacy graph for relation types that are part of etymology
         // see_also and related don't affect the cognacy graph
@@ -490,31 +521,14 @@ impl WordRelationRepository {
         antecedent: &Word,
         consequent: &Word,
     ) -> AppResult<()> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::CheckPermissionReq;
+
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(requestor.id)
             .await?;
-
-        let permissions = LanguagePermissionRepository::new(self.state.clone());
-
-        if !permissions
-            .has_permission(requestor.id, antecedent.language, PermissionLevel::Editor)
-            .await?
-        {
-            return Err(bad_request(
-                "you don't have permission to delete word relations for this language",
-            ));
-        }
-
-        if !permissions
-            .has_permission(requestor.id, consequent.language, PermissionLevel::Editor)
-            .await?
-        {
-            return Err(bad_request(
-                "you don't have permission to delete word relations for this language",
-            ));
-        }
 
         let mut tx = self.state.pool.begin().await?;
 
@@ -534,6 +548,54 @@ impl WordRelationRepository {
 
         let Some(relation) = relation else {
             return Err(bad_request("no relation exists between these words"));
+        };
+
+        // Check permissions on both languages with audit
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        let ante_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: antecedent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Deleted,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "antecedent",
+                        "word_id": antecedent.id,
+                        "language_id": antecedent.language,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        let cons_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: consequent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Deleted,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "consequent",
+                        "word_id": consequent.id,
+                        "language_id": consequent.language,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if ante_perm == PermissionCheck::NoPermission || cons_perm == PermissionCheck::NoPermission
+        {
+            return Err(bad_request(
+                "you don't have permission to delete word relations for this language",
+            ));
         };
 
         // if this was an etymological relation, we need to update the cognacy graph
@@ -757,31 +819,14 @@ impl WordRelationRepository {
         consequent: &Word,
         new_kind: WordRelationType,
     ) -> AppResult<WordRelation> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::CheckPermissionReq;
+
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(requestor.id)
             .await?;
-
-        let permissions = LanguagePermissionRepository::new(self.state.clone());
-
-        if !permissions
-            .has_permission(requestor.id, antecedent.language, PermissionLevel::Editor)
-            .await?
-        {
-            return Err(bad_request(
-                "you don't have permission to edit word relations for this language",
-            ));
-        }
-
-        if !permissions
-            .has_permission(requestor.id, consequent.language, PermissionLevel::Editor)
-            .await?
-        {
-            return Err(bad_request(
-                "you don't have permission to edit word relations for this language",
-            ));
-        }
 
         // Get the existing relation to check if we can update it
         let existing_relation = self.find_relation(antecedent, consequent).await?;
@@ -795,6 +840,58 @@ impl WordRelationRepository {
         if old_affects_cognacy != new_affects_cognacy {
             return Err(bad_request(
                 "Cannot change relation type between etymological and non-etymological. Please delete and recreate the relation.",
+            ));
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        // Check permissions on both languages with audit
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        let ante_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: antecedent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: existing_relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "antecedent",
+                        "word_id": antecedent.id,
+                        "language_id": antecedent.language,
+                        "new_kind": format!("{:?}", new_kind),
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        let cons_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: consequent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: existing_relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "consequent",
+                        "word_id": consequent.id,
+                        "language_id": consequent.language,
+                        "new_kind": format!("{:?}", new_kind),
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if ante_perm == PermissionCheck::NoPermission || cons_perm == PermissionCheck::NoPermission
+        {
+            return Err(bad_request(
+                "you don't have permission to edit word relations for this language",
             ));
         }
 
@@ -812,7 +909,7 @@ impl WordRelationRepository {
             antecedent.id,
             consequent.id,
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
         // If both types affect cognacy, we need to update the cognacy graph edge
@@ -842,10 +939,12 @@ impl WordRelationRepository {
                     schema.schema_version,
                     cognacy.id,
                 )
-                .execute(&self.state.pool)
+                .execute(&mut *tx)
                 .await?;
             }
         }
+
+        tx.commit().await?;
 
         Ok(updated_relation)
     }

@@ -60,7 +60,6 @@ pub struct MaidConfig {
     pub task_timeout_ms: u64,
 }
 
-
 const fn default_maid_port() -> u16 {
     3003
 }
@@ -113,13 +112,6 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn is_production(&self) -> bool {
-        self.environment == Environment::Prod
-    }
-    pub fn is_development(&self) -> bool {
-        self.environment == Environment::Dev
-    }
-
     pub fn url(&self, path: &str) -> String {
         if self.public_url_base.ends_with('/') {
             format!("{}{}", self.public_url_base, path.trim_start_matches('/'))

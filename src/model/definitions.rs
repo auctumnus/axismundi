@@ -99,30 +99,7 @@ impl DefinitionRepository {
             .find_by_id(word_id)
             .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request(
-                    "you don't have permission to create definitions",
-                ));
-            }
-        }
+        let mut tx = self.state.pool.begin().await?;
 
         let result = sqlx::query_as!(
             Definition,
@@ -136,25 +113,38 @@ impl DefinitionRepository {
             definition.context,
             requestor.id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Created,
-                resource_type: crate::model::audit_log::AuditableResource::Definition,
-                resource_id: result.id,
-                details: serde_json::json!({
-                    "word_id": word_id,
-                    "language_id": word.language,
-                    "definition": definition.definition
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: word.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Created,
+                    resource_type: crate::model::audit_log::AuditableResource::Definition,
+                    resource_id: result.id,
+                    context: Some(serde_json::json!({
+                        "word_id": word_id,
+                        "language_id": word.language,
+                        "definition": definition.definition
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to create definitions",
+            ));
         }
+
+        tx.commit().await?;
 
         Ok(result)
     }
@@ -179,27 +169,32 @@ impl DefinitionRepository {
             .find_by_id(existing.word)
             .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
+        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: word.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Updated,
+                    resource_type: crate::model::audit_log::AuditableResource::Definition,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "word_id": existing.word,
+                        "language_id": word.language,
+                        "updates": updates
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request("you don't have permission to edit definitions"));
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request("you don't have permission to edit definitions"));
         }
 
         let result = sqlx::query_as!(
@@ -218,27 +213,13 @@ impl DefinitionRepository {
             updates.context,
             requestor.id
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut *tx)
         .await?;
 
-        let definition_result = result.ok_or_else(|| not_found(format!("definition with id '{id}'")))?;
+        let definition_result =
+            result.ok_or_else(|| not_found(format!("definition with id '{id}'")))?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Updated,
-                resource_type: crate::model::audit_log::AuditableResource::Definition,
-                resource_id: id,
-                details: serde_json::json!({
-                    "word_id": existing.word,
-                    "language_id": word.language,
-                    "updates": updates
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(definition_result)
     }
@@ -256,51 +237,41 @@ impl DefinitionRepository {
             .find_by_id(existing.word)
             .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
+        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: word.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Deleted,
+                    resource_type: crate::model::audit_log::AuditableResource::Definition,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "word_id": existing.word,
+                        "language_id": word.language,
+                        "definition": existing.definition
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request(
-                    "you don't have permission to delete definitions",
-                ));
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to delete definitions",
+            ));
         }
 
         let result = sqlx::query!("DELETE FROM definitions WHERE id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log && result.rows_affected() > 0 {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Deleted,
-                resource_type: crate::model::audit_log::AuditableResource::Definition,
-                resource_id: id,
-                details: serde_json::json!({
-                    "word_id": existing.word,
-                    "language_id": word.language,
-                    "definition": existing.definition
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -458,8 +429,6 @@ mod tests {
             .await
             .unwrap();
 
-        
-
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo
             .create(
@@ -573,8 +542,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        
 
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo
@@ -700,8 +667,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        
 
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo

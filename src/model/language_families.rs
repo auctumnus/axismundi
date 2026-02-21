@@ -7,16 +7,20 @@ use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 use crate::err::{AppResult, bad_request, internal_error, not_found};
-use crate::model::contribution_stats::{self, ContributionStatsRepository, ContributionsSearch};
-use crate::model::language_family_members::{LanguageFamilyMember, LanguageFamilyMemberRepository, LanguageFamilyRelationType};
-use crate::model::language_family_permissions::{CreateLanguageFamilyPermission, LanguageFamilyPermissionRepository};
+use crate::model::contribution_stats::{ContributionStatsRepository, ContributionsSearch};
+use crate::model::language_family_members::{
+    LanguageFamilyMember, LanguageFamilyMemberRepository, LanguageFamilyRelationType,
+};
+use crate::model::language_family_permissions::{
+    CreateLanguageFamilyPermission, LanguageFamilyPermissionRepository,
+};
 use crate::model::language_invites::PermissionLevel;
 use crate::model::languages::Language;
 use crate::model::users::User;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::util::{AppState, repo_from_parts};
 
-#[derive(FromRow, Clone, Serialize, Deserialize)]
+#[derive(FromRow, Clone, Serialize, Deserialize, Debug)]
 pub struct LanguageFamily {
     pub id: Uuid,
     pub code: String,
@@ -30,6 +34,7 @@ pub struct LanguageFamily {
     pub updated_by: Uuid,
 }
 
+#[allow(dead_code)]
 pub struct FamilyWithContributors {
     pub family: LanguageFamily,
     pub contributors: Vec<User>,
@@ -38,9 +43,8 @@ pub struct FamilyWithContributors {
 
 impl LanguageFamily {
     pub fn tree_schema(&self) -> AppResult<LanguageFamilyInner> {
-        let schema: LanguageFamilyInner = serde_json::from_value(self.tree.clone()).map_err(|e| {
-            internal_error(format!("Failed to parse tree schema: {}", e))
-        })?;
+        let schema: LanguageFamilyInner = serde_json::from_value(self.tree.clone())
+            .map_err(|e| internal_error(format!("Failed to parse tree schema: {}", e)))?;
         Ok(schema)
     }
 }
@@ -110,13 +114,25 @@ impl LanguageFamilyRepository {
         Self { state }
     }
 
-    pub async fn materialize(&self, family: LanguageFamily, requestor: Option<&User>) -> AppResult<FamilyWithContributors> {
+    pub async fn materialize(
+        &self,
+        family: LanguageFamily,
+        requestor: Option<&User>,
+    ) -> AppResult<FamilyWithContributors> {
         let contribution_stats = ContributionStatsRepository::new(self.state.clone());
         let contributors = contribution_stats
-            .search_top_contributors_for_family(&family.code, &ContributionsSearch {
-                q: None,
-                permission_level: None,
-            }, &PaginatedRequest { limit: 5, offset: 0 }).await?;
+            .search_top_contributors_for_family(
+                &family.code,
+                &ContributionsSearch {
+                    q: None,
+                    permission_level: None,
+                },
+                &PaginatedRequest {
+                    limit: 5,
+                    offset: 0,
+                },
+            )
+            .await?;
         let is_liked = if let Some(requestor) = requestor {
             self.is_liked(&family.id, &requestor.id).await?
         } else {
@@ -129,7 +145,10 @@ impl LanguageFamilyRepository {
         })
     }
 
-    pub async fn find_primary_family(&self, language: &Language) -> AppResult<Option<LanguageFamily>> {
+    pub async fn find_primary_family(
+        &self,
+        language: &Language,
+    ) -> AppResult<Option<LanguageFamily>> {
         let family_id = sqlx::query_scalar!(
             r#"
                 SELECT family_id
@@ -151,7 +170,11 @@ impl LanguageFamilyRepository {
         }
     }
 
-    pub async fn create(&self, creator: User, family: CreateLanguageFamily) -> AppResult<LanguageFamily> {
+    pub async fn create(
+        &self,
+        creator: User,
+        family: CreateLanguageFamily,
+    ) -> AppResult<LanguageFamily> {
         let mut tx = self.state.pool.begin().await?;
 
         let language_family = sqlx::query_as!(
@@ -178,11 +201,7 @@ impl LanguageFamilyRepository {
 
         let permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
         permissions
-            .create_by_tx(
-                &mut tx,
-                owner_permission,
-                creator.id,
-            )
+            .create_by_tx(&mut tx, owner_permission, creator.id)
             .await?;
 
         tx.commit().await?;
@@ -192,7 +211,12 @@ impl LanguageFamilyRepository {
 
     // at some point, we'll have more than 1 schema version
     #[allow(irrefutable_let_patterns)]
-    pub async fn add_to_tree(&self, family: LanguageFamily, member: LanguageFamilyMember, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AppResult<LanguageFamily> {
+    pub async fn add_to_tree(
+        &self,
+        family: LanguageFamily,
+        member: LanguageFamilyMember,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<LanguageFamily> {
         // TODO: cycle checking, adding to tree structure, etc.
 
         let schema = family.tree_schema()?;
@@ -216,12 +240,7 @@ impl LanguageFamilyRepository {
 
                 // check if we can reach parent_member_id starting from member.id
                 // (if so, adding the edge parent -> member creates a cycle)
-                if crate::util::dfs(
-                    &adjacency_list,
-                    member.id,
-                    parent_member_id,
-                    &mut visited,
-                ) {
+                if crate::util::dfs(&adjacency_list, member.id, parent_member_id, &mut visited) {
                     return Err(bad_request(
                         "adding this family relation would create a cycle in the language family graph",
                     ));
@@ -239,7 +258,9 @@ impl LanguageFamilyRepository {
             };
             v1_schema.edges.push(new_edge);
 
-            if let Some(language_id) = member.language_id && member.relation_type == LanguageFamilyRelationType::Hybrid {
+            if let Some(language_id) = member.language_id
+                && member.relation_type == LanguageFamilyRelationType::Hybrid
+            {
                 // get all of its hybrid parents and add them if they aren't already present
                 let hybrid_parents = LanguageFamilyMemberRepository::new(self.state.clone())
                     .all_for_language(language_id)
@@ -258,18 +279,22 @@ impl LanguageFamilyRepository {
                     };
 
                     // TODO: could be more efficient
-                    if !v1_schema.edges.iter().any(|e| e.parent_member_id == hybrid_edge.parent_member_id && e.child_member_id == hybrid_edge.child_member_id && e.relation_kind == hybrid_edge.relation_kind) {
+                    if !v1_schema.edges.iter().any(|e| {
+                        e.parent_member_id == hybrid_edge.parent_member_id
+                            && e.child_member_id == hybrid_edge.child_member_id
+                            && e.relation_kind == hybrid_edge.relation_kind
+                    }) {
                         v1_schema.edges.push(hybrid_edge);
                     }
                 }
             }
 
             // acyclic!
-            let new_tree = serde_json::to_value(LanguageFamilyInner::V1(v1_schema))
-                .map_err(|e| internal_error(format!("Failed to serialize updated tree schema: {}", e)))?;
-            let updated_family = self
-                .update_tree(family, new_tree, tx)
-                .await?;
+            let new_tree =
+                serde_json::to_value(LanguageFamilyInner::V1(v1_schema)).map_err(|e| {
+                    internal_error(format!("Failed to serialize updated tree schema: {}", e))
+                })?;
+            let updated_family = self.update_tree(family, new_tree, tx).await?;
             Ok(updated_family)
         } else {
             Err(internal_error("Unsupported language family schema version"))
@@ -278,24 +303,36 @@ impl LanguageFamilyRepository {
 
     // at some point, we'll have more than 1 schema version
     #[allow(irrefutable_let_patterns)]
-    pub async fn remove_from_tree(&self, family: LanguageFamily, member: LanguageFamilyMember, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AppResult<LanguageFamily> {
+    pub async fn remove_from_tree(
+        &self,
+        family: LanguageFamily,
+        member: LanguageFamilyMember,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<LanguageFamily> {
         let schema = family.tree_schema()?;
 
         if let LanguageFamilyInner::V1(mut v1_schema) = schema {
-            v1_schema.edges.retain(|e| e.child_member_id != member.id && e.parent_member_id != Some(member.id));
+            v1_schema.edges.retain(|e| {
+                e.child_member_id != member.id && e.parent_member_id != Some(member.id)
+            });
 
-            let new_tree = serde_json::to_value(LanguageFamilyInner::V1(v1_schema))
-                .map_err(|e| internal_error(format!("Failed to serialize updated tree schema: {}", e)))?;
-            let updated_family = self
-                .update_tree(family, new_tree, tx)
-                .await?;
+            let new_tree =
+                serde_json::to_value(LanguageFamilyInner::V1(v1_schema)).map_err(|e| {
+                    internal_error(format!("Failed to serialize updated tree schema: {}", e))
+                })?;
+            let updated_family = self.update_tree(family, new_tree, tx).await?;
             Ok(updated_family)
         } else {
             Err(internal_error("Unsupported language family schema version"))
         }
     }
 
-    pub async fn update_tree(&self, family: LanguageFamily, new_tree: Value, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AppResult<LanguageFamily> {
+    pub async fn update_tree(
+        &self,
+        family: LanguageFamily,
+        new_tree: Value,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<LanguageFamily> {
         let updated_family = sqlx::query_as!(
             LanguageFamily,
             r#"
@@ -325,22 +362,56 @@ impl LanguageFamilyRepository {
         Ok(language_family)
     }
 
-    pub async fn update(&self, user: &User, id: Uuid, update: UpdateLanguageFamily) -> AppResult<LanguageFamily> {
+    pub async fn update(
+        &self,
+        user: &User,
+        id: Uuid,
+        update: UpdateLanguageFamily,
+    ) -> AppResult<LanguageFamily> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq;
+
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(user.id)
             .await?;
 
-        // Check permission
-        let perms = LanguageFamilyPermissionRepository::new(self.state.clone());
-        if !perms.has_permission(user.id, id, PermissionLevel::Editor).await? {
-            return Err(crate::err::forbidden("You don't have permission to edit this language family"));
-        }
-
         let family = self.find_by_id(id).await?;
 
-        let new_code = update.code.unwrap_or(family.code);
-        let new_name = update.name.unwrap_or(family.name);
-        let new_description = update.description.unwrap_or(family.description);
+        let new_code = update.code.clone().unwrap_or(family.code.clone());
+        let new_name = update.name.clone().unwrap_or(family.name.clone());
+        let new_description = update
+            .description
+            .clone()
+            .unwrap_or(family.description.clone());
+
+        let mut tx = self.state.pool.begin().await?;
+
+        // Check permission with audit
+        let perms = LanguageFamilyPermissionRepository::new(self.state.clone());
+        let perm_check = perms
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: user.id,
+                    family: id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamily,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "code": update.code,
+                        "name": update.name,
+                        "description": update.description,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == PermissionCheck::NoPermission {
+            return Err(crate::err::forbidden(
+                "You don't have permission to edit this language family",
+            ));
+        }
 
         let updated = sqlx::query_as!(
             LanguageFamily,
@@ -356,47 +427,85 @@ impl LanguageFamilyRepository {
             user.id,
             id
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
+
+        tx.commit().await?;
 
         Ok(updated)
     }
 
     pub async fn delete(&self, user: &User, id: Uuid) -> AppResult<()> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq;
+
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(user.id)
             .await?;
 
-        // Check permission - need Owner level to delete
+        // Get family details for audit log before deletion
+        let family = self.find_by_id(id).await?;
+
+        let mut tx = self.state.pool.begin().await?;
+
+        // Check permission with audit - need Owner level to delete
         let perms = LanguageFamilyPermissionRepository::new(self.state.clone());
-        if !perms.has_permission(user.id, id, PermissionLevel::Owner).await? {
-            return Err(crate::err::forbidden("You don't have permission to delete this language family"));
+        let perm_check = perms
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: user.id,
+                    family: id,
+                    required_level: PermissionLevel::Owner,
+                    action_type: AuditActionType::Deleted,
+                    resource_type: AuditableResource::LanguageFamily,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "code": &family.code,
+                        "name": &family.name,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == PermissionCheck::NoPermission {
+            return Err(crate::err::forbidden(
+                "You don't have permission to delete this language family",
+            ));
         }
 
         // Delete all members first
-        sqlx::query!("DELETE FROM language_family_members WHERE family_id = $1", id)
-            .execute(&self.state.pool)
-            .await?;
+        sqlx::query!(
+            "DELETE FROM language_family_members WHERE family_id = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         // Delete permissions
-        sqlx::query!("DELETE FROM language_family_permissions WHERE family = $1", id)
-            .execute(&self.state.pool)
-            .await?;
+        sqlx::query!(
+            "DELETE FROM language_family_permissions WHERE family = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         // Delete likes
         sqlx::query!("DELETE FROM language_family_likes WHERE family_id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
         // Delete invites
         sqlx::query!("DELETE FROM language_family_invites WHERE family = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
         // Delete the family itself
         sqlx::query!("DELETE FROM language_families WHERE id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -413,7 +522,11 @@ impl LanguageFamilyRepository {
         result.ok_or_else(|| not_found(format!("language family with id '{id}'")))
     }
 
-    pub async fn search(&self, query: SearchLanguageFamilies, pagination: PaginatedRequest) -> AppResult<PaginatedResponse<LanguageFamily>> {
+    pub async fn search(
+        &self,
+        query: SearchLanguageFamilies,
+        pagination: PaginatedRequest,
+    ) -> AppResult<PaginatedResponse<LanguageFamily>> {
         let items_future = sqlx::query_as!(
             LanguageFamily,
             r#"
@@ -512,7 +625,11 @@ impl LanguageFamilyRepository {
         Ok(result.is_some())
     }
 
-    pub async fn like_language_family(&self, family_id: Uuid, user_id: Uuid) -> AppResult<Option<i64>> {
+    pub async fn like_language_family(
+        &self,
+        family_id: Uuid,
+        user_id: Uuid,
+    ) -> AppResult<Option<i64>> {
         let mut tx = self.state.pool.begin().await?;
         let result = sqlx::query!(
             r#"
@@ -587,7 +704,6 @@ impl LanguageFamilyRepository {
 
         Ok(likes)
     }
-
 }
 
 repo_from_parts!(LanguageFamilyRepository);

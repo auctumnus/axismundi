@@ -1,29 +1,57 @@
+use axum::{
+    Json,
+    response::{IntoResponse, Response},
+};
 use std::collections::HashMap;
-use axum::{Json, response::{IntoResponse, Response}};
 
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
         contribution_stats::{ContributionStatsRepository, ContributionsSearch},
-        language_families::{CreateLanguageFamily, LanguageFamily, LanguageFamilyInner, LanguageFamilyRepository},
+        language_families::{
+            CreateLanguageFamily, LanguageFamily, LanguageFamilyInner, LanguageFamilyRepository,
+        },
         language_family_members::LanguageFamilyMemberRepository,
-        languages::LanguageRepository,
         users::User,
     },
     pagination::PaginatedResponse,
-    util::{AppState, extract_session::Session, graph_svg::{self, LanguageFamilyMemberLabel}},
+    util::{
+        AppState,
+        extract_session::Session,
+        graph_svg::{self, LanguageFamilyMemberLabel},
+    },
 };
-
 
 pub fn create_router() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/language-families", axum::routing::post(create_language_family))
-        .route("/language-families/{code}", axum::routing::get(get_language_family))
-        .route("/language-families", axum::routing::get(search_language_families))
-        .route("/language-families/{code}/like", axum::routing::post(like_language_family))
-        .route("/language-families/{code}/unlike", axum::routing::post(unlike_language_family))
-        .route("/language-families/{code}/tree.svg", axum::routing::get(get_family_tree_svg))
-        .route("/language-families/{code}/contributors", axum::routing::get(get_family_contributors))
+        .route(
+            "/language-families",
+            axum::routing::post(create_language_family),
+        )
+        .route(
+            "/language-families/{code}",
+            axum::routing::get(get_language_family),
+        )
+        .route(
+            "/language-families",
+            axum::routing::get(search_language_families),
+        )
+        .route(
+            "/language-families/{code}/like",
+            axum::routing::post(like_language_family),
+        )
+        .route(
+            "/language-families/{code}/unlike",
+            axum::routing::post(unlike_language_family),
+        )
+        .route(
+            "/language-families/{code}/tree.svg",
+            axum::routing::get(get_family_tree_svg),
+        )
+        .route(
+            "/language-families/{code}/contributors",
+            axum::routing::get(get_family_contributors),
+        )
 }
 
 type ApiResponse<T> = AppResult<T>;
@@ -38,7 +66,7 @@ pub struct LikeLanguageFamilyResponse {
 pub async fn create_language_family(
     s: Session,
     language_families: LanguageFamilyRepository,
-    Json(create): Json<CreateLanguageFamily>
+    Json(create): Json<CreateLanguageFamily>,
 ) -> ApiResponse<Json<LanguageFamily>> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
@@ -53,9 +81,7 @@ pub async fn get_language_family(
     language_families: LanguageFamilyRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
 ) -> ApiResponse<Json<LanguageFamily>> {
-    let family = language_families
-        .find_by_code(&code)
-        .await?;
+    let family = language_families.find_by_code(&code).await?;
 
     Ok(Json(family))
 }
@@ -63,11 +89,11 @@ pub async fn get_language_family(
 pub async fn search_language_families(
     language_families: LanguageFamilyRepository,
     pagination: crate::pagination::PaginatedRequest,
-    axum::extract::Query(query): axum::extract::Query<crate::model::language_families::SearchLanguageFamilies>,
+    axum::extract::Query(query): axum::extract::Query<
+        crate::model::language_families::SearchLanguageFamilies,
+    >,
 ) -> PaginatedApiResponse<LanguageFamily> {
-    let families = language_families
-        .search(query, pagination)
-        .await?;
+    let families = language_families.search(query, pagination).await?;
 
     Ok(Json(families))
 }
@@ -83,7 +109,9 @@ pub async fn like_language_family(
 
     let family = language_families.find_by_code(&code).await?;
 
-    let like_count = language_families.like_language_family(family.id, requestor.id).await?;
+    let like_count = language_families
+        .like_language_family(family.id, requestor.id)
+        .await?;
     let response = LikeLanguageFamilyResponse {
         liked: true,
         like_count: like_count.unwrap_or(family.like_count),
@@ -102,7 +130,9 @@ pub async fn unlike_language_family(
 
     let family = language_families.find_by_code(&code).await?;
 
-    let like_count = language_families.unlike_language_family(family.id, requestor.id).await?;
+    let like_count = language_families
+        .unlike_language_family(family.id, requestor.id)
+        .await?;
     let response = LikeLanguageFamilyResponse {
         liked: false,
         like_count: like_count.unwrap_or(family.like_count),
@@ -126,7 +156,6 @@ pub async fn get_family_contributors(
 pub async fn get_family_tree_svg(
     language_families: LanguageFamilyRepository,
     family_members: LanguageFamilyMemberRepository,
-    languages: LanguageRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
 ) -> AppResult<Response> {
     let family = language_families.find_by_code(&code).await?;
@@ -171,10 +200,7 @@ pub async fn get_family_tree_svg(
 
     let svg = graph_svg::language_family_to_svg(&family.code, &v1_schema, &member_labels)?;
 
-    Ok((
-        [(axum::http::header::CONTENT_TYPE, "image/svg+xml")],
-        svg,
-    ).into_response())
+    Ok(([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response())
 }
 
 #[cfg(test)]
@@ -185,8 +211,20 @@ mod tests {
     use serde_json::{Value, json};
     use tower::Service;
 
-    use crate::{controller::api::tests::{get, post, print_response_body}, email::MockEmailService, model::{languages::{CreateLanguage, Language, LanguageRepository}, user_tags::{UserTagRepository}, users::{User, UserRepository}}, tests::{make_authed_user, random_code, random_name}, util::AppState};
+    use crate::{
+        controller::api::tests::{get, post, print_response_body},
+        email::MockEmailService,
+        model::{
+            languages::{CreateLanguage, Language, LanguageRepository},
+            user_tags::UserTagRepository,
+            users::{User, UserRepository},
+        },
+        tests::{make_authed_user, random_code, random_name},
+        util::AppState,
+    };
 
+    #[allow(dead_code)]
+    #[clippy::ignore(dead_code, unused_variables)]
     struct TestContext {
         languages: Vec<Language>,
         regular_user_1: User,
@@ -218,29 +256,37 @@ mod tests {
             (user, token)
         }
 
-
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let (app, app_state) = crate::tests::test_app_with_email_service_state(&email_service_trait)
-            .await
-            .unwrap();
+        let (app, app_state) =
+            crate::tests::test_app_with_email_service_state(&email_service_trait)
+                .await
+                .unwrap();
 
-        let (regular_user_1, regular_user_1_token) = make_user_for_context(&app, app_state.clone(), email_service.clone(), "regular").await;
-        let (regular_user_2, regular_user_2_token) = make_user_for_context(&app, app_state.clone(), email_service.clone(), "regular").await;
-        let (mod_user, mod_user_token) = make_user_for_context(&app, app_state.clone(), email_service.clone(), "moderator").await;
-        let (admin_user, admin_user_token) = make_user_for_context(&app, app_state.clone(), email_service.clone(), "admin").await;
+        let (regular_user_1, regular_user_1_token) =
+            make_user_for_context(&app, app_state.clone(), email_service.clone(), "regular").await;
+        let (regular_user_2, regular_user_2_token) =
+            make_user_for_context(&app, app_state.clone(), email_service.clone(), "regular").await;
+        let (mod_user, mod_user_token) =
+            make_user_for_context(&app, app_state.clone(), email_service.clone(), "moderator")
+                .await;
+        let (admin_user, admin_user_token) =
+            make_user_for_context(&app, app_state.clone(), email_service.clone(), "admin").await;
 
         let mut languages = Vec::new();
         let languages_repo = LanguageRepository::new(app_state.clone());
         for i in 1..5 {
             let lang_code = random_code();
             let language = languages_repo
-                .create(&regular_user_1, CreateLanguage {
-                    code: lang_code.clone(),
-                    name: format!("Language {}", i),
-                    private: false,
-                    description: format!("Description for language {}", i),
-                })
+                .create(
+                    &regular_user_1,
+                    CreateLanguage {
+                        code: lang_code.clone(),
+                        name: format!("Language {}", i),
+                        private: false,
+                        description: format!("Description for language {}", i),
+                    },
+                )
                 .await
                 .unwrap();
             languages.push(language);
@@ -328,7 +374,10 @@ mod tests {
         let code = family["code"].as_str().unwrap();
 
         // the owner should appear as a contributor (has permissions on the family)
-        let request = get(&format!("language-families/{code}/contributors?limit=10&offset=0")).await;
+        let request = get(&format!(
+            "language-families/{code}/contributors?limit=10&offset=0"
+        ))
+        .await;
 
         let response = context.app.call(request).await.unwrap();
         if response.status() != StatusCode::OK {
@@ -341,7 +390,11 @@ mod tests {
         let items = result["items"].as_array().unwrap();
 
         // owner should be in the list
-        assert!(items.iter().any(|item| item["username"] == context.admin_user.username));
+        assert!(
+            items
+                .iter()
+                .any(|item| item["username"] == context.admin_user.username)
+        );
     }
 
     #[tokio::test]
@@ -352,7 +405,10 @@ mod tests {
 
         // search for the admin user by name
         let admin_name = &context.admin_user.username;
-        let request = get(&format!("language-families/{code}/contributors?q={admin_name}&limit=10&offset=0")).await;
+        let request = get(&format!(
+            "language-families/{code}/contributors?q={admin_name}&limit=10&offset=0"
+        ))
+        .await;
 
         let response = context.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -372,7 +428,10 @@ mod tests {
         let code = family["code"].as_str().unwrap();
 
         // search for a name that doesn't exist
-        let request = get(&format!("language-families/{code}/contributors?q=nonexistentuser12345&limit=10&offset=0")).await;
+        let request = get(&format!(
+            "language-families/{code}/contributors?q=nonexistentuser12345&limit=10&offset=0"
+        ))
+        .await;
 
         let response = context.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);

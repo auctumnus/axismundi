@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
@@ -15,7 +15,17 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        contribution_stats::ContributionStatsRepository, language_families::{FamilyWithContributors, LanguageFamily, LanguageFamilyRepository}, language_family_members::{LanguageFamilyMemberRepository, LanguageFamilyRelationType, MemberWithLanguages, SearchLanguageFamilyMembers}, language_family_permissions::LanguageFamilyPermissionRepository, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository}, users::User
+        contribution_stats::ContributionStatsRepository,
+        language_families::{FamilyWithContributors, LanguageFamilyRepository},
+        language_family_members::{
+            LanguageFamilyMemberRepository, LanguageFamilyRelationType, MemberWithLanguages,
+            SearchLanguageFamilyMembers,
+        },
+        language_family_permissions::LanguageFamilyPermissionRepository,
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{Language, LanguageRepository},
+        users::User,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
@@ -26,15 +36,36 @@ pub fn create_router() -> Router<AppState> {
         .route("/languages/{code}/relatives", get(search_relatives))
         .route("/language-families/{code}/add-root", post(add_root_submit))
         .route("/language-families/{code}/members/{id}", get(view_member))
-        .route("/language-families/{code}/members/{id}/add-language-member", post(add_language_member_submit))
-        .route("/language-families/{code}/members/{id}/add-grouping", post(add_grouping_submit))
-        .route("/language-families/{code}/members/{id}/delete", post(delete_member_submit))
+        .route(
+            "/language-families/{code}/members/{id}/add-language-member",
+            post(add_language_member_submit),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/add-grouping",
+            post(add_grouping_submit),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/delete",
+            post(delete_member_submit),
+        )
         .route("/language-families/{code}/members", get(search_members))
         .route("/language-families/{code}/add-root", get(add_root_form))
-        .route("/language-families/{code}/members/{id}/add-child", get(add_child_form))
-        .route("/language-families/{code}/members/{id}/add-language-member", get(add_language_member_form))
-        .route("/language-families/{code}/members/{id}/add-grouping", get(add_grouping_form))
-        .route("/language-families/{code}/members/{id}/delete", get(delete_member_form))
+        .route(
+            "/language-families/{code}/members/{id}/add-child",
+            get(add_child_form),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/add-language-member",
+            get(add_language_member_form),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/add-grouping",
+            get(add_grouping_form),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/delete",
+            get(delete_member_form),
+        )
 }
 
 #[derive(Template)]
@@ -68,9 +99,9 @@ async fn view_member(
     let can_edit_family = if let Some(user) = s.user() {
         attempt!(
             s,
-        permissions
-            .has_permission(user.id, family.id, PermissionLevel::Editor)
-            .await
+            permissions
+                .has_permission(user.id, family.id, PermissionLevel::Editor)
+                .await
         )
     } else {
         false
@@ -83,7 +114,11 @@ async fn view_member(
                 .get_top_contributors(&language.id, 5)
                 .await
         );
-        let is_liked = if let Some(user) = s.user() { attempt!(s, languages.is_liked(&user.id, &language.id).await) } else { false };
+        let is_liked = if let Some(user) = s.user() {
+            attempt!(s, languages.is_liked(&user.id, &language.id).await)
+        } else {
+            false
+        };
         let language_with_contributors = LanguagesWithContributors {
             language: language.clone(),
             top_contributors,
@@ -112,7 +147,10 @@ async fn view_member(
     };
 
     let name = member.name();
-    let get_five = PaginatedRequest { limit: 5, offset: 0 };
+    let get_five = PaginatedRequest {
+        limit: 5,
+        offset: 0,
+    };
 
     let children = attempt!(
         s,
@@ -153,7 +191,6 @@ async fn view_member(
 
     okay(render_template(template))
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/members/search.html")]
@@ -314,9 +351,6 @@ async fn search_relatives(
     okay(render_template(template))
 }
 
-
-
-
 #[derive(Template)]
 #[template(path = "language_families/members/add-root.html")]
 struct AddRootTemplate {
@@ -408,7 +442,10 @@ async fn add_root_submit(
         Err(e) => {
             let will_create_audit_log =
                 crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
-            let available_languages = languages.list_editable_by_user(user.id).await.unwrap_or_default();
+            let available_languages = languages
+                .list_editable_by_user(user.id)
+                .await
+                .unwrap_or_default();
             let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
 
             let template = AddRootTemplate {
@@ -423,7 +460,6 @@ async fn add_root_submit(
         }
     }
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/members/add.html")]
@@ -478,7 +514,6 @@ async fn add_child_form(
 
     okay(render_template(template))
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/members/add-language-member.html")]
@@ -584,7 +619,11 @@ async fn add_language_member_submit(
             crate::model::language_family_members::CreateLanguageFamilyMember {
                 language_code: form.language_code.clone(),
                 relation_type,
-                notes: if form.notes.is_empty() { None } else { Some(form.notes.clone()) },
+                notes: if form.notes.is_empty() {
+                    None
+                } else {
+                    Some(form.notes.clone())
+                },
             },
         )
         .await
@@ -600,7 +639,10 @@ async fn add_language_member_submit(
                 .unwrap_or(false);
             let will_create_audit_log =
                 crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
-            let available_languages = languages.list_editable_by_user(user.id).await.unwrap_or_default();
+            let available_languages = languages
+                .list_editable_by_user(user.id)
+                .await
+                .unwrap_or_default();
             let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
 
             let template = AddLanguageMemberTemplate {
@@ -619,7 +661,6 @@ async fn add_language_member_submit(
         }
     }
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/members/add-grouping.html")]
@@ -698,7 +739,11 @@ async fn add_grouping_submit(
             user.clone(),
             family.clone(),
             Some(member_id),
-            if form.notes.is_empty() { None } else { Some(form.notes.clone()) },
+            if form.notes.is_empty() {
+                None
+            } else {
+                Some(form.notes.clone())
+            },
         )
         .await
     {
@@ -759,7 +804,6 @@ async fn delete_member_form(
         )
         .await;
     }
-
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;

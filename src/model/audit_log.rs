@@ -7,6 +7,8 @@ use validator::Validate;
 use crate::AppState;
 use crate::err::{AppResult, forbidden, not_found};
 use crate::model::definitions::Definition;
+use crate::model::language_families::LanguageFamily;
+use crate::model::language_family_members::LanguageFamilyMember;
 use crate::model::language_invites::LanguageInvite;
 use crate::model::language_permissions::LanguagePermission;
 use crate::model::languages::Language;
@@ -17,6 +19,7 @@ use crate::model::translatable::Translatable;
 use crate::model::translations::Translation;
 use crate::model::user_tags::UserTagRepository;
 use crate::model::users::User;
+use crate::model::word_classes::WordClass;
 use crate::model::word_relations::WordRelation;
 use crate::model::words::Word;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
@@ -27,7 +30,11 @@ use crate::pagination::{PaginatedRequest, PaginatedResponse};
 pub enum AuditableResource {
     User,
     Language,
+    #[sqlx(rename = "language_family_res")]
+    LanguageFamily,
+    LanguageFamilyMember,
     Word,
+    WordClass,
     Translation,
     Translatable,
     WordRelation,
@@ -39,12 +46,22 @@ pub enum AuditableResource {
     Report,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionCheck {
+    NoPermission,
+    HasPermission,
+    Audited,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum AuditableResourceResolved {
     User(User),
     Language(Language),
+    LanguageFamily(LanguageFamily),
+    LanguageFamilyMember(LanguageFamilyMember),
     Word(Word),
+    WordClass(WordClass),
     Translation(Translation),
     Translatable(Translatable),
     WordRelation(WordRelation),
@@ -74,7 +91,7 @@ impl AuditActionType {
     pub fn as_str(self) -> &'static str {
         match self {
             AuditActionType::Created => "created",
-            AuditActionType::Updated | AuditActionType::UpdatedReport  => "updated",
+            AuditActionType::Updated | AuditActionType::UpdatedReport => "updated",
             AuditActionType::Deleted => "deleted",
             AuditActionType::UserBan => "banned",
             AuditActionType::UserUnban => "unbanned",
@@ -167,6 +184,7 @@ impl AuditLogRepository {
         resource_id: Uuid,
     ) -> Option<AuditableResourceResolved> {
         use crate::model::definitions::DefinitionRepository;
+        use crate::model::language_family_members::LanguageFamilyMemberRepository;
         use crate::model::language_invites::LanguageInviteRepository;
         use crate::model::language_permissions::LanguagePermissionRepository;
         use crate::model::languages::LanguageRepository;
@@ -175,6 +193,7 @@ impl AuditLogRepository {
         use crate::model::translatable::TranslatableRepository;
         use crate::model::translations::TranslationRepository;
         use crate::model::users::UserRepository;
+        use crate::model::word_classes::WordClassRepository;
         use crate::model::words::WordRepository;
 
         match resource_type {
@@ -192,12 +211,35 @@ impl AuditLogRepository {
                     .ok()
                     .map(AuditableResourceResolved::Language)
             }
+            AuditableResource::LanguageFamily => {
+                let repo = crate::model::language_families::LanguageFamilyRepository::new(
+                    self.state.clone(),
+                );
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::LanguageFamily)
+            }
+            AuditableResource::LanguageFamilyMember => {
+                let repo = LanguageFamilyMemberRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::LanguageFamilyMember)
+            }
             AuditableResource::Word => {
                 let repo = WordRepository::new(self.state.clone());
                 repo.find_by_id(resource_id)
                     .await
                     .ok()
                     .map(AuditableResourceResolved::Word)
+            }
+            AuditableResource::WordClass => {
+                let repo = WordClassRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::WordClass)
             }
             AuditableResource::Translation => {
                 let repo = TranslationRepository::new(self.state.clone());
@@ -263,6 +305,17 @@ impl AuditLogRepository {
     /// Create a new audit log entry without permission checks.
     /// Use this when you've already verified the user is admin/mod.
     pub(crate) async fn create_internal(&self, req: CreateAuditLog) -> AppResult<AuditLog> {
+        let mut tx = self.state.pool.begin().await?;
+        let log = self.create_internal_tx(&mut tx, req).await?;
+        tx.commit().await?;
+        Ok(log)
+    }
+
+    pub(crate) async fn create_internal_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        req: CreateAuditLog,
+    ) -> AppResult<AuditLog> {
         req.validate()?;
 
         let record = sqlx::query!(
@@ -284,7 +337,7 @@ impl AuditLogRepository {
             req.resource_id,
             req.details
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut **tx)
         .await?;
 
         let user = self.fetch_user(record.user_id).await?;

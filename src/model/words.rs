@@ -7,7 +7,11 @@ use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, internal_error, not_found},
-    model::{definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, users::User},
+    model::{
+        definitions::{Definition, DefinitionRepository},
+        language_invites::PermissionLevel,
+        users::User,
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -107,12 +111,16 @@ impl WordRepository {
         nfkc(word)
     }
 
-    pub async fn materialize(&self, word: Word, requestor: Option<&User>) -> AppResult<WordWithMeta> {
+    pub async fn materialize(
+        &self,
+        word: Word,
+        requestor: Option<&User>,
+    ) -> AppResult<WordWithMeta> {
         let creator = self.find_creator(&word.id).await?;
 
         let first_definition = DefinitionRepository::new(self.state.clone())
-                .get_first_by_word(&word.id)
-                .await?;
+            .get_first_by_word(&word.id)
+            .await?;
 
         let is_liked = if let Some(user) = requestor {
             self.is_liked(&word.id, &user.id).await?
@@ -124,7 +132,7 @@ impl WordRepository {
             word,
             creator,
             first_definition,
-            is_liked
+            is_liked,
         })
     }
 
@@ -191,29 +199,6 @@ impl WordRepository {
             .ensure_not_banned(requestor.id)
             .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, language)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request("you don't have permission to create words"));
-            }
-        }
-
         let word_classes = crate::model::word_classes::WordClassRepository::new(self.state.clone());
         let word_class = word_classes
             .find_by_abbreviation(&language, &word.word_class)
@@ -223,6 +208,9 @@ impl WordRepository {
 
         let mut tx = self.state.pool.begin().await?;
 
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
         let word_result = sqlx::query!(
             r#"
                 INSERT INTO words (language, word_class, word, slug, lemma, ipa, notes, extra, created_by, updated_by)
@@ -252,26 +240,32 @@ impl WordRepository {
         .execute(&mut *tx)
         .await?;
 
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Created,
+                    resource_type: crate::model::audit_log::AuditableResource::Word,
+                    resource_id: word_result.id,
+                    context: Some(serde_json::json!({
+                        "language_id": language,
+                        "word": word.word
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request("you don't have permission to create words"));
+        }
+
         tx.commit().await?;
 
         // fetch the created word to get materialized fields
         let created_word = self.find_by_id(word_result.id).await?;
-
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Created,
-                resource_type: crate::model::audit_log::AuditableResource::Word,
-                resource_id: created_word.id,
-                details: serde_json::json!({
-                    "language_id": language,
-                    "word": word.word
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
 
         // Create activity if language is public
         let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
@@ -405,29 +399,6 @@ impl WordRepository {
             .find_by_slug_and_lemma(Some(requestor), language, slug, lemma)
             .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request("you don't have permission to edit words"));
-            }
-        }
-
         let word_classes = crate::model::word_classes::WordClassRepository::new(self.state.clone());
 
         let word_class = if let Some(ref abbreviation) = updates.word_class {
@@ -442,6 +413,32 @@ impl WordRepository {
         };
 
         let mut tx = self.state.pool.begin().await?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: word.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Updated,
+                    resource_type: crate::model::audit_log::AuditableResource::Word,
+                    resource_id: word.id,
+                    context: Some(serde_json::json!({
+                        "language_id": word.language,
+                        "word": word.word,
+                        "updates": updates
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request("you don't have permission to edit words"));
+        }
 
         // if slug is the same, we don't need to update the lemma
         // buuut if the slug is changing, we need to change the lemmata of all words with the same slug
@@ -520,23 +517,6 @@ impl WordRepository {
         let updated_word =
             result.ok_or_else(|| not_found(format!("word with id '{}'", word.id)))?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Updated,
-                resource_type: crate::model::audit_log::AuditableResource::Word,
-                resource_id: word.id,
-                details: serde_json::json!({
-                    "language_id": word.language,
-                    "word": word.word,
-                    "updates": updates
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
-
         // Create activity if language is public
         let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
         let lang = lang_repo.find_by_id(word.language).await?;
@@ -576,48 +556,38 @@ impl WordRepository {
             .find_by_slug_and_lemma(Some(requestor), language, slug, lemma)
             .await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
+        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, word.language)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: word.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Deleted,
+                    resource_type: crate::model::audit_log::AuditableResource::Word,
+                    resource_id: word.id,
+                    context: Some(serde_json::json!({
+                        "language_id": word.language,
+                        "word": word.word
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request("you don't have permission to delete words"));
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request("you don't have permission to delete words"));
         }
 
         let result = sqlx::query!("DELETE FROM words WHERE id = $1", word.id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log && result.rows_affected() > 0 {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Deleted,
-                resource_type: crate::model::audit_log::AuditableResource::Word,
-                resource_id: word.id,
-                details: serde_json::json!({
-                    "language_id": word.language,
-                    "word": word.word
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -1102,8 +1072,6 @@ mod tests {
             .await
             .unwrap();
 
-        
-
         // Admin creates a word (without permission)
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo
@@ -1317,8 +1285,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        
 
         let word_repo = WordRepository::new(app_state.clone());
         let word = word_repo

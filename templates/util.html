@@ -606,8 +606,14 @@
             {% call badge(user) %}
         {% when crate::model::audit_log::AuditableResourceResolved::Language(language) %}
             <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::LanguageFamily(family) %}
+            <a href="/language-families/{{ family.code }}">{{ family.name }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::LanguageFamilyMember(_) %}
+            <span>a language family member</span>
         {% when crate::model::audit_log::AuditableResourceResolved::Word(word) %}
             <a href="/languages/{{ word.language_code.as_ref().unwrap() }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::WordClass(_) %}
+            <span>a word class</span>
         {% when crate::model::audit_log::AuditableResourceResolved::Translation(translation) %}
             <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ translation.language_code }}">a translation</a>
         {% when crate::model::audit_log::AuditableResourceResolved::Translatable(translatable) %}
@@ -633,8 +639,14 @@
             <span>a user</span>
         {% when crate::model::audit_log::AuditableResource::Language %}
             <span>a language</span>
+        {% when crate::model::audit_log::AuditableResource::LanguageFamily %}
+            <span>a language family</span>
+        {% when crate::model::audit_log::AuditableResource::LanguageFamilyMember %}
+            <span>a language family member</span>
         {% when crate::model::audit_log::AuditableResource::Word %}
             <span>a word</span>
+        {% when crate::model::audit_log::AuditableResource::WordClass %}
+            <span>a word class</span>
         {% when crate::model::audit_log::AuditableResource::Translation %}
             <span>a translation</span>
         {% when crate::model::audit_log::AuditableResource::Translatable %}

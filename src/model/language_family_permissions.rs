@@ -1,9 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 use crate::err::{AppResult, bad_request, not_found};
+use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
 use crate::model::language_family_invites::LanguageFamilyInvite;
 use crate::model::language_invites::PermissionLevel;
 use crate::model::users::User;
@@ -31,10 +33,21 @@ pub struct CreateLanguageFamilyPermission {
 
 pub struct SearchLanguageFamilyPermission {
     pub permission: PermissionLevel,
+    pub family: String,
 }
 
 pub struct LanguageFamilyPermissionRepository {
     state: AppState,
+}
+
+pub struct CheckPermissionReq {
+    pub user: Uuid,
+    pub family: Uuid,
+    pub required_level: PermissionLevel,
+    pub action_type: AuditActionType,
+    pub resource_type: AuditableResource,
+    pub resource_id: Uuid,
+    pub context: Option<Value>,
 }
 
 impl LanguageFamilyPermissionRepository {
@@ -162,7 +175,11 @@ impl LanguageFamilyPermissionRepository {
         Ok(result)
     }
 
-    pub async fn search(&self, search: SearchLanguageFamilyPermission, pagination: PaginatedRequest) -> AppResult<PaginatedResponse<LanguageFamilyPermission>> {
+    pub async fn search(
+        &self,
+        search: SearchLanguageFamilyPermission,
+        pagination: PaginatedRequest,
+    ) -> AppResult<PaginatedResponse<LanguageFamilyPermission>> {
         let items = sqlx::query_as!(
             LanguageFamilyPermission,
             r#"
@@ -214,6 +231,45 @@ impl LanguageFamilyPermissionRepository {
             Ok(permission.permission as i32 >= required_level as i32)
         } else {
             Ok(false)
+        }
+    }
+
+    pub async fn check_permission_with_audit(
+        &self,
+        req: CheckPermissionReq,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<PermissionCheck> {
+        let has_perm = self
+            .has_permission(req.user, req.family, req.required_level)
+            .await?;
+
+        if has_perm {
+            Ok(PermissionCheck::HasPermission)
+        } else {
+            // Check if user is admin/mod
+            let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, req.user).await?;
+
+            if is_admin_or_mod {
+                // Create audit log
+                let audit_logs =
+                    crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+                let log_req = crate::model::audit_log::CreateAuditLog {
+                    user_id: Some(req.user),
+                    action: req.action_type,
+                    resource_type: req.resource_type,
+                    resource_id: req.resource_id,
+                    details: serde_json::json!({
+                        "required_permission": req.required_level,
+                        "family_id": req.family,
+                        "extra": req.context
+                    }),
+                };
+                audit_logs.create_internal_tx(tx, log_req).await?;
+
+                Ok(PermissionCheck::Audited)
+            } else {
+                Ok(PermissionCheck::NoPermission)
+            }
         }
     }
 
@@ -340,7 +396,9 @@ impl LanguageFamilyPermissionRepository {
 
         // Check if requestor is admin/mod - if so, allow with audit log
         if crate::util::is_admin_or_mod(&self.state, requestor.id).await? {
-            let result = self.update_permission(target_perm_id, new_permission).await?;
+            let result = self
+                .update_permission(target_perm_id, new_permission)
+                .await?;
 
             // Create audit log
             let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());

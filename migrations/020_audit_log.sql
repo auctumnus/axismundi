@@ -13,7 +13,8 @@ create type auditable_resource as enum (
     'quotation',
     'definition',
     'quotation_suggestion',
-    'report'
+    'report',
+    'language_family_res'
 );
 
 create type audit_action_type as enum (

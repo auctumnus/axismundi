@@ -1,13 +1,14 @@
 use askama::Template;
 use axum::{
+    Router,
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
-    Router,
 };
 use serde::Deserialize;
 
+use crate::AppState;
 use crate::controller::html::{okay, render_generic_error, render_template};
 use crate::err::AppError;
 use crate::get_user;
@@ -15,7 +16,6 @@ use crate::model::user_bans::{CreateUserBan, UserBanRepository, UserBanSearch};
 use crate::model::users::{User, UserRepository};
 use crate::pagination::PaginatedRequest;
 use crate::util::extract_session::Session;
-use crate::AppState;
 use axum::Form;
 
 // Form struct that only contains reason - user_id comes from URL
@@ -61,7 +61,10 @@ async fn list_bans(
 ) -> (StatusCode, Response) {
     let user = get_user!(&s);
 
-    let response = match user_bans.search(&user, pagination.clone(), search.clone()).await {
+    let response = match user_bans
+        .search(&user, pagination.clone(), search.clone())
+        .await
+    {
         Ok(r) => r,
         Err(e) => return render_generic_error(s, e).await,
     };
@@ -186,7 +189,7 @@ async fn unban_user_form(
     let ban = match user_bans.find_by_user_id(banned_user.id).await {
         Ok(Some(b)) => b,
         Ok(None) => {
-            return render_generic_error(s, crate::err::not_found("User is not banned")).await
+            return render_generic_error(s, crate::err::not_found("User is not banned")).await;
         }
         Err(e) => return render_generic_error(s, e).await,
     };
@@ -222,7 +225,7 @@ async fn unban_user_submit(
     let ban = match user_bans.find_by_user_id(banned_user.id).await {
         Ok(Some(b)) => b,
         Ok(None) => {
-            return render_generic_error(s, crate::err::not_found("User is not banned")).await
+            return render_generic_error(s, crate::err::not_found("User is not banned")).await;
         }
         Err(e) => return render_generic_error(s, e).await,
     };

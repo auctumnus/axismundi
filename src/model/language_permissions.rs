@@ -4,6 +4,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::err::{AppResult, bad_request, not_found};
+use crate::model::audit_log::{AuditActionType, PermissionCheck};
 use crate::model::language_invites::LanguageInvite;
 use crate::model::users::User;
 use crate::util::{AppState, ensure_verified};
@@ -30,6 +31,16 @@ pub struct CreateLanguagePermission {
     pub via: Option<Uuid>,
 }
 
+pub struct CheckPermissionReq {
+    pub user: Uuid,
+    pub language: Uuid,
+    pub required_level: PermissionLevel,
+    pub action_type: AuditActionType,
+    pub resource_type: crate::model::audit_log::AuditableResource,
+    pub resource_id: Uuid,
+    pub context: Option<serde_json::Value>,
+}
+
 pub struct LanguagePermissionRepository {
     state: AppState,
 }
@@ -45,7 +56,6 @@ impl LanguagePermissionRepository {
         permission: CreateLanguagePermission,
         invited_by: Uuid,
     ) -> AppResult<LanguagePermission> {
-
         let result = sqlx::query_as!(
             LanguagePermission,
             r#"
@@ -397,6 +407,41 @@ impl LanguagePermissionRepository {
             Some(p) => p.permission >= required,
             None => false,
         })
+    }
+
+    pub async fn check_permission_with_audit(
+        &self,
+        req: CheckPermissionReq,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<PermissionCheck> {
+        let has_perm = self
+            .has_permission(req.user, req.language, req.required_level)
+            .await?;
+
+        if has_perm {
+            Ok(PermissionCheck::HasPermission)
+        } else {
+            // Check if user is admin/mod
+            let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, req.user).await?;
+
+            if is_admin_or_mod {
+                // Create audit log
+                let audit_logs =
+                    crate::model::audit_log::AuditLogRepository::new(self.state.clone());
+                let log_req = crate::model::audit_log::CreateAuditLog {
+                    user_id: Some(req.user),
+                    action: req.action_type,
+                    resource_type: req.resource_type,
+                    resource_id: req.resource_id,
+                    details: req.context.unwrap_or_else(|| serde_json::json!({})),
+                };
+                audit_logs.create_internal_tx(tx, log_req).await?;
+
+                Ok(PermissionCheck::Audited)
+            } else {
+                Ok(PermissionCheck::NoPermission)
+            }
+        }
     }
 }
 

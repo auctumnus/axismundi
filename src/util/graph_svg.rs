@@ -7,11 +7,11 @@ use vizoxide::{
     render::{Format, render_to_string},
 };
 
-use crate::{err::{AppResult, internal_error}, model::language_families::LanguageFamily};
-use crate::model::word_relations::{CognacyRelationKindV1, LeveledCognacy};
+use crate::err::{AppResult, internal_error};
 use crate::model::language_families::{FamilyRelationKindV1, LanguageFamilySchemaV1};
+use crate::model::word_relations::{CognacyRelationKindV1, LeveledCognacy};
 
-/// Convert a `LeveledCognacy`` to an SVG string.
+/// Convert a `LeveledCognacy` to an SVG string.
 ///
 /// Node labels show word text only.
 /// Edge styles indicate relation type:
@@ -20,7 +20,8 @@ use crate::model::language_families::{FamilyRelationKindV1, LanguageFamilySchema
 /// - Calque: dashed line
 /// - Borrowed: dotted line
 pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
-    let ctx = Context::new().map_err(|e| internal_error(format!("Failed to create graphviz context: {}", e)))?;
+    let ctx = Context::new()
+        .map_err(|e| internal_error(format!("Failed to create graphviz context: {}", e)))?;
 
     let mut g = Graph::builder("cognacy")
         .directed(true)
@@ -38,7 +39,8 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
         let word = &cognacy.words[word_id];
         let node_id = word_id.to_string();
 
-        let node = g.create_node(&node_id)
+        let node = g
+            .create_node(&node_id)
             .attribute(node::LABEL, &word.word)
             .attribute(node::SHAPE, "box")
             .attribute(node::STYLE, "rounded")
@@ -51,9 +53,11 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
 
     // Create edges with styling based on relation type
     for edge_data in &cognacy.edges {
-        let from_node = node_map.get(&edge_data.antecedent)
+        let from_node = node_map
+            .get(&edge_data.antecedent)
             .ok_or_else(|| internal_error("Edge references missing antecedent node"))?;
-        let to_node = node_map.get(&edge_data.consequent)
+        let to_node = node_map
+            .get(&edge_data.consequent)
             .ok_or_else(|| internal_error("Edge references missing consequent node"))?;
 
         let (style, penwidth) = edge_style_for_cognacy(&edge_data.kind);
@@ -84,13 +88,8 @@ fn edge_style_for_cognacy(kind: &CognacyRelationKindV1) -> (&'static str, &'stat
 }
 
 pub enum LanguageFamilyMemberLabel {
-    Language {
-        name: String,
-        code: String,
-    },
-    Grouping {
-        notes: String,
-    }
+    Language { name: String, code: String },
+    Grouping { notes: String },
 }
 
 impl LanguageFamilyMemberLabel {
@@ -127,7 +126,8 @@ pub fn language_family_to_svg(
     schema: &LanguageFamilySchemaV1,
     member_labels: &HashMap<Uuid, LanguageFamilyMemberLabel>,
 ) -> AppResult<String> {
-    let ctx = Context::new().map_err(|e| internal_error(format!("Failed to create graphviz context: {}", e)))?;
+    let ctx = Context::new()
+        .map_err(|e| internal_error(format!("Failed to create graphviz context: {}", e)))?;
 
     let mut g = Graph::builder("language_family")
         .directed(true)
@@ -153,15 +153,30 @@ pub fn language_family_to_svg(
 
     for member_id in member_ids {
         let node_id = member_id.to_string();
-        let label = member_labels.get(&member_id)
+        let label = member_labels
+            .get(&member_id)
             .map_or("group".to_string(), |s| s.as_str());
 
-        let node = g.create_node(&node_id)
-            .attribute(graph::URL, &format!("/language-families/{}/members/{}", family_code, member_id))
+        let node = g
+            .create_node(&node_id)
+            .attribute(
+                graph::URL,
+                &format!("/language-families/{}/members/{}", family_code, member_id),
+            )
             .attribute("class", "language-family-node")
             .attribute(node::LABEL, &label)
-            .attribute(node::SHAPE, member_labels.get(&member_id).map_or("box", |s| s.get_shape()))
-            .attribute(node::STYLE, member_labels.get(&member_id).map_or("rounded", |s| s.get_style()))
+            .attribute(
+                node::SHAPE,
+                member_labels
+                    .get(&member_id)
+                    .map_or("box", |s| s.get_shape()),
+            )
+            .attribute(
+                node::STYLE,
+                member_labels
+                    .get(&member_id)
+                    .map_or("rounded", |s| s.get_style()),
+            )
             .build()
             .map_err(|e| internal_error(format!("Failed to create node: {}", e)))?;
 
@@ -175,9 +190,11 @@ pub fn language_family_to_svg(
             continue;
         };
 
-        let from_node = node_map.get(&parent_id)
+        let from_node = node_map
+            .get(&parent_id)
             .ok_or_else(|| internal_error("Edge references missing parent node"))?;
-        let to_node = node_map.get(&edge_data.child_member_id)
+        let to_node = node_map
+            .get(&edge_data.child_member_id)
             .ok_or_else(|| internal_error("Edge references missing child node"))?;
 
         let style = edge_style_for_family(&edge_data.relation_kind);

@@ -193,7 +193,6 @@ async fn search_translatables(
     okay(body)
 }
 
-
 #[derive(Template)]
 #[template(path = "translatables/view.html")]
 struct ViewTranslatableTemplate {
@@ -209,7 +208,6 @@ async fn view_translatable(
     s: Session,
     translatables: TranslatableRepository,
     translations: TranslationRepository,
-    languages: crate::model::languages::LanguageRepository,
     users: UserRepository,
     Path(slug): Path<String>,
 ) -> (StatusCode, Response) {
@@ -253,9 +251,7 @@ async fn view_translatable(
     };
 
     // Check if the user can edit this translatable (only creator can edit)
-    let can_edit_translatable = s
-        .user()
-        .is_some_and(|u| u.id == translatable.created_by);
+    let can_edit_translatable = s.user().is_some_and(|u| u.id == translatable.created_by);
 
     let template = ViewTranslatableTemplate {
         current_user: s.user().cloned(),

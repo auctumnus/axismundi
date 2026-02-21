@@ -469,15 +469,18 @@ impl UserRepository {
         };
 
         // Convert empty strings to None (clearing the field), or use the original value if not updating
-        let display_name_final = updates
-            .display_name
-            .as_ref().map_or_else(|| requestor.display_name.clone(), |s| if s.is_empty() { None } else { Some(s.clone()) });
-        let description_final = updates
-            .description
-            .as_ref().map_or_else(|| requestor.description.clone(), |s| if s.is_empty() { None } else { Some(s.clone()) });
-        let pronouns_final = updates
-            .pronouns
-            .as_ref().map_or_else(|| requestor.pronouns.clone(), |s| if s.is_empty() { None } else { Some(s.clone()) });
+        let display_name_final = updates.display_name.as_ref().map_or_else(
+            || requestor.display_name.clone(),
+            |s| if s.is_empty() { None } else { Some(s.clone()) },
+        );
+        let description_final = updates.description.as_ref().map_or_else(
+            || requestor.description.clone(),
+            |s| if s.is_empty() { None } else { Some(s.clone()) },
+        );
+        let pronouns_final = updates.pronouns.as_ref().map_or_else(
+            || requestor.pronouns.clone(),
+            |s| if s.is_empty() { None } else { Some(s.clone()) },
+        );
 
         // Handle gender (which includes # prefix stripping)
         let gender_final = if let Some(g) = &updates.gender {

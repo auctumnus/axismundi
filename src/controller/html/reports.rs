@@ -1,11 +1,10 @@
 use askama::Template;
 use axum::{
-    Router,
+    Form, Router,
     extract::{Path, Query},
     http::StatusCode,
-    response::{IntoResponse, Response, Redirect},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
-    Form,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -16,7 +15,10 @@ use crate::{
     get_user,
     model::{
         languages::{Language, LanguageRepository},
-        reports::{Report, ReportSearch, ReportRepository, ReportableResource, ResolutionStatus, ReportPriority, CreateReport},
+        reports::{
+            CreateReport, Report, ReportPriority, ReportRepository, ReportSearch,
+            ReportableResource, ResolutionStatus,
+        },
         translatable::{Translatable, TranslatableRepository},
         translations::{Translation, TranslationRepository},
         user_tags::UserTagRepository,
@@ -24,7 +26,7 @@ use crate::{
         words::{Word, WordRepository},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session, ensure_verified},
+    util::{AppState, ensure_verified, extract_session::Session},
 };
 
 // Helper struct to group resource repositories for fetching reportable resource data
@@ -47,23 +49,42 @@ impl ResourceRepositories {
         }
     }
 
-    async fn fetch_resource_data(&self, resource_type: ReportableResource, resource_id: Uuid) -> Option<ReportableResourceData> {
+    async fn fetch_resource_data(
+        &self,
+        resource_type: ReportableResource,
+        resource_id: Uuid,
+    ) -> Option<ReportableResourceData> {
         match resource_type {
-            ReportableResource::User => {
-                self.users.find_by_id(resource_id).await.ok().map(|u| ReportableResourceData::User { user: u })
-            }
-            ReportableResource::Language => {
-                self.languages.find_by_id(resource_id).await.ok().map(|l| ReportableResourceData::Language { language: l })
-            }
-            ReportableResource::Word => {
-                self.words.find_by_id(resource_id).await.ok().map(|w| ReportableResourceData::Word { word: w })
-            }
-            ReportableResource::Translation => {
-                self.translations.find_by_id(resource_id).await.ok().map(|t| ReportableResourceData::Translation { translation: t })
-            }
-            ReportableResource::Translatable => {
-                self.translatables.find_by_id(resource_id).await.ok().map(|t| ReportableResourceData::Translatable { translatable: t })
-            }
+            ReportableResource::User => self
+                .users
+                .find_by_id(resource_id)
+                .await
+                .ok()
+                .map(|u| ReportableResourceData::User { user: u }),
+            ReportableResource::Language => self
+                .languages
+                .find_by_id(resource_id)
+                .await
+                .ok()
+                .map(|l| ReportableResourceData::Language { language: l }),
+            ReportableResource::Word => self
+                .words
+                .find_by_id(resource_id)
+                .await
+                .ok()
+                .map(|w| ReportableResourceData::Word { word: w }),
+            ReportableResource::Translation => self
+                .translations
+                .find_by_id(resource_id)
+                .await
+                .ok()
+                .map(|t| ReportableResourceData::Translation { translation: t }),
+            ReportableResource::Translatable => self
+                .translatables
+                .find_by_id(resource_id)
+                .await
+                .ok()
+                .map(|t| ReportableResourceData::Translatable { translatable: t }),
             _ => Some(ReportableResourceData::Other),
         }
     }
@@ -140,19 +161,22 @@ async fn search_reports(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                axum::response::Redirect::to("/login").into_response()
-            )
+                axum::response::Redirect::to("/login").into_response(),
+            );
         }
     };
 
     // Check if user is mod or admin
     let is_admin = user_tags.is_admin(current_user.id).await.unwrap_or(false);
-    let is_moderator = user_tags.is_moderator(current_user.id).await.unwrap_or(false);
+    let is_moderator = user_tags
+        .is_moderator(current_user.id)
+        .await
+        .unwrap_or(false);
 
     if !(is_admin || is_moderator) {
         return (
             StatusCode::SEE_OTHER,
-            axum::response::Redirect::to("/home").into_response()
+            axum::response::Redirect::to("/home").into_response(),
         );
     }
 
@@ -175,7 +199,10 @@ async fn search_reports(
         priority: query.priority,
     };
 
-    let results = match reports.search(&current_user, pagination.clone(), search).await {
+    let results = match reports
+        .search(&current_user, pagination.clone(), search)
+        .await
+    {
         Ok(res) => Some(res),
         Err(e) => {
             let template = SearchReportsTemplate {
@@ -238,7 +265,9 @@ async fn new_report_form(
     let user = get_user!(s);
 
     // Fetch the resource data based on type
-    let resource_data = repos.fetch_resource_data(query.resource_type, query.resource_id).await;
+    let resource_data = repos
+        .fetch_resource_data(query.resource_type, query.resource_id)
+        .await;
 
     let template = NewReportTemplate {
         current_user: Some(user),
@@ -285,12 +314,10 @@ async fn create_report_submit(
     };
 
     match reports.create(&user, create_req).await {
-        Ok(_) => {
-            (
-                StatusCode::SEE_OTHER,
-                Redirect::to("/home?report_submitted=true").into_response(),
-            )
-        }
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/home?report_submitted=true").into_response(),
+        ),
         Err(e) => {
             let template = NewReportTemplate {
                 current_user: Some(user),
@@ -325,8 +352,8 @@ async fn view_report(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                axum::response::Redirect::to("/login").into_response()
-            )
+                axum::response::Redirect::to("/login").into_response(),
+            );
         }
     };
 
@@ -348,7 +375,9 @@ async fn view_report(
     };
 
     // Fetch the resource data based on type
-    let resource_data = repos.fetch_resource_data(report.resource_type, report.resource_id).await;
+    let resource_data = repos
+        .fetch_resource_data(report.resource_type, report.resource_id)
+        .await;
 
     let template = ViewReportTemplate {
         current_user: Some(current_user),
@@ -382,19 +411,22 @@ async fn edit_report_form(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                axum::response::Redirect::to("/login").into_response()
-            )
+                axum::response::Redirect::to("/login").into_response(),
+            );
         }
     };
 
     // Check if user is mod or admin
     let is_admin = user_tags.is_admin(current_user.id).await.unwrap_or(false);
-    let is_moderator = user_tags.is_moderator(current_user.id).await.unwrap_or(false);
+    let is_moderator = user_tags
+        .is_moderator(current_user.id)
+        .await
+        .unwrap_or(false);
 
     if !(is_admin || is_moderator) {
         return (
             StatusCode::SEE_OTHER,
-            axum::response::Redirect::to("/home").into_response()
+            axum::response::Redirect::to("/home").into_response(),
         );
     }
 
@@ -413,7 +445,9 @@ async fn edit_report_form(
     };
 
     // Fetch the resource data based on type
-    let resource_data = repos.fetch_resource_data(report.resource_type, report.resource_id).await;
+    let resource_data = repos
+        .fetch_resource_data(report.resource_type, report.resource_id)
+        .await;
 
     let template = EditReportTemplate {
         current_user: Some(current_user),
@@ -451,19 +485,22 @@ async fn edit_report_submit(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                axum::response::Redirect::to("/login").into_response()
-            )
+                axum::response::Redirect::to("/login").into_response(),
+            );
         }
     };
 
     // Check if user is mod or admin
     let is_admin = user_tags.is_admin(current_user.id).await.unwrap_or(false);
-    let is_moderator = user_tags.is_moderator(current_user.id).await.unwrap_or(false);
+    let is_moderator = user_tags
+        .is_moderator(current_user.id)
+        .await
+        .unwrap_or(false);
 
     if !(is_admin || is_moderator) {
         return (
             StatusCode::SEE_OTHER,
-            axum::response::Redirect::to("/home").into_response()
+            axum::response::Redirect::to("/home").into_response(),
         );
     }
 
@@ -493,16 +530,14 @@ async fn edit_report_submit(
     };
 
     match reports.update(&current_user, id, update_req).await {
-        Ok(_) => {
-            (
-                StatusCode::SEE_OTHER,
-                Redirect::to(&format!("/admin/reports/{}", id)).into_response(),
-            )
-        }
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/admin/reports/{}", id)).into_response(),
+        ),
         Err(e) => {
             // Re-fetch the report to show the form again with error
             let Ok(report) = reports.find_by_id(&current_user, id).await else {
-                    return crate::controller::html::render_generic_error(s, e).await;
+                return crate::controller::html::render_generic_error(s, e).await;
             };
 
             // Fetch the reporter user if they exist
@@ -513,7 +548,9 @@ async fn edit_report_submit(
             };
 
             // Fetch the resource data based on type
-            let resource_data = repos.fetch_resource_data(report.resource_type, report.resource_id).await;
+            let resource_data = repos
+                .fetch_resource_data(report.resource_type, report.resource_id)
+                .await;
 
             let template = EditReportTemplate {
                 current_user: Some(current_user),

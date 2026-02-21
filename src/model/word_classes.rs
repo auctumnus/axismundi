@@ -64,29 +64,17 @@ impl WordClassRepository {
         lang_code: &str,
         word_class: CreateWordClass,
     ) -> AppResult<WordClass> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::{
+            CheckPermissionReq, LanguagePermissionRepository,
+        };
+
         word_class.validate()?;
 
         ensure_verified(requestor)?;
 
         let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
         let language = languages.find_by_code(lang_code).await?;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, language.id)
-            .await?;
-
-        let Some(perm) = user_perm else {
-            return Err(bad_request(
-                "you don't have permission to create word classes",
-            ));
-        };
-
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(bad_request("viewers cannot create word classes"));
-        }
 
         if &word_class.abbreviation == "search" {
             return Err(bad_request("cannot use 'search' as abbreviation"));
@@ -126,6 +114,32 @@ impl WordClassRepository {
         )
         .fetch_one(&mut *tx)
         .await?;
+
+        // Check permission with audit
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+        let perm_check = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: language.id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Created,
+                    resource_type: AuditableResource::WordClass,
+                    resource_id: wc_result.id,
+                    context: Some(serde_json::json!({
+                        "name": &word_class.name,
+                        "abbreviation": &word_class.abbreviation,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to create word classes",
+            ));
+        }
 
         // Generate and insert bookmark
         let slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
@@ -253,29 +267,17 @@ impl WordClassRepository {
         id: Uuid,
         updates: UpdateWordClass,
     ) -> AppResult<WordClass> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::{
+            CheckPermissionReq, LanguagePermissionRepository,
+        };
+
         updates.validate()?;
 
         ensure_verified(requestor)?;
 
         // Get the current word class to check the language
         let current = self.find_by_id(id).await?;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, current.language)
-            .await?;
-
-        let Some(perm) = user_perm else {
-            return Err(bad_request(
-                "you don't have permission to edit word classes",
-            ));
-        };
-
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(bad_request("viewers cannot edit word classes"));
-        }
 
         if let Some(name) = &updates.name {
             if self.name_exists_in_language(current.language, name).await? {
@@ -296,6 +298,34 @@ impl WordClassRepository {
             }
         }
 
+        let mut tx = self.state.pool.begin().await?;
+
+        // Check permission with audit
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+        let perm_check = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: current.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::WordClass,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "name": updates.name,
+                        "abbreviation": updates.abbreviation,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to edit word classes",
+            ));
+        }
+
         let result = sqlx::query_as!(
             WordClass,
             r#"
@@ -314,10 +344,13 @@ impl WordClassRepository {
             updates.notes,
             requestor.id
         )
-        .fetch_optional(&self.state.pool)
-        .await?;
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| not_found(format!("word class with id '{id}'")))?;
 
-        result.ok_or_else(|| not_found(format!("word class with id '{id}'")))
+        tx.commit().await?;
+
+        Ok(result)
     }
 
     pub fn render_notes(word_class: &WordClass) -> AppResult<String> {
@@ -331,31 +364,49 @@ impl WordClassRepository {
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::{
+            CheckPermissionReq, LanguagePermissionRepository,
+        };
+
         ensure_verified(requestor)?;
 
         // Get the current word class to check the language
         let current = self.find_by_id(id).await?;
 
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, current.language)
+        let mut tx = self.state.pool.begin().await?;
+
+        // Check permission with audit
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+        let perm_check = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: current.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Deleted,
+                    resource_type: AuditableResource::WordClass,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "name": &current.name,
+                        "abbreviation": &current.abbreviation,
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        let Some(perm) = user_perm else {
+        if perm_check == PermissionCheck::NoPermission {
             return Err(bad_request(
                 "you don't have permission to delete word classes",
             ));
-        };
-
-        if perm.permission == PermissionLevel::Viewer {
-            return Err(bad_request("viewers cannot delete word classes"));
         }
 
         let result = sqlx::query!("DELETE FROM word_classes WHERE id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
+
+        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }

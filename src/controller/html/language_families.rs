@@ -14,7 +14,10 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        language_families::{CreateLanguageFamily, FamilyWithContributors, LanguageFamily, LanguageFamilyRepository, SearchLanguageFamilies},
+        language_families::{
+            CreateLanguageFamily, FamilyWithContributors, LanguageFamily, LanguageFamilyRepository,
+            SearchLanguageFamilies,
+        },
         language_family_invites::{LanguageFamilyInvite, LanguageFamilyInviteRepository},
         language_family_members::LanguageFamilyMemberRepository,
         language_family_permissions::LanguageFamilyPermissionRepository,
@@ -28,19 +31,30 @@ use crate::{
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/new-language-family", post(new_language_family_submit))
-        .route("/language-families/{code}/edit", post(edit_language_family_submit))
-        .route("/language-families/{code}/delete", post(delete_language_family_submit));
+        .route(
+            "/language-families/{code}/edit",
+            post(edit_language_family_submit),
+        )
+        .route(
+            "/language-families/{code}/delete",
+            post(delete_language_family_submit),
+        );
 
     let normal_routes = Router::<AppState>::new()
         .route("/language-families", get(search_language_families))
         .route("/new-language-family", get(new_language_family_form))
         .route("/language-families/{code}", get(view_language_family))
-        .route("/language-families/{code}/edit", get(edit_language_family_form))
-        .route("/language-families/{code}/delete", get(delete_language_family_form));
+        .route(
+            "/language-families/{code}/edit",
+            get(edit_language_family_form),
+        )
+        .route(
+            "/language-families/{code}/delete",
+            get(delete_language_family_form),
+        );
 
     (secure_routes, normal_routes)
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/search.html")]
@@ -63,23 +77,41 @@ async fn search_language_families(
     let query = SearchLanguageFamilies {
         q: query.q.and_then(|q| {
             let trimmed = q.trim();
-            if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
         }),
         owner: query.owner.and_then(|o| {
             let trimmed = o.trim();
-            if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
         }),
         has_language: query.has_language.and_then(|h| {
             let trimmed = h.trim();
-            if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
         }),
     };
 
-    let results = match language_families.search(query.clone(), pagination.clone()).await {
+    let results = match language_families
+        .search(query.clone(), pagination.clone())
+        .await
+    {
         Ok(res) => {
             let mut materialized_results = vec![];
             for family in res.items {
-                materialized_results.push(attempt!(s, language_families.materialize(family, requestor).await));
+                materialized_results.push(attempt!(
+                    s,
+                    language_families.materialize(family, requestor).await
+                ));
             }
             Some(PaginatedResponse {
                 items: materialized_results,
@@ -88,7 +120,7 @@ async fn search_language_families(
                 limit: res.limit,
                 has_more: res.has_more,
             })
-        },
+        }
         Err(e) => {
             let template = SearchLanguageFamiliesTemplate {
                 current_user: s.user().cloned(),
@@ -100,7 +132,6 @@ async fn search_language_families(
             return (StatusCode::BAD_REQUEST, render_template(template));
         }
     };
-
 
     let template = SearchLanguageFamiliesTemplate {
         current_user: s.user().cloned(),
@@ -193,7 +224,9 @@ async fn view_language_family(
     let member_count = attempt!(s, members.count_by_family(family.id).await) as usize;
 
     // Generate family tree SVG
-    let family_tree_svg = crate::util::graph_svg::render_family_tree(&family, &members).await.unwrap_or_default();
+    let family_tree_svg = crate::util::graph_svg::render_family_tree(&family, &members)
+        .await
+        .unwrap_or_default();
 
     let template = ViewLanguageFamilyTemplate {
         current_user: s.user().cloned(),
@@ -277,7 +310,6 @@ async fn new_language_family_submit(
         }
     }
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/edit.html")]
@@ -365,9 +397,21 @@ async fn edit_language_family_submit(
             &user,
             family.id,
             crate::model::language_families::UpdateLanguageFamily {
-                code: if form.code == family.code { None } else { Some(form.code.clone()) },
-                name: if form.name == family.name { None } else { Some(form.name.clone()) },
-                description: if form.description == family.description { None } else { Some(form.description.clone()) },
+                code: if form.code == family.code {
+                    None
+                } else {
+                    Some(form.code.clone())
+                },
+                name: if form.name == family.name {
+                    None
+                } else {
+                    Some(form.name.clone())
+                },
+                description: if form.description == family.description {
+                    None
+                } else {
+                    Some(form.description.clone())
+                },
             },
         )
         .await
@@ -391,7 +435,6 @@ async fn edit_language_family_submit(
         }
     }
 }
-
 
 #[derive(Template)]
 #[template(path = "language_families/delete.html")]

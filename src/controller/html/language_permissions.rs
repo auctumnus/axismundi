@@ -15,7 +15,11 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        contribution_stats::{ContributionStatsRepository, ContributionsSearch}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository}, users::{User, UserRepository}
+        contribution_stats::{ContributionStatsRepository, ContributionsSearch},
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{Language, LanguageRepository},
+        users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
     util::{AppState, extract_session::Session},
@@ -202,12 +206,13 @@ async fn delete_permission_form(
         .await
         .unwrap_or(false);
 
-    let user_has_permission = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let user_has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -291,19 +296,21 @@ async fn edit_permission_form(
         .await
         .unwrap_or(false);
 
-    let can_grant_owner = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Owner)
-            .await
-    );
+    let can_grant_owner = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Owner)
+                .await
+        );
 
-    let user_has_permission = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let user_has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -352,19 +359,21 @@ async fn edit_permission_submit(
         .await
         .unwrap_or(false);
 
-    let can_grant_owner = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Owner)
-            .await
-    );
+    let can_grant_owner = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Owner)
+                .await
+        );
 
-    let user_has_permission = is_admin_or_mod || attempt!(
-        s,
-        permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let user_has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;

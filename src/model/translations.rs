@@ -8,7 +8,12 @@ use validator::Validate;
 
 use crate::{
     err::{AppError, AppResult, bad_request, not_found},
-    model::{language_invites::PermissionLevel, languages::Language, translatable::{Translatable, TranslatableRepository}, users::User},
+    model::{
+        language_invites::PermissionLevel,
+        languages::Language,
+        translatable::{Translatable, TranslatableRepository},
+        users::User,
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -40,7 +45,6 @@ pub struct Translation {
     pub translatable_title: String,
     pub language_code: String,
 }
-
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TranslationWithLanguageAndContributor {
@@ -104,7 +108,11 @@ impl TranslationRepository {
         Self { state }
     }
 
-    pub async fn materialize(&self, translation: Translation, requestor: Option<&User>) -> AppResult<TranslationWithLanguageAndContributor> {
+    pub async fn materialize(
+        &self,
+        translation: Translation,
+        requestor: Option<&User>,
+    ) -> AppResult<TranslationWithLanguageAndContributor> {
         let translatable_repo = TranslatableRepository::new(self.state.clone());
         let language_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
         let user_repo = crate::model::users::UserRepository::new(self.state.clone());
@@ -241,43 +249,18 @@ impl TranslationRepository {
         Ok(result)
     }
 
-    async fn check_create_permission(&self, requestor: &User, language_id: Uuid) -> AppResult<bool> {
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-
-        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
-            self.state.clone(),
-        );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, language_id)
-            .await?;
-
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-                Ok(false)
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                Ok(true)
-            }
-            _ => {
-                Err(bad_request(
-                    "you don't have permission to create translations",
-                ))
-            }
-        }
-    }
-
-    async fn verify_translation_unique(&self, translatable_id: Uuid, language_id: Uuid) -> AppResult<()> {
+    async fn verify_translation_unique(
+        &self,
+        translatable_id: Uuid,
+        language_id: Uuid,
+    ) -> AppResult<()> {
         match self
             .find_by_translatable_and_language(translatable_id, language_id)
             .await
         {
-            Ok(_) => {
-                Err(bad_request(
-                    "a translation for this translatable in this language already exists",
-                ))
-            }
+            Ok(_) => Err(bad_request(
+                "a translation for this translatable in this language already exists",
+            )),
             Err(AppError {
                 status_code: StatusCode::NOT_FOUND,
                 ..
@@ -286,24 +269,12 @@ impl TranslationRepository {
         }
     }
 
-    async fn create_translation_audit_log(&self, requestor: &User, translation_id: Uuid, translatable_id: Uuid, language_id: Uuid, translated_text: &str) -> AppResult<()> {
-        let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-        let log_req = crate::model::audit_log::CreateAuditLog {
-            user_id: Some(requestor.id),
-            action: crate::model::audit_log::AuditActionType::Created,
-            resource_type: crate::model::audit_log::AuditableResource::Translation,
-            resource_id: translation_id,
-            details: serde_json::json!({
-                "translatable_id": translatable_id,
-                "language_id": language_id,
-                "translated_text": translated_text
-            }),
-        };
-        let _ = audit_logs.create_internal(log_req).await;
-        Ok(())
-    }
-
-    async fn create_translation_activity(&self, requestor: &User, translation_id: Uuid, language_id: Uuid) -> AppResult<()> {
+    async fn create_translation_activity(
+        &self,
+        requestor: &User,
+        translation_id: Uuid,
+        language_id: Uuid,
+    ) -> AppResult<()> {
         let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
         let lang = lang_repo.find_by_id(language_id).await?;
         if !lang.private {
@@ -337,14 +308,15 @@ impl TranslationRepository {
             .ensure_not_banned(requestor.id)
             .await?;
 
-        let needs_audit_log = self.check_create_permission(requestor, language_id).await?;
-
         // Verify the translatable exists
         crate::model::translatable::TranslatableRepository::new(self.state.clone())
             .find_by_id(translatable_id)
             .await?;
 
-        self.verify_translation_unique(translatable_id, language_id).await?;
+        self.verify_translation_unique(translatable_id, language_id)
+            .await?;
+
+        let mut tx = self.state.pool.begin().await?;
 
         let result = sqlx::query_as!(
             Translation,
@@ -386,63 +358,51 @@ impl TranslationRepository {
             translation.gloss,
             translation.notes
         )
-        .fetch_one(&self.state.pool)
+        .fetch_one(&mut *tx)
         .await?;
-
-        if needs_audit_log {
-            self.create_translation_audit_log(requestor, result.id, translatable_id, language_id, &translation.translated_text).await?;
-        }
-
-        self.create_translation_activity(requestor, result.id, language_id).await?;
-
-        Ok(result)
-    }
-
-    async fn check_update_permission(&self, requestor: &User, language_id: Uuid) -> AppResult<bool> {
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, language_id)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: language_id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Created,
+                    resource_type: crate::model::audit_log::AuditableResource::Translation,
+                    resource_id: result.id,
+                    context: Some(serde_json::json!({
+                        "language_id": language_id,
+                        "translatable_id": translatable_id,
+                        "translated_text": translation.translated_text
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-                Ok(false)
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                Ok(true)
-            }
-            _ => {
-                Err(bad_request(
-                    "you don't have permission to edit translations",
-                ))
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to create translations",
+            ));
         }
+
+        tx.commit().await?;
+
+        self.create_translation_activity(requestor, result.id, language_id)
+            .await?;
+
+        Ok(result)
     }
 
-    async fn create_update_audit_log(&self, requestor: &User, translation_id: Uuid, existing: &Translation, updates: &UpdateTranslation) -> AppResult<()> {
-        let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-        let log_req = crate::model::audit_log::CreateAuditLog {
-            user_id: Some(requestor.id),
-            action: crate::model::audit_log::AuditActionType::Updated,
-            resource_type: crate::model::audit_log::AuditableResource::Translation,
-            resource_id: translation_id,
-            details: serde_json::json!({
-                "language_id": existing.language,
-                "translatable_id": existing.translatable,
-                "updates": updates
-            }),
-        };
-        let _ = audit_logs.create_internal(log_req).await;
-        Ok(())
-    }
-
-    async fn create_update_activity(&self, requestor: &User, translation_id: Uuid, language_id: Uuid) -> AppResult<()> {
+    async fn create_update_activity(
+        &self,
+        requestor: &User,
+        translation_id: Uuid,
+        language_id: Uuid,
+    ) -> AppResult<()> {
         let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
         let lang = lang_repo.find_by_id(language_id).await?;
         if !lang.private {
@@ -478,7 +438,35 @@ impl TranslationRepository {
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
 
-        let needs_audit_log = self.check_update_permission(requestor, existing.language).await?;
+        let mut tx = self.state.pool.begin().await?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: existing.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Updated,
+                    resource_type: crate::model::audit_log::AuditableResource::Translation,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "language_id": existing.language,
+                        "translatable_id": existing.translatable,
+                        "updates": updates
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to edit translations",
+            ));
+        }
 
         let result = sqlx::query_as!(
             Translation,
@@ -527,17 +515,16 @@ impl TranslationRepository {
             updates.notes,
             requestor.id
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut *tx)
         .await?;
 
         let updated_translation =
             result.ok_or_else(|| not_found(format!("translation with id '{id}'")))?;
 
-        if needs_audit_log {
-            self.create_update_audit_log(requestor, id, &existing, &updates).await?;
-        }
+        tx.commit().await?;
 
-        self.create_update_activity(requestor, updated_translation.id, existing.language).await?;
+        self.create_update_activity(requestor, updated_translation.id, existing.language)
+            .await?;
 
         Ok(updated_translation)
     }
@@ -552,51 +539,41 @@ impl TranslationRepository {
         // Get the translation to find its language
         let existing = self.find_by_id(id).await?;
 
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&self.state, requestor.id).await?;
-        let mut needs_audit_log = false;
+        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let user_perm = permissions
-            .find_by_user_and_language(requestor.id, existing.language)
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: existing.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Deleted,
+                    resource_type: crate::model::audit_log::AuditableResource::Translation,
+                    resource_id: id,
+                    context: Some(serde_json::json!({
+                        "language_id": existing.language,
+                        "translatable_id": existing.translatable,
+                        "translated_text": existing.translated_text
+                    })),
+                },
+                &mut tx,
+            )
             .await?;
 
-        match (user_perm, is_admin_or_mod) {
-            (Some(perm), _) if perm.permission != PermissionLevel::Viewer => {
-                // Has proper permission, no audit log needed
-            }
-            (_, true) => {
-                // Is admin/mod but doesn't have proper permission, allow with audit log
-                needs_audit_log = true;
-            }
-            _ => {
-                return Err(bad_request(
-                    "you don't have permission to delete translations",
-                ));
-            }
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to delete translations",
+            ));
         }
 
         let result = sqlx::query!("DELETE FROM translation WHERE id = $1", id)
-            .execute(&self.state.pool)
+            .execute(&mut *tx)
             .await?;
 
-        // Create audit log if admin/mod override
-        if needs_audit_log && result.rows_affected() > 0 {
-            let audit_logs = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
-            let log_req = crate::model::audit_log::CreateAuditLog {
-                user_id: Some(requestor.id),
-                action: crate::model::audit_log::AuditActionType::Deleted,
-                resource_type: crate::model::audit_log::AuditableResource::Translation,
-                resource_id: id,
-                details: serde_json::json!({
-                    "language_id": existing.language,
-                    "translatable_id": existing.translatable,
-                    "translated_text": existing.translated_text
-                }),
-            };
-            let _ = audit_logs.create_internal(log_req).await;
-        }
+        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -957,10 +934,17 @@ impl TranslationRepository {
         pagination: PaginatedRequest,
         search: TranslationSearch,
     ) -> AppResult<PaginatedResponse<Translation>> {
-        let (items_query, count_query, _param_count) = TranslationRepository::build_search_queries(&search);
+        let (items_query, count_query, _param_count) =
+            TranslationRepository::build_search_queries(&search);
 
         let (items, total) = self
-            .execute_search_queries(&items_query, &count_query, language_id, &search, &pagination)
+            .execute_search_queries(
+                &items_query,
+                &count_query,
+                language_id,
+                &search,
+                &pagination,
+            )
             .await?;
 
         let has_more =

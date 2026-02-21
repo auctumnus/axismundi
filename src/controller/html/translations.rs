@@ -299,10 +299,11 @@ async fn new_translation_submit(
             .await
             .unwrap_or(false);
 
-        let can_edit_language = is_admin_or_mod || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false);
+        let can_edit_language = is_admin_or_mod
+            || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false);
 
         let will_create_audit_log =
             crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -344,10 +345,11 @@ async fn new_translation_submit(
             .await
             .unwrap_or(false);
 
-        let can_edit_language = is_admin_or_mod || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false);
+        let can_edit_language = is_admin_or_mod
+            || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false);
 
         let will_create_audit_log =
             crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -612,17 +614,19 @@ async fn edit_translation_form(
         .await
         .unwrap_or(false);
 
-    let can_edit_language = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
-    let can_edit_translation = is_admin_or_mod || permissions
-        .find_by_user_and_language(user.id, language.id)
-        .await
-        .ok()
-        .flatten()
-        .is_some();
+    let can_edit_translation = is_admin_or_mod
+        || permissions
+            .find_by_user_and_language(user.id, language.id)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -686,17 +690,19 @@ async fn edit_translation_submit(
         .await
         .unwrap_or(false);
 
-    let can_edit_language = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
-    let can_edit_translation = is_admin_or_mod || permissions
-        .find_by_user_and_language(user.id, language.id)
-        .await
-        .ok()
-        .flatten()
-        .is_some();
+    let can_edit_translation = is_admin_or_mod
+        || permissions
+            .find_by_user_and_language(user.id, language.id)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;

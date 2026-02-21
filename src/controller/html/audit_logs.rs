@@ -13,7 +13,9 @@ use crate::{
     controller::html::{okay, render_template},
     err::AppError,
     model::{
-        audit_log::{AuditLog, AuditLogFilter, AuditLogRepository, AuditableResource, AuditActionType},
+        audit_log::{
+            AuditActionType, AuditLog, AuditLogFilter, AuditLogRepository, AuditableResource,
+        },
         user_tags::UserTagRepository,
         users::{User, UserRepository},
     },
@@ -61,19 +63,22 @@ async fn search_audit_log(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                axum::response::Redirect::to("/login").into_response()
-            )
+                axum::response::Redirect::to("/login").into_response(),
+            );
         }
     };
 
     // Check if user is mod or admin
     let is_admin = user_tags.is_admin(current_user.id).await.unwrap_or(false);
-    let is_moderator = user_tags.is_moderator(current_user.id).await.unwrap_or(false);
+    let is_moderator = user_tags
+        .is_moderator(current_user.id)
+        .await
+        .unwrap_or(false);
 
     if !(is_admin || is_moderator) {
         return (
             StatusCode::SEE_OTHER,
-            axum::response::Redirect::to("/home").into_response()
+            axum::response::Redirect::to("/home").into_response(),
         );
     }
 
@@ -94,7 +99,10 @@ async fn search_audit_log(
         resource_id: query.resource_id,
     };
 
-    let results = match audit_logs.search(&current_user, pagination.clone(), filter).await {
+    let results = match audit_logs
+        .search(&current_user, pagination.clone(), filter)
+        .await
+    {
         Ok(res) => Some(res),
         Err(e) => {
             let template = SearchAuditLogTemplate {
@@ -137,19 +145,22 @@ async fn view_audit_log(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                axum::response::Redirect::to("/login").into_response()
-            )
+                axum::response::Redirect::to("/login").into_response(),
+            );
         }
     };
 
     // Check if user is mod or admin
     let is_admin = user_tags.is_admin(current_user.id).await.unwrap_or(false);
-    let is_moderator = user_tags.is_moderator(current_user.id).await.unwrap_or(false);
+    let is_moderator = user_tags
+        .is_moderator(current_user.id)
+        .await
+        .unwrap_or(false);
 
     if !(is_admin || is_moderator) {
         return (
             StatusCode::SEE_OTHER,
-            axum::response::Redirect::to("/home").into_response()
+            axum::response::Redirect::to("/home").into_response(),
         );
     }
 

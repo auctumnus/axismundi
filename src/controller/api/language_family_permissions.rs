@@ -5,7 +5,9 @@ use crate::{
     err::{AppResult, unauthorized_no_session},
     model::{
         language_families::LanguageFamilyRepository,
-        language_family_permissions::{LanguageFamilyPermission, LanguageFamilyPermissionRepository},
+        language_family_permissions::{
+            LanguageFamilyPermission, LanguageFamilyPermissionRepository,
+        },
         language_invites::PermissionLevel,
         users::UserRepository,
     },
@@ -165,9 +167,10 @@ mod tests {
     async fn create_test_context() -> TestContext {
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let (app, app_state) = crate::tests::test_app_with_email_service_state(&email_service_trait)
-            .await
-            .unwrap();
+        let (app, app_state) =
+            crate::tests::test_app_with_email_service_state(&email_service_trait)
+                .await
+                .unwrap();
 
         async fn make_user_for_context(
             app: &axum::routing::RouterIntoService<axum::body::Body>,
@@ -261,12 +264,11 @@ mod tests {
     async fn test_get_family_permissions_unauthorized() {
         let mut context = create_test_context().await;
 
-        let request =
-            crate::controller::api::tests::get(&format!(
-                "language-families/{}/permissions",
-                context.family_code
-            ))
-            .await;
+        let request = crate::controller::api::tests::get(&format!(
+            "language-families/{}/permissions",
+            context.family_code
+        ))
+        .await;
 
         let response = context.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -530,7 +532,10 @@ mod tests {
         let invites = LanguageFamilyInviteRepository::new(context.app_state.clone());
         let families = LanguageFamilyRepository::new(context.app_state.clone());
         let family = families.find_by_code(&context.family_code).await.unwrap();
-        invites.accept(&context.other_user, family.id).await.unwrap();
+        invites
+            .accept(&context.other_user, family.id)
+            .await
+            .unwrap();
 
         // now the admin (formerly editor) can promote the new editor
         let promote_body = json!({

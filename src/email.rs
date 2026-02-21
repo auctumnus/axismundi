@@ -68,20 +68,21 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let verify_url = &CONFIG.url(&format!("verify/{user_id}?token={token}&email={}", serde_urlencoded::to_string(to)?));
+        let verify_url = &CONFIG.url(&format!(
+            "verify/{user_id}?token={token}&email={}",
+            serde_urlencoded::to_string(to)?
+        ));
         let subject = "verify your email";
-        let html = VerifyEmailHTML { verify_url }
-            .render()
-            .map_err(|e| {
-                crate::err::internal_error(format!("failed to render verification email: {}", e))
-            })?;
-        let text = VerifyEmailText { verify_url }
-            .render()
-            .map_err(|e| {
-                crate::err::internal_error(format!("failed to render verification email: {}", e))
-            })?;
+        let html = VerifyEmailHTML { verify_url }.render().map_err(|e| {
+            crate::err::internal_error(format!("failed to render verification email: {}", e))
+        })?;
+        let text = VerifyEmailText { verify_url }.render().map_err(|e| {
+            crate::err::internal_error(format!("failed to render verification email: {}", e))
+        })?;
 
-        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html).with_text(&text);
+        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject)
+            .with_html(&html)
+            .with_text(&text);
 
         self.client
             .emails
@@ -98,7 +99,10 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let reset_url = &CONFIG.url(&format!("reset-password?token={}", serde_urlencoded::to_string(token)?));
+        let reset_url = &CONFIG.url(&format!(
+            "reset-password?token={}",
+            serde_urlencoded::to_string(token)?
+        ));
         let subject = "reset your password";
         let html = format!(
             r#"<html>

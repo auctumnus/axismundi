@@ -71,6 +71,7 @@
                                 <option value="">All resources</option>
                                 <option value="user" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::User) %}selected{% endif %}>User</option>
                                 <option value="language" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Language) %}selected{% endif %}>Language</option>
+                                <option value="language_family" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::LanguageFamily) %}selected{% endif %}>Language Family</option>
                                 <option value="word" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Word) %}selected{% endif %}>Word</option>
                                 <option value="translation" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Translation) %}selected{% endif %}>Translation</option>
                                 <option value="translatable" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Translatable) %}selected{% endif %}>Translatable</option>

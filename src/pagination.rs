@@ -34,7 +34,9 @@ impl<T> PaginatedResponse<T> {
     }
 
     pub fn total_pages(&self) -> i32 {
-        ((self.total + i64::from(self.limit) - 1) / i64::from(self.limit)).try_into().unwrap_or(0)
+        ((self.total + i64::from(self.limit) - 1) / i64::from(self.limit))
+            .try_into()
+            .unwrap_or(0)
     }
 
     pub fn current_page(&self) -> i32 {

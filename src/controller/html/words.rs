@@ -21,8 +21,8 @@ use crate::{
         users::User,
         word_classes::{WordClass, WordClassRepository},
         word_relations::{
-            CreateWordRelation, RelationDirection, SearchWordRelations,
-            WordRelationRepository, WordRelationSearchResult, WordRelationType,
+            CreateWordRelation, RelationDirection, SearchWordRelations, WordRelationRepository,
+            WordRelationSearchResult, WordRelationType,
         },
         words::{CreateWord, Word, WordRepository, WordSearch, WordWithMeta},
     },
@@ -158,7 +158,6 @@ async fn word_search(
     State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
-    definitions: DefinitionRepository,
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
@@ -173,10 +172,11 @@ async fn word_search(
             .await
             .unwrap_or(false);
 
-        is_admin_or_mod || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
+        is_admin_or_mod
+            || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false)
     } else {
         false
     };
@@ -272,10 +272,11 @@ async fn view_lemmata(
             .await
             .unwrap_or(false);
 
-        is_admin_or_mod || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
+        is_admin_or_mod
+            || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false)
     } else {
         false
     };
@@ -409,10 +410,11 @@ async fn new_word(
             .await
             .unwrap_or(false);
 
-        is_admin_or_mod || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
+        is_admin_or_mod
+            || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false)
     } else {
         false
     };
@@ -466,10 +468,11 @@ async fn new_word_submit(
         .await
         .unwrap_or(false);
 
-    let user_has_permission = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let user_has_permission = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -502,10 +505,7 @@ async fn new_word_submit(
             word_classes: word_classes_list,
             previous_word: form.word.clone(),
             previous_word_class: form.word_class.clone(),
-            previous_definition: form
-                .definitions
-                .first().cloned()
-                .unwrap_or_default(),
+            previous_definition: form.definitions.first().cloned().unwrap_or_default(),
             previous_definitions: form.definitions.iter().skip(1).cloned().collect(),
             previous_context: form.contexts.first().cloned().unwrap_or_default(),
             previous_contexts: form.contexts.iter().skip(1).cloned().collect(),
@@ -572,9 +572,7 @@ async fn new_word_submit(
                 word_classes: word_classes_list,
                 previous_word: form.word.clone(),
                 previous_word_class: form.word_class.clone(),
-                previous_definition: definitions_text
-                    .first().cloned()
-                    .unwrap_or_default(),
+                previous_definition: definitions_text.first().cloned().unwrap_or_default(),
                 previous_definitions: definitions_text.iter().skip(1).cloned().collect(),
                 previous_context: form.contexts.first().cloned().unwrap_or_default(),
                 previous_contexts: form.contexts.iter().skip(1).cloned().collect(),
@@ -610,10 +608,11 @@ async fn view_lemma(
             .await
             .unwrap_or(false);
 
-        is_admin_or_mod || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
+        is_admin_or_mod
+            || permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false)
     } else {
         false
     };
@@ -820,10 +819,11 @@ async fn edit_word_submit(
         .await
         .unwrap_or(false);
 
-    let user_has_permission = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let user_has_permission = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -1020,12 +1020,13 @@ async fn add_relation_form(
         .unwrap_or(false);
 
     // Check permission
-    let has_permission = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
     if !has_permission {
         return render_generic_error(s, bad_request("You don't have permission to add relations"))
             .await;
@@ -1075,12 +1076,13 @@ async fn add_relation_submit(
         crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
 
     // Check permission on source language
-    let has_permission = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
     if !has_permission {
         let template = AddRelationTemplate {
             current_user: Some(current_user.clone()),
@@ -1128,16 +1130,17 @@ async fn add_relation_submit(
     };
 
     // Check permission on target language
-    let has_target_permission = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(
-                current_user.id,
-                target_word.language,
-                PermissionLevel::Editor
-            )
-            .await
-    );
+    let has_target_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(
+                    current_user.id,
+                    target_word.language,
+                    PermissionLevel::Editor
+                )
+                .await
+        );
     if !has_target_permission {
         let template = AddRelationTemplate {
             current_user: Some(current_user.clone()),
@@ -1238,10 +1241,11 @@ async fn view_word_relations(
             .await
             .unwrap_or(false);
 
-        is_admin_or_mod || language_permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false)
+        is_admin_or_mod
+            || language_permissions
+                .has_permission(user.id, language.id, PermissionLevel::Editor)
+                .await
+                .unwrap_or(false)
     } else {
         false
     };
@@ -1361,12 +1365,13 @@ async fn delete_relation_form(
         .unwrap_or(false);
 
     // Check permission
-    let has_permission = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
     if !has_permission {
         return render_generic_error(
             s,
@@ -1524,12 +1529,13 @@ async fn edit_relation_form(
         .unwrap_or(false);
 
     // Check permission
-    let has_permission = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
     if !has_permission {
         return render_generic_error(
             s,
@@ -1538,16 +1544,17 @@ async fn edit_relation_form(
         .await;
     }
 
-    let has_permission_on_related = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(
-                current_user.id,
-                related_language.id,
-                PermissionLevel::Editor
-            )
-            .await
-    );
+    let has_permission_on_related = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(
+                    current_user.id,
+                    related_language.id,
+                    PermissionLevel::Editor
+                )
+                .await
+        );
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
@@ -1629,22 +1636,24 @@ async fn edit_relation_submit(
         crate::util::will_create_audit_log_for_language(&state, &current_user, language.id).await;
 
     // Check permission
-    let has_permission = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(current_user.id, language.id, PermissionLevel::Editor)
-            .await
-    );
-    let has_permission_on_related = is_admin_or_mod || attempt!(
-        s,
-        language_permissions
-            .has_permission(
-                current_user.id,
-                related_language.id,
-                PermissionLevel::Editor
-            )
-            .await
-    );
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
+    let has_permission_on_related = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(
+                    current_user.id,
+                    related_language.id,
+                    PermissionLevel::Editor
+                )
+                .await
+        );
     if !has_permission {
         let template = EditRelationTemplate {
             current_user: Some(current_user.clone()),
@@ -1731,10 +1740,11 @@ async fn delete_word_form(
         .await
         .unwrap_or(false);
 
-    let user_has_permission = is_admin_or_mod || permissions
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .unwrap_or(false);
+    let user_has_permission = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
