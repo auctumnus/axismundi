@@ -111,7 +111,7 @@ body {
   }
 }
 
-@media (max-width: 616px) {
+@media (max-width: 816px) {
   :root {
     --page-width: calc(100dvw - 2rem);
   }
@@ -520,7 +520,8 @@ footer {
     }
   }
 
-  ul.last, ul.socials {
+  ul.last,
+  ul.socials {
     display: flex;
     flex-direction: row;
     gap: 1rem;
@@ -555,7 +556,7 @@ footer {
       .bluesky {
         width: 1.125rem;
         height: 1.125rem;
-        margin-right: .125rem;
+        margin-right: 0.125rem;
       }
     }
   }
@@ -791,11 +792,11 @@ ul.card-list {
 }
 
 .card > .header-with-actions:first-child:has(.icons) {
-  margin-top: .5rem;
+  margin-top: 0.5rem;
 }
 
 main > :is(.header-with-actions, h1, h2) {
-  --side-spacing: .125rem;
+  --side-spacing: 0.125rem;
   padding-left: var(--side-spacing);
   padding-right: var(--side-spacing);
 }
@@ -821,9 +822,10 @@ main > :is(.header-with-actions, h1, h2) {
 
   &:has(ul.icons) {
     align-items: flex-start;
-    h1, h2 {
+    h1,
+    h2 {
       line-height: initial;
-      margin-top: .125rem;
+      margin-top: 0.125rem;
     }
   }
 
