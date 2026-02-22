@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete permission - {{ family.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete permission</h1>
+
+<form class="default" method="post" action="/language-families/{{ family.code }}/permissions/{{ permission.id }}/delete">
+    <section>
+        <p>Are you sure you want to remove <strong>{% call u::name(&target_user) %}</strong>'s <strong>{{ permission.permission.display_name() }}</strong> permission?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete permission</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ family.code }}" class="breadcrumb">{{ family.name }}</a>
+<span class="separator">/</span>
+<a href="/language-families/{{ family.code }}/contributors" class="breadcrumb">contributors</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::family_section(&family, user_has_permission) %}
+{% endblock %}

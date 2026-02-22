@@ -30,7 +30,9 @@ use tower_http::services::ServeDir;
 mod audit_logs;
 mod bookmarks;
 mod language_families;
+mod language_family_invites;
 mod language_family_members;
+mod language_family_permissions;
 mod language_invites;
 mod language_permissions;
 mod languages;
@@ -64,6 +66,10 @@ pub fn create_html_controller() -> Router<AppState> {
         language_families::create_router();
     let (secure_language_permission_routes, normal_language_permission_routes) =
         language_permissions::create_router();
+    let (secure_family_invite_routes, normal_family_invite_routes) =
+        language_family_invites::create_router();
+    let (secure_family_permission_routes, normal_family_permission_routes) =
+        language_family_permissions::create_router();
     let (secure_word_routes, normal_word_routes) = words::create_router();
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
@@ -79,6 +85,8 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_language_routes)
         .merge(secure_language_family_routes)
         .merge(secure_language_permission_routes)
+        .merge(secure_family_invite_routes)
+        .merge(secure_family_permission_routes)
         .merge(language_family_members::create_router())
         .merge(secure_word_routes)
         .merge(secure_word_class_routes)
@@ -99,6 +107,8 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_language_routes)
         .merge(normal_language_family_routes)
         .merge(normal_language_permission_routes)
+        .merge(normal_family_invite_routes)
+        .merge(normal_family_permission_routes)
         .merge(normal_word_routes)
         .merge(normal_word_class_routes)
         .merge(normal_translatable_routes)
