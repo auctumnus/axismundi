@@ -57,6 +57,7 @@ struct ContributorWithStats {
     translation_count: i64,
     can_edit: bool,
     can_delete: bool,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Template)]
@@ -151,6 +152,7 @@ async fn search_contributors(
             translation_count: record.1.translation_count,
             can_edit: can_edit && permission_id.is_some(),
             can_delete: can_delete && permission_id.is_some(),
+            created_at: record.4,
         });
     }
 

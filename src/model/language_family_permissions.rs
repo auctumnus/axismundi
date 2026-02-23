@@ -64,8 +64,8 @@ impl LanguageFamilyPermissionRepository {
         let result = sqlx::query_as!(
             LanguageFamilyPermission,
             r#"
-                INSERT INTO language_family_permissions (family, "user", permission, via, invited_by, invited_at)
-                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                INSERT INTO language_family_permissions (family, "user", permission, via, invited_by, invited_at, accepted_at)
+                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id, family, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at
             "#,
             permission.family,
@@ -295,7 +295,7 @@ impl LanguageFamilyPermissionRepository {
             r#"
                 SELECT id, family, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at
                 FROM language_family_permissions
-                WHERE family = $1
+                WHERE family = $1 AND accepted_at IS NOT NULL
                 ORDER BY invited_at DESC
             "#,
             family

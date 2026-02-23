@@ -59,8 +59,8 @@ impl LanguagePermissionRepository {
         let result = sqlx::query_as!(
             LanguagePermission,
             r#"
-                INSERT INTO language_permissions (language, "user", permission, via, invited_by, invited_at)
-                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                INSERT INTO language_permissions (language, "user", permission, via, invited_by, invited_at, accepted_at)
+                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id, language, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at
             "#,
             permission.language,

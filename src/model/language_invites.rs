@@ -30,6 +30,15 @@ impl PermissionLevel {
             PermissionLevel::Owner => "owner",
         }
     }
+
+    pub fn color(self) -> &'static str {
+        match self {
+            PermissionLevel::Viewer => "gray",
+            PermissionLevel::Editor => "blue",
+            PermissionLevel::Admin => "orange",
+            PermissionLevel::Owner => "red",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

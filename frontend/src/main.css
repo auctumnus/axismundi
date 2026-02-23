@@ -562,6 +562,51 @@ footer {
   }
 }
 
+.text-badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  border-width: 1px;
+  border-style: solid;
+
+  border-color: light-dark(var(--text-badge-bg), transparent);
+  background-color: var(--text-badge-bg);
+  color: var(--text-badge-fg);
+  border-radius: 0.125rem;
+  padding-inline: 0.25rem;
+
+  &.blue {
+    --text-badge-bg: light-dark(var(--color-blue-200), var(--color-blue-700));
+    --text-badge-fg: light-dark(var(--color-blue-700), var(--color-blue-200));
+  }
+
+  &.red {
+    --text-badge-bg: light-dark(var(--color-red-200), var(--color-red-700));
+    --text-badge-fg: light-dark(var(--color-red-700), var(--color-red-200));
+  }
+
+  &.gray {
+    --text-badge-bg: light-dark(var(--color-slate-200), var(--color-slate-700));
+    --text-badge-fg: light-dark(var(--color-slate-700), var(--color-slate-200));
+  }
+
+  &.orange {
+    --text-badge-bg: light-dark(var(--color-amber-200), var(--color-amber-700));
+    --text-badge-fg: light-dark(var(--color-amber-700), var(--color-amber-200));
+  }
+}
+
+.invite-banner p {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 :is(.language-card, .translatable-card) .likes {
   position: relative;
   top: -0.325rem;
@@ -650,6 +695,11 @@ footer {
     flex-direction: row;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
+
+    form.default {
+      margin: 0;
+      display: inline;
+    }
 
     a.button,
     button {

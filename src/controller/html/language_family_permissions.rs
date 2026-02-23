@@ -57,6 +57,7 @@ struct ContributorWithStats {
     permission_id: Option<Uuid>,
     can_edit: bool,
     can_delete: bool,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Template)]
@@ -142,6 +143,7 @@ async fn search_contributors(
             permission_id,
             can_edit: can_edit && permission_id.is_some(),
             can_delete: can_delete && permission_id.is_some(),
+            created_at: perm.accepted_at,
         });
     }
 

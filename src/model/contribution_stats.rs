@@ -187,8 +187,15 @@ impl ContributionStatsRepository {
         language: &Uuid,
         query: &ContributionsSearch,
         paginated_request: &PaginatedRequest,
-    ) -> AppResult<PaginatedResponse<(User, ContributionStats, PermissionLevel, Option<Uuid>)>>
-    {
+    ) -> AppResult<
+        PaginatedResponse<(
+            User,
+            ContributionStats,
+            PermissionLevel,
+            Option<Uuid>,
+            Option<chrono::DateTime<chrono::Utc>>,
+        )>,
+    > {
         let offset = paginated_request.offset;
         let limit = paginated_request.limit;
 
@@ -218,6 +225,7 @@ impl ContributionStatsRepository {
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     lp.id as "permission_id?",
                     COALESCE(lp.permission, 'viewer') as "permission!: PermissionLevel",
+                    lp.accepted_at as "accepted_at?",
                     cs.language_id as "cs_language_id?",
                     cs.user_id as "cs_user_id?",
                     COALESCE(cs.word_count, 0) as "cs_word_count!",
@@ -225,7 +233,7 @@ impl ContributionStatsRepository {
                 FROM users u
                 LEFT JOIN contribution_stats cs ON u.id = cs.user_id AND cs.language_id = $1
                 LEFT JOIN bookmarks ON bookmarks.item = u.id AND bookmarks.resource = 'user'
-                LEFT JOIN language_permissions lp ON lp."user" = u.id AND lp.language = $1
+                LEFT JOIN language_permissions lp ON lp."user" = u.id AND lp.language = $1 AND lp.accepted_at IS NOT NULL
                 WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)
                 AND (lp.permission IS NULL OR lp.permission >= $4)
                 AND (cs.word_count IS NOT NULL OR cs.translation_count IS NOT NULL OR lp.permission IS NOT NULL)
@@ -244,7 +252,7 @@ impl ContributionStatsRepository {
                 SELECT COUNT(*) as "count!"
                 FROM users u
                 LEFT JOIN contribution_stats cs ON u.id = cs.user_id AND cs.language_id = $1
-                LEFT JOIN language_permissions lp ON lp.user = u.id AND lp.language = $1
+                LEFT JOIN language_permissions lp ON lp.user = u.id AND lp.language = $1 AND lp.accepted_at IS NOT NULL
                 WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)
                 AND (lp.permission IS NULL OR lp.permission >= $3)
 
@@ -287,7 +295,13 @@ impl ContributionStatsRepository {
                 word_count: record.cs_word_count,
                 translation_count: record.cs_translation_count,
             };
-            results.push((user, stats, record.permission, record.permission_id));
+            results.push((
+                user,
+                stats,
+                record.permission,
+                record.permission_id,
+                record.accepted_at,
+            ));
         }
 
         Ok(PaginatedResponse {

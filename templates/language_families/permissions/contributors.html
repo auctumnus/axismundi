@@ -17,39 +17,7 @@
 {% else %}
     <ul class="contributor-list">
         {% for contributor in contributors %}
-            <li class="contributor-card">
-                <div class="left">
-                    <div class="contributor-info">
-                        {% call u::badge(&contributor.user, size="medium") %}
-                        <div class="contributor-details">
-                            <div class="permission-badge">
-                                {% match contributor.permission %}
-                                    {% when crate::model::language_invites::PermissionLevel::Owner %}
-                                        <span class="badge owner">owner</span>
-                                    {% when crate::model::language_invites::PermissionLevel::Admin %}
-                                        <span class="badge admin">admin</span>
-                                    {% when crate::model::language_invites::PermissionLevel::Editor %}
-                                        <span class="badge editor">editor</span>
-                                    {% when crate::model::language_invites::PermissionLevel::Viewer %}
-                                        <span class="badge viewer">viewer</span>
-                                {% endmatch %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="permission-actions">
-                    {% if contributor.can_edit %}
-                        <a href="/language-families/{{ family.code }}/permissions/{{ contributor.permission_id.unwrap() }}/edit" class="icon-button-container" data-tooltip="Edit permission" aria-label="Edit permission">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.438.65T21 6.4q0 .4-.137.763t-.438.662L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
-                        </a>
-                    {% endif %}
-                    {% if contributor.can_delete %}
-                        <a href="/language-families/{{ family.code }}/permissions/{{ contributor.permission_id.unwrap() }}/delete" class="icon-button-container delete" data-tooltip="Delete permission" aria-label="Delete permission">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M19.075 21.9L17.15 20H6q-.825 0-1.412-.587T4 18v-.8q0-.85.438-1.562T5.6 14.55q1.125-.575 2.288-.925t2.362-.525L2.075 4.925q-.3-.3-.287-.712T2.1 3.5t.713-.3t.712.3l16.975 17q.3.3.3.7t-.3.7t-.712.3t-.713-.3M6 18h9.15l-3-3H12q-1.4 0-2.775.338T6.5 16.35q-.225.125-.363.35T6 17.2zm12.4-3.45q.725.35 1.15 1.063T20 17.15l-3.35-3.35q.45.175.888.35t.862.4m-4.2-3.2l-1.475-1.475q.575-.225.925-.737T14 8q0-.825-.587-1.412T12 6q-.625 0-1.137.35t-.738.925L8.65 5.8q.575-.85 1.45-1.325T12 4q1.65 0 2.825 1.175T16 8q0 1.025-.475 1.9T14.2 11.35m.95 6.65H6zm-3.725-9.425"/></svg>
-                        </a>
-                    {% endif %}
-                </div>
-            </li>
+            {% call u::contributor_card(&contributor, "/language-families/" ~ family.code) %}
         {% endfor %}
     </ul>
 {% endif %}

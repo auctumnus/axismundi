@@ -22,6 +22,7 @@ form.default {
   border-radius: var(--rounding);
   background-color: var(--background-panel);
   padding: 1rem;
+  align-items: center;
 
   transition:
     border-color var(--duration-very-fast) ease-in-out,
@@ -29,6 +30,10 @@ form.default {
 
   &:hover {
     border-color: var(--foreground-secondary);
+  }
+
+  .left {
+    flex-grow: 1;
   }
 
   .contributor-info {
@@ -47,43 +52,6 @@ form.default {
     flex-grow: 1;
   }
 
-  .permission-badge {
-    display: flex;
-    align-items: center;
-
-    .badge {
-      font-size: 0.75rem;
-      padding: 0.25rem 0.5rem;
-      border-radius: var(--rounding);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-
-      &.owner {
-        background-color: var(--color-accent);
-        color: var(--background);
-      }
-
-      &.admin {
-        background-color: var(--color-primary);
-        color: var(--background);
-      }
-
-      &.editor {
-        background-color: var(--foreground-tertiary);
-        color: var(--background);
-      }
-
-      &.viewer {
-        background-color: var(
-          --foreground-quaternary,
-          var(--foreground-tertiary)
-        );
-        color: var(--background);
-      }
-    }
-  }
-
   .contribution-stats {
     display: flex;
     flex-direction: row;
@@ -94,40 +62,6 @@ form.default {
 
     .separator {
       color: var(--foreground-tertiary);
-    }
-  }
-
-  .permission-actions {
-    display: flex;
-    flex-direction: row;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--foreground-quaternary);
-
-    .icon-button-container {
-      /* Override sizing and border-radius for this context */
-      width: 2rem;
-      height: 2rem;
-      min-width: 2rem;
-      min-height: 2rem;
-      border-radius: var(--rounding);
-      text-decoration: none;
-
-      svg {
-        width: 1.25rem;
-        height: 1.25rem;
-      }
-
-      &:hover {
-        background-color: var(--foreground-quaternary);
-        color: var(--foreground);
-      }
-
-      &.delete:hover {
-        background-color: var(--color-danger);
-        color: var(--background);
-      }
     }
   }
 }
