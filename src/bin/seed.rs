@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 // Fixed seed for reproducible data (0xAX1SMUNDI in spirit)
-const RNG_SEED: u64 = 0xA515_0000_D1;
+const RNG_SEED: u64 = 0x00A5_1500_00D1;
 
 // Pre-computed argon2 hash of "seedpassword123" - saves time vs computing at runtime
 const SEED_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c2VlZHNhbHQxMjM0NTY$Kf2SqXPfABxqIvBRCcm7vVF9EqzVnHRKWQlXDO7QZMY";
@@ -304,7 +304,7 @@ fn generate_language_name(rng: &mut StdRng) -> String {
         ""
     };
     let suffix = NAME_SUFFIXES.choose(rng).unwrap();
-    format!("{}{}{}", prefix, mid, suffix)
+    format!("{prefix}{mid}{suffix}")
 }
 
 fn generate_language_code(name: &str, rng: &mut StdRng) -> String {
@@ -317,7 +317,7 @@ fn generate_syllable(rng: &mut StdRng) -> String {
     let onset = ONSETS.choose(rng).unwrap();
     let nucleus = NUCLEI.choose(rng).unwrap();
     let coda = CODAS.choose(rng).unwrap();
-    format!("{}{}{}", onset, nucleus, coda)
+    format!("{onset}{nucleus}{coda}")
 }
 
 fn generate_word(rng: &mut StdRng) -> String {
@@ -341,7 +341,7 @@ fn generate_definition(rng: &mut StdRng) -> String {
 fn generate_username(rng: &mut StdRng) -> String {
     let word = random_word::get(random_word::Lang::En);
     let suffix: u16 = rng.gen_range(1000..9999);
-    format!("{}_{}", word, suffix).replace('-', "")
+    format!("{word}_{suffix}").replace('-', "")
 }
 
 async fn clear_database(pool: &PgPool) -> anyhow::Result<()> {
@@ -367,7 +367,7 @@ async fn seed_users(pool: &PgPool, rng: &mut StdRng, scale: &Scale) -> anyhow::R
 
     for i in 0..scale.users {
         let username = generate_username(rng);
-        let email = format!("user{}@seed.local", i);
+        let email = format!("user{i}@seed.local");
         let display_name: Option<String> = if rng.gen_bool(0.3) {
             Some(Name().fake_with_rng(rng))
         } else {
@@ -464,8 +464,7 @@ async fn seed_user_tags(pool: &PgPool, rng: &mut StdRng, user_ids: &[Uuid]) -> a
     }
 
     println!(
-        "Created {} admin tags, {} moderator tags.",
-        admin_count, mod_count
+        "Created {admin_count} admin tags, {mod_count} moderator tags."
     );
     Ok(())
 }
@@ -581,7 +580,7 @@ async fn seed_language_permissions(
         }
     }
 
-    println!("Created {} additional permissions.", count);
+    println!("Created {count} additional permissions.");
     Ok(())
 }
 
@@ -669,7 +668,7 @@ async fn seed_language_families(
 
         let mut code = name.chars().take(4).collect::<String>().to_lowercase();
         let suffix: u8 = rng.gen_range(0..100);
-        code = format!("{}{:02}", code, suffix);
+        code = format!("{code}{suffix:02}");
 
         while used_codes.contains(&code) {
             let suffix: u8 = rng.gen_range(0..100);
@@ -765,7 +764,7 @@ async fn seed_language_family_members(
         member_count += 1;
     }
 
-    println!("Created {} family members.", member_count);
+    println!("Created {member_count} family members.");
     Ok(())
 }
 
@@ -924,7 +923,7 @@ async fn seed_words(
     }
 
     let total_words: usize = words_by_lang.values().map(|v| v.len()).sum();
-    println!("Created {} words total.", total_words);
+    println!("Created {total_words} words total.");
     Ok(words_by_lang)
 }
 
@@ -1044,7 +1043,7 @@ async fn seed_word_relations(
         }
     }
 
-    println!("Created {} word relations.", count);
+    println!("Created {count} word relations.");
     Ok(())
 }
 
@@ -1061,22 +1060,18 @@ async fn seed_translatables(
     let mut used_slugs = HashSet::new();
 
     for i in 0..scale.translatables {
-        let (english, source_name, source_content) = if i < QUOTES.len() {
-            let q = QUOTES[i];
-            (
-                q.0.to_string(),
-                Some(q.1.to_string()),
-                Some(q.2.to_string()),
-            )
-        } else {
-            let text: String = Paragraph(1..3).fake_with_rng(rng);
-            (text, None, None)
+        let (english, source_name, source_content) = match QUOTES.get(i) {
+            Some(q) => (q.0.to_string(), Some(q.1.to_string()), Some(q.2.to_string())),
+            None => {
+                let text: String = Paragraph(1..3).fake_with_rng(rng);
+                (text, None, None)
+            }
         };
 
         let title: String = english.chars().take(50).collect();
         let mut slug = slug::slugify(&title);
         let suffix: u16 = rng.gen_range(100..999);
-        slug = format!("{}-{}", slug, suffix);
+        slug = format!("{slug}-{suffix}");
 
         while used_slugs.contains(&slug) {
             let suffix: u16 = rng.gen_range(100..999);
@@ -1288,8 +1283,7 @@ async fn seed_likes(
     }
 
     println!(
-        "Created likes: {} language, {} word, {} translatable, {} translation",
-        lang_likes, word_likes, translatable_likes, translation_likes
+        "Created likes: {lang_likes} language, {word_likes} word, {translatable_likes} translatable, {translation_likes} translation"
     );
 
     // Update like counts
@@ -1406,7 +1400,7 @@ async fn seed_activities(pool: &PgPool, _rng: &mut StdRng) -> anyhow::Result<()>
         LIMIT $1
         "#,
     )
-    .bind(word_sample_size as i32)
+    .bind(word_sample_size)
     .fetch_all(pool)
     .await?;
 
@@ -1455,7 +1449,7 @@ async fn seed_activities(pool: &PgPool, _rng: &mut StdRng) -> anyhow::Result<()>
         LIMIT $1
         "#,
     )
-    .bind(translation_sample_size as i32)
+    .bind(translation_sample_size)
     .fetch_all(pool)
     .await?;
 
@@ -1581,10 +1575,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!(
         "Database: {}",
-        database_url.split('@').last().unwrap_or(&database_url)
+        database_url.split('@').next_back().unwrap_or(&database_url)
     );
-    println!("Scale factor: {}", scale_factor);
-    println!("Clear first: {}\n", should_clear);
+    println!("Scale factor: {scale_factor}");
+    println!("Clear first: {should_clear}\n");
 
     let scale = Scale::from_factor(scale_factor);
 

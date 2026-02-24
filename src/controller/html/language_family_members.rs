@@ -82,6 +82,7 @@ struct ViewMemberTemplate {
     children: Vec<MemberWithLanguages>,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn view_member(
     State(state): State<AppState>,
     s: Session,

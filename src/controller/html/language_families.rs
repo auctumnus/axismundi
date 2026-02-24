@@ -5,12 +5,14 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use axum_extra::{TypedHeader, headers::UserAgent};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
     attempt,
     controller::html::{okay, render_template},
+    embed::{self, GenericEmbed, render_embed, truncate_description},
     err::AppError,
     get_user,
     model::{
@@ -158,10 +160,13 @@ struct ViewLanguageFamilyTemplate {
     is_liked: bool,
     pending_invite: Option<(LanguageFamilyInvite, User)>,
     family_tree_svg: String,
+    json_ld: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn view_language_family(
     s: Session,
+    user_agent: Option<TypedHeader<UserAgent>>,
     language_families: LanguageFamilyRepository,
     permissions: LanguageFamilyPermissionRepository,
     invites: LanguageFamilyInviteRepository,
@@ -171,10 +176,33 @@ async fn view_language_family(
 ) -> (StatusCode, Response) {
     let family = attempt!(s, language_families.find_by_code(&code).await);
     let owner = attempt!(s, users.find_by_id(family.created_by).await);
+    if let Some(ua) = user_agent
+        && ua.as_str().to_lowercase().contains("discordbot")
+    {
+        return okay(
+            render_embed(
+                embed::EmbedTarget::Discord,
+                GenericEmbed {
+                    title: family.name,
+                    description: format!("{}\n\n⭐️ {}", truncate_description(&family.description), family.like_count),
+                    author: Some(owner.clone()),
+                    color: owner.gender,
+                    url: format!(
+                        "{}/language-families/{}",
+                        &crate::CONFIG.public_url_base,
+                        family.code
+                    ),
+                    image: None,
+                },
+            )
+            .await
+            .into_response(),
+        );
+    }
     let rendered_description = crate::md::render_md(&family.description).unwrap_or_default();
 
     // Count contributors (non-owner permissions)
-    let contributor_count = attempt!(s, permissions.count_contributors(family.id).await) as usize;
+    let contributor_count = usize::try_from(attempt!(s, permissions.count_contributors(family.id).await)).unwrap_or(0);
 
     let can_edit_language_family = if let Some(user) = s.user() {
         permissions
@@ -221,12 +249,21 @@ async fn view_language_family(
         None
     };
 
-    let member_count = attempt!(s, members.count_by_family(family.id).await) as usize;
+    let member_count = usize::try_from(attempt!(s, members.count_by_family(family.id).await)).unwrap_or(0);
 
     // Generate family tree SVG
     let family_tree_svg = crate::util::graph_svg::render_family_tree(&family, &members)
         .await
         .unwrap_or_default();
+
+    let json_ld = attempt!(
+        s,
+        serde_json::to_string(&attempt!(
+            s,
+            language_families.as_json_ld(&family).await
+        ))
+        .map_err(Into::into)
+    );
 
     let template = ViewLanguageFamilyTemplate {
         current_user: s.user().cloned(),
@@ -240,6 +277,7 @@ async fn view_language_family(
         pending_invite,
         family_tree_svg,
         member_count,
+        json_ld,
     };
 
     okay(render_template(template))

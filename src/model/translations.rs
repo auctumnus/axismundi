@@ -809,6 +809,34 @@ impl TranslationRepository {
 
         Ok(likes)
     }
+
+    pub async fn as_json_ld(
+        &self,
+        translation: &Translation,
+        translatable: &Translatable,
+        language: &Language,
+    ) -> AppResult<serde_json::Value> {
+        let user_repo = crate::model::users::UserRepository::new(self.state.clone());
+        let creator = user_repo.find_by_id(translation.created_by).await?;
+
+        let translatable_repo = TranslatableRepository::new(self.state.clone());
+        let translatable_ld = translatable_repo.as_json_ld(translatable).await?;
+
+        let json_ld = serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "CreativeWork",
+            "name": format!("{} ({} translation)", translatable.title, language.name),
+            "text": translation.translated_text,
+            "inLanguage": language.name,
+            "translationOfWork": translatable_ld,
+            "dateCreated": translation.created_at.to_rfc3339(),
+            "dateModified": translation.updated_at.to_rfc3339(),
+            "author": crate::model::users::UserRepository::as_json_ld(&creator),
+            "url": format!("{}/translatable/{}/translation/{}", crate::config::CONFIG.public_url_base, translatable.slug, language.code),
+        });
+
+        Ok(json_ld)
+    }
 }
 
 #[derive(Default, Debug, Deserialize, Clone, Serialize)]

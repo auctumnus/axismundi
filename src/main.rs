@@ -23,6 +23,7 @@ use crate::{
 mod config;
 mod controller;
 mod email;
+mod embed;
 mod err;
 mod md;
 mod model;

@@ -3,11 +3,13 @@ use std::sync::LazyLock;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::{Value, json};
 use sqlx::FromRow;
 use uuid::Uuid;
 use validator::{Validate, ValidateArgs, ValidationErrors};
 
 use crate::{
+    config::CONFIG,
     err::{AppResult, bad_request, internal_error, not_found},
     model::{
         email_verification_tokens::EmailVerificationToken,
@@ -80,6 +82,10 @@ impl User {
 
     pub fn is_banned(&self) -> bool {
         self.tags.iter().any(|tag| tag == "banned")
+    }
+
+    pub fn name(&self) -> &str {
+        self.display_name.as_deref().unwrap_or(&self.username)
     }
 }
 
@@ -883,6 +889,28 @@ impl UserRepository {
         .await?;
 
         Ok(result)
+    }
+
+    pub fn as_json_ld(user: &User) -> Value {
+        let mut base = json!({
+            "@type": "Person",
+            "name": user.name(),
+            "alternateName": user.username,
+            "url": format!("{}/bookmarks/{}", CONFIG.public_url_base, &user.bookmark),
+            "image": user.get_profile_picture_url().unwrap_or_else(|| format!("{}/static/default-pfp.webp", CONFIG.public_url_base)),
+        });
+
+        if let Some(pronouns) = &user.pronouns {
+            base["pronouns"] = json!(pronouns);
+        }
+        if let Some(gender) = &user.gender {
+            base["gender"] = json!(gender);
+        }
+        if let Some(description) = &user.description {
+            base["description"] = json!(description);
+        }
+
+        base
     }
 }
 

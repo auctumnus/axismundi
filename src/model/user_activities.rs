@@ -47,11 +47,11 @@ impl ActivityType {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActivityEntity {
-    Word(WordWithMeta, String),
+    Word(Box<WordWithMeta>, String),
     Language(LanguagesWithContributors),
     User(User),
     Translatable(TranslatableWithLiked),
-    Translation(TranslationWithLanguageAndContributor, String),
+    Translation(Box<TranslationWithLanguageAndContributor>, String),
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -691,7 +691,7 @@ impl UserActivityRepository {
                         .find_by_id(word.language)
                         .await?;
                     let word = words_repo.materialize(word, requestor).await?;
-                    Ok(ActivityEntity::Word(word, lang.code))
+                    Ok(ActivityEntity::Word(Box::new(word), lang.code))
                 } else {
                     Err(bad_request(format!(
                         "unable to resolve entity with id '{}'",
@@ -748,7 +748,7 @@ impl UserActivityRepository {
                     let translation = translations_repo
                         .materialize(translation, requestor)
                         .await?;
-                    Ok(ActivityEntity::Translation(translation, lang.code))
+                    Ok(ActivityEntity::Translation(Box::new(translation), lang.code))
                 } else {
                     Err(bad_request(format!(
                         "unable to resolve entity with id '{}'",

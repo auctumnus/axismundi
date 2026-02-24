@@ -6,12 +6,14 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use axum_extra::{TypedHeader, headers::UserAgent};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     attempt,
     controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
+    embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::{AppError, bad_request},
     get_user,
     model::{
@@ -474,10 +476,12 @@ struct ViewTranslationTemplate {
     can_edit_translation: bool,
     translatable_is_liked: bool,
     translation_is_liked: bool,
+    json_ld: String,
 }
 
 async fn view_translation(
     s: Session,
+    user_agent: Option<TypedHeader<UserAgent>>,
     translatables: TranslatableRepository,
     languages: LanguageRepository,
     translations: TranslationRepository,
@@ -496,6 +500,31 @@ async fn view_translation(
 
     let translatable_creator = attempt!(s, users.find_by_id(translatable.created_by).await);
     let translation_creator = attempt!(s, users.find_by_id(translation.created_by).await);
+
+    if let Some(ua) = user_agent
+        && ua.as_str().to_lowercase().contains("discordbot")
+    {
+        return okay(
+            render_embed(
+                EmbedTarget::Discord,
+                GenericEmbed {
+                    title: format!("{} ({} translation)", translatable.title, language.name),
+                    description: format!("{}\n\n⭐️ {}", truncate_description(&translation.translated_text), translation.like_count),
+                    author: Some(translation_creator),
+                    color: None,
+                    url: format!(
+                        "{}/translatable/{}/translation/{}",
+                        &crate::CONFIG.public_url_base,
+                        translatable.slug,
+                        language.code
+                    ),
+                    image: None,
+                },
+            )
+            .await
+            .into_response(),
+        );
+    }
 
     let current_user_has_permission = if let Some(current_user) = s.user() {
         attempt!(
@@ -548,6 +577,15 @@ async fn view_translation(
 
     let can_edit_translation = current_user_has_permission;
 
+    let json_ld = attempt!(
+        s,
+        serde_json::to_string(&attempt!(
+            s,
+            translations.as_json_ld(&translation, &translatable, &language).await
+        ))
+        .map_err(Into::into)
+    );
+
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),
         translatable,
@@ -561,6 +599,7 @@ async fn view_translation(
         can_edit_translation,
         translatable_is_liked,
         translation_is_liked,
+        json_ld,
     };
 
     let body = render_template(template);

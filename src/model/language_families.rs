@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
+use crate::config::CONFIG;
 use crate::err::{AppResult, bad_request, internal_error, not_found};
 use crate::model::contribution_stats::{ContributionStatsRepository, ContributionsSearch};
 use crate::model::language_family_members::{
@@ -19,6 +20,8 @@ use crate::model::languages::Language;
 use crate::model::users::User;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::util::{AppState, repo_from_parts};
+
+use super::users::UserRepository;
 
 #[derive(FromRow, Clone, Serialize, Deserialize, Debug)]
 pub struct LanguageFamily {
@@ -703,6 +706,54 @@ impl LanguageFamilyRepository {
         tx.commit().await?;
 
         Ok(likes)
+    }
+
+    pub async fn find_owner(&self, family_id: Uuid) -> AppResult<User> {
+        let result = sqlx::query_as!(
+            User,
+            r#"
+                SELECT
+                    users.id,
+                    users.username,
+                    users.email,
+                    users.password_hash,
+                    users.display_name,
+                    users.description,
+                    users.pronouns,
+                    users.gender,
+                    users.profile_picture_object_id,
+                    users.verified_at,
+                    users.tags,
+                    users.created_at,
+                    users.updated_at,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM users
+                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'
+                JOIN language_family_permissions ON language_family_permissions.user = users.id
+                WHERE language_family_permissions.family = $1
+                AND language_family_permissions.permission = 'owner'
+            "#,
+            family_id
+        )
+        .fetch_one(&self.state.pool);
+
+        result.await.map_err(Into::into)
+    }
+
+    pub async fn as_json_ld(&self, family: &LanguageFamily) -> AppResult<Value> {
+        let owner = self.find_owner(family.id).await?;
+
+        let json_ld = json!({
+            "@context": "https://schema.org",
+            "@type": "CreativeWork",
+            "name": family.name,
+            "description": family.description,
+            "identifier": family.code,
+            "author": UserRepository::as_json_ld(&owner),
+            "url": format!("{}/language-families/{}", CONFIG.public_url_base, family.code),
+        });
+
+        Ok(json_ld)
     }
 }
 

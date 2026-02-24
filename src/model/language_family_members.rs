@@ -81,11 +81,11 @@ pub struct SearchLanguageFamilyMembers {
     pub q: Option<String>, // name, code, description, notes
 }
 
-pub struct SearchRelatives {
-    pub family_code: Option<String>,
-    pub q: Option<String>,
-    pub relation_type: Option<LanguageFamilyRelationType>,
-}
+// pub struct SearchRelatives {
+//     pub family_code: Option<String>,
+//     pub q: Option<String>,
+//     pub relation_type: Option<LanguageFamilyRelationType>,
+// }
 
 pub struct LanguageFamilyMemberRepository {
     state: AppState,
@@ -545,7 +545,7 @@ impl LanguageFamilyMemberRepository {
         let (items, count) = tokio::try_join!(items_future, count_future)?;
 
         let total = count.unwrap_or(0);
-        let has_more = i64::from(pagination.offset) + (items.len() as i64) < total;
+        let has_more = i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX) < total;
 
         Ok(PaginatedResponse {
             items,

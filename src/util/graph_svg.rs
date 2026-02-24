@@ -60,7 +60,7 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
             .get(&edge_data.consequent)
             .ok_or_else(|| internal_error("Edge references missing consequent node"))?;
 
-        let (style, penwidth) = edge_style_for_cognacy(&edge_data.kind);
+        let (style, penwidth) = edge_style_for_cognacy(edge_data.kind);
 
         g.create_edge(from_node, to_node, None)
             .attribute(edge::STYLE, style)
@@ -78,7 +78,7 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
     Ok(svg)
 }
 
-fn edge_style_for_cognacy(kind: &CognacyRelationKindV1) -> (&'static str, &'static str) {
+fn edge_style_for_cognacy(kind: CognacyRelationKindV1) -> (&'static str, &'static str) {
     match kind {
         CognacyRelationKindV1::Derived | CognacyRelationKindV1::Descendant => ("solid", "1.0"),
         CognacyRelationKindV1::Compound => ("solid", "2.0"),
@@ -95,8 +95,8 @@ pub enum LanguageFamilyMemberLabel {
 impl LanguageFamilyMemberLabel {
     fn as_str(&self) -> String {
         match self {
-            LanguageFamilyMemberLabel::Language { name, code } => format!("{} ({})", name, code),
-            LanguageFamilyMemberLabel::Grouping { notes } => format!("{}", notes),
+            LanguageFamilyMemberLabel::Language { name, code } => format!("{name} ({code})"),
+            LanguageFamilyMemberLabel::Grouping { notes } => notes.to_string(),
         }
     }
 
@@ -155,7 +155,7 @@ pub fn language_family_to_svg(
         let node_id = member_id.to_string();
         let label = member_labels
             .get(&member_id)
-            .map_or("group".to_string(), |s| s.as_str());
+            .map_or("group".to_string(), LanguageFamilyMemberLabel::as_str);
 
         let node = g
             .create_node(&node_id)
@@ -197,7 +197,7 @@ pub fn language_family_to_svg(
             .get(&edge_data.child_member_id)
             .ok_or_else(|| internal_error("Edge references missing child node"))?;
 
-        let style = edge_style_for_family(&edge_data.relation_kind);
+        let style = edge_style_for_family(edge_data.relation_kind);
 
         g.create_edge(from_node, to_node, None)
             .attribute(edge::STYLE, style)
@@ -217,7 +217,7 @@ pub fn language_family_to_svg(
     Ok(svg)
 }
 
-fn edge_style_for_family(kind: &FamilyRelationKindV1) -> &'static str {
+fn edge_style_for_family(kind: FamilyRelationKindV1) -> &'static str {
     match kind {
         FamilyRelationKindV1::Descendant => "solid",
         FamilyRelationKindV1::Hybrid => "dashed",

@@ -130,8 +130,8 @@ impl WordRepository {
 
         Ok(WordWithMeta {
             word,
-            creator,
             first_definition,
+            creator,
             is_liked,
         })
     }

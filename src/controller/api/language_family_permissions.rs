@@ -165,13 +165,6 @@ mod tests {
     }
 
     async fn create_test_context() -> TestContext {
-        let email_service = Arc::new(MockEmailService::new());
-        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let (app, app_state) =
-            crate::tests::test_app_with_email_service_state(&email_service_trait)
-                .await
-                .unwrap();
-
         async fn make_user_for_context(
             app: &axum::routing::RouterIntoService<axum::body::Body>,
             state: AppState,
@@ -188,6 +181,13 @@ mod tests {
                 .unwrap();
             (user, token)
         }
+
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let (app, app_state) =
+            crate::tests::test_app_with_email_service_state(&email_service_trait)
+                .await
+                .unwrap();
 
         let (owner_user, owner_token) =
             make_user_for_context(&app, app_state.clone(), email_service.clone(), "regular").await;

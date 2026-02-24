@@ -5,11 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
+use axum_extra::{TypedHeader, headers::UserAgent};
 use serde::Deserialize;
 
 use crate::{
     attempt,
     controller::html::{okay, render_generic_error, render_template},
+    embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::{AppError, bad_request, not_found},
     get_user,
     model::{
@@ -588,6 +590,7 @@ async fn new_word_submit(
     }
 }
 
+
 #[allow(clippy::too_many_arguments)]
 async fn view_lemma(
     s: Session,
@@ -599,6 +602,7 @@ async fn view_lemma(
     permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     Query(params): Query<PreviousSearchQuery>,
+    user_agent: Option<TypedHeader<UserAgent>>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -651,6 +655,68 @@ async fn view_lemma(
     let rendered_notes = attempt!(s, WordRepository::render_notes(&word));
 
     let creator = attempt!(s, words.find_creator(&word.id).await);
+
+    if let Some(ua) = user_agent
+        && ua.as_str().to_lowercase().contains("discordbot")
+    {
+        println!("hi discord!");
+
+        let title = if let Some(word_class) = word.word_class_abbreviation {
+            format!("{} ({}.)", word.word, word_class)
+        } else {
+            word.word.clone()
+        };
+
+        let url = format!(
+            "{}/languages/{}/words/{}/{}",
+            crate::CONFIG.public_url_base,
+            language.code,
+            word.slug,
+            word.lemma
+        );
+
+        let rendered_definitions = definitions
+            .iter()
+            .enumerate()
+            .take(3)
+            .map(|(i, d)| {
+                let i = i + 1;
+                format!(
+                    "{i}. {}{}",
+                    d.context
+                        .as_ref()
+                        .map_or(String::new(), |c| format!("({}) ", c)),
+                    d.definition
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let notes = word
+            .notes
+            .as_ref()
+            .map_or(String::new(), |n| format!("\n\n{}", n));
+
+        let combined = format!("{rendered_definitions}{notes}");
+        let description = format!("{}\n\n⭐️ {}", truncate_description(&combined), word.like_count);
+
+        return okay(
+            render_embed(
+                EmbedTarget::Discord,
+                GenericEmbed {
+                    url,
+                    title,
+                    description,
+                    author: Some(creator),
+                    image: None,
+                    color: None,
+                },
+            )
+            .await
+            .into_response(),
+        );
+    }
+
     let contributor_count = attempt!(s, words.count_contributors(word.id).await);
 
     let is_liked = if let Some(user) = &current_user {

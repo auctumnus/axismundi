@@ -20,10 +20,16 @@
 <script src="/static/tooltip.js" type="module" defer></script>
 <script src="/static/time.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/tooltip.css">
+{% if let Some(pfp_url) = user.get_profile_picture_url() %}
+    <meta property=og:image content="{{ pfp_url }}">
+{% else %}
+    <meta property=og:image content="/static/default-pfp.webp">
+{% endif %}
 {% endblock %}
-
 {% block content %}
 
+{% block embed_title %}{% if let Some(display_name) = user.display_name %}{{ display_name ~ " @" ~ user.username }}{% else %}{{ "@" ~ user.username }}{% endif %}{% endblock %}
+{% block embed_description %}{% if let Some(description) = user.description %}{{ description }}{% endif %}{% endblock %}
 <div class="card profile-card">
     <div class="banner"></div>
     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
@@ -35,7 +41,7 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <a class="icon button gray" href="/settings" aria-label="Edit profile"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg></a>
-    
+
             {% endif %}
         {% endif %}
     </div>

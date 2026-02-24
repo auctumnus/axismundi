@@ -105,9 +105,6 @@ pub fn forbidden(message: impl Display) -> AppError {
     AppError::new(message.to_string(), StatusCode::FORBIDDEN)
 }
 
-pub fn user_banned() -> AppError {
-    AppError::new("account is banned".to_string(), StatusCode::FORBIDDEN)
-}
 
 pub fn needs_verification() -> AppError {
     AppError::new(
@@ -174,6 +171,18 @@ impl From<image::ImageError> for AppError {
 
 impl From<serde_urlencoded::ser::Error> for AppError {
     fn from(err: serde_urlencoded::ser::Error) -> Self {
+        internal_error(err)
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        internal_error(err)
+    }
+}
+
+impl From<std::fmt::Error> for AppError {
+    fn from(err: std::fmt::Error) -> Self {
         internal_error(err)
     }
 }

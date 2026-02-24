@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    err::{AppError, AppResult, internal_error, user_banned},
-    model::{user_bans::UserBanRepository, users::User},
+    err::{AppError, AppResult, internal_error},
+    model::users::User,
     pagination::PaginatedRequest,
 };
 use argon2::{
@@ -49,6 +49,7 @@ mod repo {
 
 pub(crate) use repo::repo_from_parts;
 use serde::Serialize;
+use uri_encode::encode_uri;
 use uuid::Uuid;
 use validator::ValidationError;
 
@@ -225,6 +226,10 @@ pub fn serialize_search<T: Serialize>(pagination: &PaginatedRequest, query: T) -
     }
 }
 
+pub fn urlencode(input: &str) -> String {
+    encode_uri(input)
+}
+
 // look ma, Introduction to Algorithms, fourth edition by Cormen et al!
 pub fn dfs(
     adjacency_list: &HashMap<Uuid, Vec<Uuid>>,
@@ -249,13 +254,4 @@ pub fn dfs(
         }
     }
     false
-}
-
-pub async fn ensure_can_mutate(state: &AppState, requestor: &User) -> AppResult<()> {
-    ensure_verified(requestor)?;
-    let banned = UserBanRepository::new(state.clone())
-        .is_banned(requestor.id)
-        .await
-        .map_err(|_| internal_error("Failed to check if user is banned"))?;
-    if banned { Err(user_banned()) } else { Ok(()) }
 }

@@ -87,6 +87,7 @@ impl UserTagRepository {
         Ok(user_tag)
     }
 
+    #[allow(dead_code)] // it's used in tests
     pub async fn create_unchecked(
         &self,
         user_id: Uuid,

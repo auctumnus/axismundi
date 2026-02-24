@@ -2,8 +2,14 @@
 {%- import "util.html" as u -%}
 
 {% block title %}{{ word_class.name }} - {{ language.name }} - axismundi{% endblock %}
+{% block embed_title %}{{ word_class.name }} ({{ word_class.abbreviation }}.) - {{ language.name }}{% endblock %}
+{% block embed_description %}{{ language.name }} word class{% endblock %}
+{% block oembed_url_path %}{% let code = &language.code %}{% let abbr = &word_class.abbreviation %}{{ crate::util::urlencode(&format!("languages/{code}/word-classes/{abbr}")) }}{% endblock %}
 
 {% block head %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
 <link rel="stylesheet" href="/static/word-class-view.css">
 {% endblock %}
 

@@ -5,7 +5,11 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use axum_extra::extract::{CookieJar, Multipart, cookie::Cookie};
+use axum_extra::{
+    TypedHeader,
+    extract::{CookieJar, Multipart, cookie::Cookie},
+    headers::UserAgent,
+};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -15,6 +19,7 @@ use crate::{
         LanguagesWithContributors, TranslatableWithLiked, okay, render_generic_error,
         render_template,
     },
+    embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::{AppError, bad_request},
     model::{
         contribution_stats::ContributionStatsRepository,
@@ -649,8 +654,10 @@ struct ProfileTemplate {
     rendered_description: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn profile(
     s: Session,
+    user_agent: Option<TypedHeader<UserAgent>>,
     users: UserRepository,
     languages: LanguageRepository,
     translatables: TranslatableRepository,
@@ -667,6 +674,33 @@ async fn profile(
         Ok(u) => u,
         Err(e) => return render_generic_error(s, e).await,
     };
+
+    if let Some(ua) = user_agent
+        && ua.as_str().to_lowercase().contains("discordbot")
+    {
+        println!("hi discord!");
+        let title = if let Some(display_name) = &user.display_name {
+            format!("{} (@{})", display_name, user.username)
+        } else {
+            format!("@{}", user.username)
+        };
+
+        return okay(
+            render_embed(
+                EmbedTarget::Discord,
+                GenericEmbed {
+                    url: format!("{}/users/{}", &crate::CONFIG.public_url_base, user.username),
+                    title,
+                    description: truncate_description(user.description.as_deref().unwrap_or_default()),
+                    author: None,
+                    image: user.get_profile_picture_url(),
+                    color: user.gender.map(|g| format!("#{g}")),
+                },
+            )
+            .await
+            .into_response(),
+        );
+    }
 
     let languages_result = languages
         .search(

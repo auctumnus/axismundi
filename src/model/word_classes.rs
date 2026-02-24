@@ -534,6 +534,32 @@ impl WordClassRepository {
             has_more,
         })
     }
+
+    pub async fn as_json_ld(
+        &self,
+        word_class: &WordClass,
+        language: &crate::model::languages::Language,
+    ) -> AppResult<serde_json::Value> {
+        let user_repo = crate::model::users::UserRepository::new(self.state.clone());
+        let creator = user_repo.find_by_id(word_class.created_by).await?;
+
+        let language_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language_ld = language_repo.as_json_ld(language).await?;
+
+        let json_ld = serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "DefinedTerm",
+            "name": word_class.name,
+            "alternateName": word_class.abbreviation,
+            "inDefinedTermSet": language_ld,
+            "dateCreated": word_class.created_at.to_rfc3339(),
+            "dateModified": word_class.updated_at.to_rfc3339(),
+            "author": crate::model::users::UserRepository::as_json_ld(&creator),
+            "url": format!("{}/languages/{}/word-classes/{}", crate::config::CONFIG.public_url_base, language.code, word_class.abbreviation),
+        });
+
+        Ok(json_ld)
+    }
 }
 
 #[derive(Debug, Deserialize)]

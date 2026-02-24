@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Axismundi{% endblock %}</title>
+    <meta property="og:site_name" content="Axismundi" />
+    <meta property="og:description" content="{% block embed_description %}A conlanging platform and community.{% endblock %}" />
+    <meta property="og:title" content="{% block embed_title %}Axismundi{% endblock %}" />
+    <link rel="alternate" type="application/json+oembed"
+      href="{{ &crate::config::CONFIG.public_url_base }}/services/oembed?url={{ crate::util::urlencode(&crate::config::CONFIG.public_url_base) }}/{% block oembed_url_path %}{% endblock %}&format=json"
+      title="Bacon Lollys oEmbed Profile" />
+    <meta name="twitter:card" content="summary" />
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

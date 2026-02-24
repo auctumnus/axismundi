@@ -2,8 +2,15 @@
 {%- import "util.html" as u -%}
 
 {% block title %}{{ family.name }} - axismundi{% endblock %}
+{% block embed_title %}{{ family.name }}{% endblock %}
+{% block embed_description %}{{ family.description }}{% endblock %}
+
+{% block oembed_url_path %}{% let family_code = &family.code %}{{ crate::util::urlencode(&format!("language-families/{family_code}")) }}{% endblock %}
 
 {% block head %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/family-view.css">
 {% endblock %}

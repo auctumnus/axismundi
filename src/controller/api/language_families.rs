@@ -223,8 +223,7 @@ mod tests {
         util::AppState,
     };
 
-    #[allow(dead_code)]
-    #[clippy::ignore(dead_code, unused_variables)]
+    #[allow(dead_code, unused_variables)]
     struct TestContext {
         languages: Vec<Language>,
         regular_user_1: User,

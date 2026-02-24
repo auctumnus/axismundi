@@ -535,6 +535,26 @@ impl TranslatableRepository {
 
         Ok(likes)
     }
+
+    pub async fn as_json_ld(&self, translatable: &Translatable) -> AppResult<serde_json::Value> {
+        let user_repo = crate::model::users::UserRepository::new(self.state.clone());
+        let creator = user_repo.find_by_id(translatable.created_by).await?;
+
+        let json_ld = serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "CreativeWork",
+            "identifier": translatable.slug,
+            "name": translatable.title,
+            "text": translatable.english,
+            "inLanguage": "en",
+            "dateCreated": translatable.created_at.to_rfc3339(),
+            "dateModified": translatable.updated_at.to_rfc3339(),
+            "author": crate::model::users::UserRepository::as_json_ld(&creator),
+            "url": format!("{}/translatable/{}", crate::config::CONFIG.public_url_base, translatable.slug),
+        });
+
+        Ok(json_ld)
+    }
 }
 
 #[derive(Default, Debug, Deserialize, Clone)]

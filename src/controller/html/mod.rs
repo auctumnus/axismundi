@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     ErrorTemplate,
+    embed::{self},
     err::{AppError, internal_error},
     model::{
         contribution_stats::ContributionStatsRepository,
@@ -18,6 +19,7 @@ use crate::attempt;
 use askama::Template;
 use axum::{
     Router,
+    extract::{Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
@@ -101,6 +103,7 @@ pub fn create_html_controller() -> Router<AppState> {
     let normal_routes = Router::<AppState>::new()
         .route("/", get(landing))
         .route("/home", get(home))
+        .route("/services/oembed", axum::routing::get(oembed))
         .nest_service("/static", ServeDir::new("frontend/dist"))
         .nest_service("/assets", ServeDir::new("assets"))
         .merge(normal_user_routes)
@@ -239,6 +242,16 @@ async fn home(
 
     let body = render_template(template);
     (StatusCode::OK, body)
+}
+
+async fn oembed(
+    State(state): State<AppState>,
+    Query(request): Query<embed::OEmbedRequest>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    println!("sdbgffdskljgbfdgksj");
+    let response = embed::get_oembed(state, &request).await?;
+
+    Ok(axum::Json(response))
 }
 
 pub async fn render_generic_error(s: Session, error: AppError) -> (StatusCode, Response) {

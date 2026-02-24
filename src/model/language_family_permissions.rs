@@ -9,7 +9,6 @@ use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionChec
 use crate::model::language_family_invites::LanguageFamilyInvite;
 use crate::model::language_invites::PermissionLevel;
 use crate::model::users::User;
-use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::util::{AppState, ensure_verified, repo_from_parts};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -31,10 +30,10 @@ pub struct CreateLanguageFamilyPermission {
     pub via: Option<Uuid>,
 }
 
-pub struct SearchLanguageFamilyPermission {
-    pub permission: PermissionLevel,
-    pub family: String,
-}
+// pub struct SearchLanguageFamilyPermission {
+//     pub permission: PermissionLevel,
+//     pub family: String,
+// }
 
 pub struct LanguageFamilyPermissionRepository {
     state: AppState,
@@ -175,49 +174,49 @@ impl LanguageFamilyPermissionRepository {
         Ok(result)
     }
 
-    pub async fn search(
-        &self,
-        search: SearchLanguageFamilyPermission,
-        pagination: PaginatedRequest,
-    ) -> AppResult<PaginatedResponse<LanguageFamilyPermission>> {
-        let items = sqlx::query_as!(
-            LanguageFamilyPermission,
-            r#"
-                SELECT id, family, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at
-                FROM language_family_permissions
-                WHERE permission = $1
-                ORDER BY invited_at DESC
-                LIMIT $2 OFFSET $3
-            "#,
-            search.permission as PermissionLevel,
-            pagination.limit as i64,
-            pagination.offset as i64
-        )
-        .fetch_all(&self.state.pool)
-        .await?;
+    // pub async fn search(
+    //     &self,
+    //     search: SearchLanguageFamilyPermission,
+    //     pagination: PaginatedRequest,
+    // ) -> AppResult<PaginatedResponse<LanguageFamilyPermission>> {
+    //     let items = sqlx::query_as!(
+    //         LanguageFamilyPermission,
+    //         r#"
+    //             SELECT id, family, "user", permission as "permission: PermissionLevel", via, invited_by, invited_at, accepted_at
+    //             FROM language_family_permissions
+    //             WHERE permission = $1
+    //             ORDER BY invited_at DESC
+    //             LIMIT $2 OFFSET $3
+    //         "#,
+    //         search.permission as PermissionLevel,
+    //         i64::from(pagination.limit),
+    //         i64::from(pagination.offset)
+    //     )
+    //     .fetch_all(&self.state.pool)
+    //     .await?;
 
-        let total: i64 = sqlx::query_scalar!(
-            r#"
-                SELECT COUNT(*)
-                FROM language_family_permissions
-                WHERE permission = $1
-            "#,
-            search.permission as PermissionLevel
-        )
-        .fetch_one(&self.state.pool)
-        .await?
-        .unwrap_or(0);
+    //     let total: i64 = sqlx::query_scalar!(
+    //         r#"
+    //             SELECT COUNT(*)
+    //             FROM language_family_permissions
+    //             WHERE permission = $1
+    //         "#,
+    //         search.permission as PermissionLevel
+    //     )
+    //     .fetch_one(&self.state.pool)
+    //     .await?
+    //     .unwrap_or(0);
 
-        let has_more = ((pagination.offset + pagination.limit) as i64) < total;
+    //     let has_more = i64::from(pagination.offset + pagination.limit) < total;
 
-        Ok(PaginatedResponse {
-            items,
-            total,
-            limit: pagination.limit,
-            offset: pagination.offset,
-            has_more,
-        })
-    }
+    //     Ok(PaginatedResponse {
+    //         items,
+    //         total,
+    //         limit: pagination.limit,
+    //         offset: pagination.offset,
+    //         has_more,
+    //     })
+    // }
 
     pub async fn has_permission(
         &self,

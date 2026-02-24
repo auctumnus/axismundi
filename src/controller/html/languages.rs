@@ -5,12 +5,14 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use axum_extra::{TypedHeader, headers::UserAgent};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
     attempt,
     controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
+    embed::{self, GenericEmbed, render_embed, truncate_description},
     err::AppError,
     get_user,
     model::{
@@ -236,11 +238,13 @@ struct ViewLanguageTemplate {
     can_delete_language: bool,
     is_liked: bool,
     pending_invite: Option<(crate::model::language_invites::LanguageInvite, User)>,
+    json_ld: String,
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn view_language(
     s: Session,
+    user_agent: Option<TypedHeader<UserAgent>>,
     languages: LanguageRepository,
     language_families: LanguageFamilyRepository,
     users: UserRepository,
@@ -253,6 +257,30 @@ async fn view_language(
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
+    if let Some(ua) = user_agent
+        && ua.as_str().to_lowercase().contains("discordbot")
+    {
+        println!("hi discord!");
+        return okay(
+            render_embed(
+                embed::EmbedTarget::Discord,
+                GenericEmbed {
+                    title: language.name,
+                    description: format!("{}\n\n⭐️ {}", truncate_description(&language.description), language.like_count),
+                    author: Some(owner.clone()),
+                    color: owner.gender,
+                    url: format!(
+                        "{}/languages/{}",
+                        &crate::CONFIG.public_url_base,
+                        language.code
+                    ),
+                    image: None,
+                },
+            )
+            .await
+            .into_response(),
+        );
+    }
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
     let rendered_description = attempt!(s, LanguageRepository::render_description(&language));
     let get_five = PaginatedRequest {
@@ -381,6 +409,12 @@ async fn view_language(
         other_families_materialized.push(materialized);
     }
 
+    let json_ld = attempt!(
+        s,
+        serde_json::to_string(&attempt!(s, languages.as_json_ld(&language).await))
+            .map_err(Into::into)
+    );
+
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
         recent_words: words_with_meta,
@@ -394,6 +428,7 @@ async fn view_language(
         is_liked,
         pending_invite,
         primary_family,
+        json_ld,
         other_families: other_families_materialized,
     };
 

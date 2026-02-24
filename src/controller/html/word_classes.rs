@@ -5,12 +5,14 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use axum_extra::{TypedHeader, headers::UserAgent};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
     attempt,
     controller::html::{okay, render_generic_error, render_template},
+    embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::AppError,
     get_user,
     model::{
@@ -230,10 +232,12 @@ struct ViewWordClassTemplate {
     #[allow(dead_code)]
     user_has_permission: bool,
     can_edit_language: bool,
+    json_ld: String,
 }
 
 async fn view_word_class(
     s: Session,
+    user_agent: Option<TypedHeader<UserAgent>>,
     languages: LanguageRepository,
     word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
@@ -250,6 +254,35 @@ async fn view_word_class(
     let rendered_notes = attempt!(s, WordClassRepository::render_notes(&word_class));
     let creator = attempt!(s, users.find_by_id(word_class.created_by).await);
 
+    if let Some(ua) = user_agent
+        && ua.as_str().to_lowercase().contains("discordbot")
+    {
+        let description = word_class
+            .notes
+            .as_deref()
+            .map_or(String::new(), truncate_description);
+        return okay(
+            render_embed(
+                EmbedTarget::Discord,
+                GenericEmbed {
+                    title: format!("{} ({}.)", word_class.name, word_class.abbreviation),
+                    description: format!("{language_name} word class\n\n{description}", language_name = language.name),
+                    author: Some(creator),
+                    color: None,
+                    url: format!(
+                        "{}/languages/{}/word-classes/{}",
+                        &crate::CONFIG.public_url_base,
+                        language.code,
+                        word_class.abbreviation
+                    ),
+                    image: None,
+                },
+            )
+            .await
+            .into_response(),
+        );
+    }
+
     let user_has_permission = if let Some(user) = s.user() {
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
@@ -259,6 +292,12 @@ async fn view_word_class(
         false
     };
 
+    let json_ld = attempt!(
+        s,
+        serde_json::to_string(&attempt!(s, word_classes.as_json_ld(&word_class, &language).await))
+            .map_err(Into::into)
+    );
+
     let template = ViewWordClassTemplate {
         current_user: s.user().cloned(),
         language,
@@ -267,6 +306,7 @@ async fn view_word_class(
         creator,
         user_has_permission,
         can_edit_language: user_has_permission,
+        json_ld,
     };
 
     let body = render_template(template);

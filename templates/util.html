@@ -44,13 +44,15 @@
 {% endif %}
 {% endmacro %}
 
-{% macro pfp(user, size="medium") %}
+{% macro pfp_url(user) %}
 {% if let Some(pfp_url) = user.get_profile_picture_url() %}
-    <img class="pfp {{ size }}" alt="{% call name(user) %}'s profile picture" src="{{ pfp_url }}">
+    {{ pfp_url }}
 {% else %}
-    <img class="pfp {{ size }}" alt="{% call name(user) %}'s profile picture" src="/static/default-pfp.webp">
+    {{ &crate::config::CONFIG.public_url_base }}/static/default-pfp.webp
 {% endif %}
 {% endmacro %}
+
+{% macro pfp(user, size="medium") %}<img class="pfp {{ size }}" alt="{% call name(user) %}'s profile picture" src="{% call pfp_url(user) %}">{% endmacro %}
 
 {% macro badge(user, size="medium") %}
 <a href="/users/{{user.username}}" class="badge" data-badge="{{ user.username }}">

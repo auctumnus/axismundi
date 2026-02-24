@@ -596,7 +596,7 @@ impl WordRelationRepository {
             return Err(bad_request(
                 "you don't have permission to delete word relations for this language",
             ));
-        };
+        }
 
         // if this was an etymological relation, we need to update the cognacy graph
         if CognacyRelationKindV1::try_from(relation.kind).is_ok() {

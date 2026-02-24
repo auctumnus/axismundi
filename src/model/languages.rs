@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::FromRow;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
+    config::CONFIG,
     controller::html::LanguagesWithContributors,
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
@@ -16,6 +18,8 @@ use crate::{
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
+
+use super::{language_families::LanguageFamilyRepository, users::UserRepository};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Language {
@@ -851,6 +855,29 @@ impl LanguageRepository {
         tx.commit().await?;
 
         Ok(likes)
+    }
+
+    pub async fn as_json_ld(&self, language: &Language) -> AppResult<Value> {
+        let owner = self.find_owner(language.id).await?;
+
+        let mut json_ld = serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "CreativeWork",
+            "identifier": language.id,
+            "name": language.name,
+            "description": language.description,
+            "dateCreated": language.created_at.to_rfc3339(),
+            "dateModified": language.updated_at.to_rfc3339(),
+            "author": UserRepository::as_json_ld(&owner),
+            "url": format!("{}/bookmarks/{}", CONFIG.public_url_base, language.bookmark),
+        });
+
+        let language_families = LanguageFamilyRepository::new(self.state.clone());
+        if let Some(family) = language_families.find_primary_family(language).await? {
+            json_ld["isPartOf"] = language_families.as_json_ld(&family).await?;
+        }
+
+        Ok(json_ld)
     }
 }
 

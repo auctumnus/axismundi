@@ -2,8 +2,14 @@
 {%- import "util.html" as u -%}
 
 {% block title %}{{ language.name }} translation of '{{ translatable.title }}' - axismundi{% endblock %}
+{% block embed_title %}{{ translatable.title }} ({{ language.name }} translation){% endblock %}
+{% block embed_description %}{{ translation.translated_text }}{% endblock %}
+{% block oembed_url_path %}{% let slug = &translatable.slug %}{% let code = &language.code %}{{ crate::util::urlencode(&format!("translatable/{slug}/translation/{code}")) }}{% endblock %}
 
 {% block head %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
 <script src="/static/like-button.js" type="module" defer></script>
 {% endblock %}
 
