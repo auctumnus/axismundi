@@ -26,10 +26,11 @@
     <meta property=og:image content="/static/default-pfp.webp">
 {% endif %}
 {% endblock %}
-{% block content %}
 
 {% block embed_title %}{% if let Some(display_name) = user.display_name %}{{ display_name ~ " @" ~ user.username }}{% else %}{{ "@" ~ user.username }}{% endif %}{% endblock %}
 {% block embed_description %}{% if let Some(description) = user.description %}{{ description }}{% endif %}{% endblock %}
+
+{% block content %}
 <div class="card profile-card">
     <div class="banner"></div>
     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
