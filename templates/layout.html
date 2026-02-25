@@ -57,6 +57,22 @@
             <div class="right">
                 {% if let Some(user) = current_user %}
                     <span id="safety-triangle">&nbsp;</span>
+                    <noscript>
+                        <a href="/users/{{ user.username }}">
+                            <img class="pfp medium" alt="user profile picture" src="{% if let Some(pfp_url) = user.get_profile_picture_url() %}{{ pfp_url }}{% else %}/static/default-pfp.webp{% endif %}">
+                        </a>
+                        <style>
+                            #current-user {
+                                display: none;
+                            }
+                            #safety-triangle {
+                                display: none;
+                            }
+                            .user-panel {
+                                display: none;
+                            }
+                        </style>
+                    </noscript>
                     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
                         <img id="current-user" class="pfp medium" alt="user profile picture" src="{{ pfp_url }}">
                     {% else %}
