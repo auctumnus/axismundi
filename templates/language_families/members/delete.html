@@ -27,7 +27,7 @@
 </div>
 
 
-<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id }}/delete">
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/delete">
     <section>
         <p>Are you sure you want to remove this member from the family <strong>{{ family.family.name }}</strong>?</p>
         <p>This action cannot be undone.</p>

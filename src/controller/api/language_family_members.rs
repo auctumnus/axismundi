@@ -138,7 +138,7 @@ pub async fn create_language_family_member_with_parent_code(
     };
 
     let member = language_family_members
-        .create(requestor.clone(), family, Some(parent.id), create)
+        .create(requestor.clone(), family, Some(parent.id()), create)
         .await?;
 
     let materialized = language_family_members.materialize(member).await?;
@@ -190,7 +190,7 @@ pub async fn search_language_family_members_with_parent_id(
 
     let parent = language_family_members.find_by_id(parent_id).await?;
 
-    query.parent_member_id = Some(parent.id);
+    query.parent_member_id = Some(parent.id());
 
     let members = language_family_members.search(query, pagination).await?;
 
@@ -228,7 +228,7 @@ pub async fn search_language_family_members_with_parent_code(
         return Err(not_found("Parent language family member not found"));
     };
 
-    query.parent_member_id = Some(parent.id);
+    query.parent_member_id = Some(parent.id());
 
     let members = language_family_members.search(query, pagination).await?;
 
@@ -286,7 +286,9 @@ pub async fn delete_language_family_member_by_code(
         return Err(not_found("Language family member not found"));
     };
 
-    language_family_members.delete(requestor, member.id).await?;
+    language_family_members
+        .delete(requestor, member.id())
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

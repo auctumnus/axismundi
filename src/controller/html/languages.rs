@@ -266,7 +266,11 @@ async fn view_language(
                 embed::EmbedTarget::Discord,
                 GenericEmbed {
                     title: language.name,
-                    description: format!("{}\n\n⭐️ {}", truncate_description(&language.description), language.like_count),
+                    description: format!(
+                        "{}\n\n⭐️ {}",
+                        truncate_description(&language.description),
+                        language.like_count
+                    ),
                     author: Some(owner.clone()),
                     color: owner.gender,
                     url: format!(

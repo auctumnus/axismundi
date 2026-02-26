@@ -228,7 +228,11 @@ async fn view_translatable(
                 EmbedTarget::Discord,
                 GenericEmbed {
                     title: translatable.title.clone(),
-                    description: format!("{}\n\n⭐️ {}", truncate_description(&translatable.english), translatable.like_count),
+                    description: format!(
+                        "{}\n\n⭐️ {}",
+                        truncate_description(&translatable.english),
+                        translatable.like_count
+                    ),
                     author: Some(creator),
                     color: None,
                     url: format!(

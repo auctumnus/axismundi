@@ -6,6 +6,8 @@ always use `just test` for tests. if you need to do something more complicated t
 
 sometimes the db explodes and i get a bunch of errors in my ide and i think you get told about them but you can ignore the sqlx failing to connect to database queries its fine
 
+if the linker explodes, you can `rm -r target` (be kind of careful with this). there's some incremental compilation bug going on
+
 writing code off to the side is pawbably not a reasonable debugging strategy
 
 axum uses {id} style route parameters, not :id style
@@ -17,7 +19,6 @@ when you need to test changes to the html controllers, don't bother running `jus
 "secure routes" means "has user security implications", not "needs authentication"
 
 the frontend has typescript stored in `frontend/src`; that's also where the css and such are
-
 
 
 ## Debugging Strategies

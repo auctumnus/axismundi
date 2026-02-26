@@ -184,7 +184,11 @@ async fn view_language_family(
                 embed::EmbedTarget::Discord,
                 GenericEmbed {
                     title: family.name,
-                    description: format!("{}\n\n⭐️ {}", truncate_description(&family.description), family.like_count),
+                    description: format!(
+                        "{}\n\n⭐️ {}",
+                        truncate_description(&family.description),
+                        family.like_count
+                    ),
                     author: Some(owner.clone()),
                     color: owner.gender,
                     url: format!(
@@ -202,7 +206,8 @@ async fn view_language_family(
     let rendered_description = crate::md::render_md(&family.description).unwrap_or_default();
 
     // Count contributors (non-owner permissions)
-    let contributor_count = usize::try_from(attempt!(s, permissions.count_contributors(family.id).await)).unwrap_or(0);
+    let contributor_count =
+        usize::try_from(attempt!(s, permissions.count_contributors(family.id).await)).unwrap_or(0);
 
     let can_edit_language_family = if let Some(user) = s.user() {
         permissions
@@ -249,7 +254,8 @@ async fn view_language_family(
         None
     };
 
-    let member_count = usize::try_from(attempt!(s, members.count_by_family(family.id).await)).unwrap_or(0);
+    let member_count =
+        usize::try_from(attempt!(s, members.count_by_family(family.id).await)).unwrap_or(0);
 
     // Generate family tree SVG
     let family_tree_svg = crate::util::graph_svg::render_family_tree(&family, &members)
@@ -258,11 +264,8 @@ async fn view_language_family(
 
     let json_ld = attempt!(
         s,
-        serde_json::to_string(&attempt!(
-            s,
-            language_families.as_json_ld(&family).await
-        ))
-        .map_err(Into::into)
+        serde_json::to_string(&attempt!(s, language_families.as_json_ld(&family).await))
+            .map_err(Into::into)
     );
 
     let template = ViewLanguageFamilyTemplate {

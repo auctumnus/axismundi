@@ -4,7 +4,7 @@ use sqlx::{Type, prelude::FromRow};
 use uuid::Uuid;
 
 use crate::{
-    err::{AppResult, forbidden},
+    err::{AppResult, bad_request, forbidden, internal_error},
     model::{
         language_families::{LanguageFamily, LanguageFamilyRepository},
         language_family_permissions::LanguageFamilyPermissionRepository,
@@ -25,14 +25,13 @@ pub enum LanguageFamilyRelationType {
     Hybrid,
 }
 
-#[derive(Debug, FromRow, Clone, Serialize, Deserialize)]
-pub struct LanguageFamilyMember {
+// Private row struct for SQLx deserialization
+#[derive(Debug, FromRow, Clone)]
+struct LanguageFamilyMemberRow {
     pub id: Uuid,
-    #[serde(skip_serializing)]
     pub family_id: Uuid,
-    #[serde(skip_serializing)]
     pub language_id: Option<Uuid>,
-    #[serde(skip_serializing)]
+    pub title: Option<String>,
     pub parent_member_id: Option<Uuid>,
     pub relation_type: LanguageFamilyRelationType,
     pub notes: String,
@@ -42,7 +41,153 @@ pub struct LanguageFamilyMember {
     pub updated_by: Uuid,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanguageMember {
+    pub id: Uuid,
+    pub family_id: Uuid,
+    pub language_id: Uuid,
+    pub parent_member_id: Option<Uuid>,
+    pub relation_type: LanguageFamilyRelationType,
+    pub notes: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Grouping {
+    pub id: Uuid,
+    pub family_id: Uuid,
+    pub title: String,
+    pub parent_member_id: Option<Uuid>,
+    pub notes: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum LanguageFamilyMember {
+    Language(LanguageMember),
+    Grouping(Grouping),
+}
+
+#[allow(dead_code)]
+impl LanguageFamilyMember {
+    pub fn id(&self) -> Uuid {
+        match self {
+            Self::Language(m) => m.id,
+            Self::Grouping(g) => g.id,
+        }
+    }
+
+    pub fn family_id(&self) -> Uuid {
+        match self {
+            Self::Language(m) => m.family_id,
+            Self::Grouping(g) => g.family_id,
+        }
+    }
+
+    pub fn parent_member_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Language(m) => m.parent_member_id,
+            Self::Grouping(g) => g.parent_member_id,
+        }
+    }
+
+    pub fn notes(&self) -> &str {
+        match self {
+            Self::Language(m) => &m.notes,
+            Self::Grouping(g) => &g.notes,
+        }
+    }
+
+    pub fn created_by(&self) -> Uuid {
+        match self {
+            Self::Language(m) => m.created_by,
+            Self::Grouping(g) => g.created_by,
+        }
+    }
+
+    pub fn updated_by(&self) -> Uuid {
+        match self {
+            Self::Language(m) => m.updated_by,
+            Self::Grouping(g) => g.updated_by,
+        }
+    }
+
+    pub fn created_at(&self) -> DateTime<Utc> {
+        match self {
+            Self::Language(m) => m.created_at,
+            Self::Grouping(g) => g.created_at,
+        }
+    }
+
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        match self {
+            Self::Language(m) => m.updated_at,
+            Self::Grouping(g) => g.updated_at,
+        }
+    }
+
+    pub fn as_language(&self) -> Option<&LanguageMember> {
+        if let Self::Language(data) = self {
+            Some(data)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_grouping(&self) -> Option<&Grouping> {
+        if let Self::Grouping(data) = self {
+            Some(data)
+        } else {
+            None
+        }
+    }
+}
+
+impl TryFrom<LanguageFamilyMemberRow> for LanguageFamilyMember {
+    type Error = crate::err::AppError;
+
+    fn try_from(row: LanguageFamilyMemberRow) -> AppResult<Self> {
+        if let Some(lid) = row.language_id {
+            Ok(Self::Language(LanguageMember {
+                id: row.id,
+                family_id: row.family_id,
+                language_id: lid,
+                parent_member_id: row.parent_member_id,
+                relation_type: row.relation_type,
+                notes: row.notes,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                created_by: row.created_by,
+                updated_by: row.updated_by,
+            }))
+        } else {
+            let title = row
+                .title
+                .filter(|t| !t.is_empty())
+                .ok_or_else(|| internal_error("grouping missing title"))?;
+            Ok(Self::Grouping(Grouping {
+                id: row.id,
+                family_id: row.family_id,
+                title,
+                parent_member_id: row.parent_member_id,
+                notes: row.notes,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                created_by: row.created_by,
+                updated_by: row.updated_by,
+            }))
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
 pub struct MemberWithLanguages {
     pub member: LanguageFamilyMember,
     pub language: Option<Language>,
@@ -54,19 +199,20 @@ pub struct MemberWithLanguages {
 
 impl MemberWithLanguages {
     pub fn name(&self) -> String {
-        if let Some(language) = &self.language {
-            language.name.clone()
-        } else if !self.member.notes.is_empty() {
-            self.member.notes.clone()
-        } else {
-            "(unnamed grouping)".to_string()
+        match &self.member {
+            LanguageFamilyMember::Language(_) => self
+                .language
+                .as_ref()
+                .map_or_else(|| "unknown".into(), |l| l.name.clone()),
+            LanguageFamilyMember::Grouping(g) => g.title.clone(),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CreateLanguageFamilyMember {
-    pub language_code: String,
+    pub language_code: Option<String>,
+    pub title: Option<String>,
     pub relation_type: LanguageFamilyRelationType,
     pub notes: Option<String>,
 }
@@ -78,14 +224,8 @@ pub struct SearchLanguageFamilyMembers {
     pub parent_member_id: Option<Uuid>,
     pub language_code: Option<String>,
     pub relation_type: Option<LanguageFamilyRelationType>,
-    pub q: Option<String>, // name, code, description, notes
+    pub q: Option<String>, // name, code, description, notes, title
 }
-
-// pub struct SearchRelatives {
-//     pub family_code: Option<String>,
-//     pub q: Option<String>,
-//     pub relation_type: Option<LanguageFamilyRelationType>,
-// }
 
 pub struct LanguageFamilyMemberRepository {
     state: AppState,
@@ -97,10 +237,10 @@ impl LanguageFamilyMemberRepository {
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<LanguageFamilyMember> {
-        let result = sqlx::query_as!(
-            LanguageFamilyMember,
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
-                SELECT id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                SELECT id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
                 FROM language_family_members
                 WHERE id = $1
             "#,
@@ -109,7 +249,7 @@ impl LanguageFamilyMemberRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
-        Ok(result)
+        row.try_into()
     }
 
     pub async fn materialize(
@@ -118,16 +258,16 @@ impl LanguageFamilyMemberRepository {
     ) -> AppResult<MemberWithLanguages> {
         let languages = LanguageRepository::new(self.state.clone());
 
-        let language = if let Some(language_id) = member.language_id {
-            Some(languages.find_by_id(language_id).await?)
+        let language = if let LanguageFamilyMember::Language(ref data) = member {
+            Some(languages.find_by_id(data.language_id).await?)
         } else {
             None
         };
 
-        let parent_language = if let Some(parent_member_id) = member.parent_member_id {
+        let parent_language = if let Some(parent_member_id) = member.parent_member_id() {
             let parent_member = self.find_by_id(parent_member_id).await?;
-            if let Some(parent_language_id) = parent_member.language_id {
-                Some(languages.find_by_id(parent_language_id).await?)
+            if let LanguageFamilyMember::Language(ref data) = parent_member {
+                Some(languages.find_by_id(data.language_id).await?)
             } else {
                 None
             }
@@ -136,14 +276,14 @@ impl LanguageFamilyMemberRepository {
         };
 
         let family = LanguageFamilyRepository::new(self.state.clone())
-            .find_by_id(member.family_id)
+            .find_by_id(member.family_id())
             .await?;
 
         let users = UserRepository::new(self.state.clone());
 
-        let creator = users.find_by_id(member.created_by).await?;
+        let creator = users.find_by_id(member.created_by()).await?;
 
-        let updater = users.find_by_id(member.updated_by).await?;
+        let updater = users.find_by_id(member.updated_by()).await?;
 
         Ok(MemberWithLanguages {
             member,
@@ -160,10 +300,10 @@ impl LanguageFamilyMemberRepository {
         family_id: Uuid,
         language_id: Uuid,
     ) -> AppResult<Option<LanguageFamilyMember>> {
-        let result = sqlx::query_as!(
-            LanguageFamilyMember,
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
-                SELECT id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                SELECT id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
                 FROM language_family_members
                 WHERE family_id = $1 AND language_id = $2
             "#,
@@ -173,7 +313,7 @@ impl LanguageFamilyMemberRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        Ok(result)
+        row.map(LanguageFamilyMember::try_from).transpose()
     }
 
     pub async fn create(
@@ -191,14 +331,22 @@ impl LanguageFamilyMemberRepository {
             .ensure_not_banned(requestor.id)
             .await?;
 
-        let languages = LanguageRepository::new(self.state.clone());
-        let language = languages.find_by_code(&member.language_code).await?;
+        let language = if let Some(ref code) = member.language_code {
+            let languages = LanguageRepository::new(self.state.clone());
+            Some(languages.find_by_code(code).await?)
+        } else {
+            None
+        };
+
+        // For groupings, validate that a title is provided
+        if language.is_none() && member.title.as_ref().map_or(true, |t| t.is_empty()) {
+            return Err(bad_request("grouping requires a title"));
+        }
 
         let parent_member_id = if let Some(parent_id) = &parent_id {
-            // ensure the parent member exists
             let parent_member = self.find_by_id(*parent_id).await?;
 
-            if parent_member.family_id != family.id
+            if parent_member.family_id() != family.id
                 && member.relation_type != LanguageFamilyRelationType::Hybrid
             {
                 return Err(forbidden(
@@ -206,37 +354,45 @@ impl LanguageFamilyMemberRepository {
                 ));
             }
 
-            Some(parent_member.id)
+            Some(parent_member.id())
         } else {
-            // if no parent language is provided, ensure that there is no existing root for the family
             let existing_root = self.find_root(family.id).await?;
 
             if existing_root.is_some() {
-                return Err(forbidden("a root language already exists for this family"));
+                return Err(forbidden("a root member already exists for this family"));
             }
 
             None
         };
 
+        let title = if language.is_none() {
+            member.title.as_deref()
+        } else {
+            None
+        };
+
         let mut tx = self.state.pool.begin().await?;
 
-        let result = sqlx::query_as!(
-            LanguageFamilyMember,
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
-                INSERT INTO language_family_members (family_id, language_id, parent_member_id, relation_type, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $5, $5)
-                RETURNING id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                INSERT INTO language_family_members (family_id, language_id, title, parent_member_id, relation_type, notes, created_by, updated_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+                RETURNING id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
             "#,
             family.id,
-            language.id,
+            language.as_ref().map(|l| l.id),
+            title,
             parent_member_id,
             member.relation_type as LanguageFamilyRelationType,
+            member.notes.unwrap_or_default(),
             requestor.id
         )
         .fetch_one(&mut *tx)
         .await?;
 
-        // Check permissions on both family and language with audit
+        let result: LanguageFamilyMember = row.try_into()?;
+
         let family_permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
         let family_perm = family_permissions
             .check_permission_with_audit(
@@ -246,117 +402,45 @@ impl LanguageFamilyMemberRepository {
                     required_level: PermissionLevel::Editor,
                     action_type: AuditActionType::Created,
                     resource_type: AuditableResource::LanguageFamilyMember,
-                    resource_id: result.id,
+                    resource_id: result.id(),
                     context: Some(serde_json::json!({
                         "family_id": family.id,
-                        "language_id": language.id,
+                        "language_id": language.as_ref().map(|l| l.id),
+                        "is_grouping": language.is_none(),
                     })),
                 },
                 &mut tx,
             )
             .await?;
 
-        let language_permissions = LanguagePermissionRepository::new(self.state.clone());
-        let language_perm = language_permissions
-            .check_permission_with_audit(
-                LanguageCheckPermissionReq {
-                    user: requestor.id,
-                    language: language.id,
-                    required_level: PermissionLevel::Editor,
-                    action_type: AuditActionType::Created,
-                    resource_type: AuditableResource::LanguageFamilyMember,
-                    resource_id: result.id,
-                    context: Some(serde_json::json!({
-                        "family_id": family.id,
-                        "language_id": language.id,
-                    })),
-                },
-                &mut tx,
-            )
-            .await?;
+        if let Some(ref lang) = language {
+            let language_permissions = LanguagePermissionRepository::new(self.state.clone());
+            let language_perm = language_permissions
+                .check_permission_with_audit(
+                    LanguageCheckPermissionReq {
+                        user: requestor.id,
+                        language: lang.id,
+                        required_level: PermissionLevel::Editor,
+                        action_type: AuditActionType::Created,
+                        resource_type: AuditableResource::LanguageFamilyMember,
+                        resource_id: result.id(),
+                        context: Some(serde_json::json!({
+                            "family_id": family.id,
+                            "language_id": lang.id,
+                        })),
+                    },
+                    &mut tx,
+                )
+                .await?;
 
-        if family_perm == PermissionCheck::NoPermission
-            || language_perm == PermissionCheck::NoPermission
-        {
-            return Err(forbidden(
-                "user lacks permission to add member to language family",
-            ));
-        }
-
-        LanguageFamilyRepository::new(self.state.clone())
-            .add_to_tree(family, result.clone(), &mut tx)
-            .await?;
-
-        tx.commit().await?;
-
-        Ok(result)
-    }
-
-    /// Create a grouping node (no language attached).
-    pub async fn create_grouping(
-        &self,
-        requestor: User,
-        family: LanguageFamily,
-        parent_id: Option<Uuid>,
-        notes: Option<String>,
-    ) -> AppResult<LanguageFamilyMember> {
-        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
-        use crate::model::language_family_permissions::CheckPermissionReq;
-
-        crate::model::user_bans::UserBanRepository::new(self.state.clone())
-            .ensure_not_banned(requestor.id)
-            .await?;
-
-        let parent_member_id = if let Some(parent_id) = &parent_id {
-            let parent_member = self.find_by_id(*parent_id).await?;
-            if parent_member.family_id != family.id {
+            if family_perm == PermissionCheck::NoPermission
+                || language_perm == PermissionCheck::NoPermission
+            {
                 return Err(forbidden(
-                    "parent member does not belong to the same family",
+                    "user lacks permission to add member to language family",
                 ));
             }
-            Some(parent_member.id)
-        } else {
-            None
-        };
-
-        let mut tx = self.state.pool.begin().await?;
-
-        let result = sqlx::query_as!(
-            LanguageFamilyMember,
-            r#"
-                INSERT INTO language_family_members (family_id, language_id, parent_member_id, relation_type, notes, created_by, updated_by)
-                VALUES ($1, NULL, $2, 'descendant', $3, $4, $4)
-                RETURNING id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
-            "#,
-            family.id,
-            parent_member_id,
-            notes.unwrap_or_default(),
-            requestor.id
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-
-        // Check permission on family with audit
-        let family_permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
-        let family_perm = family_permissions
-            .check_permission_with_audit(
-                CheckPermissionReq {
-                    user: requestor.id,
-                    family: family.id,
-                    required_level: PermissionLevel::Editor,
-                    action_type: AuditActionType::Created,
-                    resource_type: AuditableResource::LanguageFamilyMember,
-                    resource_id: result.id,
-                    context: Some(serde_json::json!({
-                        "family_id": family.id,
-                        "is_grouping": true,
-                    })),
-                },
-                &mut tx,
-            )
-            .await?;
-
-        if family_perm == PermissionCheck::NoPermission {
+        } else if family_perm == PermissionCheck::NoPermission {
             return Err(forbidden(
                 "user lacks permission to add member to language family",
             ));
@@ -372,10 +456,10 @@ impl LanguageFamilyMemberRepository {
     }
 
     pub async fn find_root(&self, family_id: Uuid) -> AppResult<Option<LanguageFamilyMember>> {
-        let results = sqlx::query_as!(
-            LanguageFamilyMember,
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
-                SELECT id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                SELECT id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
                 FROM language_family_members
                 WHERE family_id = $1 AND parent_member_id IS NULL
             "#,
@@ -384,7 +468,7 @@ impl LanguageFamilyMemberRepository {
         .fetch_optional(&self.state.pool)
         .await?;
 
-        Ok(results)
+        row.map(LanguageFamilyMember::try_from).transpose()
     }
 
     pub async fn delete(&self, requestor: &User, member_id: Uuid) -> AppResult<()> {
@@ -397,6 +481,8 @@ impl LanguageFamilyMemberRepository {
 
         let existing_member = self.find_by_id(member_id).await?;
 
+        let language_id = existing_member.as_language().map(|data| data.language_id);
+
         let mut tx = self.state.pool.begin().await?;
 
         // Check permission on family with audit
@@ -405,14 +491,14 @@ impl LanguageFamilyMemberRepository {
             .check_permission_with_audit(
                 CheckPermissionReq {
                     user: requestor.id,
-                    family: existing_member.family_id,
+                    family: existing_member.family_id(),
                     required_level: PermissionLevel::Editor,
                     action_type: AuditActionType::Deleted,
                     resource_type: AuditableResource::LanguageFamilyMember,
                     resource_id: member_id,
                     context: Some(serde_json::json!({
-                        "family_id": existing_member.family_id,
-                        "language_id": existing_member.language_id,
+                        "family_id": existing_member.family_id(),
+                        "language_id": language_id,
                     })),
                 },
                 &mut tx,
@@ -425,27 +511,252 @@ impl LanguageFamilyMemberRepository {
             ));
         }
 
-        let member = sqlx::query_as!(
-            LanguageFamilyMember,
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
                 DELETE FROM language_family_members
                 WHERE id = $1
-                RETURNING id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                RETURNING id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
             "#,
             member_id
         )
         .fetch_one(&mut *tx)
         .await?;
 
+        let member: LanguageFamilyMember = row.try_into()?;
+
         let families = LanguageFamilyRepository::new(self.state.clone());
 
-        let family = families.find_by_id(member.family_id).await?;
+        let family = families.find_by_id(member.family_id()).await?;
 
         let _ = families.remove_from_tree(family, member, &mut tx).await?;
 
         tx.commit().await?;
 
         Ok(())
+    }
+
+    pub async fn convert_to_grouping(
+        &self,
+        requestor: &User,
+        member_id: Uuid,
+        title: String,
+        notes: String,
+    ) -> AppResult<LanguageFamilyMember> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let existing = self.find_by_id(member_id).await?;
+
+        let language_data = match &existing {
+            LanguageFamilyMember::Language(data) => data.clone(),
+            LanguageFamilyMember::Grouping(_) => {
+                return Err(crate::err::bad_request("member is already a grouping"));
+            }
+        };
+
+        if title.trim().is_empty() {
+            return Err(crate::err::bad_request(
+                "grouping requires a non-empty title",
+            ));
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let family_permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
+        let family_perm = family_permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    family: existing.family_id(),
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamilyMember,
+                    resource_id: member_id,
+                    context: Some(serde_json::json!({
+                        "action": "convert_to_grouping",
+                        "title": title,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if family_perm == PermissionCheck::NoPermission {
+            return Err(forbidden(
+                "user lacks permission to edit this language family member",
+            ));
+        }
+
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
+            r#"
+                UPDATE language_family_members
+                SET language_id = NULL,
+                    title = $1,
+                    notes = $2,
+                    relation_type = 'descendant',
+                    updated_at = CURRENT_TIMESTAMP,
+                    updated_by = $3
+                WHERE id = $4
+                RETURNING id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+            "#,
+            title,
+            notes,
+            requestor.id,
+            member_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let result: LanguageFamilyMember = row.try_into()?;
+
+        let family = LanguageFamilyRepository::new(self.state.clone())
+            .find_by_id(existing.family_id())
+            .await?;
+
+        LanguageFamilyRepository::new(self.state.clone())
+            .rebuild_member_in_tree(
+                family,
+                member_id,
+                language_data.parent_member_id,
+                language_data.family_id,
+                &mut tx,
+            )
+            .await?;
+
+        tx.commit().await?;
+
+        Ok(result)
+    }
+
+    pub async fn convert_to_language(
+        &self,
+        requestor: &User,
+        member_id: Uuid,
+        language_code: String,
+    ) -> AppResult<LanguageFamilyMember> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq as FamilyCheckPermissionReq;
+        use crate::model::language_permissions::CheckPermissionReq as LanguageCheckPermissionReq;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let existing = self.find_by_id(member_id).await?;
+
+        match &existing {
+            LanguageFamilyMember::Language(_) => {
+                return Err(crate::err::bad_request("member is already a language node"));
+            }
+            LanguageFamilyMember::Grouping(_) => {}
+        }
+
+        let languages = LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_code(&language_code).await?;
+
+        // Check language not already in this family
+        if self
+            .find_by_family_and_language(existing.family_id(), language.id)
+            .await?
+            .is_some()
+        {
+            return Err(crate::err::bad_request(
+                "this language is already a member of this family",
+            ));
+        }
+
+        // Check language doesn't already have a descendant relation in any family
+        let has_descendant = sqlx::query!(
+            r#"SELECT id FROM language_family_members WHERE language_id = $1 AND relation_type = 'descendant' LIMIT 1"#,
+            language.id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        if has_descendant.is_some() {
+            return Err(crate::err::bad_request(
+                "this language already belongs to a family tree as a descendant",
+            ));
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let family_permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
+        let family_perm = family_permissions
+            .check_permission_with_audit(
+                FamilyCheckPermissionReq {
+                    user: requestor.id,
+                    family: existing.family_id(),
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamilyMember,
+                    resource_id: member_id,
+                    context: Some(serde_json::json!({
+                        "action": "convert_to_language",
+                        "language_id": language.id,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        let language_permissions = LanguagePermissionRepository::new(self.state.clone());
+        let language_perm = language_permissions
+            .check_permission_with_audit(
+                LanguageCheckPermissionReq {
+                    user: requestor.id,
+                    language: language.id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamilyMember,
+                    resource_id: member_id,
+                    context: Some(serde_json::json!({
+                        "action": "convert_to_language",
+                        "family_id": existing.family_id(),
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if family_perm == PermissionCheck::NoPermission
+            || language_perm == PermissionCheck::NoPermission
+        {
+            return Err(forbidden(
+                "user lacks permission to convert this member to a language node",
+            ));
+        }
+
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
+            r#"
+                UPDATE language_family_members
+                SET language_id = $1,
+                    title = NULL,
+                    relation_type = 'descendant',
+                    updated_at = CURRENT_TIMESTAMP,
+                    updated_by = $2
+                WHERE id = $3
+                RETURNING id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+            "#,
+            language.id,
+            requestor.id,
+            member_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let result: LanguageFamilyMember = row.try_into()?;
+
+        tx.commit().await?;
+
+        Ok(result)
     }
 
     pub async fn count_by_family(&self, family_id: Uuid) -> AppResult<i64> {
@@ -468,13 +779,14 @@ impl LanguageFamilyMemberRepository {
         query: SearchLanguageFamilyMembers,
         pagination: PaginatedRequest,
     ) -> AppResult<PaginatedResponse<LanguageFamilyMember>> {
-        let items_future = sqlx::query_as!(
-            LanguageFamilyMember,
+        let rows_future = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
                 SELECT
                     lfm.id,
                     lfm.family_id,
                     lfm.language_id,
+                    lfm.title,
                     lfm.parent_member_id,
                     lfm.relation_type as "relation_type: LanguageFamilyRelationType",
                     lfm.created_at,
@@ -484,7 +796,7 @@ impl LanguageFamilyMemberRepository {
                     lfm.notes
                 FROM language_family_members lfm
                 JOIN language_families lf ON lf.id = lfm.family_id
-                JOIN languages l ON l.id = lfm.language_id
+                LEFT JOIN languages l ON l.id = lfm.language_id
                 LEFT JOIN language_family_members pmpl ON pmpl.id = lfm.parent_member_id
                 LEFT JOIN languages pl ON pl.id = pmpl.language_id
                 WHERE
@@ -494,6 +806,7 @@ impl LanguageFamilyMemberRepository {
                 AND ($8::UUID IS NULL OR lfm.parent_member_id = $8)
                 ORDER BY (
                     CASE
+                        WHEN $5::TEXT IS NOT NULL AND lfm.title ILIKE '%' || $5 || '%' THEN 100.0
                         WHEN $5::TEXT IS NOT NULL AND l.name ILIKE '%' || $5 || '%' THEN 100.0
                         WHEN $5::TEXT IS NOT NULL AND l.code ILIKE '%' || $5 || '%' THEN 90.0
                         WHEN $5::TEXT IS NOT NULL AND l.description ILIKE '%' || $5 || '%' THEN 80.0
@@ -501,9 +814,10 @@ impl LanguageFamilyMemberRepository {
                         ELSE 0.0
                     END +
                     CASE WHEN $5::TEXT IS NOT NULL THEN
-                        similarity(l.name, $5) * 3.0 +
-                        similarity(l.code, $5) * 2.0 +
-                        similarity(l.description, $5) * 1.0 +
+                        COALESCE(similarity(lfm.title, $5), 0.0) * 3.0 +
+                        COALESCE(similarity(l.name, $5), 0.0) * 3.0 +
+                        COALESCE(similarity(l.code, $5), 0.0) * 2.0 +
+                        COALESCE(similarity(l.description, $5), 0.0) * 1.0 +
                         similarity(lfm.notes, $5) * 1.0
                     ELSE 0.0
                     END
@@ -527,7 +841,7 @@ impl LanguageFamilyMemberRepository {
                 SELECT COUNT(*)
                 FROM language_family_members lfm
                 JOIN language_families lf ON lf.id = lfm.family_id
-                JOIN languages l ON l.id = lfm.language_id
+                LEFT JOIN languages l ON l.id = lfm.language_id
                 LEFT JOIN language_family_members pmpl ON pmpl.id = lfm.parent_member_id
                 LEFT JOIN languages pl ON pl.id = pmpl.language_id
                 WHERE
@@ -542,10 +856,16 @@ impl LanguageFamilyMemberRepository {
         )
         .fetch_one(&self.state.pool);
 
-        let (items, count) = tokio::try_join!(items_future, count_future)?;
+        let (rows, count) = tokio::try_join!(rows_future, count_future)?;
+
+        let items = rows
+            .into_iter()
+            .map(LanguageFamilyMember::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
 
         let total = count.unwrap_or(0);
-        let has_more = i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX) < total;
+        let has_more =
+            i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX) < total;
 
         Ok(PaginatedResponse {
             items,
@@ -561,10 +881,10 @@ impl LanguageFamilyMemberRepository {
         &self,
         language_id: Uuid,
     ) -> AppResult<Vec<LanguageFamilyMember>> {
-        let results = sqlx::query_as!(
-            LanguageFamilyMember,
+        let rows = sqlx::query_as!(
+            LanguageFamilyMemberRow,
             r#"
-                SELECT id, family_id, language_id, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                SELECT id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
                 FROM language_family_members
                 WHERE language_id = $1
             "#,
@@ -573,7 +893,9 @@ impl LanguageFamilyMemberRepository {
         .fetch_all(&self.state.pool)
         .await?;
 
-        Ok(results)
+        rows.into_iter()
+            .map(LanguageFamilyMember::try_from)
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 

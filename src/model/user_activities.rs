@@ -7,6 +7,7 @@ use crate::{
     controller::html::LanguagesWithContributors,
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
+        language_families::FamilyWithContributors,
         translatable::TranslatableWithLiked,
         translations::TranslationWithLanguageAndContributor,
         users::{User, UserRepository},
@@ -27,6 +28,8 @@ pub enum ActivityType {
     UpdateTranslation,
     CreateLanguage,
     UpdateLanguage,
+    CreateLanguageFamily,
+    UpdateLanguageFamily,
 }
 
 impl ActivityType {
@@ -35,11 +38,13 @@ impl ActivityType {
             ActivityType::CreateLanguage
             | ActivityType::CreateWord
             | ActivityType::CreateTranslatable
-            | ActivityType::CreateTranslation => "added",
+            | ActivityType::CreateTranslation
+            | ActivityType::CreateLanguageFamily => "added",
             ActivityType::UpdateLanguage
             | ActivityType::UpdateWord
             | ActivityType::UpdateTranslatable
-            | ActivityType::UpdateTranslation => "updated",
+            | ActivityType::UpdateTranslation
+            | ActivityType::UpdateLanguageFamily => "updated",
         }
     }
 }
@@ -52,6 +57,7 @@ pub enum ActivityEntity {
     User(User),
     Translatable(TranslatableWithLiked),
     Translation(Box<TranslationWithLanguageAndContributor>, String),
+    LanguageFamily(FamilyWithContributors),
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -748,7 +754,24 @@ impl UserActivityRepository {
                     let translation = translations_repo
                         .materialize(translation, requestor)
                         .await?;
-                    Ok(ActivityEntity::Translation(Box::new(translation), lang.code))
+                    Ok(ActivityEntity::Translation(
+                        Box::new(translation),
+                        lang.code,
+                    ))
+                } else {
+                    Err(bad_request(format!(
+                        "unable to resolve entity with id '{}'",
+                        entity_id
+                    )))
+                }
+            }
+            "language_family" => {
+                let families_repo = crate::model::language_families::LanguageFamilyRepository::new(
+                    self.state.clone(),
+                );
+                if let Ok(family) = families_repo.find_by_id(entity_id).await {
+                    let family = families_repo.materialize(family, requestor).await?;
+                    Ok(ActivityEntity::LanguageFamily(family))
                 } else {
                     Err(bad_request(format!(
                         "unable to resolve entity with id '{}'",

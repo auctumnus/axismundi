@@ -213,7 +213,10 @@ async fn home(
     };
     let mut families = Vec::with_capacity(f.len());
     for family in &f {
-        let materialized = attempt!(s, families_repo.materialize(family.clone(), Some(&user)).await);
+        let materialized = attempt!(
+            s,
+            families_repo.materialize(family.clone(), Some(&user)).await
+        );
         families.push(materialized);
     }
 

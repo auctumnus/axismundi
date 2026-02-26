@@ -131,6 +131,8 @@
             {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
                 <span>a</span>
                 <a href="/translatable/{{ translation.translatable.slug }}/translation/{{ lang_code }}">translation for {{ translation.translatable.title }}</a>
+            {% when crate::model::user_activities::ActivityEntity::LanguageFamily(family) %}
+                <a href="/language-families/{{ family.family.code }}">{{ family.family.name }}</a>
             {% else %}
                 <span>something unknown</span>
         {% endmatch %}
@@ -155,6 +157,8 @@
                 {% call translatable_card(translatable) %}
             {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
                 {% call render_translation_card(translation, lang_code) %}
+            {% when crate::model::user_activities::ActivityEntity::LanguageFamily(family) %}
+                {% call render_language_family_card(family) %}
             {% else %}
                 <li><div class="preview-card">Details not available.</div></li>
         {% endmatch %}
@@ -218,26 +222,26 @@
 
 {% macro render_language_family_member(member_with_languages, can_edit_language_family) %}
 <li class="language-family-member-card preview-card">
-    <a href="/language-families/{{ member_with_languages.family.code }}/members/{{ member_with_languages.member.id }}">
+    <a href="/language-families/{{ member_with_languages.family.code }}/members/{{ member_with_languages.member.id() }}">
         <span class="left">
-        {% if let Some(language) = member_with_languages.language %}
-            <span class="language title">{{ language.name }}</span>
+        {% if let Some(data) = member_with_languages.member.as_language() %}
+            <span class="language title">{{ member_with_languages.name() }}</span>
             {% if let Some(parent_language) = member_with_languages.parent_language %}
                 <span>from</span>
                 <span class="parent-language">{{ parent_language.name }}</span>
             {% endif %}
-            {% if !member_with_languages.member.notes.is_empty() %}
-                <span class="summary notes ellipse">{{ member_with_languages.member.notes }}</span>
+            {% if !data.notes.is_empty() %}
+                <span class="summary notes ellipse">{{ data.notes }}</span>
             {% endif %}
-        {% else %}
-            {% if !member_with_languages.member.notes.is_empty() %}
-                <span class="title notes ellipse">{{ member_with_languages.member.notes }}</span>
-            {% else %}
-                <span class="title notes empty-notes">(anonymous grouping)</span>
-            {% endif %}
+        {% endif %}
+        {% if let Some(g) = member_with_languages.member.as_grouping() %}
+            <span class="title">{{ g.title }}</span>
             {% if let Some(parent_language) = member_with_languages.parent_language %}
                 <span>from</span>
                 <span class="parent-language">{{ parent_language.name }}</span>
+            {% endif %}
+            {% if !g.notes.is_empty() %}
+                <span class="summary notes ellipse">{{ g.notes }}</span>
             {% endif %}
         {% endif %}
         <span class="creator">

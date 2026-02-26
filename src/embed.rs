@@ -178,12 +178,14 @@ pub async fn get_oembed(state: AppState, request: &OEmbedRequest) -> AppResult<O
                 let users = UserRepository::new(state.clone());
                 let author = users.find_by_id(word_class.created_by).await?;
                 let author_name = author.name().to_string();
-                let author_url =
-                    format!("{}/users/{}", &CONFIG.public_url_base, author.username);
+                let author_url = format!("{}/users/{}", &CONFIG.public_url_base, author.username);
 
                 return Ok(OEmbedResponse::Link {
                     version: "1.0".to_string(),
-                    title: Some(format!("{} ({}.)", word_class.name, word_class.abbreviation)),
+                    title: Some(format!(
+                        "{} ({}.)",
+                        word_class.name, word_class.abbreviation
+                    )),
                     author_name: Some(author_name),
                     author_url: Some(author_url),
                     provider_name: Some("Axismundi".to_string()),
@@ -256,8 +258,7 @@ pub async fn get_oembed(state: AppState, request: &OEmbedRequest) -> AppResult<O
                 let users = UserRepository::new(state.clone());
                 let author = users.find_by_id(translation.created_by).await?;
                 let author_name = author.name().to_string();
-                let author_url =
-                    format!("{}/users/{}", &CONFIG.public_url_base, author.username);
+                let author_url = format!("{}/users/{}", &CONFIG.public_url_base, author.username);
 
                 return Ok(OEmbedResponse::Link {
                     version: "1.0".to_string(),

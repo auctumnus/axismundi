@@ -38,6 +38,7 @@ pub struct LanguageFamily {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FamilyWithContributors {
     pub family: LanguageFamily,
     pub contributors: Vec<User>,
@@ -209,6 +210,19 @@ impl LanguageFamilyRepository {
 
         tx.commit().await?;
 
+        let activity_repo =
+            crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+        let _activity = activity_repo
+            .create(
+                creator.id,
+                crate::model::user_activities::ActivityType::CreateLanguageFamily,
+                language_family.id,
+                "language_family",
+                None,
+                None,
+            )
+            .await?;
+
         Ok(language_family)
     }
 
@@ -228,7 +242,7 @@ impl LanguageFamilyRepository {
             // check for cycles BEFORE adding the new edge
             // we check if we can reach the parent from the new member (via existing edges)
             // if so, adding parent -> new_member would create a cycle
-            if let Some(parent_member_id) = member.parent_member_id {
+            if let Some(parent_member_id) = member.parent_member_id() {
                 let mut adjacency_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
                 for e in &v1_schema.edges {
                     if let Some(pid) = e.parent_member_id {
@@ -243,40 +257,55 @@ impl LanguageFamilyRepository {
 
                 // check if we can reach parent_member_id starting from member.id
                 // (if so, adding the edge parent -> member creates a cycle)
-                if crate::util::dfs(&adjacency_list, member.id, parent_member_id, &mut visited) {
+                if crate::util::dfs(&adjacency_list, member.id(), parent_member_id, &mut visited) {
                     return Err(bad_request(
                         "adding this family relation would create a cycle in the language family graph",
                     ));
                 }
             }
 
-            let new_edge = LanguageFamilyEdgeV1 {
-                parent_member_id: member.parent_member_id,
-                child_member_id: member.id,
-                family_id: member.family_id,
-                relation_kind: match member.relation_type {
+            let relation_kind = match &member {
+                LanguageFamilyMember::Language(data) => match data.relation_type {
                     LanguageFamilyRelationType::Descendant => FamilyRelationKindV1::Descendant,
                     LanguageFamilyRelationType::Hybrid => FamilyRelationKindV1::Hybrid,
                 },
+                LanguageFamilyMember::Grouping(_) => FamilyRelationKindV1::Descendant,
+            };
+
+            let new_edge = LanguageFamilyEdgeV1 {
+                parent_member_id: member.parent_member_id(),
+                child_member_id: member.id(),
+                family_id: member.family_id(),
+                relation_kind,
             };
             v1_schema.edges.push(new_edge);
 
-            if let Some(language_id) = member.language_id
-                && member.relation_type == LanguageFamilyRelationType::Hybrid
+            if let LanguageFamilyMember::Language(ref lang_data) = member
+                && lang_data.relation_type == LanguageFamilyRelationType::Hybrid
             {
+                let language_id = lang_data.language_id;
                 // get all of its hybrid parents and add them if they aren't already present
                 let hybrid_parents = LanguageFamilyMemberRepository::new(self.state.clone())
                     .all_for_language(language_id)
                     .await?
                     .into_iter()
-                    .filter(|m| m.relation_type == LanguageFamilyRelationType::Hybrid)
-                    .filter_map(|m| m.parent_member_id.map(|pid| (pid, m.family_id)))
+                    .filter_map(|m| {
+                        if let LanguageFamilyMember::Language(data) = m {
+                            if data.relation_type == LanguageFamilyRelationType::Hybrid {
+                                data.parent_member_id.map(|pid| (pid, data.family_id))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
                     .collect::<Vec<_>>();
 
                 for (parent_id, family_id) in hybrid_parents {
                     let hybrid_edge = LanguageFamilyEdgeV1 {
                         parent_member_id: Some(parent_id),
-                        child_member_id: member.id,
+                        child_member_id: member.id(),
                         family_id,
                         relation_kind: FamilyRelationKindV1::Hybrid,
                     };
@@ -316,7 +345,7 @@ impl LanguageFamilyRepository {
 
         if let LanguageFamilyInner::V1(mut v1_schema) = schema {
             v1_schema.edges.retain(|e| {
-                e.child_member_id != member.id && e.parent_member_id != Some(member.id)
+                e.child_member_id != member.id() && e.parent_member_id != Some(member.id())
             });
 
             let new_tree =
@@ -325,6 +354,39 @@ impl LanguageFamilyRepository {
                 })?;
             let updated_family = self.update_tree(family, new_tree, tx).await?;
             Ok(updated_family)
+        } else {
+            Err(internal_error("Unsupported language family schema version"))
+        }
+    }
+
+    // Replaces all edges where `member_id` is the child with a single Descendant edge.
+    // Used when converting a member's type (language ↔ grouping) to keep the tree consistent.
+    // at some point, we'll have more than 1 schema version
+    #[allow(irrefutable_let_patterns)]
+    pub async fn rebuild_member_in_tree(
+        &self,
+        family: LanguageFamily,
+        member_id: Uuid,
+        parent_member_id: Option<Uuid>,
+        family_id: Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<LanguageFamily> {
+        let schema = family.tree_schema()?;
+
+        if let LanguageFamilyInner::V1(mut v1_schema) = schema {
+            v1_schema.edges.retain(|e| e.child_member_id != member_id);
+            v1_schema.edges.push(LanguageFamilyEdgeV1 {
+                parent_member_id,
+                child_member_id: member_id,
+                family_id,
+                relation_kind: FamilyRelationKindV1::Descendant,
+            });
+
+            let new_tree =
+                serde_json::to_value(LanguageFamilyInner::V1(v1_schema)).map_err(|e| {
+                    internal_error(format!("Failed to serialize updated tree schema: {}", e))
+                })?;
+            self.update_tree(family, new_tree, tx).await
         } else {
             Err(internal_error("Unsupported language family schema version"))
         }
@@ -434,6 +496,19 @@ impl LanguageFamilyRepository {
         .await?;
 
         tx.commit().await?;
+
+        let activity_repo =
+            crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+        let _activity = activity_repo
+            .create(
+                user.id,
+                crate::model::user_activities::ActivityType::UpdateLanguageFamily,
+                updated.id,
+                "language_family",
+                None,
+                None,
+            )
+            .await?;
 
         Ok(updated)
     }
@@ -740,11 +815,7 @@ impl LanguageFamilyRepository {
         result.await.map_err(Into::into)
     }
 
-    pub async fn top_families(
-        &self,
-        user_id: Uuid,
-        limit: i64,
-    ) -> AppResult<Vec<LanguageFamily>> {
+    pub async fn top_families(&self, user_id: Uuid, limit: i64) -> AppResult<Vec<LanguageFamily>> {
         let result = sqlx::query_as!(
             LanguageFamily,
             r#"

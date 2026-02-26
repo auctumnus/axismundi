@@ -463,9 +463,7 @@ async fn seed_user_tags(pool: &PgPool, rng: &mut StdRng, user_ids: &[Uuid]) -> a
         }
     }
 
-    println!(
-        "Created {admin_count} admin tags, {mod_count} moderator tags."
-    );
+    println!("Created {admin_count} admin tags, {mod_count} moderator tags.");
     Ok(())
 }
 
@@ -1061,7 +1059,11 @@ async fn seed_translatables(
 
     for i in 0..scale.translatables {
         let (english, source_name, source_content) = match QUOTES.get(i) {
-            Some(q) => (q.0.to_string(), Some(q.1.to_string()), Some(q.2.to_string())),
+            Some(q) => (
+                q.0.to_string(),
+                Some(q.1.to_string()),
+                Some(q.2.to_string()),
+            ),
             None => {
                 let text: String = Paragraph(1..3).fake_with_rng(rng);
                 (text, None, None)

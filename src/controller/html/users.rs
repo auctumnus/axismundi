@@ -24,7 +24,9 @@ use crate::{
     model::{
         contribution_stats::ContributionStatsRepository,
         email_verification_tokens::EmailVerificationTokenRepository,
-        language_families::{FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies},
+        language_families::{
+            FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
+        },
         languages::{LanguageRepository, LanguageSearch},
         sessions::SessionRepository,
         translatable::{TranslatableRepository, TranslatableSearch},
@@ -694,7 +696,9 @@ async fn profile(
                 GenericEmbed {
                     url: format!("{}/users/{}", &crate::CONFIG.public_url_base, user.username),
                     title,
-                    description: truncate_description(user.description.as_deref().unwrap_or_default()),
+                    description: truncate_description(
+                        user.description.as_deref().unwrap_or_default(),
+                    ),
                     author: None,
                     image: user.get_profile_picture_url(),
                     color: user.gender.map(|g| format!("#{g}")),

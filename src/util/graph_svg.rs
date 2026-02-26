@@ -250,19 +250,24 @@ pub async fn render_family_tree(
     for member_id in member_ids {
         if let Ok(member) = members.find_by_id(member_id).await {
             if let Ok(materialized) = members.materialize(member).await {
-                let label = if let Some(lang) = materialized.language {
-                    LanguageFamilyMemberLabel::Language {
-                        name: lang.name,
-                        code: lang.code,
+                use crate::model::language_family_members::LanguageFamilyMember;
+                let label = match &materialized.member {
+                    LanguageFamilyMember::Language(_) => {
+                        if let Some(lang) = materialized.language {
+                            LanguageFamilyMemberLabel::Language {
+                                name: lang.name,
+                                code: lang.code,
+                            }
+                        } else {
+                            // shouldn't really occur, but fallback to at least having a label
+                            LanguageFamilyMemberLabel::Grouping {
+                                notes: "(unknown language)".to_string(),
+                            }
+                        }
                     }
-                } else if !materialized.member.notes.is_empty() {
-                    LanguageFamilyMemberLabel::Grouping {
-                        notes: materialized.member.notes,
-                    }
-                } else {
-                    LanguageFamilyMemberLabel::Grouping {
-                        notes: "(unnamed grouping)".to_string(),
-                    }
+                    LanguageFamilyMember::Grouping(g) => LanguageFamilyMemberLabel::Grouping {
+                        notes: g.title.clone(),
+                    },
                 };
                 member_labels.insert(member_id, label);
             }

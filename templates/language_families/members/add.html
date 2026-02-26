@@ -36,8 +36,8 @@
 <p>do you want to add a language or a grouping?</p>
 
 <ul>
-    <li><a href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id }}/add-language-member">Add language</a></li>
-    <li><a href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id }}/add-grouping">Add grouping</a></li>
+    <li><a href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-language-member">Add language</a></li>
+    <li><a href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-grouping">Add grouping</a></li>
 </ul>
 
 <p>a grouping is a node in the language family with no language attached. after adding it, you may add children to it.</p>

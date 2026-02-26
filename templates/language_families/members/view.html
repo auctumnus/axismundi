@@ -1,16 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 
-{% let name -%}
-
-{% if let Some(language) = member.language %}
-    {% set name = language.name %}
-{% else if !member.member.notes.is_empty() %}
-    {% set name = member.member.notes %}
-{% else %}
-    {% set name = "grouping" %}
-{% endif %}
-
 {% block title %}{{ name }} in {{ member.family.name }} - axismundi{% endblock %}
 
 {% block head %}
@@ -23,10 +13,22 @@
     <h2 class="with-action">{{ name }}</h2>
     <ul>
     {% if can_edit_family %}
-        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id }}/add-child">
+        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/delete">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
         <span>delete member</span>
         </a></li>
+        {% if let Some(_) = member.member.as_language() %}
+        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-grouping">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM7 9h10v2H7zm0 4h7v2H7z"/></svg>
+            <span>convert to grouping</span>
+        </a></li>
+        {% endif %}
+        {% if let Some(_) = member.member.as_grouping() %}
+        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-language">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m12.87 15.07l-2.54-2.51l.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35C8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5l3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7l1.62-4.33L19.12 17z"/></svg>
+            <span>convert to language</span>
+        </a></li>
+        {% endif %}
     {% endif %}
 
     </ul>
@@ -64,7 +66,7 @@
         <h2>no children yet</h2>
         <p>add the first child member to get started</p>
         <div class="actions">
-            <a class="button primary-button" href="/language-families/{{ family.family.code }}/members/{{ member.member.id }}/add-child">new child</a>
+            <a class="button primary-button" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/add-child">new child</a>
         </div>
     </div>
 {% else if children.len() > 0 %}
@@ -72,12 +74,12 @@
         <h2>children</h2>
         <ul>
             {% if can_edit_family %}
-                <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id }}/add-child">
+                <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/add-child">
                     <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
                     <span>new child</span>
                 </a></li>
             {% endif %}
-            <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id }}/children">
+            <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/children">
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
                 <span>view all</span>
             </a></li>

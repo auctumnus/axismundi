@@ -509,7 +509,11 @@ async fn view_translation(
                 EmbedTarget::Discord,
                 GenericEmbed {
                     title: format!("{} ({} translation)", translatable.title, language.name),
-                    description: format!("{}\n\n⭐️ {}", truncate_description(&translation.translated_text), translation.like_count),
+                    description: format!(
+                        "{}\n\n⭐️ {}",
+                        truncate_description(&translation.translated_text),
+                        translation.like_count
+                    ),
                     author: Some(translation_creator),
                     color: None,
                     url: format!(
@@ -581,7 +585,9 @@ async fn view_translation(
         s,
         serde_json::to_string(&attempt!(
             s,
-            translations.as_json_ld(&translation, &translatable, &language).await
+            translations
+                .as_json_ld(&translation, &translatable, &language)
+                .await
         ))
         .map_err(Into::into)
     );

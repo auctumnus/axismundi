@@ -105,7 +105,6 @@ pub fn forbidden(message: impl Display) -> AppError {
     AppError::new(message.to_string(), StatusCode::FORBIDDEN)
 }
 
-
 pub fn needs_verification() -> AppError {
     AppError::new(
         "email verification required".to_string(),

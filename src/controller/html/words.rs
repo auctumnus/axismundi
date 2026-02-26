@@ -590,7 +590,6 @@ async fn new_word_submit(
     }
 }
 
-
 #[allow(clippy::too_many_arguments)]
 async fn view_lemma(
     s: Session,
@@ -698,7 +697,11 @@ async fn view_lemma(
             .map_or(String::new(), |n| format!("\n\n{}", n));
 
         let combined = format!("{rendered_definitions}{notes}");
-        let description = format!("{}\n\n⭐️ {}", truncate_description(&combined), word.like_count);
+        let description = format!(
+            "{}\n\n⭐️ {}",
+            truncate_description(&combined),
+            word.like_count
+        );
 
         return okay(
             render_embed(

@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 
-{% block title %}add child in {{ family.family.name }} - axismundi{% endblock %}
+{% block title %}convert {{ member.name() }} to language - axismundi{% endblock %}
 
 {% block content %}
 
@@ -9,7 +9,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>add child in {{ family.family.name }}</h1>
+<h1>convert to language</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -20,9 +20,9 @@
 
 <div class="context-cards">
     <div class="context-card family-member-context">
-        <span class="context-label">for parent member</span>
+        <span class="context-label">converting member</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_member(&parent_member, can_edit_family) %}
+            {% call u::render_language_family_member(&member, false) %}
         </ul>
     </div>
     <div class="context-card family-context">
@@ -33,9 +33,11 @@
     </div>
 </div>
 
-<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-language-member">
+<p>this will replace the grouping label with a language. the member keeps its position in the tree.</p>
+
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-language">
     <section>
-        <label for="language_code">Child language</label>
+        <label for="language_code">Language</label>
         {% call u::field_error(name="language_code") %}
         <div class="select-container">
             <select id="language_code" name="language_code" required>
@@ -48,27 +50,15 @@
         </div>
     </section>
 
-    <section>
-        <label>
-            <input type="checkbox" name="is_hybrid" value="true"{% if let Some(is_hybrid) = previous_is_hybrid %}{% if is_hybrid %} checked{% endif %}{% endif %}>
-            <span>hybrid language relation</span>
-            <span class="hint">e.g. creole, pidgin</span>
-        </label>
-    </section>
-
-    <section>
-        <label for="notes">Notes</label>
-        {% call u::field_error(name="notes") %}
-        <input type="text" id="notes" name="notes" value="{{previous_notes}}">
-    </section>
-
-    <button type="submit">Add child</button>
+    <button type="submit">Convert to Language</button>
 </form>
 {% endblock %}
 
 {% block breadcrumb %}
 <span class="separator">/</span>
 <a href="/language-families/{{ family.family.code }}" class="breadcrumb">{{ family.family.name }}</a>
+<span class="separator">/</span>
+<a href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}" class="breadcrumb">{{ member.name() }}</a>
 {% endblock %}
 
 {% block footer %}

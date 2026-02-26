@@ -266,7 +266,10 @@ async fn view_word_class(
                 EmbedTarget::Discord,
                 GenericEmbed {
                     title: format!("{} ({}.)", word_class.name, word_class.abbreviation),
-                    description: format!("{language_name} word class\n\n{description}", language_name = language.name),
+                    description: format!(
+                        "{language_name} word class\n\n{description}",
+                        language_name = language.name
+                    ),
                     author: Some(creator),
                     color: None,
                     url: format!(
@@ -294,8 +297,11 @@ async fn view_word_class(
 
     let json_ld = attempt!(
         s,
-        serde_json::to_string(&attempt!(s, word_classes.as_json_ld(&word_class, &language).await))
-            .map_err(Into::into)
+        serde_json::to_string(&attempt!(
+            s,
+            word_classes.as_json_ld(&word_class, &language).await
+        ))
+        .map_err(Into::into)
     );
 
     let template = ViewWordClassTemplate {
