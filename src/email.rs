@@ -7,6 +7,7 @@ use resend_rs::types::CreateEmailBaseOptions;
 
 use crate::config::{CONFIG, ResendConfig};
 use crate::err::AppResult;
+use crate::util::urlencode;
 
 #[async_trait]
 pub trait EmailService: Send + Sync + std::fmt::Debug {
@@ -70,7 +71,7 @@ impl EmailService for ResendEmailService {
     ) -> AppResult<()> {
         let verify_url = &CONFIG.url(&format!(
             "verify/{user_id}?token={token}&email={}",
-            serde_urlencoded::to_string(to)?
+            urlencode(to)
         ));
         let subject = "verify your email";
         let html = VerifyEmailHTML { verify_url }.render().map_err(|e| {
@@ -101,7 +102,7 @@ impl EmailService for ResendEmailService {
     ) -> AppResult<()> {
         let reset_url = &CONFIG.url(&format!(
             "reset-password?token={}",
-            serde_urlencoded::to_string(token)?
+            urlencode(token)
         ));
         let subject = "reset your password";
         let html = format!(
