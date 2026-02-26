@@ -740,6 +740,49 @@ impl LanguageFamilyRepository {
         result.await.map_err(Into::into)
     }
 
+    pub async fn top_families(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+    ) -> AppResult<Vec<LanguageFamily>> {
+        let result = sqlx::query_as!(
+            LanguageFamily,
+            r#"
+                SELECT
+                    lf.id,
+                    lf.code,
+                    lf.name,
+                    lf.description,
+                    lf.tree,
+                    lf.like_count,
+                    lf.created_at,
+                    lf.updated_at,
+                    lf.created_by,
+                    lf.updated_by
+                FROM language_families lf
+                JOIN language_family_permissions lfp ON lfp.family = lf.id AND lfp."user" = $1
+                LEFT JOIN (
+                    SELECT lfm.family_id, MAX(ua.timestamp) as last_activity
+                    FROM language_family_members lfm
+                    JOIN user_activities ua ON (
+                        (ua.entity_id = lfm.language_id AND ua.entity_type = 'language')
+                        OR (ua.related_entity_id = lfm.language_id AND ua.related_entity_type = 'language')
+                    )
+                    WHERE ua.user_id = $1 AND lfm.language_id IS NOT NULL
+                    GROUP BY lfm.family_id
+                ) as la ON la.family_id = lf.id
+                ORDER BY COALESCE(la.last_activity, lf.created_at) DESC
+                LIMIT $2
+            "#,
+            user_id,
+            limit
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn as_json_ld(&self, family: &LanguageFamily) -> AppResult<Value> {
         let owner = self.find_owner(family.id).await?;
 

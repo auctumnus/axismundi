@@ -6,6 +6,7 @@ use crate::{
     err::{AppError, internal_error},
     model::{
         contribution_stats::ContributionStatsRepository,
+        language_families::{FamilyWithContributors, LanguageFamilyRepository},
         languages::{Language, LanguageRepository},
         translatable::{TranslatableRepository, TranslatableSearch, TranslatableWithLiked},
         user_activities::{UserActivity, UserActivityRepository},
@@ -170,6 +171,7 @@ struct HomeTemplate {
     error: Option<AppError>,
     current_user: Option<User>,
     languages: Vec<LanguagesWithContributors>,
+    families: Vec<FamilyWithContributors>,
     activities: Vec<UserActivity>,
     translatables: Vec<TranslatableWithLiked>,
 }
@@ -177,6 +179,7 @@ struct HomeTemplate {
 async fn home(
     users: UserRepository,
     languages: LanguageRepository,
+    families_repo: LanguageFamilyRepository,
     translatables: TranslatableRepository,
     activities_repo: UserActivityRepository,
     contribution_stats: ContributionStatsRepository,
@@ -204,6 +207,15 @@ async fn home(
         languages_with_contributors.push(l);
     }
     let languages = languages_with_contributors;
+
+    let Ok(f) = families_repo.top_families(user.id, 3).await else {
+        return render_generic_error(s, internal_error("Failed to load top families")).await;
+    };
+    let mut families = Vec::with_capacity(f.len());
+    for family in &f {
+        let materialized = attempt!(s, families_repo.materialize(family.clone(), Some(&user)).await);
+        families.push(materialized);
+    }
 
     let translatables_res = translatables
         .search(
@@ -235,6 +247,7 @@ async fn home(
     let template = HomeTemplate {
         current_user: Some(user),
         languages,
+        families,
         activities,
         translatables: translatables_with_liked,
         error: None,

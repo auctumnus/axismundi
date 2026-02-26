@@ -877,9 +877,21 @@ impl UserRepository {
                     languages.updated_by,
                     COALESCE(bookmarks.slug, '')::text as "bookmark!"
                 FROM languages
+                LEFT JOIN (
+                    SELECT
+                        CASE
+                            WHEN entity_type = 'language' THEN entity_id
+                            WHEN related_entity_type = 'language' THEN related_entity_id
+                        END as lang_id,
+                        MAX(timestamp) as last_activity
+                    FROM user_activities
+                    WHERE user_id = $1
+                        AND (entity_type = 'language' OR related_entity_type = 'language')
+                    GROUP BY lang_id
+                ) as la ON la.lang_id = languages.id
                 LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
                 WHERE languages.created_by = $1
-                ORDER BY languages.updated_at DESC
+                ORDER BY COALESCE(la.last_activity, languages.created_at) DESC
                 LIMIT $2
             "#,
             user_id,
