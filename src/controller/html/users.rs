@@ -24,6 +24,7 @@ use crate::{
     model::{
         contribution_stats::ContributionStatsRepository,
         email_verification_tokens::EmailVerificationTokenRepository,
+        language_families::{FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies},
         languages::{LanguageRepository, LanguageSearch},
         sessions::SessionRepository,
         translatable::{TranslatableRepository, TranslatableSearch},
@@ -649,6 +650,7 @@ struct ProfileTemplate {
     current_user: Option<User>,
     user: User,
     languages: Vec<LanguagesWithContributors>,
+    families: Vec<FamilyWithContributors>,
     activities: Vec<crate::model::user_activities::UserActivity>,
     translatables: Vec<TranslatableWithLiked>,
     rendered_description: String,
@@ -660,6 +662,7 @@ async fn profile(
     user_agent: Option<TypedHeader<UserAgent>>,
     users: UserRepository,
     languages: LanguageRepository,
+    language_families: LanguageFamilyRepository,
     translatables: TranslatableRepository,
     activities: UserActivityRepository,
     contribution_stats: ContributionStatsRepository,
@@ -736,6 +739,36 @@ async fn profile(
     }
     let languages_list = languages_with_contributors;
 
+    let families_result = language_families
+        .search(
+            SearchLanguageFamilies {
+                owner: Some(username.clone()),
+                q: None,
+                has_language: None,
+            },
+            PaginatedRequest {
+                limit: 5,
+                offset: 0,
+            },
+        )
+        .await;
+
+    let mut families_with_contributors = Vec::new();
+    if let Ok(paginated) = families_result {
+        for family in &paginated.items {
+            let materialized = language_families
+                .materialize(family.clone(), current_user.as_ref())
+                .await
+                .unwrap_or(FamilyWithContributors {
+                    family: family.clone(),
+                    contributors: Vec::new(),
+                    is_liked: false,
+                });
+            families_with_contributors.push(materialized);
+        }
+    }
+    let families_list = families_with_contributors;
+
     // Get user activities (limit to 5)
     let activities_result = activities
         .list_by_user(
@@ -794,6 +827,7 @@ async fn profile(
             current_user,
             user,
             languages: languages_list,
+            families: families_list,
             activities: activities_list,
             translatables: translatables_list,
             rendered_description,

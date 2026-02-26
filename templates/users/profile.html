@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/profile.css">
 <link rel="stylesheet" href="/static/activity.css">
 <link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/language-family-card.css">
 <link rel="stylesheet" href="/static/word-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
 <script type="importmap">
@@ -121,6 +122,31 @@
 <ul class="card-list">
     {% for language_with_contributors in languages %}
         {% call u::render_language_card(&language_with_contributors) %}
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if !families.is_empty() %}
+<div class="header-with-actions">
+    <h2 class="with-action">language families</h2>
+    <ul>
+        {% if let Some(current_user) = current_user %}
+            {% if current_user.id == user.id %}
+        <li><a class="with-icon" href="/new-language-family">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <span>new language family</span>
+            </a></li>
+            {% endif %}
+        {% endif %}
+        <li><a class="with-icon" href="/language-families?owner={{ user.username }}">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            <span>view all</span>
+        </a></li>
+    </ul>
+</div>
+<ul class="card-list">
+    {% for family_with_contributors in families %}
+        {% call u::render_language_family_card(&family_with_contributors) %}
     {% endfor %}
 </ul>
 {% endif %}

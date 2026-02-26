@@ -568,7 +568,7 @@ impl LanguageRepository {
                         similarity(languages.description, $4) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, languages.id
+                ) DESC, languages.like_count DESC, languages.id
                 LIMIT $5
                 OFFSET $6
             "#,
