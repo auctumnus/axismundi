@@ -32,6 +32,9 @@ create table language_family_members (
     language_id uuid references languages(id) on delete cascade,
     notes text not null default '',
 
+    -- display name for grouping nodes (required when language_id is null)
+    title text,
+
     -- the parent language in this lineage (null = root/proto-language)
     parent_member_id uuid references language_family_members(id) on delete set null,
 
@@ -48,7 +51,11 @@ create table language_family_members (
 
     -- hybrid relations must have a parent (the other ancestor)
     constraint hybrid_requires_parent
-        check (relation_type = 'descendant' or parent_member_id is not null)
+        check (relation_type = 'descendant' or parent_member_id is not null),
+
+    -- grouping nodes require a non-empty title
+    constraint grouping_requires_title
+        check (language_id is not null or (title is not null and title <> ''))
 );
 
 create index language_family_members_family_id_idx on language_family_members(family_id);
@@ -97,6 +104,10 @@ create table language_family_permissions (
 
 create index language_family_permissions_family_idx on language_family_permissions(family);
 create index language_family_permissions_user_idx on language_family_permissions("user");
+
+-- add language_family activity types
+alter type activity_type add value 'create_language_family';
+alter type activity_type add value 'update_language_family';
 
 -- add language_family to reportable resources
 alter type reportable_resource add value 'language_family';
