@@ -1,0 +1,81 @@
+table.phonology-table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: var(--border);
+    border-radius: var(--rounding);
+    width: 100%;
+    margin-block: 1rem;
+    background-color: var(--background-panel);
+    overflow: hidden;
+
+    caption {
+        font-family: var(--font-heading);
+        padding-bottom: .25rem;
+        font-size: 1.25rem;
+    }
+
+    th {
+        font-family: var(--font-heading);
+        background-color: var(--background-intermediate);
+        padding: 0.5rem;
+        font-weight: 450;
+        font-size: .875rem;
+
+        &.row {
+            text-align: right;
+            max-width: min-content;
+        }
+    }
+
+    :focus-visible {
+        outline: none;
+    }
+
+    th, td {
+        border: var(--border);
+    }
+
+    td {
+        text-align: center;
+        padding: 0.5rem;
+    }
+
+    thead tr:first-child th:first-child {
+        border-top-left-radius: var(--rounding);
+    }
+
+    thead tr:first-child th:last-child {
+        border-top-right-radius: var(--rounding);
+    }
+
+    tbody, tbody tr:last-child, tbody tr:last-child th.row {
+        border-bottom-left-radius: var(--rounding);
+    }
+    tbody, tbody tr:last-child, tbody tr:last-child td:last-child {
+        border-bottom-right-radius: var(--rounding);
+    }
+
+    .focused {
+        outline: 2px solid var(--color-sky-300);
+        outline-offset: -2px;
+    }
+
+    .col-focused, .row-focused, .cell-focused {
+        background-color: var(--background-intermediate);
+    }
+
+    .select-target {
+        outline: 2px solid var(--color-sky-500);
+        outline-offset: -2px;
+        background-color: var(--color-sky-50);
+    }
+
+    .col-selected, .row-selected, .cell-selected {
+        background-color: var(--color-sky-50);
+    }
+
+    .select-edge-top { border-top: 2px solid var(--color-sky-500); }
+    .select-edge-bottom { border-bottom: 2px solid var(--color-sky-500); }
+    .select-edge-left { border-left: 2px solid var(--color-sky-500); }
+    .select-edge-right { border-right: 2px solid var(--color-sky-500); }
+}

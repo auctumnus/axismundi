@@ -62,6 +62,7 @@ fake = { version = "3.0", features = ["derive", "chrono", "uuid"] }
 random_word = { version = "0.5.2", features = ["en"] }
 url = "2.5.8"
 uri_encode = "1.0.4"
+phonologist = "1.0.1"
 
 [dev-dependencies]
 reqwest = { version = "0.12.24" }

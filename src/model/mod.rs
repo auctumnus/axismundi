@@ -11,6 +11,7 @@ pub mod language_invites;
 pub mod language_permissions;
 pub mod languages;
 pub mod password_reset_tokens;
+pub mod phonology_tables;
 pub mod quotation_suggestions;
 pub mod quotations;
 pub mod reports;

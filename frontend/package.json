@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
+    "@headlessui/react": "^2.2.9",
     "@iconify-json/material-symbols": "^1.2.48",
     "@iconify/react": "^6.0.2",
     "@swc/cli": "^0.7.8",

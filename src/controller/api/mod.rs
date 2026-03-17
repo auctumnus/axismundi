@@ -18,6 +18,7 @@ mod language_family_permissions;
 mod language_invites;
 mod language_permissions;
 mod languages;
+mod phonology_tables;
 mod quotation_suggestions;
 mod quotations;
 mod reports;
@@ -71,7 +72,8 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(language_families::create_router())
         .merge(language_family_members::create_router())
         .merge(language_family_invites::create_router())
-        .merge(language_family_permissions::create_router());
+        .merge(language_family_permissions::create_router())
+        .merge(phonology_tables::create_router());
 
     // Only apply rate limiting in non-test builds
     #[cfg(not(test))]

@@ -124,6 +124,14 @@ test flags="" cov="" $RUST_BACKTRACE="0":
     just test_teardown
     exit $return_code
 
+[working-directory: 'frontend']
+test-frontend:
+    bun test
+
+[working-directory: 'frontend']
+test-frontend-coverage:
+    bun test --coverage
+
 cov flags="":
     just test "{{flags}}" cov="1"
 
@@ -150,7 +158,6 @@ down:
 
 # Run the application locally (requires database to be running)
 run:
-    cp .env.docker .env
     cargo run
 
 # Watch frontend for changes during development

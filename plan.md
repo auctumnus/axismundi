@@ -1,4 +1,12 @@
 things left to do:
+- make translations/translatables not ugly
+- user banners?
+- images for languages
+- display language phonology
+
+
+longer-term
+- cws import
 - bugfix the cognacy model (wow that is scary)
 - docs (openapi+something nicer?)
 - ensure all endpoints feel consistent

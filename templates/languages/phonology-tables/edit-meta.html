@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit phonology table metadata - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>edit phonology table metadata</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/phonology-tables/{{ table.id }}/edit-meta" id="edit-phonology-table-meta-form">
+    <section>
+        <label for="name">Name</label>
+        <input type="text" name="name" id="name" value="{{ previous_name }}" required>
+        {% call u::field_error("name") %}
+    </section>
+
+    <section>
+        <label for="description">Description (optional)</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description" rows="4">{{ previous_description }}</textarea>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Save changes</button>
+    </section>
+</form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'edit-phonology-table-meta-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/phonology-tables" class="breadcrumb">phonology tables</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, can_delete_language) %}
+{% endblock %}
