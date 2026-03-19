@@ -8,12 +8,6 @@ import { TableRows } from "./phonology-editor/rows";
 const PhonologyEditor = ({ body, name }: { body: Body; name: string }) => {
   const [state, dispatch] = React.useReducer(apply, initialState(body, name));
 
-  useEffect(() => {
-    const focused = document.querySelector<HTMLElement>('[tabindex="0"]');
-    console.log("Focused element:", focused);
-    focused?.focus();
-  }, [state.focus]);
-
   return (
     <EditorContext.Provider value={[state, dispatch]}>
       <div className="phonology-editor">

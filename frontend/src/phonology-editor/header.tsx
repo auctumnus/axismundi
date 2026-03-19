@@ -1,23 +1,46 @@
+import type { HeadingPath } from "./path";
 import { isFocused, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Column } from "./table";
 
-type ThCell = { heading: string; rowSpan: number; colSpan: number };
+type ThCell = { heading: string; rowSpan: number; colSpan: number; path: HeadingPath };
 
-const collectAtDepth = (columns: Column[], targetDepth: number, currentDepth: number, maxDepth: number): ThCell[] => {
+const collectAtDepth = (columns: Column[], targetDepth: number, currentDepth: number, maxDepth: number, path: HeadingPath = []): ThCell[] => {
   const result: ThCell[] = [];
-  for (const col of columns) {
+  for (let i = 0; i < columns.length; i++) {
+    const col = columns[i]!;
+    const colPath = [...path, i];
     if (currentDepth === targetDepth) {
       if (col.type === "Group") {
-        result.push({ heading: col.heading, colSpan: numLeaves(col.columns), rowSpan: 1 });
+        result.push({ heading: col.heading, colSpan: numLeaves(col.columns), rowSpan: 1, path: colPath });
       } else {
-        result.push({ heading: col.heading, colSpan: 1, rowSpan: maxDepth - currentDepth + 1 });
+        result.push({ heading: col.heading, colSpan: 1, rowSpan: maxDepth - currentDepth + 1, path: colPath });
       }
     } else if (col.type === "Group") {
-      result.push(...collectAtDepth(col.columns, targetDepth, currentDepth + 1, maxDepth));
+      result.push(...collectAtDepth(col.columns, targetDepth, currentDepth + 1, maxDepth, colPath));
     }
   }
   return result;
 };
+
+const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
+  const [state, dispatch] = useEditor();
+  const focused = isFocused(state, { type: "ColumnHeading", path });
+
+  const onClick = () => {
+    if (!focused) {
+      dispatch({ type: "SetFocus", path: { type: "ColumnHeading", path } });
+    }
+  }
+
+  let rs: number | undefined = rowSpan > 1 ? rowSpan : undefined;
+  let cs: number | undefined = colSpan > 1 ? colSpan : undefined;
+
+  return (
+    <th rowSpan={rs} colSpan={cs} className={focused ? "focused" : ""} onClick={onClick}>
+      {heading}
+    </th>
+  );
+}
 
 export const ColumnHeaders = () => {
   const [state] = useEditor();
@@ -29,13 +52,7 @@ export const ColumnHeaders = () => {
         <tr key={depth}>
           {i === 0 && <TopLeftCell />}
           {collectAtDepth(columns, depth, 1, maxDepth).map((th, j) => (
-            <th
-              key={j}
-              colSpan={th.colSpan > 1 ? th.colSpan : undefined}
-              rowSpan={th.rowSpan > 1 ? th.rowSpan : undefined}
-            >
-              {th.heading}
-            </th>
+            <ColumnTh key={j} {...th} />
           ))}
         </tr>
       ))}

@@ -173,15 +173,15 @@ export const isPathEqual = (table: Body, path1: TablePath, path2: TablePath): bo
                 return JSON.stringify(normalizedColPath1) === JSON.stringify(normalizedColPath2);
             }
             case "Cell":
-                const normalizedRowPath1 = normalizeHeadingPath(table.rows, path1.rowPath);
-                const normalizedRowPath2 = normalizeHeadingPath(table.rows, (path2 as CellPath).rowPath);
-                const normalizedColPath1 = normalizeHeadingPath(table.columns, path1.colPath);
-                const normalizedColPath2 = normalizeHeadingPath(table.columns, (path2 as CellPath).colPath);
+                const normalizedRowPath1 = normalizeToIndex(table.rows, path1.rowPath);
+                const normalizedRowPath2 = normalizeToIndex(table.rows, (path2 as CellPath).rowPath);
+                const normalizedColPath1 = normalizeToIndex(table.columns, path1.colPath);
+                const normalizedColPath2 = normalizeToIndex(table.columns, (path2 as CellPath).colPath);
                 if (normalizedRowPath1 === null || normalizedRowPath2 === null || normalizedColPath1 === null || normalizedColPath2 === null) {
                     return false;
                 }
-                const areRowsEqual = JSON.stringify(normalizedRowPath1) === JSON.stringify(normalizedRowPath2);
-                const areColsEqual = JSON.stringify(normalizedColPath1) === JSON.stringify(normalizedColPath2);
+                const areRowsEqual = normalizedRowPath1 === normalizedRowPath2;
+                const areColsEqual = normalizedColPath1 === normalizedColPath2;
                 return areRowsEqual && areColsEqual;
         }
     }

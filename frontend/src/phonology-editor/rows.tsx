@@ -10,6 +10,10 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
     const selected = isSelected(state, path);
     const cellRef = useRef<HTMLTableCellElement>(null);
 
+    if(focused) {
+      console.log("Focused cell", path);
+    }
+
     const handleKeyPress = (e: React.KeyboardEvent) => {
       let movement = getMovement(e);
       if (movement) {
@@ -54,7 +58,7 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
     )
 }
 
-type ThCell = { heading: string; rowSpan: number; colSpan: number };
+type ThCell = { heading: string; rowSpan: number; colSpan: number; path: HeadingPath };
 type FlatRow = { thCells: ThCell[]; leaf: { heading: string; cells: Cell[] }; path: HeadingPath };
 
 const flattenRows = (rows: Row[], path: HeadingPath, depth: number, maxDepth: number): FlatRow[] => {
@@ -64,11 +68,11 @@ const flattenRows = (rows: Row[], path: HeadingPath, depth: number, maxDepth: nu
     const rowPath = [...path, i];
     if (row.type === "Group") {
       const children = flattenRows(row.rows, rowPath, depth + 1, maxDepth);
-      children[0]!.thCells.unshift({ heading: row.heading, rowSpan: numLeaves(row.rows), colSpan: 1 });
+      children[0]!.thCells.unshift({ heading: row.heading, rowSpan: numLeaves(row.rows), colSpan: 1, path: rowPath });
       result.push(...children);
     } else {
       result.push({
-        thCells: [{ heading: row.heading, rowSpan: 1, colSpan: maxDepth - depth + 1 }],
+        thCells: [{ heading: row.heading, rowSpan: 1, colSpan: maxDepth - depth + 1, path: rowPath }],
         leaf: row,
         path: rowPath,
       });
@@ -77,12 +81,21 @@ const flattenRows = (rows: Row[], path: HeadingPath, depth: number, maxDepth: nu
   return result;
 };
 
-const Th = ({ heading, rowSpan, colSpan }: ThCell) => {
+const Th = ({ heading, rowSpan, colSpan, path }: ThCell) => {
+  const [state, dispatch] = useEditor();
+  const focused = isFocused(state, { type: "RowHeading", path });
+
+  const onClick = () => {
+    if (!focused) {
+      dispatch({ type: "SetFocus", path: { type: "RowHeading", path } });
+    }
+  }
+  
   let rs: number | undefined = rowSpan > 1 ? rowSpan : undefined;
   let cs: number | undefined = colSpan > 1 ? colSpan : undefined;
 
   return (
-    <th rowSpan={rs} colSpan={cs}>
+    <th rowSpan={rs} colSpan={cs} className={focused ? "focused" : ""} onClick={onClick}>
       {heading}
     </th>
   );
@@ -106,7 +119,7 @@ export const TableRows = () => {
               <RowCell
                 key={j}
                 cell={cell}
-                path={{ type: "Cell", rowPath: flatRow.path, colPath: [j] }}
+                path={{ type: "Cell", rowPath: flatRow.path, colPath: j }}
                 rowFocused={rowFocused}
               />
             ))}

@@ -119,6 +119,7 @@ export type Action =
   | { type: "LoadPreset"; presetName: string }
 
 export const apply = (state: EditorState, action: Action): EditorState => {
+    console.log("Applying action", action);
     switch (action.type) {
         case "FocusEnter":
             return { ...state, focusInsideTable: true };
