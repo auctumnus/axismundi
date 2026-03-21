@@ -327,6 +327,26 @@ export const setByPath = <T extends TablePath>(table: Body, path: T, newValue: P
     }
 }
 
+export const serializePath = (table: Body, path: TablePath): string => {
+  switch (path.type) {
+    case "TopLeft":
+      return JSON.stringify({ type: "TopLeft" });
+    case "RowHeading": {
+      const normalized = normalizeHeadingPath(table.rows, path.path);
+      return JSON.stringify({ type: "RowHeading", path: normalized ?? path.path });
+    }
+    case "ColumnHeading": {
+      const normalized = normalizeHeadingPath(table.columns, path.path);
+      return JSON.stringify({ type: "ColumnHeading", path: normalized ?? path.path });
+    }
+    case "Cell": {
+      const rowIndex = typeof path.rowPath === "number" ? path.rowPath : headingPathToIndex(table.rows, path.rowPath);
+      const colIndex = typeof path.colPath === "number" ? path.colPath : headingPathToIndex(table.columns, path.colPath);
+      return JSON.stringify({ type: "Cell", rowPath: rowIndex ?? path.rowPath, colPath: colIndex ?? path.colPath });
+    }
+  }
+};
+
 export type Movement = "Up" | "Down" | "Left" | "Right" | "Tab" | "ShiftTab" | "Home" | "End";
 
 export const getMovement = (event: React.KeyboardEvent): Movement | null => {
@@ -422,6 +442,29 @@ const collectPathsDFS = (headings: Heading[], prefix: HeadingPath = []): Heading
     }
     return paths;
 }
+
+const lastLeafColumn = (headings: Heading[]): HeadingPath | null => {
+    const inner = (headings: Heading, currentPath: HeadingPath): { path: HeadingPath; heading: Heading } | null => {
+        const children = headingChildren(headings);
+        if (children.length === 0) {
+            return { path: currentPath, heading: headings };
+        }
+        const lastChild = children[children.length - 1]!;
+        return inner(lastChild, [...currentPath, children.length - 1]);
+    }
+    return inner({ type: "Group", heading: "", columns: headings } as Column, [])?.path ?? null;
+}
+
+const isLastLeafColumn = (table: Body, path: HeadingPath): boolean => {
+    const last = lastLeafColumn(table.columns);
+    if (last === null) {
+        return false;
+    }
+    const lastAsTablePath: ColumnHeadingPath = { type: "ColumnHeading", path: last };
+    const pathAsTablePath: ColumnHeadingPath = { type: "ColumnHeading", path };
+    return isPathEqual(table, lastAsTablePath, pathAsTablePath);
+}
+
 
 /**
  * Gets the next or previous sibling of the heading at the given path, where two headings that
@@ -546,6 +589,18 @@ export const move = (table: Body, path: TablePath, movement: Movement): TablePat
                 }
             }
 
+            // move to last column header
+            if (movement === "ShiftTab" && rowPath.every(index => index === 0)) {
+                if (table.columns.length > 0) {
+                    const lastColPath = lastLeafColumn(table.columns);
+                    if (lastColPath !== null) {
+                        return { type: "ColumnHeading", path: lastColPath };
+                    } else {
+                        return { type: "TopLeft" };
+                    }
+                }
+            }
+
             // all special cases handled; now handle siblings
             if (movement === "Tab") {
                 const nextSiblingPath = headingSiblingByTree(table.rows, rowPath, "Next");
@@ -586,8 +641,17 @@ export const move = (table: Body, path: TablePath, movement: Movement): TablePat
             }
 
             // if this is the first column, then Left should move to the top-left cell
-            if(colPath.every(index => index === 0) && movement === "Left") {
+            if(colPath.every(index => index === 0) && (movement === "Left" || movement === "ShiftTab")) {
                 return { type: "TopLeft" };
+            }
+
+            // if this is the last column, then Tab should move to the first row header
+            if(isLastLeafColumn(table, colPath) && movement === "Tab") {
+                if (table.rows.length > 0) {
+                    return { type: "RowHeading", path: 0 };
+                } else {
+                    return null;
+                }
             }
 
             // fast path for moving to the parent

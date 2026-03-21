@@ -91,7 +91,7 @@ async function bundleReactFiles() {
     entrypoints: existingEntrypoints,
     outdir: distDir,
     minify: true,
-    sourcemap: 'external',
+    sourcemap: 'linked',
     target: 'browser',
     format: 'esm',
   });

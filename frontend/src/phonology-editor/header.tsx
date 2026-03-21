@@ -1,5 +1,6 @@
 import type { HeadingPath } from "./path";
-import { isFocused, useEditor } from "./state";
+import { serializePath } from "./path";
+import { isFocused, isSelected, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Column } from "./table";
 
 type ThCell = { heading: string; rowSpan: number; colSpan: number; path: HeadingPath };
@@ -25,18 +26,38 @@ const collectAtDepth = (columns: Column[], targetDepth: number, currentDepth: nu
 const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
   const [state, dispatch] = useEditor();
   const focused = isFocused(state, { type: "ColumnHeading", path });
+  const selected = isSelected(state, { type: "ColumnHeading", path });
 
   const onClick = () => {
     if (!focused) {
       dispatch({ type: "SetFocus", path: { type: "ColumnHeading", path } });
+      dispatch({ type: "SetSelect", path: { type: "ColumnHeading", path } });
+    }
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === " ") {
+      e.preventDefault();
+      if (focused) {
+        dispatch({ type: "SetSelect", path: null });
+      } else {
+        dispatch({ type: "SetSelect", path: { type: "ColumnHeading", path } });
+      }
     }
   }
 
   let rs: number | undefined = rowSpan > 1 ? rowSpan : undefined;
   let cs: number | undefined = colSpan > 1 ? colSpan : undefined;
 
+  let className = focused ? "focused" : "";
+  if (selected) {
+    className += " selected";
+  }
+
+  const tabIndex = focused ? 0 : -1;
+
   return (
-    <th rowSpan={rs} colSpan={cs} className={focused ? "focused" : ""} onClick={onClick}>
+    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "ColumnHeading", path })}>
       {heading}
     </th>
   );
@@ -64,10 +85,10 @@ export const TopLeftCell = () => {
   const [state, dispatch] = useEditor();
   const focused = isFocused(state, { type: "TopLeft" });
 
-  let colSpan: number | undefined = maxHeadingDepth(state.body.columns);
+  let colSpan: number | undefined = maxHeadingDepth(state.body.rows);
   colSpan = colSpan > 1 ? colSpan : undefined;
 
-  let rowSpan: number | undefined = maxHeadingDepth(state.body.rows);
+  let rowSpan: number | undefined = maxHeadingDepth(state.body.columns);
   rowSpan = rowSpan > 1 ? rowSpan : undefined;
 
   let className = "cell top-left";
@@ -75,14 +96,10 @@ export const TopLeftCell = () => {
     className += " focused";
   }
 
-  const onClick = () => {
-    if (!focused) {
-      dispatch({ type: "SetFocus", path: { type: "TopLeft" } });
-    }
-  }
+  const tabIndex = focused ? 0 : -1;
 
   return (
-    <th className={className} rowSpan={rowSpan} colSpan={colSpan} onClick={onClick}> 
+    <th className={className} rowSpan={rowSpan} colSpan={colSpan} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "TopLeft" })}>
     </th>
   );
 }

@@ -10,22 +10,16 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    attempt,
-    controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
-    err::AppError,
-    get_user,
-    model::{
+    attempt, controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template}, err::AppError, get_user, md::render_md, model::{
         contribution_stats::ContributionStatsRepository,
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         phonology_tables::{
-            Body, Cell, Column, CreatePhonologyTable, PhonologyTable, PhonologyTableRepository, Row, SearchPhonologyTable, UpdatePhonologyTable
+            Body, Cell, Column, CreatePhonologyTable, PhonologyTable, PhonologyTableRepository, Row, SearchPhonologyTable, TableRenderOptions, UpdatePhonologyTable
         },
         users::User,
-    },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -184,7 +178,12 @@ async fn search_phonology_tables(
 
     let mut rendered_tables = Vec::with_capacity(results.items.len());
     for table in &results.items {
-        match table.to_html() {
+        
+        let options = TableRenderOptions {
+            standalone_link: format!("/languages/{}/phonology-tables/{}", language_with_contributors.language.code, table.id).into(),
+            edit_links: None,
+        };
+        match table.to_html(&options) {
             Ok(html) => rendered_tables.push(html),
             Err(_) => rendered_tables.push(String::from("<p>Failed to render table.</p>")),
         }
@@ -246,6 +245,7 @@ struct ViewPhonologyTableTemplate {
     language: LanguagesWithContributors,
     table: PhonologyTable,
     rendered_html: String,
+    rendered_description: String,
     can_edit_language: bool,
     can_delete_language: bool,
 }
@@ -487,7 +487,6 @@ async fn view_phonology_table(
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let table = attempt!(s, phonology_tables.get(&language, id).await);
-    let rendered_html = attempt!(s, table.to_html());
 
     let top_contributors = attempt!(
         s,
@@ -508,6 +507,22 @@ async fn view_phonology_table(
         false
     };
 
+    let edit_links = if can_edit_language {
+        Some((
+            format!("/languages/{}/phonology-tables/{}/edit-meta", language.code, table.id),
+            format!("/languages/{}/phonology-tables/{}/edit-body", language.code, table.id),
+            format!("/languages/{}/phonology-tables/{}/delete", language.code, table.id),
+        ))
+    } else {
+        None
+    };
+    let options = TableRenderOptions {
+        standalone_link: None,
+        edit_links: edit_links,
+    };
+
+    let rendered_html = attempt!(s, table.to_html(&options));
+
     let can_delete_language = if let Some(user) = s.user() {
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Owner)
@@ -523,11 +538,18 @@ async fn view_phonology_table(
         is_liked,
     };
 
+    let rendered_description = if let Some(description) = &table.description {
+        attempt!(s, render_md(description).map_err(Into::into))
+    } else {
+        String::new()
+    };
+
     let template = ViewPhonologyTableTemplate {
         current_user: s.user().cloned(),
         language,
         table,
         rendered_html,
+        rendered_description,
         can_edit_language,
         can_delete_language,
     };

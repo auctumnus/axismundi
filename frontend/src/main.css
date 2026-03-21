@@ -442,7 +442,7 @@ button.normal {
         in oklab,
         var(--foreground-primary) 10%,
         transparent
-      );
+      ) !important;
     }
   }
 
@@ -459,8 +459,13 @@ button.normal {
     }
   }
 
-  &:not(.icon, .danger):hover {
+  &:not(.icon, .danger, :disabled, &[disabled]):hover {
     background-color: var(--foreground-secondary);
+  }
+
+  &:disabled, &[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 

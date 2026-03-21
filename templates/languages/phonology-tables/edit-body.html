@@ -4,7 +4,10 @@
 {% block title %}edit phonology table body - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="/static/components/modal.css">
 <link rel="stylesheet" href="/static/phonology-table.css">
+<link rel="stylesheet" href="/static/tooltip.css">
+<script type="module" src="/static/phonology-editor.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -19,9 +22,6 @@
 
 <form class="default" method="post" action="/languages/{{ language.code }}/phonology-tables/{{ table.id }}/edit-body" id="edit-phonology-table-body-form">
     <input type="hidden" name="name" id="name" value="{{ previous_name }}" />
-    <input type="hidden" name="description" value="{{ previous_description }}" />
-    <input type="hidden" name="step" value="2">
-
     <input id="table-editor" name="body" value="{{ previous_table_body | json }}">
 
     <noscript>

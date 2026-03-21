@@ -23,6 +23,7 @@
     }
 </style>
 <link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/phonology-table.css">
 {% endblock %}
 
 {% block content %}
@@ -92,7 +93,7 @@
     {% else %}
         <ul class="card-list">
             {% for table in &rendered_tables %}
-                <li>{{ table|safe }}</li>
+                <li>{{ table | safe }}</li>
             {% endfor %}
         </ul>
         <nav class="pagination">

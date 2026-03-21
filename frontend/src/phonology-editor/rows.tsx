@@ -1,7 +1,18 @@
 import { useRef } from "react";
-import { getMovement, isPathEqual, move, type CellPath, type HeadingPath } from "./path";
+import { getMovement, isPathEqual, move, serializePath, type CellPath, type HeadingPath } from "./path";
 import { isFocused, isSelected, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Cell, type Row } from "./table";
+
+const Phoneme = ({ text, annotations }: { text: string; annotations: number[] }) => {
+    return (
+        <>
+          <span className="phoneme">
+              {text}
+          </span>
+          {annotations.map(index => <sup key={index} className="annotation-link">{index + 1}</sup>)}
+        </>
+    );
+}
 
 const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFocused: boolean }) => {
     const [state, dispatch] = useEditor();
@@ -10,33 +21,26 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
     const selected = isSelected(state, path);
     const cellRef = useRef<HTMLTableCellElement>(null);
 
-    if(focused) {
-      console.log("Focused cell", path);
+    const onClick = (e: React.MouseEvent) => {
+      if (!focused) {
+        dispatch({ type: "SetFocus", path });
+        dispatch({ type: "SetSelect", path });
+      }
     }
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-      let movement = getMovement(e);
-      if (movement) {
-        const newFocus = move(state.body, state.focus, movement);
-        console.log(newFocus);
-        if (newFocus) {
-          e.preventDefault();
-          dispatch({ type: "SetFocus", path: newFocus });
+    const onKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === " ") {
+        e.preventDefault();
+        if (selected) {
+          dispatch({ type: "SetSelect", path: null });
         } else {
-          cellRef.current?.blur();
+          dispatch({ type: "SetSelect", path });
         }
       }
     }
 
-    const onClick = () => {
-      if (!focused) {
-        cellRef.current?.focus();
-        dispatch({ type: "SetFocus", path });
-      }
-    }
-
     let className = "cell";
-    if (focused && state.focusInsideTable) {
+    if (focused) {
       className += " focused";
     }
     if (colFocused) {
@@ -52,8 +56,8 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
     const tabIndex = focused ? 0 : -1;
 
     return (
-      <td ref={cellRef} className={className} onClick={onClick} onKeyDown={handleKeyPress} tabIndex={tabIndex}>
-        {cell.phonemes.map(p => p.text).join(", ")}
+      <td ref={cellRef} className={className} onClick={onClick} tabIndex={tabIndex} data-path={serializePath(state.body, path)} onKeyDown={onKeyDown}>
+        {cell.phonemes.map(p => <Phoneme key={p.text} text={p.text} annotations={p.annotations} />)}
       </td>
     )
 }
@@ -84,18 +88,39 @@ const flattenRows = (rows: Row[], path: HeadingPath, depth: number, maxDepth: nu
 const Th = ({ heading, rowSpan, colSpan, path }: ThCell) => {
   const [state, dispatch] = useEditor();
   const focused = isFocused(state, { type: "RowHeading", path });
+  const selected = isSelected(state, { type: "RowHeading", path });
 
-  const onClick = () => {
+  const onClick = (e: React.MouseEvent) => {
     if (!focused) {
       dispatch({ type: "SetFocus", path: { type: "RowHeading", path } });
+      dispatch({ type: "SetSelect", path: { type: "RowHeading", path } });
     }
   }
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === " ") {
+      e.preventDefault();
+      if (selected) {
+        dispatch({ type: "SetSelect", path: null });
+      } else {
+        dispatch({ type: "SetSelect", path: { type: "RowHeading", path } });
+      }
+    }
+  }
+
   
   let rs: number | undefined = rowSpan > 1 ? rowSpan : undefined;
   let cs: number | undefined = colSpan > 1 ? colSpan : undefined;
 
+  const tabIndex = focused ? 0 : -1;
+
+  let className = focused ? "focused" : "";
+  if (selected) {
+    className += " selected";
+  }
+
   return (
-    <th rowSpan={rs} colSpan={cs} className={focused ? "focused" : ""} onClick={onClick}>
+    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "RowHeading", path })}>
       {heading}
     </th>
   );

@@ -60,3 +60,11 @@
         justify-content: flex-end;
     }
 }
+
+.stepped-content {
+    opacity: 1;
+    transition: opacity var(--duration-fast) var(--curve);
+}
+.stepped-content.faded {
+    opacity: 0;
+}

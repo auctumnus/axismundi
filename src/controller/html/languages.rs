@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
+use markdown_it::plugins::extra::tables;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -16,17 +17,9 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        contribution_stats::ContributionStatsRepository,
-        language_families::{
+        self, contribution_stats::ContributionStatsRepository, language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
-        },
-        language_invites::PermissionLevel,
-        language_permissions::LanguagePermissionRepository,
-        languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch},
-        translatable::TranslatableRepository,
-        translations::TranslationRepository,
-        users::{User, UserRepository},
-        words::{WordRepository, WordSearch, WordWithMeta},
+        }, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, phonology_tables::{PhonologyTableRepository, SearchPhonologyTable, TableRenderOptions}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{WordRepository, WordSearch, WordWithMeta}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, extract_session::Session},
@@ -239,6 +232,7 @@ struct ViewLanguageTemplate {
     is_liked: bool,
     pending_invite: Option<(crate::model::language_invites::LanguageInvite, User)>,
     json_ld: String,
+    phonology_tables: Vec<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -253,6 +247,7 @@ async fn view_language(
     translatables: TranslatableRepository,
     permissions: LanguagePermissionRepository,
     invites: crate::model::language_invites::LanguageInviteRepository,
+    phonology_tables: PhonologyTableRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -413,6 +408,17 @@ async fn view_language(
         other_families_materialized.push(materialized);
     }
 
+    let all_tables = attempt!(s, phonology_tables.search(&language, PaginatedRequest { limit: 100, offset: 0 }, SearchPhonologyTable { q: None, created_after: None, created_before: None }).await);
+    let mut tables = Vec::new();
+    for table in all_tables.items {
+
+        let options = TableRenderOptions {
+            standalone_link: Some(format!("/languages/{}/phonology-tables/{}", language.code, table.id)),
+            edit_links: None,
+        };
+        tables.push(attempt!(s, table.to_html(&options)));
+    }
+
     let json_ld = attempt!(
         s,
         serde_json::to_string(&attempt!(s, languages.as_json_ld(&language).await))
@@ -434,6 +440,7 @@ async fn view_language(
         primary_family,
         json_ld,
         other_families: other_families_materialized,
+        phonology_tables: tables,
     };
 
     okay(render_template(template))

@@ -174,9 +174,13 @@ struct HeaderCell {
     rowspan: usize,
 }
 
+pub struct TableRenderOptions {
+    pub standalone_link: Option<String>,
+    pub edit_links: Option<(String, String, String)>, // (edit meta, edit body, delete)
+}
 
 impl PhonologyTable {
-    pub fn to_html(&self) -> AppResult<String> {
+    pub fn to_html(&self, options: &TableRenderOptions) -> AppResult<String> {
         fn max_row_group_depth(rows: &[Row], current_depth: usize) -> usize {
             let mut max_depth = current_depth;
             for row in rows {
@@ -235,11 +239,11 @@ impl PhonologyTable {
                             write!(html, ">{group_heading}</th>").unwrap();
                         }
 
-                        // individual row heading — rowspan to fill remaining depth
-                        let rowspan = max_row_group_depth - current_depth;
+                        // individual row heading — colspan to fill remaining group columns
+                        let colspan = max_row_group_depth - current_depth;
                         write!(html, "<th").unwrap();
-                        if rowspan > 1 {
-                            write!(html, " rowspan=\"{rowspan}\"").unwrap();
+                        if colspan > 1 {
+                            write!(html, " colspan=\"{colspan}\"").unwrap();
                         }
                         write!(html, ">{heading}</th>").unwrap();
 
@@ -253,7 +257,7 @@ impl PhonologyTable {
                                 html.push_str(&phoneme.text);
                                 html.push_str("</span>");
                                 for &annotation_index in &phoneme.annotations {
-                                    write!(html, "<a href=\"#annotation-{annotation_index}\" class=\"annotation\">{annotation_index}</a>").unwrap();
+                                    write!(html, "<sup><a href=\"#annotation-{annotation_index}\" class=\"annotation\">{annotation_index}</a></sup>").unwrap();
                                 }
                             }
                             html.push_str("</td>");
@@ -266,10 +270,48 @@ impl PhonologyTable {
 
         let mut html = String::new();
         let body: Body = serde_json::from_value(self.body.clone())?;
+        
+        html.push_str("<div class=\"phonology-table-container\">");
 
-        html.push_str("<table class=\"phonology-table\"><caption>");
-        html.push_str(&self.name);
-        html.push_str("</caption>");
+        html.push_str("<div class=\"header-with-actions\">");
+        write!(html, "<h2 id=\"table-{}\">{}</h2>", self.id, self.name)?;
+        html.push_str("</h2><ul>");
+        if let Some(standalone_link) = &options.standalone_link {
+            html.push_str(&format!(
+                "<li><a class=\"with-icon\" href=\"{}\">",
+                standalone_link
+            ));
+            html.push_str(r#"
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+                    <span>view table</span></a></li>"#);
+        };
+        if let Some((edit_meta_link, edit_body_link, delete_link)) = &options.edit_links {
+            html.push_str(&format!(
+                "<li><a class=\"with-icon\" href=\"{}\">",
+                edit_meta_link
+            ));
+            html.push_str(r#"
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM7 9h10v2H7zm0 4h7v2H7z"/></svg>
+                <span>edit table metadata</span></a></li>"#);
+            html.push_str(&format!(
+                "<li><a class=\"with-icon\" href=\"{}\">",
+                edit_body_link
+            ));
+            html.push_str(r#"
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM7 9h10v2H7zm0 4h7v2H7z"/></svg>
+                <span>edit table body</span></a></li>"#);
+
+            html.push_str(&format!(
+                "<li><a class=\"with-icon\" href=\"{}\">",
+                delete_link
+            ));
+            html.push_str(r#"
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
+                <span>delete table</span></a></li>"#);
+        }
+        html.push_str("</ul></div>");
+
+        write!(html, "<table class=\"phonology-table\" aria-labelledby=\"table-{}\">", self.id)?;
 
         // --- thead: column headers ---
         let max_col_depth = Column::max_depth(&body.columns, 1);
@@ -335,6 +377,12 @@ impl PhonologyTable {
 
         html.push_str("</table>");
 
+        html.push_str("<ol class=\"annotations\">");
+        for (i, annotation) in body.annotations.iter().enumerate() {
+            write!(html, "<li id=\"annotation-{i}\">{annotation}</li>").unwrap();
+        }
+        html.push_str("</ol>");
+        html.push_str("</div>");
         Ok(html)
     }
 }
