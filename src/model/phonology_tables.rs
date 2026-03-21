@@ -177,6 +177,7 @@ struct HeaderCell {
 pub struct TableRenderOptions {
     pub standalone_link: Option<String>,
     pub edit_links: Option<(String, String, String)>, // (edit meta, edit body, delete)
+    pub header_el: String,
 }
 
 impl PhonologyTable {
@@ -274,7 +275,7 @@ impl PhonologyTable {
         html.push_str("<div class=\"phonology-table-container\">");
 
         html.push_str("<div class=\"header-with-actions\">");
-        write!(html, "<h2 id=\"table-{}\">{}</h2>", self.id, self.name)?;
+        write!(html, "<{} id=\"table-{}\">{}</{}>", options.header_el, self.id, self.name, options.header_el)?;
         html.push_str("</h2><ul>");
         if let Some(standalone_link) = &options.standalone_link {
             html.push_str(&format!(

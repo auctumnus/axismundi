@@ -469,6 +469,11 @@ button.normal {
   }
 }
 
+h3 {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+}
+
 a.button {
   display: inline-block;
   margin-bottom: 0.5rem;
@@ -869,7 +874,7 @@ ul.card-list {
   margin-top: 0.5rem;
 }
 
-main > :is(.header-with-actions, h1, h2) {
+main > :is(h1, h2, h3), main .header-with-actions {
   --side-spacing: 0.125rem;
   padding-left: var(--side-spacing);
   padding-right: var(--side-spacing);

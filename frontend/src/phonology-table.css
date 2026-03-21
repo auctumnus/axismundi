@@ -206,11 +206,6 @@ ol.annotations {
     overflow-y: auto;
     padding-right: 1rem;
 
-    h3 {
-        font-family: var(--font-heading);
-        font-size: 1.2rem;
-    }
-
     kbd, .keybind {
     font-family: var(--font-monospace);
     background-color: var(--background-panel);

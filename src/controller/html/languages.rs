@@ -415,6 +415,7 @@ async fn view_language(
         let options = TableRenderOptions {
             standalone_link: Some(format!("/languages/{}/phonology-tables/{}", language.code, table.id)),
             edit_links: None,
+            header_el: "h3".to_string(),
         };
         tables.push(attempt!(s, table.to_html(&options)));
     }

@@ -182,6 +182,7 @@ async fn search_phonology_tables(
         let options = TableRenderOptions {
             standalone_link: format!("/languages/{}/phonology-tables/{}", language_with_contributors.language.code, table.id).into(),
             edit_links: None,
+            header_el: "h3".to_string(),
         };
         match table.to_html(&options) {
             Ok(html) => rendered_tables.push(html),
@@ -533,6 +534,7 @@ async fn view_phonology_table(
     let options = TableRenderOptions {
         standalone_link: None,
         edit_links: edit_links,
+        header_el: "h2".to_string(),
     };
 
     let rendered_html = attempt!(s, table.to_html(&options));
