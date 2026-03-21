@@ -74,6 +74,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/etymology-modal.tsx',
   'src/word-combobox.tsx',
   'src/user-combobox.tsx',
+  'src/phonology-editor.tsx',
 ];
 
 async function bundleReactFiles() {
@@ -90,7 +91,7 @@ async function bundleReactFiles() {
     entrypoints: existingEntrypoints,
     outdir: distDir,
     minify: true,
-    sourcemap: 'external',
+    sourcemap: 'linked',
     target: 'browser',
     format: 'esm',
   });
@@ -116,6 +117,11 @@ async function processFile(filePath: string) {
 
   // Skip TypeScript declaration files
   if (filePath.endsWith('.d.ts')) {
+    return;
+  }
+
+  // skip tests
+  if (filePath.endsWith('.test.ts') || filePath.endsWith('.test.tsx')) {
     return;
   }
 

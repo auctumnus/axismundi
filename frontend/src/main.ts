@@ -69,7 +69,6 @@ const initializeUserPanel = () => {
   });
 
   currentUserElement.addEventListener("mouseleave", (e) => {
-    console.log(e.relatedTarget);
     if (
       !inUserPanel(e.relatedTarget as HTMLElement) &&
       !panelLocked &&

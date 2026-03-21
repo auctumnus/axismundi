@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}new phonology table - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/components/modal.css">
+<link rel="stylesheet" href="/static/phonology-table.css">
+<link rel="stylesheet" href="/static/tooltip.css">
+<script type="module" src="/static/phonology-editor.js"></script>
+{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>new phonology table</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/phonology-tables/new" id="new-phonology-table-form">
+    <input type="hidden" name="name" id="name" value="{{ previous_name }}" />
+    <input type="hidden" name="description" value="{{ previous_description }}" />
+    <input type="hidden" name="step" value="2">
+
+    <input id="table-editor" name="body" value="{{ previous_table_body | json }}">
+
+    <noscript>
+        <div class="error">
+            <p>
+                JavaScript is required to create a phonology table.
+                (alternatively, you could specially craft the JSON for the table ...)
+            </p>
+        </div>
+    </noscript>
+
+    <section class="button-row">
+        <button type="submit">Create table</button>
+    </section>
+</form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountPhonologyEditor) {
+        console.log('Mounting phonology editor...');
+      const editorInput = document.getElementById('table-editor');
+      const editorDiv = document.createElement('div');
+      editorDiv.id = 'table-editor';
+      editorInput.replaceWith(editorDiv);
+      const initialValue = JSON.parse(document.getElementById('initial-table-body').textContent);
+      const name = document.getElementById('name').value;
+      window.mountPhonologyEditor('table-editor', initialValue, name);
+    }
+  });
+</script>
+<script type="application/json" id="initial-table-body">{{ previous_table_body | json | safe }}</script>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/phonology-tables" class="breadcrumb">phonology tables</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, can_delete_language) %}
+{% endblock %}

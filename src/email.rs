@@ -100,10 +100,7 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let reset_url = &CONFIG.url(&format!(
-            "reset-password?token={}",
-            urlencode(token)
-        ));
+        let reset_url = &CONFIG.url(&format!("reset-password?token={}", urlencode(token)));
         let subject = "reset your password";
         let html = format!(
             r#"<html>

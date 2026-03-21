@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete {{ table.name }}? - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete phonology table</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/phonology-tables/{{ table.id }}/delete">
+    <section>
+        <p>Are you sure you want to delete the phonology table <strong>{{ table.name }}</strong>?</p>
+        <p>This action cannot be undone and will delete all associated data.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete phonology table</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/phonology-tables" class="breadcrumb">phonology tables</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::language_section(&language, can_delete_language) %}
+{% endblock %}

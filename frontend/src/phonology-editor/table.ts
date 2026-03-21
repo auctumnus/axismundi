@@ -1,0 +1,80 @@
+export interface Phoneme {
+  text: string;
+  annotations: number[];
+}
+
+export interface Cell {
+  phonemes: Phoneme[];
+}
+
+export type Row =
+  | { type: "Group"; heading: string; rows: Row[] }
+  | { type: "Individual"; heading: string; cells: Cell[] };
+
+export type Column =
+  | { type: "Group"; heading: string; columns: Column[] }
+  | { type: "Individual"; heading: string };
+
+export type Heading = Row | Column;
+
+export type TableElement = Heading | Cell;
+
+export const TOP_LEFT_CELL: unique symbol = Symbol("TOP_LEFT_CELL");
+
+export interface Body {
+  rows: Row[];
+  columns: Column[];
+  annotations: string[];
+}
+
+export const isRow = (heading: Heading): heading is Row => Object.hasOwn(heading, "cells") || Object.hasOwn(heading, "rows");
+
+export type TableElementKind = "TopLeft" | "RowHeading" | "ColumnHeading" | "Cell";
+
+export const elementKind = (element: TableElement | typeof TOP_LEFT_CELL): TableElementKind => {
+  if (element === TOP_LEFT_CELL) {
+    return "TopLeft";
+  }
+  if (Object.hasOwn(element, "heading")) {
+    return isRow(element as Heading) ? "RowHeading" : "ColumnHeading";
+  }
+  return "Cell";
+}
+
+export function headingChildren(heading: Row): Row[];                                                                            
+export function headingChildren(heading: Column): Column[];                                                                      
+export function headingChildren(heading: Heading): Heading[];                                                                    
+export function headingChildren(heading: Heading): Heading[] {
+  if (heading.type === "Group") {
+    return isRow(heading) ? heading.rows : heading.columns;
+  }
+  return [];
+}
+
+export const maxHeadingDepth = (headings: Heading[]): number => {
+  const maxHeadingDepthInner = (headings: Heading[], currentDepth: number): number => {
+    let max = currentDepth;
+    for (const heading of headings) {
+      max = Math.max(max, maxHeadingDepthInner(headingChildren(heading), currentDepth + 1));
+    }
+    return max;
+  };
+  return maxHeadingDepthInner(headings, 1);
+};
+
+export const numLeaves = (headings: Heading[]): number => {
+  const numLeavesInner = (headings: Heading[]): number => {
+    let count = 0;
+    for (const heading of headings) {
+      const children = headingChildren(heading);
+      if (children.length === 0) {
+        count += 1;
+      } else {
+        count += numLeavesInner(children);
+      }
+    }
+    return count;
+  };
+  return numLeavesInner(headings);
+};
+
