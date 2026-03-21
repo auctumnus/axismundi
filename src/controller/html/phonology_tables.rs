@@ -322,12 +322,26 @@ struct EditBodyFormData {
 fn default_empty_body() -> Body {
     Body {
         rows: vec![
-            Row::Individual { heading: "Manner".to_string(), cells: vec![
-                Cell { phonemes: vec![] }
+            Row::Individual { heading: "Row 1".to_string(), cells: vec![
+                Cell { phonemes: vec![] },
+                Cell { phonemes: vec![] },
+                Cell { phonemes: vec![] },
+            ] },
+             Row::Individual { heading: "Row 2".to_string(), cells: vec![
+                Cell { phonemes: vec![] },
+                Cell { phonemes: vec![] },
+                Cell { phonemes: vec![] },
+            ] },
+             Row::Individual { heading: "Row 3".to_string(), cells: vec![
+                Cell { phonemes: vec![] },
+                Cell { phonemes: vec![] },
+                Cell { phonemes: vec![] },
             ] },
         ],
         columns: vec![
-            Column::Individual { heading: "Place".to_string() },
+            Column::Individual { heading: "Column 1".to_string() },
+            Column::Individual { heading: "Column 2".to_string() },
+            Column::Individual { heading: "Column 3".to_string() },
         ],
         annotations: vec![],
     }

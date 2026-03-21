@@ -1,4 +1,4 @@
-import { useEditor, type EditorState } from "./state"
+import { useEditor, type EditorState, PRESETS } from "./state"
 import { Tooltip } from "../components/tooltip"
 import { getByPath, normalizeHeadingPath, type CellPath, type HeadingPath, type TablePath } from "./path";
 import { numLeaves, type Cell, type Column, type Row, type TableElement, type TOP_LEFT_CELL } from "./table";
@@ -736,6 +736,61 @@ const EditorControls = () => {
     )
 }
 
+const PresetModal = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+    const [state, dispatch] = useEditor();
+
+    const applyPreset = (presetName: string) => {
+        dispatch({ type: "LoadPreset", presetName });
+        onClose();
+    }
+
+    const presetNames = Object.keys(PRESETS);
+
+    return (
+        <ModalInner open={open} close={onClose} title="Load preset" contents={(close) => (
+            <>
+                <section className="preset-options">
+                    {presetNames.map(name => (
+                        <button key={name} type="button" className="normal preset-option" onClick={() => applyPreset(name)}>
+                            {name}
+                        </button>
+                    ))}
+                </section>
+                <div className="button-row">
+                    <button type="button" className="normal secondary" onClick={close}>Cancel</button>
+                </div>
+            </>
+        )} />
+    )
+
+}
+
+const PresetControls = () => {
+    const [state, dispatch] = useEditor();
+
+    const [presetModalOpen, setPresetModalOpen] = useState(false);
+
+    const openPresetModal = () =>
+        setPresetModalOpen(true);
+
+    useEffect(() => {
+        if (state.pendingModal === "LoadPreset") {
+            dispatch({ type: "ClearPendingModal" });
+            openPresetModal();
+        }
+    }, [state.pendingModal]);
+
+    return (
+        <div className="controls preset-controls">
+            <span className="controls-header">Presets</span>
+            <ControlButton onClick={() => dispatch({ type: "OpenModal", modal: "LoadPreset" })} enabled={true} title="Load preset">
+                <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">{/* Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE */}<path fill="currentColor" d="M12 15.575q-.2 0-.375-.062T11.3 15.3l-3.6-3.6q-.3-.3-.288-.7t.288-.7q.3-.3.713-.312t.712.287L11 12.15V5q0-.425.288-.712T12 4t.713.288T13 5v7.15l1.875-1.875q.3-.3.713-.288t.712.313q.275.3.288.7t-.288.7l-3.6 3.6q-.15.15-.325.213t-.375.062M6 20q-.825 0-1.412-.587T4 18v-2q0-.425.288-.712T5 15t.713.288T6 16v2h12v-2q0-.425.288-.712T19 15t.713.288T20 16v2q0 .825-.587 1.413T18 20z" /></svg>
+            </ControlButton>
+            <PresetModal open={presetModalOpen} onClose={() => setPresetModalOpen(false)} />
+        </div>
+    )
+}
+
 export const Controls = () => {
     const [state] = useEditor();
 
@@ -758,6 +813,7 @@ export const Controls = () => {
             <ColumnControls {...controlState} />
             <PhonemeControls {...controlState} />
             <AnnotationControls {...controlState} />
+            <PresetControls />
         </div>
     )
 }

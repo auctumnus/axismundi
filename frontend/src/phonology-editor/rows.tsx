@@ -3,13 +3,14 @@ import { getMovement, isPathEqual, move, serializePath, type CellPath, type Head
 import { isFocused, isSelected, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Cell, type Row } from "./table";
 
-const Phoneme = ({ text, annotations }: { text: string; annotations: number[] }) => {
+const Phoneme = ({ text, annotations, isLast }: { text: string; annotations: number[]; isLast: boolean }) => {
     return (
         <>
           <span className="phoneme">
               {text}
           </span>
-          {annotations.map(index => <sup key={index} className="annotation-link">{index + 1}</sup>)}
+          {annotations.map((index, i) => <><sup key={index} className="annotation-link">{index + 1}{ i === annotations.length - 1 ? "" : ", "}</sup></>)}
+          {!isLast && <span className="phoneme-separator">, </span>}
         </>
     );
 }
@@ -57,7 +58,9 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
 
     return (
       <td ref={cellRef} className={className} onClick={onClick} tabIndex={tabIndex} data-path={serializePath(state.body, path)} onKeyDown={onKeyDown}>
-        {cell.phonemes.map(p => <Phoneme key={p.text} text={p.text} annotations={p.annotations} />)}
+        {cell.phonemes.map((p, i) => (
+          <Phoneme key={p.text + i} text={p.text} annotations={p.annotations} isLast={i === cell.phonemes.length - 1} />
+        ))}
       </td>
     )
 }

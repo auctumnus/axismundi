@@ -14,6 +14,19 @@ export const PRESETS: { [key: string]: Body } = (() => {
         phonemes: phonemes.map(p => ({ text: p, annotations: [] }))
     });
     return {
+        "Default": {
+            rows: [
+                { type: "Individual", heading: "Row 1", cells: [cell(), cell(), cell()] },
+                { type: "Individual", heading: "Row 2", cells: [cell(), cell(), cell()] },
+                { type: "Individual", heading: "Row 3", cells: [cell(), cell(), cell()] },
+            ],
+            columns: [
+                { type: "Individual", heading: "Column 1" },
+                { type: "Individual", heading: "Column 2" },
+                { type: "Individual", heading: "Column 3" },
+            ],
+            annotations: []
+        },
         "Simple Consonants": {
             rows: [
                 { type: "Individual", heading: "Nasal", cells: [cell("m"), cell("n"), cell("ŋ"), cell()] },
@@ -31,14 +44,24 @@ export const PRESETS: { [key: string]: Body } = (() => {
         },
         "Estonian Consonants": {
             rows: [
-                { type: "Individual", heading: "Nasal", cells: [cell("m"), cell("n"), cell("nʲ"), cell(), cell()] },
+                { type: "Individual", heading: "Nasal", cells: [cell("m"), {
+                        phonemes: [ { text: "n", annotations: [1] } ]
+                    }, cell("nʲ"), cell(), cell()] },
                 { type: "Group", heading: "Plosive", rows: [
                     { type: "Individual", heading: "Short", cells: [cell("p"), cell("t"), cell("tʲ"), cell("k"), cell()] },
                     { type: "Individual", heading: "Long", cells: [cell("pː"), cell("tː"), cell("tʲː"), cell("kː"), cell()] },
                 ]},
                 { type: "Group", heading: "Fricative", rows: [
-                    { type: "Individual", heading: "Short", cells: [cell("f"), cell("s"), cell("sʲː"), cell("ʃ"), cell("h")] },
-                    { type: "Individual", heading: "Long", cells: [cell("fː"), cell("sː"), cell("sʲː"), cell("ʃː"), cell("hː")] },
+                    { type: "Individual", heading: "Short", cells: [{
+                        phonemes: [ { text: "f", annotations: [0] } ]
+                    }, cell("s"), cell("sʲː"), {
+                        phonemes: [ { text: "ʃ", annotations: [0] } ]
+                    }, cell("h")] },
+                    { type: "Individual", heading: "Long", cells: [{
+                        phonemes: [ { text: "fː", annotations: [0] } ]
+                    }, cell("sː"), cell("sʲː"), {
+                        phonemes: [ { text: "ʃː", annotations: [0] } ]
+                    }, cell("hː")] },
                 ]},
                 { type: "Individual", heading: "Approximant", cells: [cell("v"), cell("l"), cell("lʲ"), cell("j"), cell()] },
                 { type: "Individual", heading: "Trill", cells: [cell(), cell("r"), cell(), cell(), cell()] },
@@ -52,7 +75,98 @@ export const PRESETS: { [key: string]: Body } = (() => {
                 { type: "Individual", heading: "Velar" },
                 { type: "Individual", heading: "Glottal" },
              ],
-             annotations: []
+             annotations: [
+                "Appears only in loanwords.",
+                "/n/ is realized as velar [ŋ] before a velar consonant.",
+             ]
+        },
+        "Simple Vowels": {
+            rows: [
+                { type: "Individual", heading: "High", cells: [cell("i"), cell(), cell("u")] },
+                { type: "Individual", heading: "Mid", cells: [cell("e"), cell("ə"), cell("o")] },
+                { type: "Individual", heading: "Low", cells: [cell(), cell("a"), cell()] },
+            ],
+            columns: [
+                { type: "Individual", heading: "Front" },
+                { type: "Individual", heading: "Central" },
+                { type: "Individual", heading: "Back" },
+            ],
+            annotations: []
+        },
+        "Burmese Vowels": {
+            rows: [
+                { type: "Individual", heading: "Close", cells: [{ phonemes: [ { text: "i", annotations: [0] } ] }, { phonemes: [ { text: "ĩ", annotations: [0] } ] }, cell(), cell(), { phonemes: [ { text: "u", annotations: [0] } ] }, { phonemes: [ { text: "ũ", annotations: [0] } ] }] },
+                { type: "Individual", heading: "Close-mid", cells: [cell("e"), cell(), cell("ə"), cell(), cell("o"), cell()] },
+                { type: "Individual", heading: "Open-mid", cells: [cell("ɛ"), cell(), cell(), cell(), cell("ɔ"), cell()] },
+                { type: "Individual", heading: "Open", cells: [cell(), cell(), cell("a"), cell("ã"), cell(), cell()] },
+            ],
+            columns: [
+                { type: "Group", heading: "Front", columns: [
+                    { type: "Individual", heading: "Oral" },
+                    { type: "Individual", heading: "Nasal" },
+                ] },
+                { type: "Group", heading: "Central", columns: [
+                    { type: "Individual", heading: "Oral" },
+                    { type: "Individual", heading: "Nasal" },
+                ] },
+                { type: "Group", heading: "Back", columns: [
+                    { type: "Individual", heading: "Oral" },
+                    { type: "Individual", heading: "Nasal" },
+                ] }
+            ],
+            annotations: ["Somewhat mid-centralized ([ɪ, ʊ]) in closed syllables."]
+        },
+        "Sandawe Clicks": {
+            columns: [
+                { type: "Individual", heading: "Laminal denti-alveolar"},
+                { type: "Individual", heading: "Apical post-alveolar" },
+                { type: "Individual", heading: "Lateral palatal"},
+            ],
+            rows: [
+                { type: "Individual", heading: "Nasal", cells: [cell("ŋǀ"), cell("ŋǃ"), cell("ŋǁ")] },
+                { type: "Individual", heading: "Voiced", cells: [cell("gǀ"), cell("gǃ"), cell("gǁ")] },
+                { type: "Individual", heading: "Tenuis", cells: [cell("kǀ"), cell("kǃ"), cell("kǁ")] },
+                { type: "Individual", heading: "Aspirated", cells: [cell("kǀʰ"), cell("kǃʰ"), cell("kǁʰ")] },
+                { type: "Individual", heading: "Glottalized", cells: [cell("ᵑǀˀ"), cell("ᵑǃˀ"), cell("ᵑǁˀ")] },
+            ],
+            annotations: []
+        },
+        "Dutch Diphthongs": {
+            columns: [
+                {
+                    type: "Group",
+                    heading: "Front",
+                    columns: [
+                        {
+                            type: "Group",
+                            heading: "Unrounded",
+                            columns: [
+                                { type: "Individual", heading: "Fronting" },
+                                { type: "Individual", heading: "Backing" },
+                            ]
+                        },
+                        { type: "Individual", heading: "Rounded" },
+                    ]
+                },
+                {
+                    "type": "Group",
+                    "heading": "Back",
+                    "columns": [
+                        { type: "Individual", heading: "Fronting" },
+                        { type: "Individual", heading: "Backing" },
+                    ]
+                }
+            ],
+            rows: [
+                { type: "Individual", heading: "Close", cells: [cell(), cell("iu̯"), cell("yu̯"), cell("ui̯"), cell()] },
+                { type: "Individual", heading: "Mid", cells: [{ phonemes: [ { text: "ɛi̯", annotations: [1, 2] }] }, cell("eːu̯"), { phonemes: [ { text: "œy̯", annotations: [1] }] }, cell("ɔi̯", "oːi̯"), { phonemes: [ { text: "ɔu̯", annotations: [0, 1] }] }] },
+                { type: "Individual", heading: "Open", cells: [cell(), cell(), cell(), cell("ɑi̯", "aːi̯"), cell()] },
+            ],
+            annotations: [
+                "/ɔu/ has been variously transcribed with ⟨ɔu⟩, ⟨ɑu⟩, and ⟨ʌu⟩.",
+                "The starting points of /ɛi, œy, ɔu/ tend to be closer ([ɛɪ, œ̈ʏ, ɔ̈ʊ]) in Belgian Standard Dutch than in Northern Standard Dutch ([ɛ̞ɪ, œ̞̈ʏ, ʌ̞̈ʊ]).",
+                "The backness of the starting point of the Belgian Standard Dutch realisation of /ɛi/ has been variously described as front [ɛɪ] and centralised front [ɛ̈ɪ]."
+            ]
         }
     }
 })();
@@ -73,6 +187,7 @@ export type ControlModal =
     | "LinkAnnotation"
     | "EditAnnotation"
     | "DeleteAnnotation"
+    | "LoadPreset"
 
 export interface EditorState {
   body: Body;

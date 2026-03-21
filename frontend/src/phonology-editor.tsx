@@ -91,7 +91,7 @@ export const mountPhonologyEditor = (
   }
 
   const root = ReactDOM.createRoot(container);
-  root.render(<PhonologyEditor body={PRESETS["Estonian Consonants"]!} name={name} />);
+  root.render(<PhonologyEditor body={body} name={name} />);
 }
 
 if (typeof window !== "undefined") {

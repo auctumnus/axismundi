@@ -34,6 +34,8 @@ table.phonology-table {
 
     th, td {
         border: var(--border);
+        transition: outline 0.1s;
+        outline-color: transparent;
     }
 
     td {
@@ -104,16 +106,20 @@ ol.annotations {
         transition: color .2s;
     }
 
-    button:hover {
-        transition: color .1s;
-        text-decoration: underline;
-        color: var(--foreground-accent) !important;
-        cursor: pointer;
+    button {
+        text-align: left;
+
+        &:hover {
+            transition: color .1s;
+            text-decoration: underline;
+            color: var(--foreground-accent) !important;
+            cursor: pointer;
+        }
     }
 
     &.has-focused {
         li:not(.focused) {
-            color: var(--foreground-secondary);
+            color: var(--foreground-tertiary);
         }
     }
 }
@@ -174,6 +180,7 @@ ol.annotations {
         &.disabled {
             cursor: not-allowed;
             opacity: 0.5;
+            background-color: transparent;
         }
 
         &:not(.disabled):hover {
@@ -182,6 +189,10 @@ ol.annotations {
             border-left: 1px solid var(--input-border-focus);
             border-bottom: 1px solid var(--input-border-focus);
         }
+    }
+
+    .phoneme + .phoneme {
+        padding-left: 0.5rem;
     }
 }
 
