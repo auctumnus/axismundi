@@ -6,7 +6,6 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
-use markdown_it::plugins::extra::tables;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -17,7 +16,7 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        self, contribution_stats::ContributionStatsRepository, language_families::{
+        contribution_stats::ContributionStatsRepository, language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
         }, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, phonology_tables::{PhonologyTableRepository, SearchPhonologyTable, TableRenderOptions}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{WordRepository, WordSearch, WordWithMeta}
     },

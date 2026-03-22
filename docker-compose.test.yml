@@ -61,6 +61,16 @@ services:
       "
     restart: on-failure
 
+  lexurgy:
+    image: ghcr.io/auctumnus/lexurgy-services:latest
+    ports:
+      - "4000:8080"
+    environment:
+      API_KEY: change-me-in-production
+      SINGLE_STEP_TIMEOUT: 1
+      REQUEST_TIMEOUT: 5
+      TOTAL_TIMEOUT: 60
+
   thumbor:
     image: beeyev/thumbor-s3:slim-alpine
     container_name: axismundi-thumbor-test

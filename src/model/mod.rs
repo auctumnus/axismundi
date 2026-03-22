@@ -16,6 +16,7 @@ pub mod quotation_suggestions;
 pub mod quotations;
 pub mod reports;
 pub mod sessions;
+pub mod sound_change_sets;
 pub mod translatable;
 pub mod translations;
 pub mod user_activities;

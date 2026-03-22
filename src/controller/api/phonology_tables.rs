@@ -190,17 +190,17 @@ mod tests {
     fn valid_body() -> serde_json::Value {
         json!({
             "columns": [
-                {"Individual": {"heading": "Bilabial"}},
-                {"Individual": {"heading": "Alveolar"}}
+                {"type": "Individual", "heading": "Bilabial"},
+                {"type": "Individual", "heading": "Alveolar"}
             ],
             "rows": [
-                {"Individual": {
+                {"type": "Individual",
                     "heading": "Plosive",
                     "cells": [
                         {"phonemes": [{"text": "p", "annotations": []}]},
                         {"phonemes": [{"text": "t", "annotations": []}]}
                     ]
-                }}
+                }
             ],
             "annotations": []
         })
@@ -290,16 +290,16 @@ mod tests {
             "name": "Bad Table",
             "body": {
                 "columns": [
-                    {"Individual": {"heading": "Bilabial"}},
-                    {"Individual": {"heading": "Alveolar"}}
+                    {"type": "Individual", "heading": "Bilabial"},
+                    {"type": "Individual", "heading": "Alveolar"}
                 ],
                 "rows": [
-                    {"Individual": {
+                    {"type": "Individual",
                         "heading": "Plosive",
                         "cells": [
                             {"phonemes": [{"text": "p", "annotations": []}]}
                         ]
-                    }}
+                    }
                 ],
                 "annotations": []
             }

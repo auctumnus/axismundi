@@ -91,6 +91,12 @@ pub enum EmailConfig {
 }
 
 #[derive(Clone, Deserialize, Debug)]
+pub struct LexurgyConfig {
+    pub url: String,
+    pub api_key: String,
+}
+
+#[derive(Clone, Deserialize, Debug)]
 pub struct AppConfig {
     pub database_url: String,
     pub s3: S3Config,
@@ -109,6 +115,7 @@ pub struct AppConfig {
     pub environment: Environment,
     #[serde(default)]
     pub banner: BannerConfig,
+    pub lexurgy: LexurgyConfig,
 }
 
 impl AppConfig {
@@ -152,6 +159,10 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 message: "This is a test banner".to_string(),
                 kind: "info".to_string(),
                 enabled: false,
+            },
+            lexurgy: LexurgyConfig {
+                url: "http://localhost:4000".to_string(),
+                api_key: "change-me-in-production".to_string(),
             },
             // TODO: seems bad!
             environment: Environment::Dev,

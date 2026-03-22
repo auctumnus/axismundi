@@ -25,6 +25,7 @@ mod controller;
 mod email;
 mod embed;
 mod err;
+mod lexurgy;
 mod md;
 mod model;
 mod pagination;

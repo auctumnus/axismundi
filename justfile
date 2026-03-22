@@ -86,18 +86,24 @@ test flags="" cov="" $RUST_BACKTRACE="0":
         echo "Failed to start test services"; \
         exit 1; \
     fi
-    echo "Waiting for database to be ready..."
+    echo -n "Waiting for database to be ready..."
     while ! docker exec axismundi-db-test pg_isready -U user_test -d axismundi_test >/dev/null 2>&1; do \
-        echo {{ if flags == "-q" { "" } else { "Database is unavailable - sleeping" } }}; \
+        echo -n {{ if flags == "-q" { "" } else { "." } }}; \
         sleep .5; \
     done
-    echo "Database is ready!"
-    echo "Waiting for Thumbor to be ready..."
+    echo " Database is ready!"
+    echo -n "Waiting for Thumbor to be ready..."
     while ! curl -sf http://localhost:7888/healthcheck >/dev/null 2>&1; do \
-        echo {{ if flags == "-q" { "" } else { "Thumbor is unavailable - sleeping" } }}; \
+        echo -n {{ if flags == "-q" { "" } else { "." } }}; \
         sleep .5; \
     done
-    echo "Thumbor is ready!"
+    echo " Thumbor is ready!"
+    echo -n "Waiting for Lexurgy to be ready..."
+    while ! curl -sf http://localhost:4000/ >/dev/null 2>&1; do \
+        echo -n {{ if flags == "-q" { "" } else { "." } }}; \
+        sleep .5; \
+    done
+    echo " Lexurgy is ready!"
     echo "Creating database..."
     sqlx database create --database-url {{postgres_test_url}}
     if [ $? -ne 0 ]; then \
@@ -106,7 +112,7 @@ test flags="" cov="" $RUST_BACKTRACE="0":
         exit 1; \
     fi
     echo "Running migrations..."
-    sqlx migrate run --database-url {{postgres_test_url}}
+    sqlx migrate run --database-url {{postgres_test_url}} >/dev/null 2>&1
     if [ $? -ne 0 ]; then \
         echo "Failed to run migrations"; \
         just test_teardown; \
@@ -167,7 +173,7 @@ watch-frontend:
 # Start all services except the app (db, minio, thumbor, thumbor proxy)
 dev-full:
     @echo "Starting all development services..."
-    docker compose up -d postgres minio createbuckets thumbor
+    docker compose up -d postgres minio createbuckets thumbor lexurgy
     @echo "Waiting for services to be ready..."
     @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
         echo "Database is unavailable - sleeping"; \

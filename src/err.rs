@@ -186,6 +186,12 @@ impl From<std::fmt::Error> for AppError {
     }
 }
 
+impl From<reqwest::Error> for AppError {
+    fn from(err: reqwest::Error) -> Self {
+        internal_error(err)
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (self.status_code, self.message).into_response()

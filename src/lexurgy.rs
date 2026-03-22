@@ -1,0 +1,131 @@
+use std::{collections::HashMap, fmt::Display, sync::LazyLock};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{config::CONFIG, err::AppResult};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Request {
+    pub changes: String,
+    pub input_words: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_words: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_polling: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceStep {
+    pub rule: String,
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleFailure {
+    pub message: String,
+    pub rule: String,
+    pub original_word: String,
+    pub current_word: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Response {
+    pub rule_names: Vec<String>,
+    pub output_words: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intermediate_words: Option<HashMap<String, Vec<String>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub traces: Option<HashMap<String, Vec<TraceStep>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<RuleFailure>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum Error {
+    ParseError {
+        message: String,
+        line_number: u32,
+        column_number: u32,
+    },
+    InvalidExpression {
+        message: String,
+        rule: String,
+        expression: String,
+        expression_number: u32,
+    },
+    AnalysisError {
+        message: String,
+    },
+    RuntimeError {
+        message: String,
+    },
+    Timeout {
+        message: String,
+    },
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::ParseError { message, line_number, column_number } => {
+                write!(f, "Parse error at line {}, column {}: {}", line_number, column_number, message)
+            }
+            Error::InvalidExpression { message, rule, expression, expression_number } => {
+                write!(f, "Invalid expression in rule '{}', expression {}: {}. Expression was: '{}'", rule, expression_number, message, expression)
+            }
+            Error::AnalysisError { message } => {
+                write!(f, "Analysis error: {}", message)
+            }
+            Error::RuntimeError { message } => {
+                write!(f, "Runtime error: {}", message)
+            }
+            Error::Timeout { message } => {
+                write!(f, "Timeout error: {}", message)
+            }
+        }
+    }
+}
+
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+
+pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> {
+    let response: reqwest::Response = CLIENT
+        .post(format!("{}/scv1", CONFIG.lexurgy.url))
+        .header("Authorization", CONFIG.lexurgy.api_key.clone())
+        .json(request)
+        .send()
+        .await?;
+
+    if response.status() == 400 {
+        let error = response.json::<Error>().await?;
+        Ok(Err(error))
+    } else {
+        let response = response.json::<Response>().await?;
+        Ok(Ok(response))
+    }
+}
+
+pub async fn run_sound_changes(
+    changes: String,
+    input_words: Vec<String>
+) -> AppResult<Result<Response, Error>> {
+    let request = Request {
+        changes,
+        input_words,
+        trace_words: None,
+        start_at: None,
+        stop_before: None,
+        allow_polling: None,
+    };
+
+    send_scv1(&request).await
+}
