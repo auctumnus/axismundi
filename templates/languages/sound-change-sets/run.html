@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block head %}
+<script type="importmap">
+    {
+        "imports": {
+            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
+        }
+    }
+</script>
+<script src="/static/tooltip.js" type="module" defer></script>
+<script src="/static/time.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/sound-change-set-card.css">
+<link rel="stylesheet" href="/static/tooltip.css">
+{% endblock %}
+
+{% block title %}new translation - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>new translation</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<div class="context-cards">
+    <div class="context-card sound-change-set-context">
+        <span class="context-label">for sound change set</span>
+        <ul class="standalone-card">
+            {% call u::render_sound_change_set_card(&set.sound_change_set, &set.author, &language.language, can_edit_language) %}
+        </ul>
+    </div>
+</div>
+
+
+
+{% endblock %}
+
+{% block footer %}
+{% call u::sound_change_set_section(&set.sound_change_set, can_edit_language) %}
+{% call u::language_section(&language, can_edit_language) %}
+{% endblock %}
