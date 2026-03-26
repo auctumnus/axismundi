@@ -217,11 +217,11 @@ impl SoundChangeSetRepository {
         })
     }
 
-    pub async fn run(&self, set_id: &Uuid, input_words: Vec<String>) -> AppResult<lexurgy::Response> {
+    pub async fn run_from_db(&self, set_id: &Uuid, input_words: Vec<String>) -> AppResult<lexurgy::Response> {
         let set = self.get(*set_id).await?;
 
         if let Some(set) = set {
-            let response = crate::lexurgy::run_sound_changes(set.changes, input_words).await?;
+            let response = crate::lexurgy::run_sound_changes(set.changes, input_words, None, None, None).await?;
 
             match response {
                 Ok(response) => Ok(response),

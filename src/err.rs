@@ -6,13 +6,14 @@ use axum::{
 };
 use validator::ValidationError;
 
-use crate::config;
+use crate::{config, lexurgy};
 
 #[derive(Debug, Clone)]
 pub struct AppError {
     pub message: String,
     pub status_code: StatusCode,
     pub validation_errors: Option<validator::ValidationErrors>,
+    pub extra: Option<serde_json::Value>,
 }
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -49,6 +50,7 @@ impl AppError {
             message,
             status_code,
             validation_errors: None,
+            extra: None,
         }
     }
 
@@ -129,6 +131,7 @@ impl From<anyhow::Error> for AppError {
             message: err.to_string(),
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
             validation_errors: None,
+            extra: None,
         }
     }
 }
@@ -139,6 +142,7 @@ impl From<validator::ValidationErrors> for AppError {
             message: errors.to_string(),
             status_code: StatusCode::BAD_REQUEST,
             validation_errors: Some(errors),
+            extra: None,
         }
     }
 }
@@ -150,6 +154,7 @@ impl From<sqlx::Error> for AppError {
                 message: "Resource not found".to_string(),
                 status_code: StatusCode::NOT_FOUND,
                 validation_errors: None,
+                extra: None,
             },
             _ => internal_error(err),
         }
@@ -189,6 +194,24 @@ impl From<std::fmt::Error> for AppError {
 impl From<reqwest::Error> for AppError {
     fn from(err: reqwest::Error) -> Self {
         internal_error(err)
+    }
+}
+
+impl From<lexurgy::Error> for AppError {
+    fn from(err: lexurgy::Error) -> Self {
+        let message = match &err {
+            lexurgy::Error::ParseError { message, line_number, column_number } => {
+                format!("Error parsing sound changes: {message} at line {line_number}, column {column_number}")
+            },
+            lexurgy::Error::InvalidExpression { message, rule, expression, expression_number } => {
+                format!("Invalid expression in sound changes: {message} in rule {rule} at expression {expression_number}: {expression}")
+            },
+            lexurgy::Error::AnalysisError { message } => format!("Error analyzing sound changes: {message}"),
+            lexurgy::Error::RuntimeError { message } => format!("Error running sound changes: {message}"),
+            lexurgy::Error::Timeout { message } => format!("Timeout running sound changes: {message}"),
+        };
+
+        AppError { message, status_code: StatusCode::BAD_REQUEST, validation_errors: None, extra: serde_json::to_value(err).ok() }
     }
 }
 

@@ -101,11 +101,11 @@ form.default, .modal-inner-container {
     font-family: var(--font-heading);
   }
 
-  input[type="text"],
-  input[type="search"],
-  input[type="email"],
-  input[type="password"],
-  textarea {
+  input[type="text"]:not(.no-default-styles),
+  input[type="search"]:not(.no-default-styles),
+  input[type="email"]:not(.no-default-styles),
+  input[type="password"]:not(.no-default-styles),
+  textarea:not(.no-default-styles) {
     font-family: var(--font-normal);
     padding: 0.5rem;
     border: 1px solid var(--input-border);

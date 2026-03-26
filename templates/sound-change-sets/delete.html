@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete {{ set.name }}? - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete sound change set</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}/delete">
+    <section>
+        <p>Are you sure you want to delete the sound change set <strong>{{ set.name }}</strong>?</p>
+        <p>This action cannot be undone and will delete all associated data.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete sound change set</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/sound-change-sets" class="breadcrumb">sound change sets</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::sound_change_set_section(&set, &language.code, can_edit_language) %}
+{% call u::language_section(&language, can_delete_language) %}
+{% endblock %}

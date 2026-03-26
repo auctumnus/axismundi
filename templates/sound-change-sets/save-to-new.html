@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}save sound change set - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1>save sound change set</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/sound-change-sets/save" id="new-sound-change-set-form">
+    <section>
+        <label for="language_code">Language to save this set into</label>
+        {% call u::field_error(name="language_code") %}
+        <div class="select-container">
+            <select id="language_code" name="language_code" required>
+                <option value="" disabled selected>-- select a language --</option>
+                {% for language in available_languages %}
+                    <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
+                {% endfor %}
+            </select>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+        </div>
+    </section>
+
+    <section>
+        <label for="name">Name</label>
+        <input type="text" name="name" id="name" value="{{ previous_name }}" required>
+        {% call u::field_error("name") %}
+    </section>
+
+    <section>
+        <label for="description">Description (optional)</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description" rows="4">{{ previous_description }}</textarea>
+    </section>
+
+    <input type="hidden" name="changes" value="{{ changes }}">
+
+    <section class="button-row">
+        <button type="submit">Save</button>
+    </section>
+</form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'new-sound-change-set-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
+{% endblock %}

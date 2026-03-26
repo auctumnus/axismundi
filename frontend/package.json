@@ -6,6 +6,7 @@
   "scripts": {
     "build": "bun build.ts",
     "build:annotation": "parcel build",
+    "build:lexurgy-grammar": "lezer-generator ./lexurgy.grammar -o src/lexurgy-parser.js",
     "dev": "bun build.ts -- --watch",
     "format": "prettier --write src/**/*.ts src/**/*.tsx src/**/*.css",
     "lint": "eslint src/**/*.ts",
@@ -37,12 +38,25 @@
   "peerDependencies": {
     "typescript": "^5.8.3"
   },
+  "overrides": {
+    "@lezer/common": "^1.5.1",
+    "@lezer/lr": "^1.4.8"
+  },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
     "@floating-ui/dom": "^1.7.4",
     "@floating-ui/react": "^0.27.19",
     "@headlessui/react": "^2.2.9",
     "@iconify-json/material-symbols": "^1.2.48",
     "@iconify/react": "^6.0.2",
+    "@lezer/common": "^1.5.1",
+    "@lezer/generator": "^1.8.0",
+    "@lezer/highlight": "^1.2.3",
+    "@lezer/lr": "^1.4.8",
     "@swc/cli": "^0.7.8",
     "@swc/core": "^1.13.3",
     "date-fns": "^4.1.0",

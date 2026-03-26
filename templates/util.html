@@ -433,6 +433,20 @@
 </li>
 {% endmacro %}
 
+{% macro render_sound_change_set_card(set, author, language, can_edit_language) %}
+    <li class="sound-change-set-preview-card preview-card">
+        <a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}">
+            <span class="left">
+                <span class="title">{{ set.name }}</span>
+                <span class="summary ellipse">{% if let Some(desc) = set.description %}{{ crate::util::first_sentence(&desc) }}{% endif %}</span>
+                <span class="creator">
+                    {% call user_display(&author, size="small") %}
+                </span>
+            </span>
+        </a>
+    </li>
+{% endmacro %}
+
 {% macro audit_log_card(entry) %}
 <li class="audit-log-card">
     <span class="left">
@@ -514,6 +528,7 @@
         <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
         <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
         <li><a href="/languages/{{ language.code }}/phonology-tables">phonology tables</a></li>
+        <li><a href="/languages/{{ language.code }}/sound-change-sets">sound change sets</a></li>
         {% if can_edit_language %}
             <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
             <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
@@ -579,6 +594,20 @@
             <li><a href="/language-families/{{ family.code }}/edit">edit language family</a></li>
             <li><a href="/language-families/{{ family.code }}/add-member">add member</a></li>
             <li><a href="/language-families/{{ family.code }}/invites">invites</a></li>
+        {% endif %}
+    </ul>
+</li>
+{% endmacro %}
+
+{% macro sound_change_set_section(set, language_code, can_edit_language) %}
+<li>
+    <h2>{{ set.name }}</h2>
+    <ul>
+        <li><a href="/languages/{{ language_code }}/sound-change-sets/{{ set.id }}">view sound change set</a></li>
+        <li><a href="/languages/{{ language_code }}/sound-change-sets/{{ set.id }}/run">run sound change set</a></li>
+        {% if can_edit_language %}
+            <li><a href="/languages/{{ language_code }}/sound-change-sets/{{ set.id }}/edit">edit sound change set</a></li>
+            <li><a href="/languages/{{ language_code }}/sound-change-sets/{{ set.id }}/delete">delete sound change set</a></li>
         {% endif %}
     </ul>
 </li>
