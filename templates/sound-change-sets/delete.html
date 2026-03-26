@@ -32,6 +32,6 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::sound_change_set_section(&set, can_edit_language) %}
+{% call u::sound_change_set_section(&set, &language.code, can_edit_language) %}
 {% call u::language_section(&language, can_delete_language) %}
 {% endblock %}

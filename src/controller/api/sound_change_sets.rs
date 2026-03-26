@@ -1,14 +1,11 @@
 use crate::{
-    err::{AppResult, unauthorized_no_session},
-    model::{
+    err::{AppResult, internal_error, unauthorized_no_session}, lexurgy::{self, send_scv1}, model::{
         languages::LanguageRepository,
         sound_change_sets::{
             NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet,
             SoundChangeSetRepository, UpdateSoundChangeSet,
         },
-    },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::extract_session::Session,
+    }, pagination::{PaginatedRequest, PaginatedResponse}, util::extract_session::Session
 };
 use axum::{Json, extract::Path, http::StatusCode};
 use serde::Deserialize;
@@ -28,6 +25,10 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
         )
         .route(
             "/languages/{code}/sound-change-sets/{id}/run",
+            axum::routing::post(run_sound_change_set_from_db),
+        )
+        .route(
+            "/sound-change-sets/run",
             axum::routing::post(run_sound_change_set),
         )
 }
@@ -110,13 +111,23 @@ pub async fn delete_sound_change_set(
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn run_sound_change_set(
+pub async fn run_sound_change_set_from_db(
     sets: SoundChangeSetRepository,
     Path((_code, id)): Path<(String, Uuid)>,
     Json(req): Json<RunSoundChangeSetRequest>,
 ) -> ApiResponse<Json<crate::lexurgy::Response>> {
-    let response = sets.run(&id, req.input_words).await?;
+    let response = sets.run_from_db(&id, req.input_words).await?;
     Ok(Json(response))
+}
+
+pub async fn run_sound_change_set(
+    Json(req): Json<lexurgy::Request>,
+) -> ApiResponse<Json<crate::lexurgy::Response>> {
+    let response = send_scv1(&req).await?;
+    match response {
+        Ok(response) => Ok(Json(response)),
+        Err(err) => Err(err.into()),
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,162 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block head %}
+<script src="/static/sound-change-runner.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/sound-change-set-card.css">
+<link rel="stylesheet" href="/static/sound-changer.css">
+<link rel="stylesheet" href="/static/tooltip.css">
+<link rel="stylesheet" href="/static/components/modal.css">
+{% endblock %}
+
+{% block title %}run sound changes - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>run sound changes</h1>
+
+<p>
+    Sound changes are accepted in the <a href="https://www.meamoria.com/lexurgy/html/sc-tutorial.html">Lexurgy SC language</a>.
+    Input words should be newline-delimited; that is, there should be one word per line.
+</p>
+
+<p class="tab-warning">
+    If you use a keyboard to navigate, note that regular <kbd>Tab</kbd> will indent (or accept completions) in the editor.
+    To circumvent this, use <kbd>Esc</kbd> then <kbd>Tab</kbd>.
+</p>
+
+<div id="error-container">
+    {% if let Some(error) = error %}
+        <div class="error">
+            <h2>Error</h2>
+            <p class="error">{{ error.message }}</p>
+        </div>
+    {% endif %}
+</div>
+
+{% if let Some((set_with_meta, language, can_edit_language)) = associated_sound_set %}
+    <div class="context-cards">
+        <div class="context-card sound-change-set-context">
+            <span class="context-label">for sound change set</span>
+            <ul class="standalone-card">
+                {% call u::render_sound_change_set_card(&set_with_meta.sound_change_set, &set_with_meta.author, &language.language, can_edit_language) %}
+            </ul>
+        </div>
+    </div>
+
+    {% if (previous_changes != set_with_meta.sound_change_set.changes && can_edit_language) %}
+        <noscript>
+            <div class="warning">
+                <h2>Warning</h2>
+                <p>You have unsaved changes to this sound change set. If you leave this page, your changes will be lost.</p>
+            </div>
+        </noscript>
+    {% endif %}
+{% endif %}
+
+<form class="default sound-change-runner" method="post">
+    <div class="options">
+        <details class="advanced-options">
+            <summary>
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
+                <span class="title">Advanced options</span>
+            </summary>
+            <div class="container">
+                <div class="content">
+                    <section>
+                        <label for="start_at">Rule to start from</label>
+                        {% call u::field_error("start_at") %}
+                        <input type="text" id="start_at" name="start_at" value="{{ previous_start_at }}">
+                        <span class="hint">leave blank to start from the beginning</span>
+                    </section>
+                    <section>
+                        <label for="stop_before">Rule to end at</label>
+                        {% call u::field_error("stop_before") %}
+                        <input type="text" id="stop_before" name="stop_before" value="{{ previous_stop_before }}">
+                        <span class="hint">leave blank to run all rules</span>
+                    </section>
+                    <section>
+                        <label for="trace_words">Words to trace</label>
+                        {% call u::field_error("trace_words") %}
+                        <textarea id="trace_words" name="trace_words" rows="5">{{ previous_trace_words }}</textarea>
+                        <span class="hint">to trace the evolution of words, enter one word per line</span>
+                    </section>
+                </div>
+            </div>
+        </details>
+    </div>
+    <div class="sound-change-runner-main">
+        <div class="sound-change-input sound-changer-section">
+            <section>
+                <label for="input-words">Input words</label>
+                {% call u::field_error("input_words") %}
+                <textarea id="input-words" name="input_words" rows="10">{{ previous_input_words }}</textarea>
+                <span class="hint">enter one word per line</span>
+            </section>
+            <div id="input-button-row" class="button-row"></div>
+        </div>
+        <div class="sound-change-rules sound-changer-section">
+            <section>
+                <label id="changes-label" for="changes">Sound change rules</label>
+                {% call u::field_error("changes") %}
+                <textarea id="changes" name="changes" rows="10">{{ previous_changes }}</textarea>
+            </section>
+            <div id="changes-button-row" class="button-row">
+                {% if let Some((set_with_meta, language, can_edit_language)) = associated_sound_set %}
+                    <input type="hidden" name="set_id" value="{{ set_with_meta.sound_change_set.id }}">
+                    {% if can_edit_language %}
+                        <button id="save-button" data-language-code="{{ language.language.code }}" data-set-id="{{ set_with_meta.sound_change_set.id }}" type="submit" formaction="/languages/{{ language.language.code }}/sound-change-sets/{{ set_with_meta.sound_change_set.id }}/save">Save changes</button>
+                    {% endif %}
+                    <button class="secondary" type="submit" formaction="/sound-change-sets/save-to-new">Save to new set</button>
+                    <button id="run-button" type="submit" formaction="/sound-change-sets/run?set={{ set_with_meta.sound_change_set.id }}">Run</button>
+                {% else %}
+                    <button class="secondary" type="submit" formaction="/sound-change-sets/save-to-new">Save to new set</button>
+                    <button id="run-button" type="submit" formaction="/sound-change-sets/run">Run</button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="sound-change-output sound-changer-section">
+            <h2 id="output-label">Output</h2>
+            {% if rendered_output.len() > 0 %}
+            <table aria-labelledby="output-label" id="output">
+                <thead>
+                    <tr>
+                        <th>Input word</th>
+                        <th>Output word</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pair in &rendered_output %}
+                        <tr>
+                            <td>{{ pair.input }}</td>
+                            <td>{{ pair.output }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div id="output-button-row" class="button-row"></div>
+            {% else %}
+                <div class="empty-output">
+                    <span>Output will appear here.</span>
+                </div>
+            {% endif %}
+            <div id="traces">
+                {% for trace in &rendered_traces %}
+                    {{ trace | safe }}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block footer %}
+{% if let Some((set_with_meta, language, can_edit_language)) = associated_sound_set %}
+    {% call u::sound_change_set_section(&set_with_meta.sound_change_set, &language.language.code, can_edit_language) %}
+    {% call u::language_section(&language.language, can_edit_language) %}
+{% endif %}
+{% endblock %}

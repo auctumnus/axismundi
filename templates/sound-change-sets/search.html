@@ -87,9 +87,9 @@
         <p>No results found.</p>
     {% else %}
         <ul class="card-list">
-            {% for set in &sets_with_meta %}
+            {% for item in &sets_with_meta %}
                 <li>
-                    {% call u::render_sound_change_set_card(&set.sound_change_set, &set.author, &language.language, can_edit_language) %}
+                    {% call u::render_sound_change_set_card(&item.sound_change_set, &item.author, &language.language, can_edit_language) %}
                 </li>
             {% endfor %}
         </ul>

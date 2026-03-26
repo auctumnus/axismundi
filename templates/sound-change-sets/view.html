@@ -40,7 +40,7 @@
 </div>
 
 <div class="sound-change-set">
-    <a href="/languages/{{ language.language.code }}/sound-change-sets/{{ set.id }}/run">Run</a>
+    <a href="/sound-change-sets/run?set={{ set.id }}">Run</a>
     <pre>{{ set.changes }}</pre>
 </div>
 
@@ -54,6 +54,6 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::sound_change_set_section(&set, can_edit_language) %}
+{% call u::sound_change_set_section(&set, &language.language.code, can_edit_language) %}
 {% call u::language_section(&language.language, can_delete_language) %}
 {% endblock %}

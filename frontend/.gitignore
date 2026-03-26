@@ -17,3 +17,6 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+src/lexurgy-parser.js
+src/lexurgy-parser.terms.js

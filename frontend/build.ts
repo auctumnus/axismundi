@@ -68,13 +68,13 @@ async function processJS(inputPath: string, outputPath: string) {
 
 // Entry points that need bundling (React components and main entry)
 const BUNDLE_ENTRY_POINTS = [
-  'src/main.ts',
   'src/form-editor.tsx',
   'src/annotation.tsx',
   'src/etymology-modal.tsx',
   'src/word-combobox.tsx',
   'src/user-combobox.tsx',
   'src/phonology-editor.tsx',
+  'src/sound-change-runner.ts',
 ];
 
 async function bundleReactFiles() {

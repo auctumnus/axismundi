@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{config::CONFIG, err::AppResult};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {
     pub changes: String,
@@ -116,14 +116,17 @@ pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> 
 
 pub async fn run_sound_changes(
     changes: String,
-    input_words: Vec<String>
+    input_words: Vec<String>,
+    start_at: Option<String>,
+    stop_before: Option<String>,
+    trace_words: Option<Vec<String>>,
 ) -> AppResult<Result<Response, Error>> {
     let request = Request {
         changes,
         input_words,
-        trace_words: None,
-        start_at: None,
-        stop_before: None,
+        trace_words,
+        start_at,
+        stop_before,
         allow_polling: None,
     };
 
