@@ -569,6 +569,7 @@ const setupAdvancedOptions = (): boolean => {
     }
 
     const setupRulesInput = (input: HTMLInputElement, title: string, description?: string) => {
+        const name = input.name;
         const container = input.parentElement;
         if (!container) {
             console.error("Could not find parent element for rules input.");
@@ -584,7 +585,8 @@ const setupAdvancedOptions = (): boolean => {
             rulesStore,
             multiple: false,
             title,
-            description
+            description,
+            name,
         });
     }
 
@@ -634,6 +636,7 @@ const setupAdvancedOptions = (): boolean => {
     }
 
     if (traceWordsInput) {
+        const name = traceWordsInput.name;
         const container = document.createElement("div");
         container.className = "rules-combobox-container";
 
@@ -649,7 +652,8 @@ const setupAdvancedOptions = (): boolean => {
             rulesStore: wordsStore,
             multiple: true,
             title: "Words to trace",
-            description: "to trace the evolution of words, enter one word per line"
+            description: "to trace the evolution of words, enter one word per line",
+            name,
         });
     }
 

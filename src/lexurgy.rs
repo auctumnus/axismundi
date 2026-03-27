@@ -98,19 +98,31 @@ impl Display for Error {
 static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> {
-    let response: reqwest::Response = CLIENT
+    let response = CLIENT
         .post(format!("{}/scv1", CONFIG.lexurgy.url))
+        .timeout(std::time::Duration::from_secs(60))
         .header("Authorization", CONFIG.lexurgy.api_key.clone())
         .json(request)
         .send()
-        .await?;
+        .await;
 
-    if response.status() == 400 {
-        let error = response.json::<Error>().await?;
-        Ok(Err(error))
-    } else {
-        let response = response.json::<Response>().await?;
-        Ok(Ok(response))
+    match response {
+        Ok(response) => {
+            if response.status() == 400 {
+                let error = response.json::<Error>().await?;
+                Ok(Err(error))
+            } else {
+                let response = response.json::<Response>().await?;
+                Ok(Ok(response))
+            }
+        }
+        Err(e) => {
+            if e.is_timeout() {
+                Ok(Err(Error::Timeout { message: "The request timed out".to_string() }))
+            } else {
+                Ok(Err(Error::RuntimeError { message: format!("An error occurred while sending the request: {}", e) }))
+            }
+        }
     }
 }
 

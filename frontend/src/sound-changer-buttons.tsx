@@ -92,11 +92,14 @@ const RunButton = ({ getRequest, onResponse, onError }: { getRequest: () => Requ
                         });
 
                         if (!response.ok) {
-                            const errorData = await response.json();
-                            if (errorData && errorData.extra) {
-                                onError(errorData.extra as LexurgyError);
-                            } else {
-                                onError(`Failed to run sound changes: ${response.statusText}`);
+                            const errorText = await response.text();
+                            try {
+                                const errorData = JSON.parse(errorText);
+                                onError(errorData.extra);
+                                return;
+                            } catch(e) {
+                                onError(errorText);
+                                return;
                             }
                         }
 
@@ -141,11 +144,12 @@ interface ComboboxProps {
     multiple: boolean;
     title: string;
     description?: string;
+    name: string;
 }
 
 const Checkmark = ({ className }: { className?: string }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">{/* Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE */}<path fill="currentColor" d="m9.55 15.15l8.475-8.475q.3-.3.7-.3t.7.3t.3.713t-.3.712l-9.175 9.2q-.3.3-.7.3t-.7-.3L4.55 13q-.3-.3-.288-.712t.313-.713t.713-.3t.712.3z" /></svg>
 
-const Combobox = ({ rulesStore, multiple, title, description }: ComboboxProps) => {
+const Combobox = ({ rulesStore, multiple, title, description, name }: ComboboxProps) => {
     const rules = useSyncExternalStore(rulesStore.subscribe, rulesStore.getSnapshot);
 
     const [inputValue, setInputValue] = useState("");
@@ -236,6 +240,8 @@ const Combobox = ({ rulesStore, multiple, title, description }: ComboboxProps) =
                         ref={inputRef}
                         className="combobox-input multiple no-default-styles"
                         aria-label={title}
+                        name={name}
+                        id={name}
                         onChange={(event) => setInputValue(event.target.value)}
                     />
                 </div>
@@ -245,6 +251,8 @@ const Combobox = ({ rulesStore, multiple, title, description }: ComboboxProps) =
                 <ComboboxInput
                     className="combobox-input single"
                     aria-label={title}
+                    name={name}
+                    id={name}
                     onChange={(event) => setInputValue(event.target.value)}
                 />
             );
@@ -254,7 +262,7 @@ const Combobox = ({ rulesStore, multiple, title, description }: ComboboxProps) =
     return (
         <Field as="section" className={`combobox-field ${multiple ? "multiple" : "single"}`}>
             <Label>{title}</Label>
-            <ComboboxOuter multiple={multiple} onChange={interceptedOnChange}>
+            <ComboboxOuter multiple={multiple} value={selectedOptions} onChange={interceptedOnChange}>
                 <input type="hidden" value={multiple ? (selectedOptions as string[]).join("\n") : selectedOptions as string} readOnly />
                 {input}
                 {(filteredOptions.length > 0) && (
