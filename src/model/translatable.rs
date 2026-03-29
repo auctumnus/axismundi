@@ -6,11 +6,45 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    err::{AppResult, not_found},
+    err::{AppResult, bad_request, not_found},
     model::users::User,
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, ensure_verified},
+    util::{AppState, ensure_verified, sanitize_external_url},
 };
+
+fn validate_external_url(url: &str) -> Result<(), validator::ValidationError> {
+    sanitize_external_url(url)?;
+    Ok(())
+}
+
+fn sanitize_source_url(url: Option<String>) -> AppResult<Option<String>> {
+    url.map(|u| sanitize_external_url(&u).map_err(|e| bad_request(e.to_string())))
+        .transpose()
+}
+
+fn normalize_empty(value: Option<String>) -> Option<String> {
+    value.filter(|s| !s.trim().is_empty())
+}
+
+fn normalize_and_validate_source_fields(
+    name: Option<String>,
+    content: Option<String>,
+    language: Option<String>,
+) -> AppResult<(Option<String>, Option<String>, Option<String>)> {
+    let name = normalize_empty(name);
+    let content = normalize_empty(content);
+    let language = normalize_empty(language);
+    let count = [name.is_some(), content.is_some(), language.is_some()]
+        .iter()
+        .filter(|&&x| x)
+        .count();
+    if count != 0 && count != 3 {
+        return Err(bad_request(
+            "source_name, source_content, and source_language must all be provided together or all omitted",
+        ));
+    }
+    Ok((name, content, language))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Translatable {
@@ -25,6 +59,7 @@ pub struct Translatable {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub translations_count: i64,
+    pub description: Option<String>,
     pub like_count: i64,
     #[serde(skip_serializing)]
     pub created_by: Uuid,
@@ -56,7 +91,7 @@ pub struct CreateTranslatable {
     #[validate(length(max = 1000))]
     pub source_name: Option<String>,
 
-    #[validate(url)]
+    #[validate(custom(function = "validate_external_url"))]
     #[validate(length(max = 2000))]
     pub source_url: Option<String>,
 
@@ -65,6 +100,9 @@ pub struct CreateTranslatable {
 
     #[validate(length(max = 100))]
     pub source_language: Option<String>,
+
+    #[validate(length(max = 1000))]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -72,7 +110,7 @@ pub struct UpdateTranslatable {
     #[validate(length(min = 1, max = 200))]
     pub slug: Option<String>,
 
-    #[validate(length(min = 1, max = 500))]
+    #[validate(length(min = 1, max = 40))]
     pub title: Option<String>,
 
     #[validate(length(min = 1, max = 100_000))]
@@ -81,7 +119,7 @@ pub struct UpdateTranslatable {
     #[validate(length(max = 1000))]
     pub source_name: Option<String>,
 
-    #[validate(url)]
+    #[validate(custom(function = "validate_external_url"))]
     #[validate(length(max = 2000))]
     pub source_url: Option<String>,
 
@@ -90,6 +128,9 @@ pub struct UpdateTranslatable {
 
     #[validate(length(max = 100))]
     pub source_language: Option<String>,
+
+    #[validate(length(max = 1000))]
+    pub description: Option<String>,
 }
 
 pub struct TranslatableRepository {
@@ -135,6 +176,7 @@ impl TranslatableRepository {
                     created_by,
                     updated_by,
                     like_count,
+                    description,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -169,6 +211,7 @@ impl TranslatableRepository {
                     created_by,
                     updated_by,
                     like_count,
+                    description,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -191,6 +234,13 @@ impl TranslatableRepository {
         translatable: CreateTranslatable,
     ) -> AppResult<Translatable> {
         translatable.validate()?;
+        let (source_name, source_content, source_language) =
+            normalize_and_validate_source_fields(
+                translatable.source_name,
+                translatable.source_content,
+                translatable.source_language,
+            )?;
+        let source_url = sanitize_source_url(translatable.source_url)?;
 
         ensure_verified(requestor)?;
 
@@ -204,17 +254,18 @@ impl TranslatableRepository {
         let result = sqlx::query_as!(
             Translatable,
             r#"
-                INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, 0 AS "translations_count!"
+                INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, description, created_by, updated_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description, 0 AS "translations_count!"
             "#,
             slug,
             translatable.title,
             translatable.english,
-            translatable.source_name,
-            translatable.source_url,
-            translatable.source_content,
-            translatable.source_language,
+            source_name,
+            source_url,
+            source_content,
+            source_language,
+            translatable.description,
             requestor.id
         )
         .fetch_one(&self.state.pool)
@@ -244,6 +295,13 @@ impl TranslatableRepository {
         updates: UpdateTranslatable,
     ) -> AppResult<Translatable> {
         updates.validate()?;
+        let (source_name, source_content, source_language) =
+            normalize_and_validate_source_fields(
+                updates.source_name,
+                updates.source_content,
+                updates.source_language,
+            )?;
+        let source_url = sanitize_source_url(updates.source_url)?;
 
         ensure_verified(requestor)?;
 
@@ -272,10 +330,11 @@ impl TranslatableRepository {
                     source_url = COALESCE($6, source_url),
                     source_content = COALESCE($7, source_content),
                     source_language = COALESCE($8, source_language),
-                    updated_by = $9,
+                    description = COALESCE($9, description),
+                    updated_by = $10,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count,
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description,
                     (
                         SELECT COUNT(*)
                         FROM translation
@@ -286,10 +345,11 @@ impl TranslatableRepository {
             slug,
             updates.title,
             updates.english,
-            updates.source_name,
-            updates.source_url,
-            updates.source_content,
-            updates.source_language,
+            source_name,
+            source_url,
+            source_content,
+            source_language,
+            updates.description,
             requestor.id
         )
         .fetch_optional(&self.state.pool)
@@ -313,6 +373,51 @@ impl TranslatableRepository {
             .await?;
 
         Ok(updated_translatable)
+    }
+
+    pub async fn clear_source(
+        &self,
+        requestor: &User,
+        id: Uuid,
+    ) -> AppResult<Translatable> {
+        ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let existing = self.find_by_id(id).await?;
+        if existing.created_by != requestor.id {
+            return Err(crate::err::forbidden(
+                "only the creator can update this translatable",
+            ));
+        }
+
+        let result = sqlx::query_as!(
+            Translatable,
+            r#"
+                UPDATE translatable
+                SET source_name = NULL,
+                    source_url = NULL,
+                    source_content = NULL,
+                    source_language = NULL,
+                    updated_by = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description,
+                    (
+                        SELECT COUNT(*)
+                        FROM translation
+                        WHERE translation.translatable = translatable.id
+                    ) AS "translations_count!"
+            "#,
+            id,
+            requestor.id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("translatable with id '{id}'")))
     }
 
     pub async fn delete(&self, requestor: &User, translatable: Translatable) -> AppResult<bool> {
@@ -366,6 +471,7 @@ impl TranslatableRepository {
                     created_by,
                     updated_by,
                     like_count,
+                    description,
                     (
                         SELECT COUNT(*)
                         FROM translation

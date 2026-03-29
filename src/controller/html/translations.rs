@@ -225,6 +225,7 @@ struct NewTranslationStep2Template {
     language: Language,
     language_with_contributors: LanguagesWithContributors,
     previous_translated_text: String,
+    previous_translated_title: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
     will_create_audit_log: bool,
@@ -236,6 +237,7 @@ struct NewTranslationFormData {
     language_code: Option<String>,
     language_id: Option<Uuid>,
     translated_text: Option<String>,
+    translated_title: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -330,6 +332,7 @@ async fn new_translation_submit(
             language,
             language_with_contributors,
             previous_translated_text: String::new(),
+            previous_translated_title: String::new(),
             can_edit_translatable,
             can_edit_language,
             will_create_audit_log,
@@ -380,6 +383,7 @@ async fn new_translation_submit(
                 language,
                 language_with_contributors,
                 previous_translated_text: String::new(),
+                previous_translated_title: String::new(),
                 can_edit_translatable,
                 can_edit_language,
                 will_create_audit_log,
@@ -395,8 +399,7 @@ async fn new_translation_submit(
                 language.id,
                 CreateTranslation {
                     translated_text: translated_text.clone(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: form.translated_title.clone(),
                     ipa: None,
                     gloss: None,
                     notes: None,
@@ -429,6 +432,7 @@ async fn new_translation_submit(
                     language,
                     language_with_contributors,
                     previous_translated_text: translated_text,
+                    previous_translated_title: form.translated_title.clone().unwrap_or_default(),
                     can_edit_translatable,
                     can_edit_language,
                     will_create_audit_log,
@@ -625,6 +629,7 @@ struct EditTranslationTemplate {
     language_with_contributors: LanguagesWithContributors,
     translation: Translation,
     previous_translated_text: String,
+    previous_translated_title: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
     can_edit_translation: bool,
@@ -697,6 +702,7 @@ async fn edit_translation_form(
         language_with_contributors,
         translation: translation.clone(),
         previous_translated_text: translation.translated_text.clone(),
+        previous_translated_title: translation.translated_title.clone().unwrap_or_default(),
         can_edit_translatable,
         can_edit_language,
         can_edit_translation,
@@ -709,6 +715,7 @@ async fn edit_translation_form(
 #[derive(Deserialize)]
 struct EditTranslationFormData {
     translated_text: String,
+    translated_title: Option<String>,
     language_id: Uuid,
 }
 
@@ -764,8 +771,7 @@ async fn edit_translation_submit(
             existing_translation.id,
             UpdateTranslation {
                 translated_text: Some(form.translated_text.clone()),
-                translator_name: None,
-                translator_url: None,
+                translated_title: form.translated_title.clone(),
                 ipa: None,
                 gloss: None,
                 notes: None,
@@ -805,6 +811,7 @@ async fn edit_translation_submit(
                 language,
                 translation: existing_translation,
                 previous_translated_text: form.translated_text.clone(),
+                previous_translated_title: form.translated_title.clone().unwrap_or_default(),
                 language_with_contributors,
                 can_edit_translatable,
                 can_edit_language,

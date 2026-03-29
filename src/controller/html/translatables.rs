@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::{
     attempt,
-    controller::html::{TranslatableWithLiked, okay, render_template},
+    controller::html::{TranslatableWithLiked, okay, render_generic_error, render_template},
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::AppError,
     get_user,
@@ -30,13 +30,25 @@ use crate::{
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/new-translatable", post(new_translatable_submit))
-        .route("/translatable/{slug}/edit", post(edit_translatable_submit));
+        .route("/translatable/{slug}/edit", post(edit_translatable_submit))
+        .route("/translatable/{slug}/edit-source", post(edit_source_submit))
+        .route(
+            "/translatable/{slug}/clear-source",
+            post(clear_source_submit),
+        )
+        .route("/translatable/{slug}/delete", post(delete_translatable_submit));
 
     let normal_routes = Router::<AppState>::new()
         .route("/new-translatable", get(new_translatable_form))
         .route("/translatables", get(search_translatables))
         .route("/translatable/{slug}", get(view_translatable))
-        .route("/translatable/{slug}/edit", get(edit_translatable_form));
+        .route("/translatable/{slug}/edit", get(edit_translatable_form))
+        .route("/translatable/{slug}/edit-source", get(edit_source_form))
+        .route(
+            "/translatable/{slug}/clear-source",
+            get(clear_source_form),
+        )
+        .route("/translatable/{slug}/delete", get(delete_translatable_form));
 
     (secure_routes, normal_routes)
 }
@@ -48,6 +60,7 @@ struct NewTranslatableTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
     previous_title: String,
+    previous_description: String,
     previous_english: String,
 }
 
@@ -63,6 +76,7 @@ async fn new_translatable_form(s: Session) -> (StatusCode, Response) {
         current_user: Some(user),
         error: None,
         previous_title: String::new(),
+        previous_description: String::new(),
         previous_english: String::new(),
     };
 
@@ -72,6 +86,7 @@ async fn new_translatable_form(s: Session) -> (StatusCode, Response) {
 #[derive(Deserialize)]
 struct NewTranslatableFormData {
     title: String,
+    description: Option<String>,
     english: String,
 }
 
@@ -92,6 +107,7 @@ async fn new_translatable_submit(
                 source_url: None,
                 source_content: None,
                 source_language: None,
+                description: form.description.clone(),
             },
         )
         .await;
@@ -107,6 +123,7 @@ async fn new_translatable_submit(
                 current_user: Some(user),
                 error: Some(e),
                 previous_title: form.title.clone(),
+                previous_description: form.description.clone().unwrap_or_default(),
                 previous_english: form.english.clone(),
             };
 
@@ -205,6 +222,7 @@ struct ViewTranslatableTemplate {
     is_liked: bool,
     can_edit_translatable: bool,
     json_ld: String,
+    rendered_description: Option<String>,
 }
 
 async fn view_translatable(
@@ -291,6 +309,12 @@ async fn view_translatable(
             .map_err(Into::into)
     );
 
+    let rendered_description = if let Some(description) = &translatable.description {
+        crate::md::render_md(description).ok()
+    } else {
+        None
+    };
+
     let template = ViewTranslatableTemplate {
         current_user: s.user().cloned(),
         translatable,
@@ -299,6 +323,7 @@ async fn view_translatable(
         is_liked,
         can_edit_translatable,
         json_ld,
+        rendered_description,
     };
     okay(render_template(template))
 }
@@ -311,6 +336,7 @@ struct EditTranslatableTemplate {
     translatable: Translatable,
     error: Option<AppError>,
     previous_title: String,
+    previous_description: String,
     previous_english: String,
 }
 
@@ -328,6 +354,7 @@ async fn edit_translatable_form(
         translatable: translatable.clone(),
         error: None,
         previous_title: translatable.title,
+        previous_description: translatable.description.unwrap_or_default(),
         previous_english: translatable.english,
     };
 
@@ -337,6 +364,7 @@ async fn edit_translatable_form(
 #[derive(Deserialize)]
 struct EditTranslatableFormData {
     title: String,
+    description: Option<String>,
     english: String,
 }
 
@@ -365,6 +393,7 @@ async fn edit_translatable_submit(
         source_url: None,
         source_content: None,
         source_language: None,
+        description: form.description.clone(),
     };
 
     match translatables.update(&user, translatable.id, updates).await {
@@ -378,11 +407,192 @@ async fn edit_translatable_submit(
                 translatable: translatable.clone(),
                 error: Some(e),
                 previous_title: form.title.clone(),
+                previous_description: form.description.clone().unwrap_or_default(),
                 previous_english: form.english.clone(),
             };
 
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)
         }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "translatables/edit-source.html")]
+#[allow(dead_code)]
+struct EditSourceTemplate {
+    current_user: Option<User>,
+    translatable: Translatable,
+    error: Option<AppError>,
+    previous_source_name: String,
+    previous_source_url: String,
+    previous_source_language: String,
+    previous_source_content: String,
+}
+
+async fn edit_source_form(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    let template = EditSourceTemplate {
+        current_user: Some(user),
+        translatable: translatable.clone(),
+        error: None,
+        previous_source_name: translatable.source_name.unwrap_or_default(),
+        previous_source_url: translatable.source_url.unwrap_or_default(),
+        previous_source_language: translatable.source_language.unwrap_or_default(),
+        previous_source_content: translatable.source_content.unwrap_or_default(),
+    };
+
+    okay(render_template(template))
+}
+
+#[derive(Deserialize)]
+struct EditSourceFormData {
+    source_name: String,
+    source_url: String,
+    source_language: String,
+    source_content: String,
+}
+
+async fn edit_source_submit(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+    Form(form): Form<EditSourceFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    let to_opt = |s: &str| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    };
+
+    let updates = UpdateTranslatable {
+        slug: None,
+        title: None,
+        english: None,
+        source_name: to_opt(&form.source_name),
+        source_url: to_opt(&form.source_url),
+        source_content: to_opt(&form.source_content),
+        source_language: to_opt(&form.source_language),
+        description: None,
+    };
+
+    match translatables.update(&user, translatable.id, updates).await {
+        Ok(result) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
+        ),
+        Err(e) => {
+            let template = EditSourceTemplate {
+                current_user: Some(user),
+                translatable: translatable.clone(),
+                error: Some(e),
+                previous_source_name: form.source_name.clone(),
+                previous_source_url: form.source_url.clone(),
+                previous_source_language: form.source_language.clone(),
+                previous_source_content: form.source_content.clone(),
+            };
+
+            let body = render_template(template);
+            (StatusCode::BAD_REQUEST, body)
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "translatables/clear-source.html")]
+#[allow(dead_code)]
+struct ClearSourceTemplate {
+    current_user: Option<User>,
+    translatable: Translatable,
+    will_create_audit_log: bool,
+}
+
+async fn clear_source_form(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    let template = ClearSourceTemplate {
+        current_user: Some(user),
+        translatable,
+        will_create_audit_log: false,
+    };
+
+    okay(render_template(template))
+}
+
+async fn clear_source_submit(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    match translatables.clear_source(&user, translatable.id).await {
+        Ok(result) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
+    }
+}
+
+#[derive(Template)]
+#[template(path = "translatables/delete.html")]
+#[allow(dead_code)]
+struct DeleteTranslatableTemplate {
+    current_user: Option<User>,
+    translatable: Translatable,
+    will_create_audit_log: bool,
+}
+
+async fn delete_translatable_form(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    let template = DeleteTranslatableTemplate {
+        current_user: Some(user),
+        translatable,
+        will_create_audit_log: false,
+    };
+
+    okay(render_template(template))
+}
+
+async fn delete_translatable_submit(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    match translatables.delete(&user, translatable).await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/translatables").into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
     }
 }

@@ -27,6 +27,7 @@ create table translatable (
     source_url text,
     source_content text,
     source_language text,
+    description text,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
@@ -47,8 +48,7 @@ create table translation (
     language uuid not null references languages(id) on delete cascade,
 
     translated_text text not null,
-    translator_name text,
-    translator_url text,
+    translated_title text,
 
     ipa text,
     gloss text,

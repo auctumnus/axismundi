@@ -64,6 +64,11 @@
         {% call u::badge(&translation_creator, size="small") %}
     </div>
 
+    {% if let Some(translated_title) = &translation.translated_title %}
+        <h2>title</h2>
+        <p>{{ translated_title }}</p>
+    {% endif %}
+
     <h2>text</h2>
     <p>{{ translation.translated_text }}</p>
 

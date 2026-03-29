@@ -26,11 +26,10 @@ pub struct Translation {
     #[serde(skip_serializing)]
     pub language: Uuid,
     pub translated_text: String,
+    pub translated_title: Option<String>,
     pub ipa: Option<String>,
     pub gloss: Option<String>,
     pub notes: Option<String>,
-    pub translator_name: Option<String>,
-    pub translator_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub like_count: i64,
@@ -60,12 +59,8 @@ pub struct CreateTranslation {
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: String,
 
-    #[validate(length(max = 1000))]
-    pub translator_name: Option<String>,
-
-    #[validate(url)]
-    #[validate(length(max = 2000))]
-    pub translator_url: Option<String>,
+    #[validate(length(min = 1, max = 40))]
+    pub translated_title: Option<String>,
 
     #[validate(length(max = 100_000))]
     pub ipa: Option<String>,
@@ -82,12 +77,8 @@ pub struct UpdateTranslation {
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: Option<String>,
 
-    #[validate(length(max = 1000))]
-    pub translator_name: Option<String>,
-
-    #[validate(url)]
-    #[validate(length(max = 2000))]
-    pub translator_url: Option<String>,
+    #[validate(length(min = 1, max = 40))]
+    pub translated_title: Option<String>,
 
     #[validate(length(max = 100_000))]
     pub ipa: Option<String>,
@@ -150,8 +141,7 @@ impl TranslationRepository {
                     t.gloss,
                     t.notes,
                     t.translated_text,
-                    t.translator_name,
-                    t.translator_url,
+                    t.translated_title,
                     t.created_at,
                     t.updated_at,
                     t.like_count,
@@ -186,8 +176,7 @@ impl TranslationRepository {
                     t.gloss,
                     t.notes,
                     t.translated_text,
-                    t.translator_name,
-                    t.translator_url,
+                    t.translated_title,
                     t.created_at,
                     t.updated_at,
                     t.like_count,
@@ -225,8 +214,7 @@ impl TranslationRepository {
                     t.gloss,
                     t.notes,
                     t.translated_text,
-                    t.translator_name,
-                    t.translator_url,
+                    t.translated_title,
                     t.created_at,
                     t.updated_at,
                     t.like_count,
@@ -322,9 +310,9 @@ impl TranslationRepository {
             Translation,
             r#"
                 WITH inserted AS (
-                    INSERT INTO translation (translatable, language, translated_text, translator_name, translator_url, created_by, updated_by, ipa, gloss, notes)
-                    VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9)
-                    RETURNING id, translatable, language, translated_text, translator_name, translator_url, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count
+                    INSERT INTO translation (translatable, language, translated_text, translated_title, created_by, updated_by, ipa, gloss, notes)
+                    VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8)
+                    RETURNING id, translatable, language, translated_text, translated_title, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count
                 )
                 SELECT
                     i.id,
@@ -334,8 +322,7 @@ impl TranslationRepository {
                     i.gloss,
                     i.notes,
                     i.translated_text,
-                    i.translator_name,
-                    i.translator_url,
+                    i.translated_title,
                     i.created_at,
                     i.updated_at,
                     i.like_count,
@@ -351,8 +338,7 @@ impl TranslationRepository {
             translatable_id,
             language_id,
             translation.translated_text,
-            translation.translator_name,
-            translation.translator_url,
+            translation.translated_title,
             requestor.id,
             translation.ipa,
             translation.gloss,
@@ -474,15 +460,14 @@ impl TranslationRepository {
                 WITH updated AS (
                     UPDATE translation
                     SET translated_text = COALESCE($2, translated_text),
-                        translator_name = COALESCE($3, translator_name),
-                        translator_url = COALESCE($4, translator_url),
-                        ipa = COALESCE($5, ipa),
-                        gloss = COALESCE($6, gloss),
-                        notes = COALESCE($7, notes),
-                        updated_by = $8,
+                        translated_title = COALESCE($3, translated_title),
+                        ipa = COALESCE($4, ipa),
+                        gloss = COALESCE($5, gloss),
+                        notes = COALESCE($6, notes),
+                        updated_by = $7,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $1
-                    RETURNING id, translatable, language, translated_text, translator_name, translator_url, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count
+                    RETURNING id, translatable, language, translated_text, translated_title, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count
                 )
                 SELECT
                     u.id,
@@ -492,8 +477,7 @@ impl TranslationRepository {
                     u.gloss,
                     u.notes,
                     u.translated_text,
-                    u.translator_name,
-                    u.translator_url,
+                    u.translated_title,
                     u.created_at,
                     u.updated_at,
                     u.like_count,
@@ -508,8 +492,7 @@ impl TranslationRepository {
             "#,
             id,
             updates.translated_text,
-            updates.translator_name,
-            updates.translator_url,
+            updates.translated_title,
             updates.ipa,
             updates.gloss,
             updates.notes,
@@ -594,8 +577,7 @@ impl TranslationRepository {
                     t.gloss,
                     t.notes,
                     t.translated_text,
-                    t.translator_name,
-                    t.translator_url,
+                    t.translated_title,
                     t.created_at,
                     t.updated_at,
                     t.like_count,
@@ -659,8 +641,7 @@ impl TranslationRepository {
                     t.gloss,
                     t.notes,
                     t.translated_text,
-                    t.translator_name,
-                    t.translator_url,
+                    t.translated_title,
                     t.created_at,
                     t.updated_at,
                     t.like_count,
@@ -860,8 +841,7 @@ impl TranslationRepository {
                     t.gloss,
                     t.notes,
                     t.translated_text,
-                    t.translator_name,
-                    t.translator_url,
+                    t.translated_title,
                     t.created_at,
                     t.updated_at,
                     t.like_count,
@@ -1087,6 +1067,7 @@ mod tests {
 
                     source_content: None,
                     source_language: None,
+                    description: None,
                 },
             )
             .await
@@ -1101,8 +1082,7 @@ mod tests {
                 target_lang.id,
                 CreateTranslation {
                     translated_text: "Bonjour le monde".to_string(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     ipa: None,
                     gloss: None,
                     notes: None,
@@ -1222,6 +1202,7 @@ mod tests {
 
                     source_content: None,
                     source_language: None,
+                    description: None,
                 },
             )
             .await
@@ -1235,8 +1216,7 @@ mod tests {
                 target_lang.id,
                 CreateTranslation {
                     translated_text: "Bonjour le monde".to_string(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     gloss: None,
                     ipa: None,
                     notes: None,
@@ -1252,8 +1232,7 @@ mod tests {
                 translation.id,
                 UpdateTranslation {
                     translated_text: Some("Salut le monde".to_string()),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     gloss: None,
                     ipa: None,
                     notes: None,
@@ -1376,6 +1355,7 @@ mod tests {
 
                     source_content: None,
                     source_language: None,
+                    description: None,
                 },
             )
             .await
@@ -1388,8 +1368,7 @@ mod tests {
                 target_lang.id,
                 CreateTranslation {
                     translated_text: "Bonjour le monde".to_string(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     gloss: None,
                     ipa: None,
                     notes: None,

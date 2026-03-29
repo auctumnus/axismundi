@@ -92,11 +92,16 @@
 {% endmacro %}
 
 {% macro translatable_card(translatable_with_liked) %}
-<li class="translatable-card">
+<li class="preview-card">
     <a href="/translatable/{{ translatable_with_liked.translatable.slug }}">
         <span class="left">
-            <span class="translatable-title">{{ translatable_with_liked.translatable.title }}</span>
-            <ul class="translatable-summary">
+            <span class="title">{{ translatable_with_liked.translatable.title }}</span>
+            {% if let Some(description) = &translatable_with_liked.translatable.description %}
+                <span class="summary ellipse">{{ crate::util::first_sentence(description) }}</span>
+            {% else %}
+                <span class="summary ellipse empty-description">no description yet</span>
+            {% endif %}
+            <ul class="translatable-summary summary">
                 {% let words_count = translatable_with_liked.translatable.words_count() %}
                 {% let translations_count = translatable_with_liked.translatable.translations_count %}
                 <li>{{ words_count }} {% if words_count == (1 as usize) %}word{% else %}words{% endif %}</li>
@@ -253,11 +258,11 @@
 {% endmacro %}
 
 {% macro render_translation_card(translation_with_author, language_code) %}
-<li class="translation-card">
+<li class="preview-card">
     <a href="/translatable/{{ translation_with_author.translation.translatable_slug }}/translation/{{ language_code }}">
         <span class="left">
-            <span class="translation-title">{{ translation_with_author.translatable.title }}</span>
-            <span class="creator">
+            <span class="translation-title title">{{ translation_with_author.translatable.title }}</span>
+            <span class="creator summary">
                 <span>translated by</span>
                 {% call user_display(&translation_with_author.author, "small") %}
                 {% call relative(&translation_with_author.translation.created_at) %}

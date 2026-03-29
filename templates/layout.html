@@ -105,7 +105,11 @@
         </div>
     </header>
 
-    {% block toc %}{% endblock %}
+    <nav id="table-of-contents">
+        <ul>
+            {% block toc %}{% endblock %}
+        </ul>
+    </nav>
 
     <main>
         {% if let Some(user) = current_user.as_ref() %}

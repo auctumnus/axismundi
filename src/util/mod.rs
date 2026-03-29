@@ -176,6 +176,21 @@ pub fn validate_password(
     Ok(())
 }
 
+pub fn sanitize_external_url(url: &str) -> Result<String, ValidationError> {
+    let parsed = ammonia::Url::parse(url).map_err(|e| {
+        let message = format!("invalid URL: {e}");
+        ValidationError::new("invalid_url").with_message(message.into())
+    })?;
+
+    let scheme = parsed.scheme();
+
+    if scheme != "http" && scheme != "https" {
+        return Err(ValidationError::new("invalid_url").with_message("URL must start with http:// or https://".into()));
+    }
+
+    Ok(parsed.to_string())
+}
+
 #[derive(Debug)]
 pub struct AppState {
     pub pool: sqlx::PgPool,

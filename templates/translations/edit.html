@@ -46,6 +46,12 @@
 
 <form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit-translation">
     <section>
+        <label for="translated_title">Translated title</label>
+        {% call u::field_error(name="translated_title") %}
+        <input type="text" id="translated_title" name="translated_title" value="{{ previous_translated_title }}" placeholder="Title in your language (optional)">
+    </section>
+
+    <section>
         <label for="translated_text">Translated text</label>
         {% call u::field_error(name="translated_text") %}
         <div id="annotation-editor-root">

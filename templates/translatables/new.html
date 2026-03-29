@@ -3,6 +3,12 @@
 
 {% block title %}new translatable - axismundi{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
 {% block content %}
 <h1>new translatable</h1>
 
@@ -21,12 +27,36 @@
     </section>
 
     <section>
+        <label for="description">Description (optional)</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description">{{previous_description}}</textarea>
+    </section>
+
+    <section>
         <label for="english">Source text</label>
         {% call u::field_error(name="english") %}
         <textarea id="english" name="english" required rows="10">{{previous_english}}</textarea>
+        <span class="hint">translatable text in english; text in the original language can be entered after creation</span>
     </section>
 
     <button type="submit">Create translatable</button>
 </form>
 
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'new-translatable-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
 {% endblock %}
