@@ -4,14 +4,7 @@
 {% block title %}search reports - axismundi{% endblock %}
 
 {% block head %}
-<script type="importmap">
-    {
-        "imports": {
-            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
-        }
-    }
-</script>
-<script src="/static/tooltip.js" type="module" defer></script>
+<script src="/static/tooltip.js" defer></script>
 <link rel="stylesheet" href="/static/tooltip.css">
 <style>
     form.default {
@@ -107,9 +100,10 @@
     {% if results.items.is_empty() %}
         <p>No results found.</p>
     {% else %}
+        {% let back_url = crate::util::back_url("/admin/reports", &previous_pagination, &previous_query) %}
         <ul class="card-list">
             {% for item in results.items %}
-                {% call u::report_card(&item) %}
+                {% call u::report_card(&item, &back_url) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

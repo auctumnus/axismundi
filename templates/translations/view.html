@@ -17,7 +17,7 @@
 
 {% block content %}
 
-{% call u::back_button("/translatable/" ~ translatable_with_meta.translatable.slug, "to translatable") %}
+{% call u::back_button(&back, &back_text) %}
 
 {% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
 

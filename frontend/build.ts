@@ -75,6 +75,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/user-combobox.tsx',
   'src/phonology-editor.tsx',
   'src/sound-change-runner.ts',
+  'src/tooltip.ts',
 ];
 
 async function bundleReactFiles() {

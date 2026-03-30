@@ -11,14 +11,7 @@
 <link rel="stylesheet" href="/static/language-family-card.css">
 <link rel="stylesheet" href="/static/word-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
-<script type="importmap">
-    {
-        "imports": {
-            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
-        }
-    }
-</script>
-<script src="/static/tooltip.js" type="module" defer></script>
+<script src="/static/tooltip.js" defer></script>
 <script src="/static/time.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/tooltip.css">
 {% if let Some(pfp_url) = user.get_profile_picture_url() %}
@@ -32,6 +25,9 @@
 {% block embed_description %}{% if !user.description.is_empty() %}{{ user.description }}{% endif %}{% endblock %}
 
 {% block content %}
+
+{% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
+
 <div class="card profile-card">
     <div class="banner"></div>
     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
@@ -108,7 +104,7 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <li><a class="with-icon" href="/new-language">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>new language</span>
             </a></li>
             {% endif %}
@@ -133,7 +129,7 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <li><a class="with-icon" href="/new-language-family">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>new language family</span>
             </a></li>
             {% endif %}
@@ -176,7 +172,7 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <li><a class="with-icon" href="/new-translatable">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>new translatable</span>
             </a></li>
             {% endif %}

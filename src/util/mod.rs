@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     err::{AppError, AppResult, internal_error},
     model::users::User,
-    pagination::PaginatedRequest,
+    pagination::{PaginatedRequest, PaginatedResponse, PaginationTemplate},
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -13,6 +13,7 @@ pub mod extract_session;
 pub mod graph_svg;
 mod images;
 pub mod s3;
+use axum::extract::Query;
 use base64::Engine;
 
 mod re {
@@ -241,6 +242,23 @@ pub fn serialize_search<T: Serialize>(pagination: &PaginatedRequest, query: T) -
     }
 }
 
+pub fn back_url<T: Serialize>(base: &str, pagination: &PaginatedRequest, query: T) -> String {
+    let qs = serialize_search(pagination, query);
+    if qs.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}?{}", base, qs)
+    }
+}
+
+pub fn back_url_simple(base: &str, query: &str) -> String {
+    if query.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}?q={}", base, query)
+    }
+}
+
 pub fn urlencode(input: &str) -> String {
     encode_uri(input)
 }
@@ -271,10 +289,33 @@ pub fn dfs(
     false
 }
 
-pub fn empty_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    Ok(s.filter(|s| !s.trim().is_empty()))
+pub struct SearchTemplate<T, Q> {
+    pub current_user: Option<User>,
+    pub error: Option<AppError>,
+    pub search_action: String,
+    pub pagination: PaginationTemplate,
+
+    pub results: PaginatedResponse<T>,
+    pub previous_query: Q,
+}
+
+impl<T, Q: Serialize> SearchTemplate<T, Q> {
+    pub fn new(
+        current_user: Option<User>,
+        error: Option<AppError>,
+        search_action: String,
+        pagination: PaginatedRequest,
+        results: PaginatedResponse<T>,
+        previous_query: Q,
+    ) -> Self {
+        let pagination = PaginationTemplate::from_paginated_response(&search_action, &results, &pagination, &previous_query);
+        Self {
+            current_user,
+            error,
+            search_action,
+            pagination,
+            results,
+            previous_query,
+        }
+    }
 }

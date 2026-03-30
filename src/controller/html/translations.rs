@@ -82,6 +82,7 @@ struct TranslationSearchTemplate {
     previous_pagination: PaginatedRequest,
     results: Option<PaginatedResponse<TranslationWithMeta>>,
     user_has_permission: bool,
+    back_url: String,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -97,6 +98,12 @@ async fn translation_search(
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
+
+    let back_url = crate::util::back_url(
+        &format!("/languages/{}/translations", language.code),
+        &pagination,
+        &query,
+    );
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -133,6 +140,7 @@ async fn translation_search(
                 previous_pagination: pagination,
                 results: None,
                 user_has_permission,
+                back_url,
             };
             let body = render_template(template);
             return (StatusCode::BAD_REQUEST, body);
@@ -164,6 +172,7 @@ async fn translation_search(
         previous_pagination: pagination,
         results: results_with_meta,
         user_has_permission,
+        back_url,
     };
 
     let body = render_template(template);
@@ -467,6 +476,13 @@ struct ViewTranslationTemplate {
     translation_is_liked: bool,
     json_ld: String,
     rendered_description: Option<String>,
+    back: String,
+    back_text: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 async fn view_translation(
@@ -478,6 +494,7 @@ async fn view_translation(
     permissions: LanguagePermissionRepository,
     users: UserRepository,
     Path((slug, code)): Path<(String, String)>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -581,6 +598,25 @@ async fn view_translation(
         translatables.materialize(translatable, s.user()).await
     );
 
+    let back_text = back_query
+        .back
+        .as_ref()
+        .and_then(|url| {
+            if url.contains("/languages/") {
+                Some("to language")
+            } else if url.contains("/translatable/") {
+                Some("to translatable")
+            } else {
+                None
+            }
+        })
+        .unwrap_or("back");
+
+    let back_url = back_query
+        .back
+        .clone()
+        .unwrap_or_else(|| format!("/translatable/{}", &translatable_with_meta.translatable.slug));
+
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),
         translatable_with_meta,
@@ -594,6 +630,8 @@ async fn view_translation(
         translation_is_liked,
         json_ld,
         rendered_description,
+        back: back_url,
+        back_text: back_text.to_string(),
     };
 
     let body = render_template(template);

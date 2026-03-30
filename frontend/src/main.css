@@ -1196,3 +1196,7 @@ code {
 .preserve-breaks {
   white-space: pre-wrap;
 }
+
+form.search {
+    margin-bottom: 0;
+}

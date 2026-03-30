@@ -339,6 +339,12 @@ struct ViewReportTemplate {
     report: Report,
     resource_data: Option<ReportableResourceData>,
     reporter: Option<User>,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 async fn view_report(
@@ -346,6 +352,7 @@ async fn view_report(
     reports: ReportRepository,
     repos: ResourceRepositories,
     Path(id): Path<Uuid>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let current_user = match s.user() {
         Some(u) => u.clone(),
@@ -384,6 +391,7 @@ async fn view_report(
         report,
         resource_data,
         reporter,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))

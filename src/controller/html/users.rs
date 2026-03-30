@@ -594,7 +594,6 @@ struct SearchUsersTemplate {
     previous_query: UserSearch,
     previous_pagination: PaginatedRequest,
     results: Option<PaginatedResponse<User>>,
-    previous_search: String,
 }
 
 async fn search_users(
@@ -626,7 +625,6 @@ async fn search_users(
                 previous_query: query,
                 previous_pagination: pagination,
                 results: None,
-                previous_search: String::new(),
             };
             let body = render_template(template);
             return (StatusCode::BAD_REQUEST, body);
@@ -639,7 +637,6 @@ async fn search_users(
         previous_query: query,
         previous_pagination: pagination,
         results,
-        previous_search: String::new(),
     };
 
     let body = render_template(template);
@@ -656,6 +653,12 @@ struct ProfileTemplate {
     activities: Vec<crate::model::user_activities::UserActivity>,
     translatables: Vec<TranslatableWithMeta>,
     rendered_description: String,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -669,6 +672,7 @@ async fn profile(
     activities: UserActivityRepository,
     contribution_stats: ContributionStatsRepository,
     path: axum::extract::Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let username = path.0;
     let current_user = s.user().cloned();
@@ -827,6 +831,7 @@ async fn profile(
             activities: activities_list,
             translatables: translatables_list,
             rendered_description,
+            back: back_query.back.unwrap_or_default(),
         })
         .into_response(),
     )

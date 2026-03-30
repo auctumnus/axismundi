@@ -45,6 +45,7 @@ struct WordSearchTemplate {
     results: Option<PaginatedResponse<WordWithMeta>>,
     word_classes: Vec<WordClass>,
     user_has_permission: bool,
+    back_url: String,
 }
 
 #[derive(Template)]
@@ -73,7 +74,7 @@ struct LemmaTemplate {
     word: Word,
     definitions: Vec<Definition>,
     other_lemmata: bool,
-    previous_search: String,
+    back: String,
     user_has_permission: bool,
     rendered_notes: String,
     creator: User,
@@ -124,8 +125,8 @@ struct EditWordTemplate {
 }
 
 #[derive(Deserialize)]
-struct PreviousSearchQuery {
-    previous_search: Option<String>,
+struct BackQuery {
+    back: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -168,6 +169,12 @@ async fn word_search(
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
+
+    let back_url = crate::util::back_url(
+        &format!("/languages/{}/words", language.code),
+        &pagination,
+        &query,
+    );
 
     let user_has_permission = if let Some(user) = &current_user {
         let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
@@ -220,6 +227,7 @@ async fn word_search(
                 results: None,
                 word_classes: word_classes_list,
                 user_has_permission,
+                back_url,
             };
             let body = render_template(template);
             return (StatusCode::BAD_REQUEST, body);
@@ -249,6 +257,7 @@ async fn word_search(
         results: results_with_meta,
         word_classes: word_classes_list,
         user_has_permission,
+        back_url,
     };
 
     let body = render_template(template);
@@ -600,7 +609,7 @@ async fn view_lemma(
     word_relations: WordRelationRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
-    Query(params): Query<PreviousSearchQuery>,
+    Query(params): Query<BackQuery>,
     user_agent: Option<TypedHeader<UserAgent>>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
@@ -644,12 +653,7 @@ async fn view_lemma(
 
     let other_lemmata = attempt!(s, words.count_by_slug(language.id, &slug).await) > 1;
 
-    // Construct the previous search URL
-    let previous_search = if let Some(search_params) = params.previous_search {
-        format!("/languages/{}/words?{}", language_code, search_params)
-    } else {
-        format!("/languages/{}/words", language_code)
-    };
+    let back = params.back.unwrap_or_default();
 
     let rendered_notes = attempt!(s, WordRepository::render_notes(&word));
 
@@ -755,7 +759,7 @@ async fn view_lemma(
         word,
         definitions,
         other_lemmata,
-        previous_search,
+        back,
         user_has_permission,
         rendered_notes,
         creator,

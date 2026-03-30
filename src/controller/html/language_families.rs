@@ -161,6 +161,12 @@ struct ViewLanguageFamilyTemplate {
     pending_invite: Option<(LanguageFamilyInvite, User)>,
     family_tree_svg: String,
     json_ld: String,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -173,6 +179,7 @@ async fn view_language_family(
     members: LanguageFamilyMemberRepository,
     users: UserRepository,
     Path(code): Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let family = attempt!(s, language_families.find_by_code(&code).await);
     let owner = attempt!(s, users.find_by_id(family.created_by).await);
@@ -281,6 +288,7 @@ async fn view_language_family(
         family_tree_svg,
         member_count,
         json_ld,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))

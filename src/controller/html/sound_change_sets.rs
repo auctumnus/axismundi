@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -113,6 +113,7 @@ struct SearchTemplate {
     sets_with_meta: Vec<SoundChangeSetWithMeta>,
     can_edit_language: bool,
     can_delete_language: bool,
+    back_url: String,
 }
 
 #[derive(Template)]
@@ -126,6 +127,12 @@ struct ViewTemplate {
     rendered_description: String,
     can_edit_language: bool,
     can_delete_language: bool,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 #[derive(Template)]
@@ -313,6 +320,12 @@ async fn search(
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&code).await);
 
+    let back_url = crate::util::back_url(
+        &format!("/languages/{}/sound-change-sets", code),
+        &pagination,
+        &query,
+    );
+
     let query = SearchSoundChangeSets {
         q: query.q.and_then(|q| {
             let trimmed = q.trim();
@@ -350,6 +363,7 @@ async fn search(
                 sets_with_meta: vec![],
                 can_edit_language,
                 can_delete_language,
+                back_url,
             };
             return (StatusCode::BAD_REQUEST, render_template(template));
         }
@@ -374,6 +388,7 @@ async fn search(
         sets_with_meta,
         can_edit_language,
         can_delete_language,
+        back_url,
     };
 
     okay(render_template(template))
@@ -387,6 +402,7 @@ async fn view(
     permissions: LanguagePermissionRepository,
     contribution_stats: ContributionStatsRepository,
     Path((code, id)): Path<(String, Uuid)>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let set = attempt!(s, sets.get(id).await);
@@ -415,6 +431,7 @@ async fn view(
         rendered_description,
         can_edit_language,
         can_delete_language,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))

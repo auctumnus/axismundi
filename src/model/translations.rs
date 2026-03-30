@@ -59,7 +59,7 @@ pub struct CreateTranslation {
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: String,
 
-    #[validate(length(min = 1, max = 40))]
+    #[validate(length(max = 40))]
     pub translated_title: Option<String>,
 
     #[validate(length(max = 100_000))]
@@ -74,10 +74,10 @@ pub struct CreateTranslation {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateTranslation {
-    #[validate(length(min = 1, max = 100_000))]
+    #[validate(length(max = 100_000))]
     pub translated_text: Option<String>,
 
-    #[validate(length(min = 1, max = 40))]
+    #[validate(length(max = 40))]
     pub translated_title: Option<String>,
 
     #[validate(length(max = 100_000))]

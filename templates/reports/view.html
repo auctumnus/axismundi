@@ -8,7 +8,12 @@
 {% endblock %}
 
 {% block content %}
-{% call u::back_button("/admin/reports" , "to search") %}
+
+{% if !back.is_empty() %}
+    {% call u::back_button(&back, "to search") %}
+{% else %}
+    {% call u::back_button("/admin/reports", "to search") %}
+{% endif %}
 
 <div class="report-view">
     <div class="header-with-actions">

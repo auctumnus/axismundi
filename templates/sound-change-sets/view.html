@@ -9,6 +9,9 @@
 {% endblock %}
 
 {% block content %}
+
+{% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
+
 <div class="context-cards">
     <div class="context-card language-context">
         <span class="context-label">in language</span>

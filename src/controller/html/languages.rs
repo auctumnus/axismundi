@@ -232,6 +232,12 @@ struct ViewLanguageTemplate {
     pending_invite: Option<(crate::model::language_invites::LanguageInvite, User)>,
     json_ld: String,
     phonology_tables: Vec<String>,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -248,6 +254,7 @@ async fn view_language(
     invites: crate::model::language_invites::LanguageInviteRepository,
     phonology_tables: PhonologyTableRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
@@ -441,6 +448,7 @@ async fn view_language(
         json_ld,
         other_families: other_families_materialized,
         phonology_tables: tables,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))

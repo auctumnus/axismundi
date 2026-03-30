@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Form, Router,
-    extract::Path,
+    extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -205,6 +205,12 @@ struct ViewTranslatableTemplate {
     can_edit_translatable: bool,
     json_ld: String,
     rendered_description: Option<String>,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 async fn view_translatable(
@@ -214,6 +220,7 @@ async fn view_translatable(
     translations: TranslationRepository,
     users: UserRepository,
     Path(slug): Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
@@ -292,6 +299,7 @@ async fn view_translatable(
         can_edit_translatable,
         json_ld,
         rendered_description,
+        back: back_query.back.unwrap_or_default(),
     };
     okay(render_template(template))
 }

@@ -132,6 +132,12 @@ async fn search_audit_log(
 struct ViewAuditLogTemplate {
     current_user: Option<User>,
     entry: AuditLog,
+    back: String,
+}
+
+#[derive(Deserialize)]
+struct BackQuery {
+    back: Option<String>,
 }
 
 async fn view_audit_log(
@@ -139,6 +145,7 @@ async fn view_audit_log(
     audit_logs: AuditLogRepository,
     user_tags: UserTagRepository,
     Path(id): Path<Uuid>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let current_user = match s.user() {
         Some(u) => u.clone(),
@@ -174,6 +181,7 @@ async fn view_audit_log(
     let template = ViewAuditLogTemplate {
         current_user: Some(current_user),
         entry,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))
