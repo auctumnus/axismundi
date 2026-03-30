@@ -18,7 +18,7 @@ pub struct Definition {
     #[serde(skip_serializing)]
     pub word: Uuid,
     pub definition: String,
-    pub context: Option<String>,
+    pub context: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
@@ -110,7 +110,7 @@ impl DefinitionRepository {
             "#,
             word_id,
             definition.definition,
-            definition.context,
+            definition.context.unwrap_or_default(),
             requestor.id
         )
         .fetch_one(&mut *tx)

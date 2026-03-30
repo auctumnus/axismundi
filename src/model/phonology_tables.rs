@@ -139,7 +139,7 @@ pub struct PhonologyTable {
     #[serde(skip_serializing)]
     pub language_id: Uuid,
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub position: i32,
 
     pub body: Value,
@@ -452,7 +452,7 @@ impl PhonologyTableRepository {
             "#,
             req.language_id,
             req.name,
-            req.description,
+            req.description.unwrap_or_default(),
             serde_json::to_value(&req.body).unwrap(),
         )
         .fetch_one(&self.state.pool)

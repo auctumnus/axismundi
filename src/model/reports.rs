@@ -67,7 +67,7 @@ pub struct Report {
     pub resolved_at: Option<DateTime<Utc>>,
 
     // Shown to normal users only if resolution_note_hidden is false
-    pub resolution_note: Option<String>,
+    pub resolution_note: String,
 
     pub user_updated_at: Option<DateTime<Utc>>,
 
@@ -455,7 +455,7 @@ impl ReportRepository {
             report.resolution_status = Some(status);
         }
         if let Some(note) = req.resolution_note {
-            report.resolution_note = Some(note);
+            report.resolution_note = note;
         }
         if let Some(hidden) = req.resolution_status_hidden {
             report.resolution_status_hidden = Some(hidden);
@@ -575,7 +575,7 @@ impl ReportRepository {
 
         // Hide resolution note if resolution_note_hidden is true
         if report.resolution_note_hidden.unwrap_or(false) {
-            sanitized.resolution_note = None;
+            sanitized.resolution_note = String::new();
         }
 
         // Don't expose the hidden flags to users

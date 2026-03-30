@@ -3,7 +3,7 @@ create table phonology_tables (
     language_id uuid not null references languages(id) on delete cascade,
 
     name text not null,
-    description text,
+    description text not null default '',
     position integer not null default 0,
 
     body jsonb not null,

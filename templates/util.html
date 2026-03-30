@@ -37,10 +37,10 @@
 {% endmacro %}
 
 {% macro name(user) %}
-{% if let Some(name) = user.display_name.clone() %}
-    {{ name }}
+{% if !user.display_name.is_empty() %}
+    {{ user.display_name }}
 {% else %}
-    {{ user.username.clone() }}
+    {{ user.username }}
 {% endif %}
 {% endmacro %}
 
@@ -57,8 +57,8 @@
 {% macro badge(user, size="medium") %}
 <a href="/users/{{user.username}}" class="badge" data-badge="{{ user.username }}">
     {% call pfp(user, size) %}
-    {% if let Some(gender) = &user.gender %}
-        <span class="display-name gendered" style="--color: #{{gender}}">{% call name(user) %}</span>
+    {% if !user.gender.is_empty() %}
+        <span class="display-name gendered" style="--color: #{{user.gender}}">{% call name(user) %}</span>
     {% else %}
         <span class="display-name">{% call name(user) %}</span>
     {% endif %}
@@ -68,8 +68,8 @@
 {% macro user_display(user, size="medium") %}
 <span class="badge" data-badge="{{ user.username }}">
     {% call pfp(user, size) %}
-    {% if let Some(gender) = &user.gender %}
-        <span class="display-name gendered" style="--color: #{{gender}}">{% call name(user) %}</span>
+    {% if !user.gender.is_empty() %}
+        <span class="display-name gendered" style="--color: #{{user.gender}}">{% call name(user) %}</span>
     {% else %}
         <span class="display-name">{% call name(user) %}</span>
     {% endif %}
@@ -96,8 +96,8 @@
     <a href="/translatable/{{ translatable_with_meta.translatable.slug }}">
         <span class="left">
             <span class="title">{{ translatable_with_meta.translatable.title }}</span>
-            {% if let Some(description) = &translatable_with_meta.translatable.description %}
-                <span class="summary ellipse">{{ crate::util::first_sentence(description) }}</span>
+            {% if !translatable_with_meta.translatable.description.is_empty() %}
+                <span class="summary ellipse">{{ crate::util::first_sentence(&translatable_with_meta.translatable.description) }}</span>
             {% else %}
                 <span class="summary ellipse">{{ crate::util::first_sentence(translatable_with_meta.translatable.english) }}</span>
             {% endif %}
@@ -150,7 +150,7 @@
 
     <div class="expandable {% if !should_be_expandable %}always-expanded{% endif %}">
         <div class="expandable-content">
-            {% if &translatable_with_meta.translatable.source_content.is_none() && &rendered_description.is_none() %}
+            {% if translatable_with_meta.translatable.source_content.is_empty() && rendered_description.is_none() %}
                 <p class="preserve-breaks">{{ translatable_with_meta.translatable.english }}</p>
             {% else %}
                 <div class="tabs">
@@ -158,11 +158,11 @@
                         <input class="tab-head" id="english-tab" type="radio" name="translatable-tabs" checked>
                         <label class="tab-label" for="english-tab">English</label>
 
-                        {% if translatable_with_meta.translatable.source_language.is_some() || translatable_with_meta.translatable.source_content.is_some() %}
+                        {% if !translatable_with_meta.translatable.source_language.is_empty() || !translatable_with_meta.translatable.source_content.is_empty() %}
                             <input class="tab-head" id="source-tab" type="radio" name="translatable-tabs">
                             <label class="tab-label" for="source-tab">
-                                {% if let Some(source_language) = &translatable_with_meta.translatable.source_language %}
-                                    {{ source_language }}
+                                {% if !translatable_with_meta.translatable.source_language.is_empty() %}
+                                    {{ translatable_with_meta.translatable.source_language }}
                                 {% else %}
                                     Source language
                                 {% endif %}
@@ -177,20 +177,20 @@
                     <div class="english-content">
                         <p class="preserve-breaks">{{ translatable_with_meta.translatable.english }}</p>
                     </div>
-                    {% if let Some(source_content) = &translatable_with_meta.translatable.source_content %}
+                    {% if !translatable_with_meta.translatable.source_content.is_empty() %}
                         <div class="source-content">
-                            {% if let Some(source_name) = &translatable_with_meta.translatable.source_name %}
-                                {% if let Some(source_url) = &translatable_with_meta.translatable.source_url %}
-                                    <h2><a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_name }}</a></h2>
+                            {% if !translatable_with_meta.translatable.source_name.is_empty() %}
+                                {% if !translatable_with_meta.translatable.source_url.is_empty() %}
+                                    <h2><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener">{{ translatable_with_meta.translatable.source_name }}</a></h2>
                                 {% else %}
-                                    <h2>{{ source_name }}</h2>
+                                    <h2>{{ translatable_with_meta.translatable.source_name }}</h2>
                                 {% endif %}
                             {% else %}
-                                {% if let Some(source_url) = &translatable_with_meta.translatable.source_url %}
-                                    <h2><a href="{{ source_url }}" target="_blank" rel="noopener">Source</a></h2>
+                                {% if !translatable_with_meta.translatable.source_url.is_empty() %}
+                                    <h2><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener">Source</a></h2>
                                 {% endif %}
                             {% endif %}
-                            <p class="preserve-breaks">{{ source_content }}</p>
+                            <p class="preserve-breaks">{{ translatable_with_meta.translatable.source_content }}</p>
                         </div>
                     {% endif %}
                     {% if let Some(description) = &rendered_description %}
@@ -366,8 +366,8 @@
     <a href="/translatable/{{ translation_with_author.translation.translatable_slug }}/translation/{{ language_code }}">
         <span class="left">
             <span class="translation-title title">
-                {% if let Some(translated_title) = &translation_with_author.translation.translated_title %}
-                    {{ translated_title }}
+                {% if !translation_with_author.translation.translated_title.is_empty() %}
+                    {{ translation_with_author.translation.translated_title }}
                 {% else %}
                     {{ translation_with_author.translatable.title }}
                 {% endif %}
@@ -482,13 +482,13 @@
         <span class="left">
             {% call pfp(&user, "large") %}
             <span class="user-info">
-                {% if let Some(gender) = &user.gender %}
-                    <span class="display-name gendered" style="--color: #{{gender}}">{% call name(user) %}</span>
+                {% if !user.gender.is_empty() %}
+                    <span class="display-name gendered" style="--color: #{{user.gender}}">{% call name(user) %}</span>
                 {% else %}
                     <span class="display-name">{% call name(user) %}</span>
                 {% endif %}
-                {% if let Some(bio) = &user.description %}
-                    <span class="user-bio ellipse">{{ crate::util::first_sentence(bio) }}</span>
+                {% if !user.description.is_empty() %}
+                    <span class="user-bio ellipse">{{ crate::util::first_sentence(&user.description) }}</span>
                 {% else %}
                     <span class="user-bio ellipse empty-bio">no bio yet</span>
                 {% endif %}
@@ -537,7 +537,7 @@
     <a href="/languages/{{ language_code }}/word-classes/{{ word_class.abbreviation }}">
         <span class="left">
             <span class="word-class-name">{{ word_class.name }} (<span class="word-class-abbreviation">{{ word_class.abbreviation }}</span>.)</span>
-            {% if let Some(notes) = word_class.notes %}<span class="word-class-notes">{{ crate::util::first_sentence(&notes) }}</span>{% endif %}
+            {% if !word_class.notes.is_empty() %}<span class="word-class-notes">{{ crate::util::first_sentence(&word_class.notes) }}</span>{% endif %}
             <span class="creator">
                 created by {% call user_display(creator, "small") %} {% call relative(&word_class.created_at) %}
             </span>
@@ -554,7 +554,7 @@
         <a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}">
             <span class="left">
                 <span class="title">{{ set.name }}</span>
-                <span class="summary ellipse">{% if let Some(desc) = set.description %}{{ crate::util::first_sentence(&desc) }}{% endif %}</span>
+                <span class="summary ellipse">{% if !set.description.is_empty() %}{{ crate::util::first_sentence(&set.description) }}{% endif %}</span>
                 <span class="creator">
                     {% call user_display(&author, size="small") %}
                 </span>

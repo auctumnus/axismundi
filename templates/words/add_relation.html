@@ -20,8 +20,8 @@
     <div class="context-card">
         <div class="context-card-content">
             <span class="word-text">{{ word.word }}</span>
-            {% if let Some(ipa) = &word.ipa %}
-            <span class="word-ipa">{{ ipa }}</span>
+            {% if !word.ipa.is_empty() %}
+            <span class="word-ipa">{{ word.ipa }}</span>
             {% endif %}
             <span class="word-language">{{ language.name }} ({{ language.code }})</span>
         </div>

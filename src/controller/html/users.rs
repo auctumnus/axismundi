@@ -309,8 +309,7 @@ mod ma {
             $previous_input
                 .as_ref()
                 .and_then(|p| p.$field.clone())
-                .or($current_user.as_ref().and_then(|u| u.$field.clone()))
-                .unwrap_or(String::new())
+                .unwrap_or_else(|| $current_user.as_ref().map_or(String::new(), |u| u.$field.clone()))
         };
     }
     pub(crate) use prev;
@@ -376,10 +375,10 @@ async fn settings_submit(
             UpdateUser {
                 username: coalesce(form.username.as_ref(), Some(&user.username)),
                 email: coalesce(form.email.as_ref(), Some(&user.email)),
-                display_name: coalesce(form.display_name.as_ref(), user.display_name.as_ref()),
-                description: coalesce(form.description.as_ref(), user.description.as_ref()),
-                pronouns: coalesce(form.pronouns.as_ref(), user.pronouns.as_ref()),
-                gender: coalesce(form.gender.as_ref(), user.gender.as_ref()),
+                display_name: coalesce(form.display_name.as_ref(), Some(&user.display_name)),
+                description: coalesce(form.description.as_ref(), Some(&user.description)),
+                pronouns: coalesce(form.pronouns.as_ref(), Some(&user.pronouns)),
+                gender: coalesce(form.gender.as_ref(), Some(&user.gender)),
                 current_password: form.current_password.clone(),
                 new_password: form.new_password.clone(),
             },
@@ -685,8 +684,8 @@ async fn profile(
         && ua.as_str().to_lowercase().contains("discordbot")
     {
         println!("hi discord!");
-        let title = if let Some(display_name) = &user.display_name {
-            format!("{} (@{})", display_name, user.username)
+        let title = if !user.display_name.is_empty() {
+            format!("{} (@{})", user.display_name, user.username)
         } else {
             format!("@{}", user.username)
         };
@@ -698,11 +697,11 @@ async fn profile(
                     url: format!("{}/users/{}", &crate::CONFIG.public_url_base, user.username),
                     title,
                     description: truncate_description(
-                        user.description.as_deref().unwrap_or_default(),
+                        &user.description,
                     ),
                     author: None,
                     image: user.get_profile_picture_url(),
-                    color: user.gender.map(|g| format!("#{g}")),
+                    color: if user.gender.is_empty() { None } else { Some(format!("#{}", user.gender)) },
                 },
             )
             .await

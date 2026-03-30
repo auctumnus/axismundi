@@ -257,10 +257,11 @@ async fn view_word_class(
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
     {
-        let description = word_class
-            .notes
-            .as_deref()
-            .map_or(String::new(), truncate_description);
+        let description = if word_class.notes.is_empty() {
+            String::new()
+        } else {
+            truncate_description(&word_class.notes)
+        };
         return okay(
             render_embed(
                 EmbedTarget::Discord,
@@ -360,7 +361,7 @@ async fn edit_word_class_form(
         language,
         previous_name: word_class.name.clone(),
         previous_abbreviation: word_class.abbreviation.clone(),
-        previous_notes: word_class.notes.clone().unwrap_or_default(),
+        previous_notes: word_class.notes.clone(),
         word_class,
         error: None,
         user_has_permission,
@@ -417,7 +418,7 @@ async fn edit_word_class_submit(
         } else {
             Some(form.abbreviation.clone())
         },
-        notes: if form_notes == word_class.notes {
+        notes: if form_notes.as_deref().unwrap_or("") == word_class.notes {
             None
         } else {
             form_notes

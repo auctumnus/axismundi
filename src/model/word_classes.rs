@@ -17,7 +17,7 @@ pub struct WordClass {
     pub language: Uuid,
     pub name: String,
     pub abbreviation: String,
-    pub notes: Option<String>,
+    pub notes: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
@@ -109,7 +109,7 @@ impl WordClassRepository {
             language.id,
             word_class.name,
             word_class.abbreviation,
-            word_class.notes,
+            word_class.notes.unwrap_or_default(),
             requestor.id
         )
         .fetch_one(&mut *tx)
@@ -354,13 +354,11 @@ impl WordClassRepository {
     }
 
     pub fn render_notes(word_class: &WordClass) -> AppResult<String> {
-        let rendered = word_class
-            .notes
-            .as_ref()
-            .map(|notes| crate::md::render_md(notes))
-            .transpose()?
-            .unwrap_or_default();
-        Ok(rendered)
+        if word_class.notes.is_empty() {
+            Ok(String::new())
+        } else {
+            Ok(crate::md::render_md(&word_class.notes)?)
+        }
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {

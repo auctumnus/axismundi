@@ -26,10 +26,10 @@ pub struct Translation {
     #[serde(skip_serializing)]
     pub language: Uuid,
     pub translated_text: String,
-    pub translated_title: Option<String>,
-    pub ipa: Option<String>,
-    pub gloss: Option<String>,
-    pub notes: Option<String>,
+    pub translated_title: String,
+    pub ipa: String,
+    pub gloss: String,
+    pub notes: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub like_count: i64,
@@ -59,42 +59,33 @@ pub struct CreateTranslation {
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: String,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 40))]
     pub translated_title: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub ipa: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub gloss: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub notes: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateTranslation {
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 40))]
     pub translated_title: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub ipa: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub gloss: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub notes: Option<String>,
 }
@@ -347,11 +338,11 @@ impl TranslationRepository {
             translatable_id,
             language_id,
             translation.translated_text,
-            translation.translated_title,
+            translation.translated_title.unwrap_or_default(),
             requestor.id,
-            translation.ipa,
-            translation.gloss,
-            translation.notes
+            translation.ipa.unwrap_or_default(),
+            translation.gloss.unwrap_or_default(),
+            translation.notes.unwrap_or_default()
         )
         .fetch_one(&mut *tx)
         .await?;

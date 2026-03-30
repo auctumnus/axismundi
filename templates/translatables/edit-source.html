@@ -13,11 +13,6 @@
     </div>
 {% endif %}
 
-<p>
-    To remove the source information without deleting the translatable,
-    see the <a href="/translatable/{{ translatable.slug }}/clear-source">clear source</a> page.
-</p>
-
 <form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit-source">
     <section>
         <label for="source_name">Original title</label>
@@ -45,7 +40,11 @@
 
     <button type="submit">Save changes</button>
 </form>
+{% endblock %}
 
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/translatables/{{ translatable.slug }}" class="breadcrumb">{{ translatable.title }}</a>
 {% endblock %}
 
 {% block footer %}

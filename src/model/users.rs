@@ -22,14 +22,14 @@ use crate::{
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
 
-#[allow(clippy::ref_option)] // due to serde
-fn serialize_object_key<S>(object_id: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_object_key<S>(object_id: &str, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    match object_id {
-        Some(filename) => serializer.serialize_str(&S3.get_profile_picture_url(filename)),
-        None => serializer.serialize_none(),
+    if object_id.is_empty() {
+        serializer.serialize_none()
+    } else {
+        serializer.serialize_str(&S3.get_profile_picture_url(object_id))
     }
 }
 
@@ -45,17 +45,17 @@ pub struct User {
     pub verified_at: Option<DateTime<Utc>>,
 
     pub username: String,
-    pub display_name: Option<String>,
-    pub description: Option<String>,
-    pub pronouns: Option<String>,
-    pub gender: Option<String>,
+    pub display_name: String,
+    pub description: String,
+    pub pronouns: String,
+    pub gender: String,
     pub bookmark: String,
 
     #[serde(
         rename(serialize = "profile_picture_url"),
         serialize_with = "serialize_object_key"
     )]
-    pub profile_picture_object_id: Option<String>,
+    pub profile_picture_object_id: String,
     pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -67,9 +67,11 @@ impl User {
     }
 
     pub fn get_profile_picture_url(&self) -> Option<String> {
-        self.profile_picture_object_id
-            .as_ref()
-            .map(|object_id| S3.get_profile_picture_url(object_id))
+        if self.profile_picture_object_id.is_empty() {
+            None
+        } else {
+            Some(S3.get_profile_picture_url(&self.profile_picture_object_id))
+        }
     }
 
     pub fn is_admin(&self) -> bool {
@@ -85,7 +87,11 @@ impl User {
     }
 
     pub fn name(&self) -> &str {
-        self.display_name.as_deref().unwrap_or(&self.username)
+        if self.display_name.is_empty() {
+            &self.username
+        } else {
+            &self.display_name
+        }
     }
 }
 
@@ -168,13 +174,11 @@ impl UserRepository {
     }
 
     pub fn render_description(user: &User) -> AppResult<String> {
-        let rendered = user
-            .description
-            .as_ref()
-            .map(|desc| crate::md::render_md(desc))
-            .transpose()?
-            .unwrap_or_default();
-        Ok(rendered)
+        if user.description.is_empty() {
+            Ok(String::new())
+        } else {
+            Ok(crate::md::render_md(&user.description)?)
+        }
     }
 
     pub async fn create(&self, user: CreateUser) -> AppResult<(User, EmailVerificationToken)> {
@@ -212,7 +216,8 @@ impl UserRepository {
 
         let gender = user
             .gender
-            .map(|g| g.strip_prefix("#").unwrap_or(&g).to_lowercase());
+            .map(|g| g.strip_prefix("#").unwrap_or(&g).to_lowercase())
+            .unwrap_or_default();
 
         let user_result = sqlx::query!(
             r#"
@@ -226,9 +231,9 @@ impl UserRepository {
             username_lower,
             user.email.to_lowercase(),
             password_hash,
-            user.display_name,
-            user.description,
-            user.pronouns,
+            user.display_name.unwrap_or_default(),
+            user.description.unwrap_or_default(),
+            user.pronouns.unwrap_or_default(),
             gender,
             random_pfp
         )
@@ -406,7 +411,7 @@ impl UserRepository {
             updates
                 .display_name
                 .as_deref()
-                .unwrap_or(requestor.display_name.as_deref().unwrap_or("")),
+                .unwrap_or(if requestor.display_name.is_empty() { "" } else { &requestor.display_name }),
         ];
 
         updates.validate_with_args(&user_inputs.as_ref())?;
@@ -474,26 +479,26 @@ impl UserRepository {
             &requestor.password_hash
         };
 
-        // Convert empty strings to None (clearing the field), or use the original value if not updating
+        // None = don't change, Some("") = clear, Some("value") = set
         let display_name_final = updates.display_name.as_ref().map_or_else(
             || requestor.display_name.clone(),
-            |s| if s.is_empty() { None } else { Some(s.clone()) },
+            |s| s.clone(),
         );
         let description_final = updates.description.as_ref().map_or_else(
             || requestor.description.clone(),
-            |s| if s.is_empty() { None } else { Some(s.clone()) },
+            |s| s.clone(),
         );
         let pronouns_final = updates.pronouns.as_ref().map_or_else(
             || requestor.pronouns.clone(),
-            |s| if s.is_empty() { None } else { Some(s.clone()) },
+            |s| s.clone(),
         );
 
         // Handle gender (which includes # prefix stripping)
         let gender_final = if let Some(g) = &updates.gender {
             if g.is_empty() {
-                None
+                String::new()
             } else {
-                Some(g.strip_prefix("#").unwrap_or(g).to_lowercase())
+                g.strip_prefix("#").unwrap_or(g).to_lowercase()
             }
         } else {
             requestor.gender.clone()
@@ -800,7 +805,7 @@ impl UserRepository {
             RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
             "#,
             user_id,
-            Some(object_key)
+            object_key
         )
         .fetch_optional(&self.state.pool)
         .await?;
@@ -820,7 +825,7 @@ impl UserRepository {
             &[
                 &user.username,
                 &user.email,
-                user.display_name.as_deref().unwrap_or(""),
+                &user.display_name,
             ],
         )
         .map_err(|e| {
@@ -912,14 +917,14 @@ impl UserRepository {
             "image": user.get_profile_picture_url().unwrap_or_else(|| format!("{}/static/default-pfp.webp", CONFIG.public_url_base)),
         });
 
-        if let Some(pronouns) = &user.pronouns {
-            base["pronouns"] = json!(pronouns);
+        if !user.pronouns.is_empty() {
+            base["pronouns"] = json!(&user.pronouns);
         }
-        if let Some(gender) = &user.gender {
-            base["gender"] = json!(gender);
+        if !user.gender.is_empty() {
+            base["gender"] = json!(&user.gender);
         }
-        if let Some(description) = &user.description {
-            base["description"] = json!(description);
+        if !user.description.is_empty() {
+            base["description"] = json!(&user.description);
         }
 
         base

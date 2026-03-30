@@ -31,8 +31,8 @@ create table words (
     word text not null,
     slug text not null,
     lemma integer not null default 0,
-    ipa text,
-    notes text,
+    ipa text not null default '',
+    notes text not null default '',
 
     cognacy uuid references cognacies(id) on delete set null,
 

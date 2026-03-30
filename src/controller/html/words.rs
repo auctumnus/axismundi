@@ -682,19 +682,22 @@ async fn view_lemma(
                 let i = i + 1;
                 format!(
                     "{i}. {}{}",
-                    d.context
-                        .as_ref()
-                        .map_or(String::new(), |c| format!("({}) ", c)),
+                    if d.context.is_empty() {
+                        String::new()
+                    } else {
+                        format!("({}) ", d.context)
+                    },
                     d.definition
                 )
             })
             .collect::<Vec<String>>()
             .join("\n");
 
-        let notes = word
-            .notes
-            .as_ref()
-            .map_or(String::new(), |n| format!("\n\n{}", n));
+        let notes = if word.notes.is_empty() {
+            String::new()
+        } else {
+            format!("\n\n{}", word.notes)
+        };
 
         let combined = format!("{rendered_definitions}{notes}");
         let description = format!(
@@ -834,7 +837,7 @@ async fn edit_word(
         .collect();
     let previous_contexts: Vec<String> = definitions_result
         .iter()
-        .map(|d| d.context.clone().unwrap_or_default())
+        .map(|d| d.context.clone())
         .collect();
     let previous_definition_ids: Vec<String> = definitions_result
         .iter()
@@ -852,8 +855,8 @@ async fn edit_word(
         previous_definitions,
         previous_contexts,
         previous_definition_ids,
-        previous_ipa: word.ipa.unwrap_or_default(),
-        previous_notes: word.notes.unwrap_or_default(),
+        previous_ipa: word.ipa.clone(),
+        previous_notes: word.notes.clone(),
         user_has_permission,
         will_create_audit_log,
     };

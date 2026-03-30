@@ -303,10 +303,11 @@ async fn new_translation_step_1_submit(
         is_liked,
     };
 
-    let rendered_description = translatable
-        .description
-        .as_deref()
-        .and_then(|d| crate::md::render_md(d).ok());
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
 
     let translatable_with_meta = attempt!(
         s,
@@ -337,13 +338,9 @@ async fn new_translation_step_1_submit(
 struct NewTranslationStep2Form {
     language_id: Uuid,
     translated_text: String,
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     translated_title: Option<String>,
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     ipa: Option<String>,
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     gloss: Option<String>,
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     notes: Option<String>,
 }
 
@@ -399,10 +396,11 @@ async fn new_translation_step_2_submit(
         .create(&user, translatable.id, language.id, create)
         .await;
 
-    let rendered_description = translatable
-        .description
-        .as_deref()
-        .and_then(|d| crate::md::render_md(d).ok());
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
 
     let redirect_slug = translatable.slug.clone();
 
@@ -572,10 +570,11 @@ async fn view_translation(
         .map_err(Into::into)
     );
 
-    let rendered_description = translatable
-        .description
-        .as_deref()
-        .and_then(|d| crate::md::render_md(d).ok());
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
 
     let translatable_with_meta = attempt!(
         s,
@@ -683,10 +682,11 @@ async fn edit_translation_form(
         is_liked,
     };
 
-    let rendered_description = translatable
-        .description
-        .as_deref()
-        .and_then(|d| crate::md::render_md(d).ok());
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
 
     let translatable_with_meta = attempt!(
         s,
@@ -701,10 +701,10 @@ async fn edit_translation_form(
         language_with_contributors,
         translation: translation.clone(),
         previous_translated_text: translation.translated_text.clone(),
-        previous_translated_title: translation.translated_title.clone().unwrap_or_default(),
-        previous_ipa: translation.ipa.clone().unwrap_or_default(),
-        previous_gloss: translation.gloss.clone().unwrap_or_default(),
-        previous_notes: translation.notes.clone().unwrap_or_default(),
+        previous_translated_title: translation.translated_title.clone(),
+        previous_ipa: translation.ipa.clone(),
+        previous_gloss: translation.gloss.clone(),
+        previous_notes: translation.notes.clone(),
         can_edit_translatable,
         can_edit_language,
         can_edit_translation,
@@ -798,10 +798,11 @@ async fn edit_translation_submit(
         is_liked,
     };
 
-    let rendered_description = translatable
-        .description
-        .as_deref()
-        .and_then(|d| crate::md::render_md(d).ok());
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
 
     let redirect_slug = translatable.slug.clone();
 

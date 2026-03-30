@@ -44,7 +44,7 @@ create table reports (
     resolution_status_hidden boolean not null default false,
     
     -- optional note about the resolution; e.g. 'user warned'
-    resolution_note text,
+    resolution_note text not null default '',
     -- whether the resolution note is visible to the reporter
     -- resolution note is always available to mods/admins
     -- cannot have a visible note if the status is hidden
