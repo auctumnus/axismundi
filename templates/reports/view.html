@@ -31,8 +31,8 @@
                         <span class="context-label">reported user</span>
                         <a href="/users/{{ user.username }}" class="context-card-link">
                             <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                            {% if let Some(description) = &user.description %}
-                                <span class="context-text">{{ description }}</span>
+                            {% if !user.description.is_empty() %}
+                                <span class="context-text">{{ user.description }}</span>
                             {% endif %}
                         </a>
                     </div>
@@ -116,8 +116,8 @@
                     <span class="context-label">reported by</span>
                     <a href="/users/{{ user.username }}" class="context-card-link">
                         <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                        {% if let Some(description) = &user.description %}
-                            <span class="context-text">{{ description }}</span>
+                        {% if !user.description.is_empty() %}
+                            <span class="context-text">{{ user.description }}</span>
                         {% endif %}
                     </a>
                 </div>
@@ -200,10 +200,10 @@
             <div class="reason-text">{{ report.reason }}</div>
         </div>
 
-        {% if let Some(note) = report.resolution_note %}
+        {% if !report.resolution_note.is_empty() %}
             <div class="reason-section">
                 <h2>resolution note</h2>
-                <div class="reason-text">{{ note }}</div>
+                <div class="reason-text">{{ report.resolution_note }}</div>
             </div>
         {% endif %}
 

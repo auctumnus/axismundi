@@ -4,12 +4,12 @@ create table users (
     email text not null unique,
     password_hash text not null,
 
-    display_name text,
-    description text,
-    pronouns text,
-    gender text,
+    display_name text not null default '',
+    description text not null default '',
+    pronouns text not null default '',
+    gender text not null default '',
 
-    profile_picture_object_id text,
+    profile_picture_object_id text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

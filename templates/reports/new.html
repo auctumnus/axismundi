@@ -23,8 +23,8 @@
                         <span class="context-label">reporting user</span>
                         <a href="/users/{{ user.username }}" class="context-card-link">
                             <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                            {% if let Some(description) = &user.description %}
-                                <span class="context-text">{{ description }}</span>
+                            {% if !user.description.is_empty() %}
+                                <span class="context-text">{{ user.description }}</span>
                             {% endif %}
                         </a>
                     </div>

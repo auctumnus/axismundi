@@ -401,8 +401,8 @@ async fn view(
         build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
     );
 
-    let rendered_description = if let Some(description) = &set.description {
-        attempt!(s, render_md(description).map_err(Into::into))
+    let rendered_description = if !set.description.is_empty() {
+        attempt!(s, render_md(&set.description).map_err(Into::into))
     } else {
         String::new()
     };
@@ -553,7 +553,7 @@ async fn edit_meta_form(
         current_user: Some(user),
         language,
         previous_name: set.name.clone(),
-        previous_description: set.description.clone().unwrap_or_default(),
+        previous_description: set.description.clone(),
         sound_change_set: set,
         error: None,
         will_create_audit_log,
@@ -605,7 +605,7 @@ async fn edit_meta_submit(
         } else {
             Some(form.name.clone())
         },
-        description: if description == set.description {
+        description: if description.as_deref().unwrap_or("") == set.description {
             None
         } else {
             description

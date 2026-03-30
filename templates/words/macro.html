@@ -1,6 +1,6 @@
 {% macro make_lemma(word, definitions, language_code, user_has_permission, rendered_notes) %}
-{% if let Some(ipa) = word.ipa %}
-    {% if !ipa.is_empty() %}<p class="ipa">/{{ ipa }}/</p>{%endif%}
+{% if !word.ipa.is_empty() %}
+    <p class="ipa">/{{ word.ipa }}/</p>
 {% endif %}
 
 {% if !definitions.is_empty() %}
@@ -9,8 +9,8 @@
         {% for definition in definitions %}
             <li>
                 {{ definition.definition }}
-                {% if let Some(context) = definition.context %}
-                    <p class="context">{{ context }}</p>
+                {% if !definition.context.is_empty() %}
+                    <p class="context">{{ definition.context }}</p>
                 {% endif %}
                 {% if user_has_permission %}
                     <details class="definition-actions">

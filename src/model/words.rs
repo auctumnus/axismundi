@@ -31,8 +31,8 @@ pub struct Word {
     pub word: String,
     pub slug: String,
     pub lemma: i32,
-    pub ipa: Option<String>,
-    pub notes: Option<String>,
+    pub ipa: String,
+    pub notes: String,
     pub extra: Option<JsonValue>,
     pub like_count: i64,
     pub created_at: DateTime<Utc>,
@@ -176,13 +176,11 @@ impl WordRepository {
     }
 
     pub fn render_notes(word: &Word) -> AppResult<String> {
-        let rendered = word
-            .notes
-            .as_ref()
-            .map(|notes| crate::md::render_md(notes))
-            .transpose()?
-            .unwrap_or_default();
-        Ok(rendered)
+        if word.notes.is_empty() {
+            Ok(String::new())
+        } else {
+            Ok(crate::md::render_md(&word.notes)?)
+        }
     }
 
     pub async fn create(
@@ -222,8 +220,8 @@ impl WordRepository {
             word.word,
             slug,
             lemma,
-            word.ipa,
-            word.notes,
+            word.ipa.unwrap_or_default(),
+            word.notes.unwrap_or_default(),
             word.extra,
             requestor.id
         )
@@ -1203,7 +1201,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(updated.notes, Some("updated notes".to_string()));
+        assert_eq!(updated.notes, "updated notes".to_string());
 
         // Check audit log was created
         let audit_repo = AuditLogRepository::new(app_state.clone());

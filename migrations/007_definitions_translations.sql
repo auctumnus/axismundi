@@ -4,7 +4,7 @@ create table definitions (
     word uuid not null references words(id) on delete cascade,
 
     definition text not null,
-    context text,
+    context text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
@@ -23,11 +23,11 @@ create table translatable (
     title text not null,
 
     english text not null,
-    source_name text,
-    source_url text,
-    source_content text,
-    source_language text,
-    description text,
+    source_name text not null default '',
+    source_url text not null default '',
+    source_content text not null default '',
+    source_language text not null default '',
+    description text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
@@ -48,11 +48,11 @@ create table translation (
     language uuid not null references languages(id) on delete cascade,
 
     translated_text text not null,
-    translated_title text,
+    translated_title text not null default '',
 
-    ipa text,
-    gloss text,
-    notes text,
+    ipa text not null default '',
+    gloss text not null default '',
+    notes text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

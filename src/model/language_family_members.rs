@@ -31,7 +31,7 @@ struct LanguageFamilyMemberRow {
     pub id: Uuid,
     pub family_id: Uuid,
     pub language_id: Option<Uuid>,
-    pub title: Option<String>,
+    pub title: String,
     pub parent_member_id: Option<Uuid>,
     pub relation_type: LanguageFamilyRelationType,
     pub notes: String,
@@ -168,10 +168,11 @@ impl TryFrom<LanguageFamilyMemberRow> for LanguageFamilyMember {
                 updated_by: row.updated_by,
             }))
         } else {
-            let title = row
-                .title
-                .filter(|t| !t.is_empty())
-                .ok_or_else(|| internal_error("grouping missing title"))?;
+            let title = if row.title.is_empty() {
+                return Err(internal_error("grouping missing title"));
+            } else {
+                row.title
+            };
             Ok(Self::Grouping(Grouping {
                 id: row.id,
                 family_id: row.family_id,
@@ -366,9 +367,9 @@ impl LanguageFamilyMemberRepository {
         };
 
         let title = if language.is_none() {
-            member.title.as_deref()
+            member.title.as_deref().unwrap_or("")
         } else {
-            None
+            ""
         };
 
         let mut tx = self.state.pool.begin().await?;
@@ -738,7 +739,7 @@ impl LanguageFamilyMemberRepository {
             r#"
                 UPDATE language_family_members
                 SET language_id = $1,
-                    title = NULL,
+                    title = '',
                     relation_type = 'descendant',
                     updated_at = CURRENT_TIMESTAMP,
                     updated_by = $2

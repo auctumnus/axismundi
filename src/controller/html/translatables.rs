@@ -32,10 +32,6 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/new-translatable", post(new_translatable_submit))
         .route("/translatable/{slug}/edit", post(edit_translatable_submit))
         .route("/translatable/{slug}/edit-source", post(edit_source_submit))
-        .route(
-            "/translatable/{slug}/clear-source",
-            post(clear_source_submit),
-        )
         .route("/translatable/{slug}/delete", post(delete_translatable_submit));
 
     let normal_routes = Router::<AppState>::new()
@@ -44,10 +40,6 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/translatable/{slug}", get(view_translatable))
         .route("/translatable/{slug}/edit", get(edit_translatable_form))
         .route("/translatable/{slug}/edit-source", get(edit_source_form))
-        .route(
-            "/translatable/{slug}/clear-source",
-            get(clear_source_form),
-        )
         .route("/translatable/{slug}/delete", get(delete_translatable_form));
 
     (secure_routes, normal_routes)
@@ -262,8 +254,8 @@ async fn view_translatable(
             .map_err(Into::into)
     );
 
-    let rendered_description = if let Some(description) = &translatable.description {
-        crate::md::render_md(description).ok()
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
     } else {
         None
     };
@@ -330,7 +322,7 @@ async fn edit_translatable_form(
         translatable: translatable.clone(),
         error: None,
         previous_title: translatable.title,
-        previous_description: translatable.description.unwrap_or_default(),
+        previous_description: translatable.description.clone(),
         previous_english: translatable.english,
     };
 
@@ -393,10 +385,10 @@ async fn edit_source_form(
         current_user: Some(user),
         translatable: translatable.clone(),
         error: None,
-        previous_source_name: translatable.source_name.unwrap_or_default(),
-        previous_source_url: translatable.source_url.unwrap_or_default(),
-        previous_source_language: translatable.source_language.unwrap_or_default(),
-        previous_source_content: translatable.source_content.unwrap_or_default(),
+        previous_source_name: translatable.source_name.clone(),
+        previous_source_url: translatable.source_url.clone(),
+        previous_source_language: translatable.source_language.clone(),
+        previous_source_content: translatable.source_content.clone(),
     };
 
     okay(render_template(template))
@@ -457,49 +449,6 @@ async fn edit_source_submit(
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)
         }
-    }
-}
-
-#[derive(Template)]
-#[template(path = "translatables/clear-source.html")]
-#[allow(dead_code)]
-struct ClearSourceTemplate {
-    current_user: Option<User>,
-    translatable: Translatable,
-    will_create_audit_log: bool,
-}
-
-async fn clear_source_form(
-    s: Session,
-    translatables: TranslatableRepository,
-    Path(slug): Path<String>,
-) -> (StatusCode, Response) {
-    let user = get_user!(s);
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
-
-    let template = ClearSourceTemplate {
-        current_user: Some(user),
-        translatable,
-        will_create_audit_log: false,
-    };
-
-    okay(render_template(template))
-}
-
-async fn clear_source_submit(
-    s: Session,
-    translatables: TranslatableRepository,
-    Path(slug): Path<String>,
-) -> (StatusCode, Response) {
-    let user = get_user!(s);
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
-
-    match translatables.clear_source(&user, translatable.id).await {
-        Ok(result) => (
-            StatusCode::SEE_OTHER,
-            Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
-        ),
-        Err(e) => render_generic_error(s, e).await,
     }
 }
 

@@ -28,14 +28,14 @@ pub struct Translatable {
     pub slug: String,
     pub title: String,
     pub english: String,
-    pub source_name: Option<String>,
-    pub source_url: Option<String>,
-    pub source_content: Option<String>,
-    pub source_language: Option<String>,
+    pub source_name: String,
+    pub source_url: String,
+    pub source_content: String,
+    pub source_language: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub translations_count: i64,
-    pub description: Option<String>,
+    pub description: String,
     pub like_count: i64,
     #[serde(skip_serializing)]
     pub created_by: Uuid,
@@ -84,19 +84,15 @@ pub struct CreateTranslatable {
 
 #[derive(Debug, Serialize, Deserialize, Validate, Clone)]
 pub struct UpdateTranslatable {
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 40))]
     pub title: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 100_000))]
     pub english: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 1000))]
     pub source_name: Option<String>,
 
-    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(custom(function = "validate_external_url"))]
     #[validate(length(max = 2000))]
     pub source_url: Option<String>,
@@ -236,11 +232,11 @@ impl TranslatableRepository {
             slug,
             translatable.title,
             translatable.english,
-            translatable.source_name,
-            source_url,
-            translatable.source_content,
-            translatable.source_language,
-            translatable.description,
+            translatable.source_name.unwrap_or_default(),
+            source_url.unwrap_or_default(),
+            translatable.source_content.unwrap_or_default(),
+            translatable.source_language.unwrap_or_default(),
+            translatable.description.unwrap_or_default(),
             requestor.id
         )
         .fetch_one(&self.state.pool)
@@ -342,51 +338,6 @@ impl TranslatableRepository {
             .await?;
 
         Ok(updated_translatable)
-    }
-
-    pub async fn clear_source(
-        &self,
-        requestor: &User,
-        id: Uuid,
-    ) -> AppResult<Translatable> {
-        ensure_verified(requestor)?;
-
-        crate::model::user_bans::UserBanRepository::new(self.state.clone())
-            .ensure_not_banned(requestor.id)
-            .await?;
-
-        let existing = self.find_by_id(id).await?;
-        if existing.created_by != requestor.id {
-            return Err(crate::err::forbidden(
-                "only the creator can update this translatable",
-            ));
-        }
-
-        let result = sqlx::query_as!(
-            Translatable,
-            r#"
-                UPDATE translatable
-                SET source_name = NULL,
-                    source_url = NULL,
-                    source_content = NULL,
-                    source_language = NULL,
-                    updated_by = $2,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = $1
-                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description,
-                    (
-                        SELECT COUNT(*)
-                        FROM translation
-                        WHERE translation.translatable = translatable.id
-                    ) AS "translations_count!"
-            "#,
-            id,
-            requestor.id
-        )
-        .fetch_optional(&self.state.pool)
-        .await?;
-
-        result.ok_or_else(|| not_found(format!("translatable with id '{id}'")))
     }
 
     pub async fn delete(&self, requestor: &User, translatable: Translatable) -> AppResult<bool> {

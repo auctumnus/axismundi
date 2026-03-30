@@ -24,8 +24,8 @@
 <div class="card">
     <div class="header-with-actions">
         <div class="with-subtitle">
-            {% if let Some(translated_title) = &translation.translated_title %}
-                <h1>{{ translated_title }}</h1>
+            {% if !translation.translated_title.is_empty() %}
+                <h1>{{ translation.translated_title }}</h1>
                 <div class="contributors">
                     <span>by</span>
                     {% call u::badge(&translatable_with_meta.creator, size="small") %}
@@ -57,7 +57,7 @@
         </ul>
     </div>
 
-    {% if &translation.ipa.is_none() && &translation.gloss.is_none() && &translation.notes.is_none() %}
+    {% if translation.ipa.is_empty() && translation.gloss.is_empty() && translation.notes.is_empty() %}
         <p class="preserve-breaks">{{ translation.translated_text }}</p>
     {% else %}
         <div class="tabs">
@@ -65,17 +65,17 @@
                 <input class="tab-head" id="translated-tab" type="radio" name="translation-tabs" checked>
                 <label class="tab-label" for="translated-tab">{{ &language.name }}</label>
 
-                {% if &translation.ipa.is_some() %}
+                {% if !translation.ipa.is_empty() %}
                     <input class="tab-head" id="ipa-tab" type="radio" name="translation-tabs">
                     <label class="tab-label" for="ipa-tab">IPA</label>
                 {% endif %}
 
-                {% if &translation.gloss.is_some() %}
+                {% if !translation.gloss.is_empty() %}
                     <input class="tab-head" id="gloss-tab" type="radio" name="translation-tabs">
                     <label class="tab-label" for="gloss-tab">Gloss</label>
                 {% endif %}
 
-                {% if &translation.notes.is_some() %}
+                {% if !translation.notes.is_empty() %}
                     <input class="tab-head" id="notes-tab" type="radio" name="translation-tabs">
                     <label class="tab-label" for="notes-tab">Notes</label>
                 {% endif %}
@@ -83,19 +83,19 @@
             <div class="translated-content">
                 <p class="preserve-breaks">{{ translation.translated_text }}</p>
             </div>
-            {% if let Some(ipa) = &translation.ipa %}
+            {% if !translation.ipa.is_empty() %}
                 <div class="ipa-content">
-                    <p class="preserve-breaks">{{ ipa }}</p>
+                    <p class="preserve-breaks">{{ translation.ipa }}</p>
                 </div>
             {% endif %}
-            {% if let Some(gloss) = &translation.gloss %}
+            {% if !translation.gloss.is_empty() %}
                 <div class="gloss-content">
-                    <p class="preserve-breaks">{{ gloss }}</p>
+                    <p class="preserve-breaks">{{ translation.gloss }}</p>
                 </div>
             {% endif %}
-            {% if let Some(notes) = &translation.notes %}
+            {% if !translation.notes.is_empty() %}
                 <div class="notes-content">
-                    <p class="preserve-breaks">{{ notes }}</p>
+                    <p class="preserve-breaks">{{ translation.notes }}</p>
                 </div>
             {% endif %}
         </div>

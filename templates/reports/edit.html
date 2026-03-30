@@ -30,8 +30,8 @@
                         <span class="context-label">reported user</span>
                         <a href="/users/{{ user.username }}" class="context-card-link">
                             <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                            {% if let Some(description) = &user.description %}
-                                <span class="context-text">{{ description }}</span>
+                            {% if !user.description.is_empty() %}
+                                <span class="context-text">{{ user.description }}</span>
                             {% endif %}
                         </a>
                     </div>
@@ -115,8 +115,8 @@
                     <span class="context-label">reported by</span>
                     <a href="/users/{{ user.username }}" class="context-card-link">
                         <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                        {% if let Some(description) = &user.description %}
-                            <span class="context-text">{{ description }}</span>
+                        {% if !user.description.is_empty() %}
+                            <span class="context-text">{{ user.description }}</span>
                         {% endif %}
                     </a>
                 </div>
@@ -177,7 +177,7 @@
         <section>
             <label for="resolution_note">Resolution note</label>
             {% call u::field_error(name="resolution_note") %}
-            <textarea id="resolution_note" name="resolution_note" rows="4">{% if let Some(note) = &report.resolution_note %}{{ note }}{% endif %}</textarea>
+            <textarea id="resolution_note" name="resolution_note" rows="4">{{ report.resolution_note }}</textarea>
         </section>
 
         <h2>Visibility Settings</h2>

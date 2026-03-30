@@ -28,8 +28,8 @@
 {% endif %}
 {% endblock %}
 
-{% block embed_title %}{% if let Some(display_name) = user.display_name %}{{ display_name ~ " @" ~ user.username }}{% else %}{{ "@" ~ user.username }}{% endif %}{% endblock %}
-{% block embed_description %}{% if let Some(description) = user.description %}{{ description }}{% endif %}{% endblock %}
+{% block embed_title %}{% if !user.display_name.is_empty() %}{{ user.display_name ~ " @" ~ user.username }}{% else %}{{ "@" ~ user.username }}{% endif %}{% endblock %}
+{% block embed_description %}{% if !user.description.is_empty() %}{{ user.description }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="card profile-card">
@@ -49,16 +49,16 @@
     </div>
     <div class="content">
         <div class="name">
-            {% if let Some(display_name) = user.display_name %}
-                {% if let Some(gender) = user.gender %}
-                    <h1 class="display-name gender-color" style="--gender: #{{ gender }};">{{ display_name }}</h1>
+            {% if !user.display_name.is_empty() %}
+                {% if !user.gender.is_empty() %}
+                    <h1 class="display-name gender-color" style="--gender: #{{ user.gender }};">{{ user.display_name }}</h1>
                 {% else %}
-                    <h1 class="display-name">{{ display_name }}</h1>
+                    <h1 class="display-name">{{ user.display_name }}</h1>
                 {% endif %}
                 <p class="username">@{{ user.username }}</p>
             {% else %}
-                {% if let Some(gender) = user.gender %}
-                    <h1 class="username gender-color" style="--gender: #{{ gender }};">@{{ user.username }}</h1>
+                {% if !user.gender.is_empty() %}
+                    <h1 class="username gender-color" style="--gender: #{{ user.gender }};">@{{ user.username }}</h1>
                 {% else %}
                     <h1 class="username">@{{ user.username }}</h1>
                 {% endif %}
@@ -70,16 +70,16 @@
     </div>
 
     <table>
-        {% if let Some(pronouns) = user.pronouns %}
+        {% if !user.pronouns.is_empty() %}
             <tr>
                 <th>pronouns</th>
-                <td>{{ pronouns }}</td>
+                <td>{{ user.pronouns }}</td>
             </tr>
         {% endif %}
-        {% if let Some(gender) = user.gender %}
+        {% if !user.gender.is_empty() %}
             <tr>
                 <th>gender</th>
-                <td><span class="gender-color gender-text" style="--gender: #{{ gender }};">#{{ gender }}</span></td>
+                <td><span class="gender-color gender-text" style="--gender: #{{ user.gender }};">#{{ user.gender }}</span></td>
             </tr>
         {% endif %}
         <tr>

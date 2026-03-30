@@ -12,7 +12,7 @@ pub struct SoundChangeSet {
     #[serde(skip_serializing)]
     pub language_id: Uuid,
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub changes: String,
 
     pub created_at: DateTime<Utc>,
@@ -70,7 +70,7 @@ impl SoundChangeSetRepository {
             "insert into sound_change_sets (language_id, name, description, changes, created_by, updated_by) values ($1, $2, $3, $4, $5, $6) returning *",
             language.id,
             new_set.name,
-            new_set.description,
+            new_set.description.unwrap_or_default(),
             new_set.changes,
             requestor.id,
             requestor.id

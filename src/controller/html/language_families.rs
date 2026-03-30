@@ -190,7 +190,7 @@ async fn view_language_family(
                         family.like_count
                     ),
                     author: Some(owner.clone()),
-                    color: owner.gender,
+                    color: if owner.gender.is_empty() { None } else { Some(owner.gender.clone()) },
                     url: format!(
                         "{}/language-families/{}",
                         &crate::CONFIG.public_url_base,

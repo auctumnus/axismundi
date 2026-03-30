@@ -266,7 +266,7 @@ async fn view_language(
                         language.like_count
                     ),
                     author: Some(owner.clone()),
-                    color: owner.gender,
+                    color: if owner.gender.is_empty() { None } else { Some(owner.gender.clone()) },
                     url: format!(
                         "{}/languages/{}",
                         &crate::CONFIG.public_url_base,

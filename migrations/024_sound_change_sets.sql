@@ -3,7 +3,7 @@ create table sound_change_sets (
     language_id uuid not null references languages(id) on delete cascade,
 
     name text not null,
-    description text,
+    description text not null default '',
     changes text not null,
 
     created_at timestamp with time zone not null default current_timestamp,

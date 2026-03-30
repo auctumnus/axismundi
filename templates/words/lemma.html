@@ -49,18 +49,16 @@
     </div>
 
     <div class="word-meta">
-        {% if let Some(ipa) = word.ipa %}
-            {% if !ipa.is_empty() %}<span class="ipa">/{{ ipa }}/</span>{% endif %}
-        {% endif %}
+        {% if !word.ipa.is_empty() %}<span class="ipa">/{{ word.ipa }}/</span>{% endif %}
     </div>
 
     {% if !definitions.is_empty() %}
         <ol class="definitions-list">
             {% for definition in definitions %}
                 <li>
-                    {% if let Some(context) = definition.context %}
-                    <span class="context-container">   
-                        (<span class="context">{{ context }}</span>)
+                    {% if !definition.context.is_empty() %}
+                    <span class="context-container">
+                        (<span class="context">{{ definition.context }}</span>)
                     </span>
                     {% endif %}
                     {{ definition.definition }}

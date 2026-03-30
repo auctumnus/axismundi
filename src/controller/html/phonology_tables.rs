@@ -554,8 +554,8 @@ async fn view_phonology_table(
         is_liked,
     };
 
-    let rendered_description = if let Some(description) = &table.description {
-        attempt!(s, render_md(description).map_err(Into::into))
+    let rendered_description = if !table.description.is_empty() {
+        attempt!(s, render_md(&table.description).map_err(Into::into))
     } else {
         String::new()
     };
@@ -597,7 +597,7 @@ async fn edit_meta_form(
         current_user: Some(user),
         language,
         previous_name: table.name.clone(),
-        previous_description: table.description.clone().unwrap_or_default(),
+        previous_description: table.description.clone(),
         table,
         error: None,
         will_create_audit_log,
@@ -640,7 +640,7 @@ async fn edit_meta_submit(
         } else {
             Some(form.name.clone())
         },
-        description: if description == table.description {
+        description: if description.as_deref().unwrap_or("") == table.description {
             None
         } else {
             description
@@ -700,7 +700,7 @@ async fn edit_body_form(
         current_user: Some(user),
         language,
         previous_name: table.name.clone(),
-        previous_description: table.description.clone().unwrap_or_default(),
+        previous_description: table.description.clone(),
         previous_table_body,
         table,
         error: None,
