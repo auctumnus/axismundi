@@ -1,10 +1,10 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 
-{% block title %}{{ translatable.title }} - axismundi{% endblock %}
-{% block embed_title %}{{ translatable.title }}{% endblock %}
-{% block embed_description %}{{ translatable.english }}{% endblock %}
-{% block oembed_url_path %}{% let slug = &translatable.slug %}{{ crate::util::urlencode(&format!("translatable/{slug}")) }}{% endblock %}
+{% block title %}{{ translatable_with_meta.translatable.title }} - axismundi{% endblock %}
+{% block embed_title %}{{ translatable_with_meta.translatable.title }}{% endblock %}
+{% block embed_description %}{{ translatable_with_meta.translatable.english }}{% endblock %}
+{% block oembed_url_path %}{% let slug = &translatable_with_meta.translatable.slug %}{{ crate::util::urlencode(&format!("translatable/{slug}")) }}{% endblock %}
 
 {% block head %}
 <script type="application/ld+json">
@@ -12,77 +12,12 @@
 </script>
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/translation-card.css">
-<link rel="stylesheet" href="/static/translatables/view.css">
+<link rel="stylesheet" href="/static/translatables/card.css">
 {% endblock %}
 
 {% block content %}
 
-<div class="card full-card">
-    <div class="header-with-actions">
-        <div class="with-subtitle">
-            <h1>{{ translatable.title }}</h1>
-            <div class="contributors">
-                <span>added by</span>
-                {% call u::badge(&creator, size="small") %}
-            </div>
-        </div>
-        <ul class="icons">
-            {% if can_edit_translatable %}
-            <li>
-                <a class="icon button gray" href="/translatable/{{ translatable.slug }}/edit"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg></a>
-            </li>
-            {% endif %}
-            <li><span class="likes like-button {% if is_liked %}liked{% endif %}" data-target="/api/translatable/{{ translatable.slug }}" data-tooltip="Like this translatable" role="button">
-                <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
-                </span>
-                <span class="like-count">{{ translatable.like_count }}</span>
-            </span>
-            </li>
-        </ul>
-    </div>
-
-    {% if let Some(description) = &rendered_description %}
-    {{ description | safe }}
-    {% endif %}
-
-    {% if let Some(source_content) = &translatable.source_content %}
-        <div class="tabs">
-            <div class="tab-wrap">
-                <input class="tab-head" id="english" type="radio" name="tabs" checked>
-                <label class="tab-label" for="english">English</label>
-                
-                <input class="tab-head" id="source" type="radio" name="tabs">
-                <label class="tab-label" for="source">
-                    {% if let Some(source_language) = &translatable.source_language %}
-                        {{ source_language }}
-                    {% else %}
-                        Source language
-                    {% endif %}
-                </label>
-            </div>
-            <div class="english-content">
-                <p class="preserve-breaks">{{ translatable.english }}</p>
-            </div>
-            <div class="source-content">
-                {% if let Some(source_name) = &translatable.source_name %}
-                    {% if let Some(source_url) = &translatable.source_url %}
-                        <h2><a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_name }}</a></h2>
-                    {% else %}
-                        <h2>{{ source_name }}</h2>
-                    {% endif %}
-                {% endif %}
-                <p class="preserve-breaks">{{ source_content }}</p>
-            </div>
-        </div>
-    {% else %}
-        {% if rendered_description.is_some() %}
-            <hr />
-        {% endif %}
-        <p class="preserve-breaks">{{ translatable.english }}</p>
-    {% endif %}
-</div>
+{% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
 
 {% if translations.len() == 0 && current_user.is_some() %}
 <h2>translations</h2>
@@ -90,7 +25,7 @@
     <h2>no translations yet</h2>
     <p>create the first translation for this text</p>
     <div class="actions">
-        <a class="button primary-button" href="/translatable/{{ translatable.slug }}/new-translation">new translation</a>
+        <a class="button primary-button" href="/translatable/{{ translatable_with_meta.translatable.slug }}/new-translation">new translation</a>
     </div>
 </div>
 
@@ -99,7 +34,7 @@
 <div class="header-with-actions">
     <h2>translations</h2>
     <ul>
-        <li><a class="with-icon" href="/translatable/{{translatable.slug}}/new-translation">
+        <li><a class="with-icon" href="/translatable/{{ translatable_with_meta.translatable.slug }}/new-translation">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
             <span>add new</span>
         </a></li>
@@ -126,5 +61,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable, can_edit_translatable) %}
+{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
 {% endblock %}

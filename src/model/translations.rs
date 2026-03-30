@@ -47,45 +47,54 @@ pub struct Translation {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TranslationWithLanguageAndContributor {
-    pub translation: Translation,
-    pub translatable: Translatable,
-    pub language: Language,
-    pub author: User,
+    pub translation: Box<Translation>,
+    pub translatable: Box<Translatable>,
+    pub language: Box<Language>,
+    pub author: Box<User>,
     pub is_liked: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct CreateTranslation {
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: String,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 40))]
     pub translated_title: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub ipa: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub gloss: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub notes: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateTranslation {
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 100_000))]
     pub translated_text: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 40))]
     pub translated_title: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub ipa: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub gloss: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 100_000))]
     pub notes: Option<String>,
 }
@@ -121,10 +130,10 @@ impl TranslationRepository {
         };
 
         Ok(TranslationWithLanguageAndContributor {
-            translation,
-            translatable,
-            language,
-            author,
+            translation: Box::new(translation),
+            translatable: Box::new(translatable),
+            language: Box::new(language),
+            author: Box::new(author),
             is_liked,
         })
     }

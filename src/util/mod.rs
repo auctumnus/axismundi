@@ -48,7 +48,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
-use serde::Serialize;
+use serde::{Deserialize as _, Deserializer, Serialize};
 use uri_encode::encode_uri;
 use uuid::Uuid;
 use validator::ValidationError;
@@ -269,4 +269,12 @@ pub fn dfs(
         }
     }
     false
+}
+
+pub fn empty_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(s.filter(|s| !s.trim().is_empty()))
 }

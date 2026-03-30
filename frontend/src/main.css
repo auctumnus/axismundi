@@ -1089,6 +1089,10 @@ button.with-icon {
   flex-direction: column;
   gap: 1rem;
   margin-bottom: 1.5rem;
+
+  .standalone-card .full-card {
+    margin: 0;
+  }
 }
 
 .context-card {

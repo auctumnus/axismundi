@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
+    controller::html::{LanguagesWithContributors, TranslatableWithMeta, okay, render_template},
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::{AppError, bad_request},
     get_user,
@@ -36,8 +36,12 @@ use axum::extract::State;
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route(
-            "/translatable/{slug}/new-translation",
-            post(new_translation_submit),
+            "/translatable/{slug}/new-translation-1",
+            post(new_translation_step_1_submit),
+        )
+        .route(
+            "/translatable/{slug}/new-translation-2",
+            post(new_translation_step_2_submit),
         )
         .route(
             "/translatable/{slug}/edit-translation",
@@ -221,27 +225,130 @@ async fn new_translation_step_1_form(
 struct NewTranslationStep2Template {
     current_user: Option<User>,
     error: Option<AppError>,
-    translatable: Translatable,
+    translatable_with_meta: TranslatableWithMeta,
     language: Language,
     language_with_contributors: LanguagesWithContributors,
     previous_translated_text: String,
     previous_translated_title: String,
+    previous_ipa: String,
+    previous_gloss: String,
+    previous_notes: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
     will_create_audit_log: bool,
+    rendered_description: Option<String>,
 }
 
 #[derive(Deserialize)]
-struct NewTranslationFormData {
-    step: u8,
-    language_code: Option<String>,
-    language_id: Option<Uuid>,
-    translated_text: Option<String>,
+struct NewTranslationStep1Form {
+    language_code: String,
+}
+
+async fn new_translation_step_1_submit(
+    s: Session,
+    State(state): State<AppState>,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    contribution_stats: ContributionStatsRepository,
+    Path(slug): Path<String>,
+    Form(form): Form<NewTranslationStep1Form>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let can_edit_translatable = translatable.created_by == user.id;
+
+    let Ok(language) = languages.find_by_code(&form.language_code).await else {
+        let error = bad_request("Language not found");
+        let available_languages = attempt!(s, languages.find_all_by_user(user.id).await);
+        let template = NewTranslationStep1Template {
+            current_user: Some(user),
+            error: Some(error),
+            translatable: translatable.clone(),
+            translatable_id: translatable.slug,
+            available_languages,
+            previous_language_code: form.language_code,
+            can_edit_translatable,
+            language: None,
+            can_edit_language: false,
+            will_create_audit_log: false,
+        };
+        return (StatusCode::BAD_REQUEST, render_template(template));
+    };
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
+    let top_contributors = attempt!(
+        s,
+        contribution_stats
+            .get_top_contributors(&language.id, 5)
+            .await
+    );
+    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let language_with_contributors = LanguagesWithContributors {
+        language: language.clone(),
+        top_contributors,
+        is_liked,
+    };
+
+    let rendered_description = translatable
+        .description
+        .as_deref()
+        .and_then(|d| crate::md::render_md(d).ok());
+
+    let translatable_with_meta = attempt!(
+        s,
+        translatables.materialize(translatable, Some(&user)).await
+    );
+
+    let template = NewTranslationStep2Template {
+        current_user: Some(user),
+        error: None,
+        translatable_with_meta,
+        language,
+        language_with_contributors,
+        previous_translated_text: String::new(),
+        previous_translated_title: String::new(),
+        previous_ipa: String::new(),
+        previous_gloss: String::new(),
+        previous_notes: String::new(),
+        can_edit_translatable,
+        can_edit_language,
+        will_create_audit_log,
+        rendered_description,
+    };
+
+    okay(render_template(template))
+}
+
+#[derive(Deserialize)]
+struct NewTranslationStep2Form {
+    language_id: Uuid,
+    translated_text: String,
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     translated_title: Option<String>,
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
+    ipa: Option<String>,
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
+    gloss: Option<String>,
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
+    notes: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn new_translation_submit(
+async fn new_translation_step_2_submit(
     s: Session,
     State(state): State<AppState>,
     translatables: TranslatableRepository,
@@ -250,215 +357,97 @@ async fn new_translation_submit(
     permissions: LanguagePermissionRepository,
     contribution_stats: ContributionStatsRepository,
     Path(slug): Path<String>,
-    Form(form): Form<NewTranslationFormData>,
+    Form(form): Form<NewTranslationStep2Form>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
-
     let can_edit_translatable = translatable.created_by == user.id;
 
-    if form.step == 1 {
-        let Some(language_code) = form.language_code.clone() else {
-            let error = bad_request("Language code is required");
+    let language = attempt!(s, languages.find_by_id(form.language_id).await);
 
-            let available_languages = attempt!(s, languages.find_all_by_user(user.id).await);
-            let template = NewTranslationStep1Template {
-                current_user: Some(user),
-                error: Some(error),
-                translatable: translatable.clone(),
-                translatable_id: translatable.slug,
-                available_languages,
-                previous_language_code: String::new(),
-                can_edit_translatable,
-                language: None,
-                can_edit_language: false,
-                will_create_audit_log: false,
-            };
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
 
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        };
-
-        let Ok(language) = languages.find_by_code(&language_code).await else {
-            let error = bad_request("Language not found");
-
-            let available_languages = attempt!(s, languages.find_all_by_user(user.id).await);
-            let template = NewTranslationStep1Template {
-                current_user: Some(user),
-                error: Some(error),
-                translatable: translatable.clone(),
-                translatable_id: translatable.slug,
-                available_languages,
-                previous_language_code: language_code,
-                can_edit_translatable,
-                language: None,
-                can_edit_language: false,
-                will_create_audit_log: false,
-            };
-
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        };
-
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
             .unwrap_or(false);
 
-        let can_edit_language = is_admin_or_mod
-            || permissions
-                .has_permission(user.id, language.id, PermissionLevel::Editor)
-                .await
-                .unwrap_or(false);
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
-        let will_create_audit_log =
-            crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
-
-        let top_contributors = attempt!(
-            s,
-            contribution_stats
-                .get_top_contributors(&language.id, 5)
-                .await
-        );
-        let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
-        let language_with_contributors = LanguagesWithContributors {
-            language: language.clone(),
-            top_contributors,
-            is_liked,
-        };
-
-        let template = NewTranslationStep2Template {
-            current_user: Some(user),
-            error: None,
-            translatable,
-            language,
-            language_with_contributors,
-            previous_translated_text: String::new(),
-            previous_translated_title: String::new(),
-            can_edit_translatable,
-            can_edit_language,
-            will_create_audit_log,
-        };
-
-        okay(render_template(template))
-    } else if form.step == 2 {
-        let Some(language_id) = form.language_id else {
-            return render_generic_error(s, bad_request("Language ID is required")).await;
-        };
-
-        let language = attempt!(s, languages.find_by_id(language_id).await);
-
-        let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+    let top_contributors = attempt!(
+        s,
+        contribution_stats
+            .get_top_contributors(&language.id, 5)
             .await
-            .unwrap_or(false);
+    );
+    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
 
-        let can_edit_language = is_admin_or_mod
-            || permissions
-                .has_permission(user.id, language.id, PermissionLevel::Editor)
-                .await
-                .unwrap_or(false);
+    let create = CreateTranslation {
+        translated_text: form.translated_text.clone(),
+        translated_title: form.translated_title.clone(),
+        ipa: form.ipa.clone(),
+        gloss: form.gloss.clone(),
+        notes: form.notes.clone(),
+    };
 
-        let will_create_audit_log =
-            crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+    let create_result = translations
+        .create(&user, translatable.id, language.id, create)
+        .await;
 
-        let top_contributors = attempt!(
-            s,
-            contribution_stats
-                .get_top_contributors(&language.id, 5)
-                .await
-        );
-        let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let rendered_description = translatable
+        .description
+        .as_deref()
+        .and_then(|d| crate::md::render_md(d).ok());
 
-        let Some(translated_text) = form.translated_text.clone() else {
-            let error = bad_request("Translated text is required");
+    let redirect_slug = translatable.slug.clone();
 
+    match create_result {
+        Ok(_) => {
+            let redirect_url = format!(
+                "/translatable/{}/translation/{}",
+                redirect_slug, language.code
+            );
+            (
+                StatusCode::SEE_OTHER,
+                Redirect::to(&redirect_url).into_response(),
+            )
+        }
+        Err(e) => {
             let language_with_contributors = LanguagesWithContributors {
                 language: language.clone(),
                 top_contributors,
                 is_liked,
             };
 
+            let translatable_with_meta = attempt!(
+                s,
+                translatables.materialize(translatable, Some(&user)).await
+            );
+
             let template = NewTranslationStep2Template {
                 current_user: Some(user),
-                error: Some(error),
-                translatable,
+                error: Some(e),
+                translatable_with_meta,
                 language,
                 language_with_contributors,
-                previous_translated_text: String::new(),
-                previous_translated_title: String::new(),
+                previous_translated_text: form.translated_text,
+                previous_translated_title: form.translated_title.unwrap_or_default(),
+                previous_ipa: form.ipa.unwrap_or_default(),
+                previous_gloss: form.gloss.unwrap_or_default(),
+                previous_notes: form.notes.unwrap_or_default(),
                 can_edit_translatable,
                 can_edit_language,
                 will_create_audit_log,
+                rendered_description,
             };
 
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        };
-
-        let create_result = translations
-            .create(
-                &user,
-                translatable.id,
-                language.id,
-                CreateTranslation {
-                    translated_text: translated_text.clone(),
-                    translated_title: form.translated_title.clone(),
-                    ipa: None,
-                    gloss: None,
-                    notes: None,
-                },
-            )
-            .await;
-
-        match create_result {
-            Ok(_) => {
-                let redirect_url = format!(
-                    "/translatable/{}/translation/{}",
-                    translatable.slug, language.code
-                );
-                (
-                    StatusCode::SEE_OTHER,
-                    Redirect::to(&redirect_url).into_response(),
-                )
-            }
-            Err(e) => {
-                let language_with_contributors = LanguagesWithContributors {
-                    language: language.clone(),
-                    top_contributors,
-                    is_liked,
-                };
-
-                let template = NewTranslationStep2Template {
-                    current_user: Some(user),
-                    error: Some(e),
-                    translatable,
-                    language,
-                    language_with_contributors,
-                    previous_translated_text: translated_text,
-                    previous_translated_title: form.translated_title.clone().unwrap_or_default(),
-                    can_edit_translatable,
-                    can_edit_language,
-                    will_create_audit_log,
-                };
-
-                (StatusCode::BAD_REQUEST, render_template(template))
-            }
+            (StatusCode::BAD_REQUEST, render_template(template))
         }
-    } else {
-        let error = bad_request("Invalid form submission");
-
-        let available_languages = attempt!(s, languages.find_all_by_user(user.id).await);
-        let template = NewTranslationStep1Template {
-            current_user: Some(user),
-            error: Some(error),
-            translatable: translatable.clone(),
-            translatable_id: translatable.slug,
-            available_languages,
-            previous_language_code: String::new(),
-            can_edit_translatable,
-            language: None,
-            can_edit_language: false,
-            will_create_audit_log: false,
-        };
-
-        (StatusCode::BAD_REQUEST, render_template(template))
     }
 }
 
@@ -468,8 +457,7 @@ async fn new_translation_submit(
 #[allow(clippy::struct_excessive_bools)]
 struct ViewTranslationTemplate {
     current_user: Option<User>,
-    translatable: Translatable,
-    translatable_creator: User,
+    translatable_with_meta: TranslatableWithMeta,
     language: Language,
     translation: Translation,
     translation_creator: User,
@@ -478,9 +466,9 @@ struct ViewTranslationTemplate {
     can_edit_translatable: bool,
     can_edit_language: bool,
     can_edit_translation: bool,
-    translatable_is_liked: bool,
     translation_is_liked: bool,
     json_ld: String,
+    rendered_description: Option<String>,
 }
 
 async fn view_translation(
@@ -502,7 +490,6 @@ async fn view_translation(
             .await
     );
 
-    let translatable_creator = attempt!(s, users.find_by_id(translatable.created_by).await);
     let translation_creator = attempt!(s, users.find_by_id(translation.created_by).await);
 
     if let Some(ua) = user_agent
@@ -561,17 +548,6 @@ async fn view_translation(
         false
     };
 
-    let translatable_is_liked = if let Some(current_user) = s.user() {
-        attempt!(
-            s,
-            translatables
-                .is_liked(&current_user.id, &translatable.id)
-                .await
-        )
-    } else {
-        false
-    };
-
     let translation_is_liked = if let Some(current_user) = s.user() {
         attempt!(
             s,
@@ -596,10 +572,19 @@ async fn view_translation(
         .map_err(Into::into)
     );
 
+    let rendered_description = translatable
+        .description
+        .as_deref()
+        .and_then(|d| crate::md::render_md(d).ok());
+
+    let translatable_with_meta = attempt!(
+        s,
+        translatables.materialize(translatable, s.user()).await
+    );
+
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),
-        translatable,
-        translatable_creator,
+        translatable_with_meta,
         language,
         translation,
         translation_creator,
@@ -607,9 +592,9 @@ async fn view_translation(
         can_edit_translatable,
         can_edit_language,
         can_edit_translation,
-        translatable_is_liked,
         translation_is_liked,
         json_ld,
+        rendered_description,
     };
 
     let body = render_template(template);
@@ -624,16 +609,20 @@ async fn view_translation(
 struct EditTranslationTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
-    translatable: Translatable,
+    translatable_with_meta: TranslatableWithMeta,
     language: Language,
     language_with_contributors: LanguagesWithContributors,
     translation: Translation,
     previous_translated_text: String,
     previous_translated_title: String,
+    previous_ipa: String,
+    previous_gloss: String,
+    previous_notes: String,
     can_edit_translatable: bool,
     can_edit_language: bool,
     can_edit_translation: bool,
     will_create_audit_log: bool,
+    rendered_description: Option<String>,
 }
 
 async fn edit_translation_form(
@@ -694,19 +683,33 @@ async fn edit_translation_form(
         is_liked,
     };
 
+    let rendered_description = translatable
+        .description
+        .as_deref()
+        .and_then(|d| crate::md::render_md(d).ok());
+
+    let translatable_with_meta = attempt!(
+        s,
+        translatables.materialize(translatable, Some(&user)).await
+    );
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
-        translatable,
+        translatable_with_meta,
         language,
         language_with_contributors,
         translation: translation.clone(),
         previous_translated_text: translation.translated_text.clone(),
         previous_translated_title: translation.translated_title.clone().unwrap_or_default(),
+        previous_ipa: translation.ipa.clone().unwrap_or_default(),
+        previous_gloss: translation.gloss.clone().unwrap_or_default(),
+        previous_notes: translation.notes.clone().unwrap_or_default(),
         can_edit_translatable,
         can_edit_language,
         can_edit_translation,
         will_create_audit_log,
+        rendered_description,
     };
 
     okay(render_template(template))
@@ -716,6 +719,9 @@ async fn edit_translation_form(
 struct EditTranslationFormData {
     translated_text: String,
     translated_title: Option<String>,
+    ipa: Option<String>,
+    gloss: Option<String>,
+    notes: Option<String>,
     language_id: Uuid,
 }
 
@@ -772,9 +778,9 @@ async fn edit_translation_submit(
             UpdateTranslation {
                 translated_text: Some(form.translated_text.clone()),
                 translated_title: form.translated_title.clone(),
-                ipa: None,
-                gloss: None,
-                notes: None,
+                ipa: form.ipa.clone(),
+                gloss: form.gloss.clone(),
+                notes: form.notes.clone(),
             },
         )
         .await;
@@ -792,11 +798,18 @@ async fn edit_translation_submit(
         is_liked,
     };
 
+    let rendered_description = translatable
+        .description
+        .as_deref()
+        .and_then(|d| crate::md::render_md(d).ok());
+
+    let redirect_slug = translatable.slug.clone();
+
     match translation {
         Ok(_) => {
             let redirect_url = format!(
                 "/translatable/{}/translation/{}",
-                translatable.slug, language.code
+                redirect_slug, language.code
             );
             (
                 StatusCode::SEE_OTHER,
@@ -804,19 +817,28 @@ async fn edit_translation_submit(
             )
         }
         Err(e) => {
+            let translatable_with_meta = attempt!(
+                s,
+                translatables.materialize(translatable, Some(&user)).await
+            );
+
             let template = EditTranslationTemplate {
                 current_user: Some(user),
                 error: Some(e),
-                translatable: translatable.clone(),
+                translatable_with_meta,
                 language,
                 translation: existing_translation,
                 previous_translated_text: form.translated_text.clone(),
                 previous_translated_title: form.translated_title.clone().unwrap_or_default(),
+                previous_ipa: form.ipa.clone().unwrap_or_default(),
+                previous_gloss: form.gloss.clone().unwrap_or_default(),
+                previous_notes: form.notes.clone().unwrap_or_default(),
                 language_with_contributors,
                 can_edit_translatable,
                 can_edit_language,
                 can_edit_translation,
                 will_create_audit_log,
+                rendered_description,
             };
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)

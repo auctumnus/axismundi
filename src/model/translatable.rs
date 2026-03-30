@@ -22,30 +22,6 @@ fn sanitize_source_url(url: Option<String>) -> AppResult<Option<String>> {
         .transpose()
 }
 
-fn normalize_empty(value: Option<String>) -> Option<String> {
-    value.filter(|s| !s.trim().is_empty())
-}
-
-fn normalize_and_validate_source_fields(
-    name: Option<String>,
-    content: Option<String>,
-    language: Option<String>,
-) -> AppResult<(Option<String>, Option<String>, Option<String>)> {
-    let name = normalize_empty(name);
-    let content = normalize_empty(content);
-    let language = normalize_empty(language);
-    let count = [name.is_some(), content.is_some(), language.is_some()]
-        .iter()
-        .filter(|&&x| x)
-        .count();
-    if count != 0 && count != 3 {
-        return Err(bad_request(
-            "source_name, source_content, and source_language must all be provided together or all omitted",
-        ));
-    }
-    Ok((name, content, language))
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Translatable {
     pub id: Uuid,
@@ -69,9 +45,10 @@ pub struct Translatable {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TranslatableWithLiked {
+pub struct TranslatableWithMeta {
     pub translatable: Translatable,
     pub is_liked: bool,
+    pub creator: User,
 }
 
 impl Translatable {
@@ -105,20 +82,21 @@ pub struct CreateTranslatable {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Serialize, Deserialize, Validate, Clone)]
 pub struct UpdateTranslatable {
-    #[validate(length(min = 1, max = 200))]
-    pub slug: Option<String>,
-
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 40))]
     pub title: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(min = 1, max = 100_000))]
     pub english: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(length(max = 1000))]
     pub source_name: Option<String>,
 
+    #[serde(deserialize_with = "crate::util::empty_is_none")]
     #[validate(custom(function = "validate_external_url"))]
     #[validate(length(max = 2000))]
     pub source_url: Option<String>,
@@ -146,15 +124,18 @@ impl TranslatableRepository {
         &self,
         translatable: Translatable,
         requestor: Option<&User>,
-    ) -> AppResult<TranslatableWithLiked> {
+    ) -> AppResult<TranslatableWithMeta> {
         let is_liked = if let Some(user) = requestor {
             self.is_liked(&translatable.id, &user.id).await?
         } else {
             false
         };
-        Ok(TranslatableWithLiked {
+        let users = crate::model::users::UserRepository::new(self.state.clone());
+        let creator = users.find_by_id(translatable.created_by).await?;
+        Ok(TranslatableWithMeta {
             translatable,
             is_liked,
+            creator,
         })
     }
 
@@ -234,12 +215,6 @@ impl TranslatableRepository {
         translatable: CreateTranslatable,
     ) -> AppResult<Translatable> {
         translatable.validate()?;
-        let (source_name, source_content, source_language) =
-            normalize_and_validate_source_fields(
-                translatable.source_name,
-                translatable.source_content,
-                translatable.source_language,
-            )?;
         let source_url = sanitize_source_url(translatable.source_url)?;
 
         ensure_verified(requestor)?;
@@ -261,10 +236,10 @@ impl TranslatableRepository {
             slug,
             translatable.title,
             translatable.english,
-            source_name,
+            translatable.source_name,
             source_url,
-            source_content,
-            source_language,
+            translatable.source_content,
+            translatable.source_language,
             translatable.description,
             requestor.id
         )
@@ -295,12 +270,6 @@ impl TranslatableRepository {
         updates: UpdateTranslatable,
     ) -> AppResult<Translatable> {
         updates.validate()?;
-        let (source_name, source_content, source_language) =
-            normalize_and_validate_source_fields(
-                updates.source_name,
-                updates.source_content,
-                updates.source_language,
-            )?;
         let source_url = sanitize_source_url(updates.source_url)?;
 
         ensure_verified(requestor)?;
@@ -345,10 +314,10 @@ impl TranslatableRepository {
             slug,
             updates.title,
             updates.english,
-            source_name,
+            updates.source_name,
             source_url,
-            source_content,
-            source_language,
+            updates.source_content,
+            updates.source_language,
             updates.description,
             requestor.id
         )

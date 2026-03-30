@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::{
     attempt,
-    controller::html::{TranslatableWithLiked, okay, render_generic_error, render_template},
+    controller::html::{TranslatableWithMeta, okay, render_generic_error, render_template},
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::AppError,
     get_user,
@@ -140,7 +140,7 @@ struct SearchTranslatablesTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
     previous_query: String,
-    results: Option<Vec<TranslatableWithLiked>>,
+    results: Option<Vec<TranslatableWithMeta>>,
 }
 
 async fn search_translatables(
@@ -173,18 +173,10 @@ async fn search_translatables(
         Ok(res) => {
             let mut translatables_with_liked = Vec::with_capacity(res.items.len());
             for translatable in res.items {
-                let is_liked = if let Some(ref cu) = current_user {
-                    translatables
-                        .is_liked(&translatable.id, &cu.id)
-                        .await
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-                translatables_with_liked.push(TranslatableWithLiked {
-                    translatable,
-                    is_liked,
-                });
+                translatables_with_liked.push(attempt!(
+                    s,
+                    translatables.materialize(translatable, current_user.as_ref()).await
+                ));
             }
             Some(translatables_with_liked)
         }
@@ -216,10 +208,8 @@ async fn search_translatables(
 #[template(path = "translatables/view.html")]
 struct ViewTranslatableTemplate {
     current_user: Option<User>,
-    translatable: Translatable,
-    creator: User,
+    translatable_with_meta: TranslatableWithMeta,
     translations: Vec<TranslationWithLanguageAndContributor>,
-    is_liked: bool,
     can_edit_translatable: bool,
     json_ld: String,
     rendered_description: Option<String>,
@@ -233,14 +223,12 @@ async fn view_translatable(
     users: UserRepository,
     Path(slug): Path<String>,
 ) -> (StatusCode, Response) {
-    println!("Viewing translatable: {}", slug);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
-    println!("Found translatable: {:?}", translatable);
-    let creator = attempt!(s, users.find_by_id(translatable.created_by).await);
 
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
     {
+        let creator = attempt!(s, users.find_by_id(translatable.created_by).await);
         return okay(
             render_embed(
                 EmbedTarget::Discord,
@@ -266,41 +254,6 @@ async fn view_translatable(
         );
     }
 
-    // Fetch the 3 most recent translations for this translatable
-    let translations_list = attempt!(
-        s,
-        translations
-            .list_by_translatable(
-                translatable.id,
-                PaginatedRequest {
-                    limit: 3,
-                    offset: 0
-                }
-            )
-            .await
-    );
-
-    println!("Found translations: {:?}", translations_list);
-
-    // For each translation, fetch the language and contributor
-    let mut translations_with_info = Vec::new();
-    for translation in translations_list.items {
-        let translation = attempt!(s, translations.materialize(translation, s.user()).await);
-
-        translations_with_info.push(translation);
-    }
-
-    // Check if the user has liked this translatable
-    let is_liked = if let Some(user) = s.user() {
-        translatables
-            .is_liked(&translatable.id, &user.id)
-            .await
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
-    // Check if the user can edit this translatable (only creator can edit)
     let can_edit_translatable = s.user().is_some_and(|u| u.id == translatable.created_by);
 
     let json_ld = attempt!(
@@ -315,12 +268,35 @@ async fn view_translatable(
         None
     };
 
+    let translatable_with_meta = attempt!(
+        s,
+        translatables.materialize(translatable, s.user()).await
+    );
+
+    // Fetch the 3 most recent translations for this translatable
+    let translations_list = attempt!(
+        s,
+        translations
+            .list_by_translatable(
+                translatable_with_meta.translatable.id,
+                PaginatedRequest {
+                    limit: 3,
+                    offset: 0
+                }
+            )
+            .await
+    );
+
+    let mut translations_with_info = Vec::new();
+    for translation in translations_list.items {
+        let translation = attempt!(s, translations.materialize(translation, s.user()).await);
+        translations_with_info.push(translation);
+    }
+
     let template = ViewTranslatableTemplate {
         current_user: s.user().cloned(),
-        translatable,
-        creator,
+        translatable_with_meta,
         translations: translations_with_info,
-        is_liked,
         can_edit_translatable,
         json_ld,
         rendered_description,
@@ -361,42 +337,16 @@ async fn edit_translatable_form(
     okay(render_template(template))
 }
 
-#[derive(Deserialize)]
-struct EditTranslatableFormData {
-    title: String,
-    description: Option<String>,
-    english: String,
-}
-
 async fn edit_translatable_submit(
     s: Session,
     translatables: TranslatableRepository,
     Path(slug): Path<String>,
-    Form(form): Form<EditTranslatableFormData>,
+    Form(updates): Form<UpdateTranslatable>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
-    let updates = UpdateTranslatable {
-        slug: None,
-        title: if form.title == translatable.title {
-            None
-        } else {
-            Some(form.title.clone())
-        },
-        english: if form.english == translatable.english {
-            None
-        } else {
-            Some(form.english.clone())
-        },
-        source_name: None,
-        source_url: None,
-        source_content: None,
-        source_language: None,
-        description: form.description.clone(),
-    };
-
-    match translatables.update(&user, translatable.id, updates).await {
+    match translatables.update(&user, translatable.id, updates.clone()).await {
         Ok(result) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
@@ -406,9 +356,9 @@ async fn edit_translatable_submit(
                 current_user: Some(user),
                 translatable: translatable.clone(),
                 error: Some(e),
-                previous_title: form.title.clone(),
-                previous_description: form.description.clone().unwrap_or_default(),
-                previous_english: form.english.clone(),
+                previous_title: updates.title.unwrap_or_default(),
+                previous_description: updates.description.unwrap_or_default(),
+                previous_english: updates.english.unwrap_or_default(),
             };
 
             let body = render_template(template);
@@ -479,7 +429,6 @@ async fn edit_source_submit(
     };
 
     let updates = UpdateTranslatable {
-        slug: None,
         title: None,
         english: None,
         source_name: to_opt(&form.source_name),

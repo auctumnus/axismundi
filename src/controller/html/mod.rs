@@ -8,7 +8,7 @@ use crate::{
         contribution_stats::ContributionStatsRepository,
         language_families::{FamilyWithContributors, LanguageFamilyRepository},
         languages::{Language, LanguageRepository},
-        translatable::{TranslatableRepository, TranslatableSearch, TranslatableWithLiked},
+        translatable::{TranslatableRepository, TranslatableSearch, TranslatableWithMeta},
         user_activities::{UserActivity, UserActivityRepository},
         users::{User, UserRepository},
     },
@@ -183,7 +183,7 @@ struct HomeTemplate {
     languages: Vec<LanguagesWithContributors>,
     families: Vec<FamilyWithContributors>,
     activities: Vec<UserActivity>,
-    translatables: Vec<TranslatableWithLiked>,
+    translatables: Vec<TranslatableWithMeta>,
 }
 
 async fn home(
@@ -244,11 +244,7 @@ async fn home(
     let translatables_with_liked = {
         let mut vec = Vec::with_capacity(translatables_res.len());
         for t in translatables_res {
-            let is_liked = attempt!(s, translatables.is_liked(&user.id, &t.id).await);
-            vec.push(TranslatableWithLiked {
-                translatable: t,
-                is_liked,
-            });
+            vec.push(attempt!(s, translatables.materialize(t, Some(&user)).await));
         }
         vec
     };

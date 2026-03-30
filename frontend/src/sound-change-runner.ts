@@ -546,6 +546,13 @@ const setupAdvancedOptions = (): boolean => {
                 newRules.push(name);
             }
         });
+        // top.getChildren("InterRomanizer").forEach(romanizerNode => {
+        //     const nameNode = romanizerNode.getChild("RuleName");
+        //     if (nameNode) {
+        //         const name = update.state.sliceDoc(nameNode.from, nameNode.to);
+        //         newRules.push(`romanizer-${name}`);
+        //     }
+        // });
         rules = newRules;
         rulesUpdateListeners.forEach(listener => listener(rules));
     }
