@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}delete {{ translatable.title }}? - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete translatable</h1>
+
+<form class="default" method="post" action="/translatable/{{ translatable.slug }}/delete">
+    <section>
+        <p>Are you sure you want to delete the translatable <strong>{{ translatable.title }}</strong>?</p>
+        <p>This action cannot be undone and will delete all associated words, definitions, translations, and other content.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete translatable</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/translatables/{{ translatable.slug }}" class="breadcrumb">{{ translatable.title }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call u::translatable_section(&translatable, true) %}
+{% endblock %}

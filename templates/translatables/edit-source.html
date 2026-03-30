@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}edit source for {{ translatable.title }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>edit source for {{ translatable.title }}</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<p>
+    To remove the source information without deleting the translatable,
+    see the <a href="/translatable/{{ translatable.slug }}/clear-source">clear source</a> page.
+</p>
+
+<form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit-source">
+    <section>
+        <label for="source_name">Original title</label>
+        {% call u::field_error(name="source_name") %}
+        <input type="text" id="source_name" name="source_name" value="{{previous_source_name}}">
+    </section>
+
+    <section>
+        <label for="source_url">Link to source (optional)</label>
+        {% call u::field_error(name="source_url") %}
+        <input type="text" id="source_url" name="source_url" value="{{previous_source_url}}">
+    </section>
+
+    <section>
+        <label for="source_language">Original language</label>
+        {% call u::field_error(name="source_language") %}
+        <input type="text" id="source_language" name="source_language" value="{{previous_source_language}}">
+    </section>
+
+    <section>
+        <label for="source_content">Original text</label>
+        {% call u::field_error(name="source_content") %}
+        <textarea id="source_content" name="source_content">{{previous_source_content}}</textarea>
+    </section>
+
+    <button type="submit">Save changes</button>
+</form>
+
+{% endblock %}
+
+{% block footer %}
+{% call u::translatable_section(&translatable, true) %}
+{% endblock %}

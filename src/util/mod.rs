@@ -48,7 +48,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
-use serde::Serialize;
+use serde::{Deserialize as _, Deserializer, Serialize};
 use uri_encode::encode_uri;
 use uuid::Uuid;
 use validator::ValidationError;
@@ -176,6 +176,21 @@ pub fn validate_password(
     Ok(())
 }
 
+pub fn sanitize_external_url(url: &str) -> Result<String, ValidationError> {
+    let parsed = ammonia::Url::parse(url).map_err(|e| {
+        let message = format!("invalid URL: {e}");
+        ValidationError::new("invalid_url").with_message(message.into())
+    })?;
+
+    let scheme = parsed.scheme();
+
+    if scheme != "http" && scheme != "https" {
+        return Err(ValidationError::new("invalid_url").with_message("URL must start with http:// or https://".into()));
+    }
+
+    Ok(parsed.to_string())
+}
+
 #[derive(Debug)]
 pub struct AppState {
     pub pool: sqlx::PgPool,
@@ -254,4 +269,12 @@ pub fn dfs(
         }
     }
     false
+}
+
+pub fn empty_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(s.filter(|s| !s.trim().is_empty()))
 }

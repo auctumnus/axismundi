@@ -8,7 +8,7 @@ use crate::{
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
         language_families::FamilyWithContributors,
-        translatable::TranslatableWithLiked,
+        translatable::TranslatableWithMeta,
         translations::TranslationWithLanguageAndContributor,
         users::{User, UserRepository},
         words::WordWithMeta,
@@ -55,7 +55,7 @@ pub enum ActivityEntity {
     Word(Box<WordWithMeta>, String),
     Language(LanguagesWithContributors),
     User(User),
-    Translatable(TranslatableWithLiked),
+    Translatable(TranslatableWithMeta),
     Translation(Box<TranslationWithLanguageAndContributor>, String),
     LanguageFamily(FamilyWithContributors),
 }

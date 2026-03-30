@@ -591,6 +591,7 @@ mod tests {
                     source_url: None,
                     source_content: None,
                     source_language: None,
+                    description: None,
                 },
             )
             .await
@@ -604,8 +605,7 @@ mod tests {
                 lang.id,
                 CreateTranslation {
                     translated_text: "Test translation text for quotation".to_string(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     ipa: None,
                     gloss: None,
                     notes: None,
@@ -750,6 +750,7 @@ mod tests {
                     source_url: None,
                     source_content: None,
                     source_language: None,
+                    description: None,
                 },
             )
             .await
@@ -763,8 +764,7 @@ mod tests {
                 lang.id,
                 CreateTranslation {
                     translated_text: "Test translation text for quotation".to_string(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     ipa: None,
                     gloss: None,
                     notes: None,
@@ -925,6 +925,7 @@ mod tests {
                     source_url: None,
                     source_content: None,
                     source_language: None,
+                    description: None,
                 },
             )
             .await
@@ -938,8 +939,7 @@ mod tests {
                 lang.id,
                 CreateTranslation {
                     translated_text: "Test translation text for quotation".to_string(),
-                    translator_name: None,
-                    translator_url: None,
+                    translated_title: None,
                     ipa: None,
                     gloss: None,
                     notes: None,

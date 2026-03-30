@@ -9,6 +9,7 @@ use validator::ValidationError;
 use crate::{config, lexurgy};
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct AppError {
     pub message: String,
     pub status_code: StatusCode,

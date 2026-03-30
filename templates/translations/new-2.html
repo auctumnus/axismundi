@@ -14,6 +14,8 @@
 <script src="/static/language-card.js" defer></script>
 <link rel="stylesheet" href="/static/language-card.css">
 <link rel="stylesheet" href="/static/tooltip.css">
+<script src="/static/like-button.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/translatables/card.css">
 {% endblock %}
 
 {% block title %}new translation - axismundi{% endblock %}
@@ -33,6 +35,8 @@
     </div>
 {% endif %}
 
+{% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
+
 <div class="context-cards">
     <div class="context-card language-context">
         <span class="context-label">for language</span>
@@ -40,23 +44,40 @@
             {% call u::render_language_card(&language_with_contributors) %}
         </ul>
     </div>
-    <div class="context-card translatable-context">
-        <span class="context-label">translatable</span>
-        <div class="context-card-link">
-            <span class="context-title">{{ translatable.title }}</span>
-            <span class="context-text">{{ translatable.english }}</span>
-        </div>
-    </div>
 </div>
 
-<form class="default" method="post" action="/translatable/{{ translatable.slug }}/new-translation">
+<form class="default" method="post" action="/translatable/{{ translatable_with_meta.translatable.slug }}/new-translation-2">
+    <section>
+        <label for="translated_title">Translated title (optional)</label>
+        {% call u::field_error(name="translated_title") %}
+        <input type="text" id="translated_title" name="translated_title" value="{{ previous_translated_title }}">
+    </section>
+
     <section>
         <label for="translated_text">Translated text</label>
         {% call u::field_error(name="translated_text") %}
         <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
     </section>
 
-    <input type="hidden" name="step" value="2">
+    <section>
+        <label for="ipa">IPA transcription</label>
+        {% call u::field_error(name="ipa") %}
+        <textarea id="ipa" name="ipa">{{ previous_ipa }}</textarea>
+    </section>
+
+    <section>
+        <label for="gloss">Gloss</label>
+        {% call u::field_error(name="gloss") %}
+        <textarea id="gloss" name="gloss">{{ previous_gloss }}</textarea>
+        <span class="hint">in leipzig notation</span>
+    </section>
+
+    <section>
+        <label for="notes">Notes</label>
+        {% call u::field_error(name="notes") %}
+        <textarea id="notes" name="notes">{{ previous_notes }}</textarea>
+    </section>
+
     <input type="hidden" name="language_id" value="{{ language.id }}">
 
     <button type="submit">Create translation</button>
@@ -65,6 +86,6 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable, can_edit_translatable) %}
+{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
 {% call u::language_section(&language, can_edit_language) %}
 {% endblock %}

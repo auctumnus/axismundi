@@ -4,14 +4,17 @@
 {% block title %}edit translation - axismundi{% endblock %}
 
 {% block head %}
-    <script>
-        window.language = {
-            name: "{{ language.name }}",
-            code: "{{ language.code }}",
-        }
-    </script>
-    <link rel="stylesheet" href="/static/slate-editor.css">
-    <script src="/static/annotation.js" defer></script>
+<script>
+    window.language = {
+        name: "{{ language.name }}",
+        code: "{{ language.code }}",
+    }
+</script>
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
+<script src="/static/like-button.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/translatables/card.css">
 {% endblock %}
 {% block content %}
 
@@ -36,21 +39,46 @@
         </ul>
     </div>
     <div class="context-card translatable-context">
-        <span class="context-label">translatable</span>
-        <div class="context-card-link">
-            <span class="context-title">{{ translatable.title }}</span>
-            <span class="context-text">{{ translatable.english }}</span>
-        </div>
+        <span class="context-label">for translatable</span>
+        <ul class="standalone-card">
+            <li>
+                {% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
+            </li>
+        </ul>
     </div>
 </div>
 
-<form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit-translation">
+<form class="default" method="post" action="/translatable/{{ translatable_with_meta.translatable.slug }}/edit-translation">
+    <section>
+        <label for="translated_title">Translated title</label>
+        {% call u::field_error(name="translated_title") %}
+        <input type="text" id="translated_title" name="translated_title" value="{{ previous_translated_title }}" placeholder="Title in your language (optional)">
+    </section>
+
     <section>
         <label for="translated_text">Translated text</label>
         {% call u::field_error(name="translated_text") %}
-        <div id="annotation-editor-root">
-        <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
-    </div></section>
+            <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
+    </section>
+
+    <section>
+        <label for="ipa">IPA transcription</label>
+        {% call u::field_error(name="ipa") %}
+        <textarea id="ipa" name="ipa">{{ previous_ipa }}</textarea>
+    </section>
+
+    <section>
+        <label for="gloss">Gloss</label>
+        {% call u::field_error(name="gloss") %}
+        <textarea id="gloss" name="gloss">{{ previous_gloss }}</textarea>
+        <span class="hint">in leipzig notation</span>
+    </section>
+
+    <section>
+        <label for="notes">Notes</label>
+        {% call u::field_error(name="notes") %}
+        <textarea id="notes" name="notes">{{ previous_notes }}</textarea>
+    </section>
 
 
     <input type="hidden" name="language_id" value="{{ language.id }}">
@@ -58,10 +86,28 @@
     <button type="submit">Save changes</button>
 </form>
 
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('notes');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'notes';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
+      window.mountFormEditor('notes', {
+        initialValue: initialValue,
+        inputName: 'notes',
+        formId: 'edit-translation-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
+
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable, can_edit_translatable) %}
+{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
 {% call u::language_section(&language, can_edit_language) %}
-{% call u::translation_section(&translatable, &language, &translation, can_edit_translation) %}
+{% call u::translation_section(&translatable_with_meta.translatable, &language, &translation, can_edit_translation) %}
 {% endblock %}

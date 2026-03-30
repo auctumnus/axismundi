@@ -3,6 +3,12 @@
 
 {% block title %}edit translatable - axismundi{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
 {% block content %}
 <h1>edit translatable</h1>
 
@@ -13,11 +19,22 @@
     </div>
 {% endif %}
 
+<p>
+To edit information about the source text, such as the original title, language, or content,
+go to the <a href="/translatable/{{ translatable.slug }}/edit-source">edit source</a> page.
+</p>
+
 <form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit">
     <section>
         <label for="title">Title</label>
         {% call u::field_error(name="title") %}
         <input type="text" id="title" name="title" required value="{{previous_title}}">
+    </section>
+
+    <section>
+        <label for="description">Description (optional)</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description">{{previous_description}}</textarea>
     </section>
 
     <section>
@@ -28,7 +45,28 @@
 
     <button type="submit">Save changes</button>
 </form>
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'edit-translatable-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
+{% endblock %}
 
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/translatables/{{ translatable.slug }}" class="breadcrumb">{{ translatable.title }}</a>
 {% endblock %}
 
 {% block footer %}

@@ -107,8 +107,8 @@
     </ul>
 </div>
 <ul class="card-list">
-    {% for translatable_with_liked in translatables %}
-        {% call u::translatable_card(&translatable_with_liked) %}
+    {% for translatable_with_meta in translatables %}
+        {% call u::translatable_card(&translatable_with_meta) %}
     {% endfor %}
 </ul>
 

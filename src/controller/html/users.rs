@@ -15,8 +15,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
+    attempt,
     controller::html::{
-        LanguagesWithContributors, TranslatableWithLiked, okay, render_generic_error,
+        LanguagesWithContributors, TranslatableWithMeta, okay, render_generic_error,
         render_template,
     },
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
@@ -654,7 +655,7 @@ struct ProfileTemplate {
     languages: Vec<LanguagesWithContributors>,
     families: Vec<FamilyWithContributors>,
     activities: Vec<crate::model::user_activities::UserActivity>,
-    translatables: Vec<TranslatableWithLiked>,
+    translatables: Vec<TranslatableWithMeta>,
     rendered_description: String,
 }
 
@@ -806,19 +807,11 @@ async fn profile(
 
     let mut translatables_with_liked = Vec::new();
     if let Ok(paginated) = translatables_result {
-        for translatable in &paginated.items {
-            let is_liked = if let Some(ref cu) = current_user {
-                translatables
-                    .is_liked(&translatable.id, &cu.id)
-                    .await
-                    .unwrap_or(false)
-            } else {
-                false
-            };
-            translatables_with_liked.push(TranslatableWithLiked {
-                translatable: translatable.clone(),
-                is_liked,
-            });
+        for translatable in paginated.items {
+            translatables_with_liked.push(attempt!(
+                s,
+                translatables.materialize(translatable, current_user.as_ref()).await
+            ));
         }
     }
     let translatables_list = translatables_with_liked;
