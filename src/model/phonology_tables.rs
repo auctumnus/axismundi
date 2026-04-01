@@ -412,6 +412,8 @@ pub struct SearchPhonologyTable {
     pub created_after: Option<DateTime<Utc>>,
 }
 
+crate::util::text_query!(SearchPhonologyTable);
+
 pub struct PhonologyTableRepository {
     state: AppState,
 }

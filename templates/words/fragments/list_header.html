@@ -1,0 +1,27 @@
+{%- import "util.html" as u -%}
+
+{% if can_edit_language || kind == ListHeaderKind::Preview %}
+<div class="header-with-actions">
+    <h1>{{ title() }}</h1>
+    <ul>
+        {% if can_edit_language %}
+            <li>
+                <a class="with-icon" href="/languages/{{ language.code }}/new-word">
+                    {% call u::icon("plus") %}
+                    <span>new word</span>
+                </a>
+            </li>
+        {% endif %}
+        {% if kind == ListHeaderKind::Preview %}
+            <li>
+                <a class="with-icon" href="/languages/{{ language.code }}/words">
+                    {% call u::icon("list") %}
+                    <span>view all</span>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</div>
+{% else %}
+<h1>{{ title() }}</h1>
+{% endif %}

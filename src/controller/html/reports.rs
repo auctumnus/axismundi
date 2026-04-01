@@ -26,7 +26,7 @@ use crate::{
         words::{Word, WordRepository},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, ensure_verified, extract_session::Session},
+    util::{AppState, BackQuery, ensure_verified, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 
 // Helper struct to group resource repositories for fetching reportable resource data
@@ -130,7 +130,7 @@ pub enum ReportableResourceData {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 struct ReportSearchQuery {
-    text_query: Option<String>,
+    q: Option<String>,
     resource_type: Option<ReportableResource>,
     resource_id: Option<Uuid>,
     username: Option<String>,
@@ -138,14 +138,31 @@ struct ReportSearchQuery {
     priority: Option<ReportPriority>,
 }
 
+impl crate::util::HasTextQuery for ReportSearchQuery {
+    fn text_query(&self) -> Option<&str> {
+        self.q.as_deref()
+    }
+}
+
 #[derive(Template)]
-#[template(path = "reports/search.html")]
-struct SearchReportsTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    previous_query: ReportSearchQuery,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<Report>>,
+#[template(path = "reports/fragments/card.html")]
+struct ReportPreviewCard {
+    report: Report,
+    back_url: String,
+}
+
+#[derive(Template)]
+#[template(path = "reports/fragments/list_header.html")]
+struct ReportSearchHeader;
+
+#[derive(Template)]
+#[template(path = "reports/fragments/query.html")]
+struct ReportSearchQueryTemplate {
+    username: Option<String>,
+    resolution_status: Option<ResolutionStatus>,
+    priority: Option<ReportPriority>,
+    resource_type: Option<ReportableResource>,
+    resource_id: Option<Uuid>,
 }
 
 async fn search_reports(
@@ -154,7 +171,7 @@ async fn search_reports(
     user_tags: UserTagRepository,
     users: UserRepository,
     Query(query): Query<ReportSearchQuery>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = match s.user() {
         Some(u) => u.clone(),
@@ -180,18 +197,20 @@ async fn search_reports(
         );
     }
 
+    let back_url = crate::util::back_url("/admin/reports", &pagination, &query);
+
     // Resolve username to user_id if provided
     let reporter = if let Some(username) = &query.username {
         match users.find_by_username(username).await {
             Ok(user) => Some(user.id),
-            Err(_) => None, // Username not found, will return no results
+            Err(_) => None,
         }
     } else {
         None
     };
 
     let search = ReportSearch {
-        text_query: query.text_query.clone(),
+        text_query: query.q.clone(),
         resource_type: query.resource_type,
         resource_id: query.resource_id,
         reporter,
@@ -199,32 +218,37 @@ async fn search_reports(
         priority: query.priority,
     };
 
-    let results = match reports
+    let results = reports
         .search(&current_user, pagination.clone(), search)
-        .await
-    {
-        Ok(res) => Some(res),
-        Err(e) => {
-            let template = SearchReportsTemplate {
-                current_user: Some(current_user),
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
+        .await;
+
+    let render_item = |report: &Report| ReportPreviewCard {
+        report: report.clone(),
+        back_url: back_url.clone(),
     };
 
-    let template = SearchReportsTemplate {
+    let query_template = ReportSearchQueryTemplate {
+        username: query.username.clone(),
+        resolution_status: query.resolution_status,
+        priority: query.priority,
+        resource_type: query.resource_type,
+        resource_id: query.resource_id,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
         current_user: Some(current_user),
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
+        header: ReportSearchHeader,
+        query_template,
+        query,
         results,
-    };
+        pagination,
+        search_name: "reports",
+        search_action: "/admin/reports",
+        render_item,
+    });
 
-    okay(render_template(template))
+    let status = template.status();
+    (status, render_template(template))
 }
 
 #[derive(Debug, Deserialize)]
@@ -342,10 +366,7 @@ struct ViewReportTemplate {
     back: String,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 async fn view_report(
     s: Session,

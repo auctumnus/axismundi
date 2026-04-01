@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
+use futures::TryFutureExt;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -26,8 +27,8 @@ use crate::{
         language_invites::PermissionLevel,
         users::{User, UserRepository},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{AppState, BackQuery, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -59,91 +60,61 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 }
 
 #[derive(Template)]
-#[template(path = "language_families/search.html")]
-struct SearchLanguageFamiliesTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    previous_query: SearchLanguageFamilies,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<FamilyWithContributors>>,
+#[template(path = "language_families/fragments/card.html")]
+pub struct PreviewCard<'a> {
+    pub family_with_contributors: FamilyWithContributors,
+    pub back_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/fragments/list_header.html")]
+pub struct Header<'a> {
+    pub current_user: Option<&'a User>,
+    pub kind: ListHeaderKind,
 }
 
 async fn search_language_families(
     s: Session,
     language_families: LanguageFamilyRepository,
     Query(query): Query<SearchLanguageFamilies>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
-    let requestor = s.user();
+    let current_user = s.user().cloned();
 
-    let query = SearchLanguageFamilies {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        owner: query.owner.and_then(|o| {
-            let trimmed = o.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        has_language: query.has_language.and_then(|h| {
-            let trimmed = h.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-    };
+    let back_url = crate::util::back_url("/language-families", &pagination, &query);
 
-    let results = match language_families
+    let results = language_families
         .search(query.clone(), pagination.clone())
-        .await
-    {
-        Ok(res) => {
-            let mut materialized_results = vec![];
-            for family in res.items {
-                materialized_results.push(attempt!(
-                    s,
-                    language_families.materialize(family, requestor).await
-                ));
-            }
-            Some(PaginatedResponse {
-                items: materialized_results,
-                total: res.total,
-                offset: res.offset,
-                limit: res.limit,
-                has_more: res.has_more,
-            })
-        }
-        Err(e) => {
-            let template = SearchLanguageFamiliesTemplate {
-                current_user: s.user().cloned(),
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
+        .and_then(|response| {
+            response.try_map_async(|family| language_families.materialize(family, s.user()))
+        })
+        .await;
+
+    let render_item = |family_with_contributors: &FamilyWithContributors| PreviewCard {
+        family_with_contributors: family_with_contributors.clone(),
+        back_url: &back_url,
     };
 
-    let template = SearchLanguageFamiliesTemplate {
-        current_user: s.user().cloned(),
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
+    let header = Header {
+        current_user: current_user.as_ref(),
+        kind: ListHeaderKind::Search,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user: current_user.clone(),
+        header,
+        query_template: query.clone(),
+        query,
         results,
-    };
+        pagination,
+        search_name: "families",
+        search_action: "/language-families",
+        render_item,
+    });
 
-    okay(render_template(template))
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]
@@ -164,10 +135,7 @@ struct ViewLanguageFamilyTemplate {
     back: String,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 #[allow(clippy::too_many_arguments)]
 async fn view_language_family(

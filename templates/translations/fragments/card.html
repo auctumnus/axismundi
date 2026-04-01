@@ -1,0 +1,13 @@
+<li class="translation-card">
+    <div class="translatable-title">
+        <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ language_code }}?back={{ back_url|urlencode }}">
+            {{ translation.translatable_title }}
+        </a>
+    </div>
+    <div class="translated-text">
+        {{ translation.translated_text }}
+    </div>
+    <div class="meta">
+        Created by <a href="/user/{{ creator.username }}">{{ creator.username }}</a>
+    </div>
+</li>

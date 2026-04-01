@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -24,11 +24,13 @@ pub struct ContributionStatsRepository {
     state: AppState,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContributionsSearch {
     pub q: Option<String>,
     pub permission_level: Option<PermissionLevel>,
 }
+
+crate::util::text_query!(ContributionsSearch);
 
 impl ContributionStatsRepository {
     pub fn new(state: AppState) -> Self {

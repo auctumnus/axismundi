@@ -1,0 +1,29 @@
+{%- import "util.html" as u -%}
+
+{% macro render(word_with_meta, back="") %}
+<li class="word-card preview-card">
+    <a href="/languages/{{ word_with_meta.word.language_code.as_ref().unwrap() }}/words/{{ word_with_meta.word.slug }}/{{ word_with_meta.word.lemma }}{% if !back.is_empty() %}?back={{ back | urlencode }}{% endif %}">
+        <span class="left">
+            <span class="word-text title">
+                {{ word_with_meta.word.word }}
+                {% if let Some(abbreviation) = word_with_meta.word.word_class_abbreviation %}
+                    <span class="word-class-abbreviation-container">
+                        (<span class="word-class-abbreviation">{{ abbreviation }}</span>.)
+                    </span>
+                {% endif %}
+            </span>
+            {% if let Some(definition) = &word_with_meta.first_definition %}
+                <span class="word-definition">{{ definition.definition }}</span>
+            {% else %}
+                <span class="word-definition no-definition">no definition</span>
+            {% endif %}
+            <span class="creator">
+                created by {% call u::user_display(&word_with_meta.creator, "small") %} {% call u::relative(&word_with_meta.word.created_at) %}
+            </span>
+        </span>
+        {% call u::like_button(word_with_meta.like_target(), word_with_meta.word.like_count, word_with_meta.is_liked, "Like this word") %}
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(word_with_meta, back_url) %}

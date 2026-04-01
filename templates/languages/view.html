@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/fragments/card.html" as word_card -%}
 
 {% block title %}{{ language.name }} - axismundi{% endblock %}
 {% block embed_title %}{{ language.name }}{% endblock %}
@@ -154,7 +155,7 @@
 </div>
 <ul class="card-list">
     {% for word_with_meta in recent_words %}
-        {% call u::render_word_card(&word_with_meta) %}
+        {% call word_card::render(&word_with_meta) %}
     {% endfor %}
 </ul>
 

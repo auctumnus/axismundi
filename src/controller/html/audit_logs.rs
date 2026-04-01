@@ -20,7 +20,7 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    util::{AppState, BackQuery, extract_session::Session},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -135,10 +135,7 @@ struct ViewAuditLogTemplate {
     back: String,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 async fn view_audit_log(
     s: Session,

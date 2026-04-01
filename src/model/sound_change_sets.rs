@@ -37,11 +37,13 @@ pub struct UpdateSoundChangeSet {
     pub changes: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SearchSoundChangeSets {
     pub q: Option<String>,
     pub author: Option<String>,
 }
+
+crate::util::text_query!(SearchSoundChangeSets);
 
 pub struct SoundChangeSetRepository {
     state: AppState,

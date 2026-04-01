@@ -1,0 +1,27 @@
+{%- import "util.html" as u -%}
+<link rel="stylesheet" href="/static/phonology-table.css">
+<link rel="stylesheet" href="/static/language-card.css">
+<div class="context-cards">
+    <div class="context-card language-context">
+        <span class="context-label">in language</span>
+        <ul class="standalone-card">
+            {% call u::render_language_card(&language) %}
+        </ul>
+    </div>
+</div>
+
+{% if can_edit_language %}
+<div class="header-with-actions">
+    <h1>search phonology tables</h1>
+    <ul>
+        <li>
+            <a class="with-icon" href="/languages/{{ language_code }}/phonology-tables/new">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new phonology table</span>
+            </a>
+        </li>
+    </ul>
+</div>
+{% else %}
+<h1>search phonology tables</h1>
+{% endif %}

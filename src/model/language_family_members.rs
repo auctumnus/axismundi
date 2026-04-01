@@ -228,6 +228,8 @@ pub struct SearchLanguageFamilyMembers {
     pub q: Option<String>, // name, code, description, notes, title
 }
 
+crate::util::text_query!(SearchLanguageFamilyMembers);
+
 pub struct LanguageFamilyMemberRepository {
     state: AppState,
 }

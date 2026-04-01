@@ -1,0 +1,15 @@
+{% if current_user.is_some() %}
+<div class="header-with-actions">
+    <h1>search translatables</h1>
+    <ul>
+        <li>
+            <a class="with-icon" href="/new-translatable">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new translatable</span>
+            </a>
+        </li>
+    </ul>
+</div>
+{% else %}
+<h1>search translatables</h1>
+{% endif %}

@@ -44,6 +44,10 @@ form.default, .modal-inner-container {
     flex-direction: column;
   }
 
+  &.search {
+    margin-bottom: 0;
+  }
+
   section {
     gap: 0.5rem;
 

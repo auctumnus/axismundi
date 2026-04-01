@@ -9,6 +9,8 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use futures::TryFutureExt;
+
 use crate::{
     attempt,
     controller::html::{LanguagesWithContributors, okay, render_template},
@@ -16,7 +18,7 @@ use crate::{
     get_user,
     model::{
         contribution_stats::ContributionStatsRepository,
-        language_families::{FamilyWithContributors, LanguageFamilyRepository},
+        language_families::{FamilyWithContributors, LanguageFamily, LanguageFamilyRepository},
         language_family_members::{
             LanguageFamilyMemberRepository, LanguageFamilyRelationType, MemberWithLanguages,
             SearchLanguageFamilyMembers,
@@ -27,8 +29,8 @@ use crate::{
         languages::{Language, LanguageRepository},
         users::User,
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{AppState, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 
 pub fn create_router() -> Router<AppState> {
@@ -225,16 +227,45 @@ async fn view_member(
 }
 
 #[derive(Template)]
-#[template(path = "language_families/members/search.html")]
-#[allow(dead_code)]
-struct SearchMembersTemplate {
-    current_user: Option<User>,
-    family: FamilyWithContributors,
-    error: Option<AppError>,
-    previous_query: SearchLanguageFamilyMembers,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<MemberWithLanguages>>,
-    previous_search: String,
+#[template(path = "language_families/members/fragments/card.html")]
+struct MemberPreviewCard<'a> {
+    member_with_languages: MemberWithLanguages,
+    back_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/fragments/list_header.html")]
+struct MemberHeader<'a> {
+    can_edit_family: bool,
+    family: &'a LanguageFamily,
+    kind: ListHeaderKind,
+}
+
+impl MemberHeader<'_> {
+    fn title(&self) -> &'static str {
+        match self.kind {
+            ListHeaderKind::Preview => "members",
+            ListHeaderKind::Search => "search members",
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/fragments/query.html")]
+struct MemberSearchOptions {
+    query: SearchLanguageFamilyMembers,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/fragments/breadcrumb.html")]
+struct MemberBreadcrumb<'a> {
+    family: &'a LanguageFamily,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/fragments/footer.html")]
+struct MemberFooter<'a> {
+    family: &'a LanguageFamily,
     can_edit_family: bool,
 }
 
@@ -245,11 +276,12 @@ async fn search_members(
     permissions: LanguageFamilyPermissionRepository,
     Path(code): Path<String>,
     Query(query): Query<SearchLanguageFamilyMembers>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
     let family = attempt!(s, language_families.find_by_code(&code).await);
 
-    let can_edit_family = if let Some(user) = s.user() {
+    let can_edit_family = if let Some(user) = &current_user {
         permissions
             .has_permission(user.id, family.id, PermissionLevel::Editor)
             .await
@@ -258,70 +290,75 @@ async fn search_members(
         false
     };
 
+    let search_action = format!("/language-families/{}/members", code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
+
     let search_query = SearchLanguageFamilyMembers {
         family_code: Some(code.clone()),
         ..query.clone()
     };
 
-    let results = match members.search(search_query, pagination.clone()).await {
-        Ok(res) => {
-            // Materialize all members
-            let mut materialized = Vec::new();
-            for member in res.items {
-                if let Ok(m) = members.materialize(member).await {
-                    materialized.push(m);
-                }
-            }
-            Some(PaginatedResponse {
-                items: materialized,
-                total: res.total,
-                limit: res.limit,
-                offset: res.offset,
-                has_more: res.has_more,
-            })
-        }
-        Err(e) => {
-            let family = attempt!(s, language_families.materialize(family, s.user()).await);
-            let template = SearchMembersTemplate {
-                current_user: s.user().cloned(),
-                family,
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                previous_search: String::new(),
-                can_edit_family,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
-    let family = attempt!(s, language_families.materialize(family, s.user()).await);
+    let results = members
+        .search(search_query, pagination.clone())
+        .and_then(|response| response.try_map_async(|member| members.materialize(member)))
+        .await;
 
-    let template = SearchMembersTemplate {
-        current_user: s.user().cloned(),
-        family,
-        error: None,
-        previous_query: query.clone(),
-        previous_pagination: pagination,
-        results,
-        previous_search: query.q.unwrap_or_default(),
+    let render_item = |member_with_languages: &MemberWithLanguages| MemberPreviewCard {
+        member_with_languages: member_with_languages.clone(),
+        back_url: &back_url,
+    };
+
+    let header = MemberHeader {
+        can_edit_family,
+        family: &family,
+        kind: ListHeaderKind::Search,
+    };
+
+    let query_template = MemberSearchOptions {
+        query: query.clone(),
+    };
+
+    let breadcrumbs = MemberBreadcrumb { family: &family };
+    let footer = MemberFooter {
+        family: &family,
         can_edit_family,
     };
 
-    okay(render_template(template))
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "members",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]
-#[template(path = "languages/relatives.html")]
-#[allow(dead_code)]
-struct SearchRelativesTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
+#[template(path = "languages/fragments/relatives_header.html")]
+struct RelativesHeader {
     language: LanguagesWithContributors,
-    previous_query: SearchLanguageFamilyMembers,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<MemberWithLanguages>>,
-    previous_search: String,
+}
+
+#[derive(Template)]
+#[template(path = "languages/fragments/relatives_breadcrumb.html")]
+struct RelativesBreadcrumb {
+    language: LanguagesWithContributors,
+}
+
+#[derive(Template)]
+#[template(path = "languages/fragments/relatives_query.html")]
+struct RelativesSearchOptions {
+    query: SearchLanguageFamilyMembers,
 }
 
 async fn search_relatives(
@@ -330,57 +367,56 @@ async fn search_relatives(
     members: LanguageFamilyMemberRepository,
     Path(code): Path<String>,
     Query(query): Query<SearchLanguageFamilyMembers>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&code).await);
     let language = attempt!(s, languages.materialize(language, s.user()).await);
+
+    let search_action = format!("/languages/{}/relatives", code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
 
     let search_query = SearchLanguageFamilyMembers {
         language_code: Some(code.clone()),
         ..query.clone()
     };
 
-    let results = match members.search(search_query, pagination.clone()).await {
-        Ok(res) => {
-            // Materialize all members
-            let mut materialized = Vec::new();
-            for member in res.items {
-                if let Ok(m) = members.materialize(member).await {
-                    materialized.push(m);
-                }
-            }
-            Some(PaginatedResponse {
-                items: materialized,
-                total: res.total,
-                limit: res.limit,
-                offset: res.offset,
-                has_more: res.has_more,
-            })
-        }
-        Err(e) => {
-            let template = SearchRelativesTemplate {
-                current_user: s.user().cloned(),
-                error: Some(e),
-                language,
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                previous_search: String::new(),
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
-    let template = SearchRelativesTemplate {
-        current_user: s.user().cloned(),
-        error: None,
-        language,
-        previous_query: query.clone(),
-        previous_pagination: pagination,
-        results,
-        previous_search: query.q.unwrap_or_default(),
+    let results = members
+        .search(search_query, pagination.clone())
+        .and_then(|response| response.try_map_async(|member| members.materialize(member)))
+        .await;
+
+    let render_item = |member_with_languages: &MemberWithLanguages| MemberPreviewCard {
+        member_with_languages: member_with_languages.clone(),
+        back_url: &back_url,
     };
 
-    okay(render_template(template))
+    let header = RelativesHeader {
+        language: language.clone(),
+    };
+
+    let query_template = RelativesSearchOptions {
+        query: query.clone(),
+    };
+
+    let breadcrumbs = RelativesBreadcrumb { language };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "relatives",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs);
+
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]

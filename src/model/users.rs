@@ -9,15 +9,11 @@ use uuid::Uuid;
 use validator::{Validate, ValidateArgs, ValidationErrors};
 
 use crate::{
-    config::CONFIG,
-    err::{AppResult, bad_request, internal_error, not_found},
-    model::{
+    config::CONFIG, embed::{GenericEmbed, truncate_description}, err::{AppResult, bad_request, internal_error, not_found}, model::{
         email_verification_tokens::EmailVerificationToken,
         languages::Language,
         password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository},
-    },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password},
+    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password}
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -155,13 +151,15 @@ pub struct UpdateUser {
     pub new_password: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct UserSearch {
-    pub text_query: Option<String>,
+    pub q: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
     pub verified: Option<bool>,
 }
+
+crate::util::text_query!(UserSearch);
 
 #[derive(Clone)]
 pub struct UserRepository {
@@ -630,7 +628,7 @@ impl UserRepository {
             search.verified,
             search.created_before,
             search.created_after,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset)
         )
@@ -928,6 +926,22 @@ impl UserRepository {
         }
 
         base
+    }
+
+    pub fn as_embed(user: &User) -> GenericEmbed {
+        let title = if user.display_name.is_empty() {
+            format!("@{}", user.username)
+        } else {
+            format!("{} (@{})", user.display_name, user.username)
+        };
+        GenericEmbed {
+            url: format!("{}/users/{}", &crate::CONFIG.public_url_base, user.username),
+            title,
+            description: truncate_description(&user.description),
+            author: None,
+            image: user.get_profile_picture_url(),
+            color: if user.gender.is_empty() { None } else { Some(format!("#{}", user.gender)) },
+        }
     }
 }
 

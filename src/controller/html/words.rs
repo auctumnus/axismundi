@@ -6,11 +6,12 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
+use futures::TryFutureExt;
 use serde::Deserialize;
 
 use crate::{
     attempt,
-    controller::html::{okay, render_generic_error, render_template},
+    controller::html::{self, okay, render_generic_error, render_template},
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::{AppError, bad_request, not_found},
     get_user,
@@ -23,29 +24,31 @@ use crate::{
         users::User,
         word_classes::{WordClass, WordClassRepository},
         word_relations::{
-            CreateWordRelation, RelationDirection, SearchWordRelations, WordRelationRepository,
+            CreateWordRelation, SearchWordRelations, WordRelationRepository,
             WordRelationSearchResult, WordRelationType,
         },
         words::{CreateWord, Word, WordRepository, WordSearch, WordWithMeta},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{AppState, BackQuery, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 use uuid::Uuid;
 
 #[derive(Template)]
-#[template(path = "words/search.html")]
-#[allow(dead_code)]
-struct WordSearchTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    language: Language,
-    previous_query: WordSearch,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<WordWithMeta>>,
-    word_classes: Vec<WordClass>,
-    user_has_permission: bool,
-    back_url: String,
+#[template(path = "words/fragments/list_header.html")]
+struct Header<'a> {
+    can_edit_language: bool,
+    language: &'a Language,
+    kind: ListHeaderKind,
+}
+
+impl Header<'_> {
+    fn title(&self) -> &'static str {
+        match self.kind {
+            ListHeaderKind::Preview => "words",
+            ListHeaderKind::Search => "search words",
+        }
+    }
 }
 
 #[derive(Template)]
@@ -124,10 +127,7 @@ struct EditWordTemplate {
     will_create_audit_log: bool,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 #[derive(Deserialize)]
 struct NewWordFormData {
@@ -155,6 +155,20 @@ struct EditWordFormData {
     notes: Option<String>,
 }
 
+#[derive(Template)]
+#[template(path = "words/fragments/query.html")]
+struct WordSearchOptions {
+    query: WordSearch,
+    word_classes: Vec<WordClass>,
+}
+
+#[derive(Template)]
+#[template(path = "words/fragments/card.html")]
+struct PreviewCard<'a> {
+    word_with_meta: WordWithMeta,
+    back_url: &'a str,
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn word_search(
     s: Session,
@@ -169,14 +183,15 @@ async fn word_search(
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let search_action = format!("/languages/{}/words", language.code);
 
     let back_url = crate::util::back_url(
-        &format!("/languages/{}/words", language.code),
+        &search_action,
         &pagination,
         &query,
     );
 
-    let user_has_permission = if let Some(user) = &current_user {
+    let can_edit_language = if let Some(user) = &current_user {
         let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
             .await
             .unwrap_or(false);
@@ -190,78 +205,51 @@ async fn word_search(
         false
     };
 
-    let query = WordSearch {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        word_class: query.word_class.and_then(|wc| {
-            let trimmed = wc.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
-    };
-
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
-
-    let results = match words
-        .search(&language.id, pagination.clone(), query.clone())
-        .await
-    {
-        Ok(res) => res,
-        Err(e) => {
-            let template = WordSearchTemplate {
-                current_user,
-                error: Some(e),
-                language,
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                word_classes: word_classes_list,
-                user_has_permission,
-                back_url,
-            };
-            let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body);
-        }
-    };
-
-    let mut results_with_meta = vec![];
-    for word in results.items {
-        let word = attempt!(s, words.materialize(word, s.user()).await);
-        results_with_meta.push(word);
-    }
-
-    let results_with_meta = Some(PaginatedResponse {
-        items: results_with_meta,
-        total: results.total,
-        limit: results.limit,
-        offset: results.offset,
-        has_more: results.has_more,
-    });
-
-    let template = WordSearchTemplate {
-        current_user,
-        error: None,
-        language,
-        previous_query: query,
-        previous_pagination: pagination,
-        results: results_with_meta,
+    let query_template = WordSearchOptions {
+        query: query.clone(),
         word_classes: word_classes_list,
-        user_has_permission,
-        back_url,
     };
 
-    let body = render_template(template);
-    okay(body)
+    let breadcrumbs = html::languages::Breadcrumb { language: &language };
+
+    let results = words
+        .search(&language.id, pagination.clone(), query.clone())
+        .and_then(|results| results.try_map_async(|word| words.materialize(word, s.user())))
+        .await;
+
+    let render_item = |word_with_meta: &WordWithMeta|
+        PreviewCard {
+            word_with_meta: word_with_meta.clone(),
+            back_url: &back_url,
+        };
+    
+    let header = Header {
+        can_edit_language,
+        language: &language,
+        kind: ListHeaderKind::Search,
+    };
+
+    let footer = html::languages::Footer {
+        can_edit_language,
+        language: &language,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "words",
+        search_action,
+        render_item,
+    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1273,24 +1261,38 @@ struct AddRelationForm {
 }
 
 #[derive(Template)]
-#[template(path = "words/relations.html")]
-#[allow(dead_code)]
-struct WordRelationsTemplate {
-    current_user: Option<User>,
-    language: Language,
-    word: Word,
-    results: Option<PaginatedResponse<WordRelationSearchResult>>,
-    previous_query: SearchWordRelations,
-    previous_pagination: PaginatedRequest,
-    error: Option<AppError>,
+#[template(path = "words/relations/fragments/list_header.html")]
+struct RelationsHeader<'a> {
+    user_has_permission: bool,
+    language: &'a Language,
+    word: &'a Word,
+}
+
+#[derive(Template)]
+#[template(path = "words/relations/fragments/query.html")]
+struct RelationsQueryTemplate {
+    query: SearchWordRelations,
+}
+
+#[derive(Template)]
+#[template(path = "words/relations/fragments/card.html")]
+struct RelationCard<'a> {
+    relation: WordRelationSearchResult,
+    back_url: &'a str,
+    current_word_language_code: &'a str,
+    current_word_slug: &'a str,
+    current_word_lemma: i32,
     user_has_permission: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct RelationsFilterQuery {
-    kind: Option<String>,
-    direction: Option<String>,
+#[derive(Template)]
+#[template(path = "words/relations/fragments/breadcrumb.html")]
+struct RelationsBreadcrumb<'a> {
+    language: &'a Language,
+    word: &'a Word,
 }
+
+
 #[allow(clippy::too_many_arguments)]
 async fn view_word_relations(
     s: Session,
@@ -1300,7 +1302,7 @@ async fn view_word_relations(
     word_relations: WordRelationRepository,
     language_permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
-    Query(filter): Query<RelationsFilterQuery>,
+    Query(query): Query<SearchWordRelations>,
     Query(pagination): Query<PaginatedRequest>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
@@ -1326,64 +1328,62 @@ async fn view_word_relations(
         false
     };
 
-    // Parse filter parameters
-    let kind: Option<WordRelationType> = filter.kind.as_ref().and_then(|k| {
-        if k.is_empty() {
-            None
-        } else {
-            serde_json::from_value(serde_json::Value::String(k.clone())).ok()
-        }
-    });
+    let search_action = format!(
+        "/languages/{}/words/{}/{}/relations",
+        language.code, word.slug, word.lemma
+    );
 
-    let direction: Option<RelationDirection> = filter.direction.as_ref().and_then(|d| {
-        if d.is_empty() {
-            None
-        } else {
-            use std::str::FromStr;
-            RelationDirection::from_str(d).ok()
-        }
-    });
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
 
-    let search = SearchWordRelations {
-        q: None,
-        kind,
-        direction,
+    let header = RelationsHeader {
+        user_has_permission,
+        language: &language,
+        word: &word,
     };
 
-    let results = match word_relations
-        .search(pagination.clone(), search.clone(), &word)
-        .await
-    {
-        Ok(res) => Some(res),
-        Err(e) => {
-            let template = WordRelationsTemplate {
-                current_user,
-                language,
-                word,
-                results: None,
-                previous_query: search,
-                previous_pagination: pagination,
-                error: Some(e),
-                user_has_permission,
-            };
-            let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body);
-        }
+    let query_template = RelationsQueryTemplate {
+        query: query.clone(),
     };
 
-    let template = WordRelationsTemplate {
-        current_user,
-        language,
-        word,
-        results,
-        previous_query: search,
-        previous_pagination: pagination,
-        error: None,
+    let breadcrumbs = RelationsBreadcrumb {
+        language: &language,
+        word: &word,
+    };
+
+    let footer = html::languages::Footer {
+        language: &language,
+        can_edit_language: user_has_permission,
+    };
+
+    let results = word_relations
+        .search(pagination.clone(), query.clone(), &word)
+        .await;
+
+    let render_item = |relation: &WordRelationSearchResult| RelationCard {
+        relation: relation.clone(),
+        back_url: &back_url,
+        current_word_language_code: &language.code,
+        current_word_slug: &word.slug,
+        current_word_lemma: word.lemma,
         user_has_permission,
     };
 
-    let body = render_template(template);
-    okay(body)
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "relations",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
 }
 
 #[derive(Template)]

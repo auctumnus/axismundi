@@ -827,6 +827,8 @@ pub struct TranslationSearch {
     pub created_after: Option<DateTime<Utc>>,
 }
 
+crate::util::text_query!(TranslationSearch);
+
 impl TranslationRepository {
     fn build_search_queries(search: &TranslationSearch) -> (String, String, usize) {
         let mut param_count = 1;

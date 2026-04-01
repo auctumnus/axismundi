@@ -575,7 +575,7 @@ impl LanguageRepository {
             search.owned_by,
             search.created_before,
             search.created_after,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset),
             search.in_family,
@@ -680,7 +680,7 @@ impl LanguageRepository {
             search.verified,
             search.created_before,
             search.created_after,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset)
         )
@@ -883,7 +883,7 @@ impl LanguageRepository {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LanguageSearch {
-    pub text_query: Option<String>,
+    pub q: Option<String>,
     pub owned_by: Option<String>,
     #[allow(dead_code)]
     pub edited_by: Option<Vec<String>>,
@@ -891,6 +891,8 @@ pub struct LanguageSearch {
     pub created_after: Option<DateTime<Utc>>,
     pub in_family: Option<String>,
 }
+
+crate::util::text_query!(LanguageSearch);
 
 crate::util::repo_from_parts!(LanguageRepository);
 

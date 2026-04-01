@@ -16,7 +16,7 @@ use crate::{
     util::{AppState, ensure_verified, repo_from_parts},
 };
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "word_relation_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum WordRelationType {
@@ -191,7 +191,7 @@ pub struct CreateWordRelation {
     pub kind: WordRelationType,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, strum::Display, strum::EnumString)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, strum::Display, strum::EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum RelationDirection {
     Antecedent,
@@ -213,6 +213,8 @@ pub struct SearchWordRelations {
     pub kind: Option<WordRelationType>,
     pub direction: Option<RelationDirection>,
 }
+
+crate::util::text_query!(SearchWordRelations);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WordRelationSearchResult {

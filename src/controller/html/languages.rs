@@ -9,6 +9,8 @@ use axum_extra::{TypedHeader, headers::UserAgent};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
+use chrono::{DateTime, Utc};
+
 use crate::{
     attempt,
     controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
@@ -20,8 +22,8 @@ use crate::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
         }, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, phonology_tables::{PhonologyTableRepository, SearchPhonologyTable, TableRenderOptions}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{WordRepository, WordSearch, WordWithMeta}
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{AppState, BackQuery, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -41,13 +43,37 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 }
 
 #[derive(Template)]
-#[template(path = "languages/search.html")]
-struct SearchLanguagesTemplate {
+#[template(path = "languages/fragments/breadcrumb.html")]
+pub struct Breadcrumb<'a> {
+    pub language: &'a Language,
+}
+
+#[derive(Template)]
+#[template(path = "languages/fragments/footer.html")]
+pub struct Footer<'a> {
+    pub language: &'a Language,
+    pub can_edit_language: bool,
+}
+
+#[derive(Template)]
+#[template(path = "languages/fragments/card.html")]
+struct LanguagePreviewCard {
+    language_with_contributors: LanguagesWithContributors,
+    back_url: String,
+}
+
+#[derive(Template)]
+#[template(path = "languages/fragments/list_header.html")]
+struct LanguageSearchHeader {
     current_user: Option<User>,
-    error: Option<AppError>,
-    previous_query: LanguageSearch,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<LanguagesWithContributors>>,
+}
+
+#[derive(Template)]
+#[template(path = "languages/fragments/query.html")]
+struct LanguageSearchQuery {
+    owned_by: Option<String>,
+    created_after: Option<DateTime<Utc>>,
+    created_before: Option<DateTime<Utc>>,
 }
 
 async fn search_languages(
@@ -55,86 +81,74 @@ async fn search_languages(
     languages: LanguageRepository,
     contribution_stats: ContributionStatsRepository,
     Query(query): Query<LanguageSearch>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
 
-    let query = LanguageSearch {
-        text_query: query.text_query.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        owned_by: query.owned_by.and_then(|o| {
-            let trimmed = o.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
-    };
+    let back_url = crate::util::back_url("/languages", &pagination, &query);
 
     let results = match languages.search(pagination.clone(), query.clone()).await {
-        Ok(res) => res,
-        Err(e) => {
-            let template = SearchLanguagesTemplate {
-                current_user,
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-            };
-            let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body);
-        }
+        Ok(response) => {
+            let mut items = Vec::with_capacity(response.items.len());
+            for language in response.items {
+                let top_contributors = attempt!(
+                    s,
+                    contribution_stats.get_top_contributors(&language.id, 5).await
+                );
+                let is_liked = if let Some(user) = &current_user {
+                    languages
+                        .is_liked(&language.id, &user.id)
+                        .await
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+                items.push(LanguagesWithContributors {
+                    language,
+                    top_contributors,
+                    is_liked,
+                });
+            }
+            Ok(crate::pagination::PaginatedResponse {
+                items,
+                total: response.total,
+                limit: response.limit,
+                offset: response.offset,
+                has_more: response.has_more,
+            })
+        },
+        Err(e) => Err(e),
     };
 
-    let mut results_with_meta = vec![];
-    for language in results.items {
-        let top_contributors = attempt!(
-            s,
-            contribution_stats
-                .get_top_contributors(&language.id, 5)
-                .await
-        );
-        let is_liked = if let Some(user) = &current_user {
-            languages
-                .is_liked(&language.id, &user.id)
-                .await
-                .unwrap_or(false)
-        } else {
-            false
-        };
-        results_with_meta.push(LanguagesWithContributors {
-            language,
-            top_contributors,
-            is_liked,
-        });
-    }
+    let render_item = |item: &LanguagesWithContributors| LanguagePreviewCard {
+        language_with_contributors: item.clone(),
+        back_url: back_url.clone(),
+    };
 
-    let results_with_meta = Some(PaginatedResponse {
-        items: results_with_meta,
-        total: results.total,
-        limit: results.limit,
-        offset: results.offset,
-        has_more: results.has_more,
+    let header = LanguageSearchHeader {
+        current_user: current_user.clone(),
+    };
+
+    let query_template = LanguageSearchQuery {
+        owned_by: query.owned_by.clone(),
+        created_after: query.created_after,
+        created_before: query.created_before,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "languages",
+        search_action: "/languages",
+        render_item,
     });
 
-    let template = SearchLanguagesTemplate {
-        current_user,
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
-        results: results_with_meta,
-    };
-
-    let body = render_template(template);
-    okay(body)
+    let status = template.status();
+    (status, render_template(template))
 }
 
 #[derive(Template)]
@@ -235,10 +249,7 @@ struct ViewLanguageTemplate {
     back: String,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 #[allow(clippy::too_many_arguments)]
 async fn view_language(

@@ -1,0 +1,12 @@
+{%- import "util.html" as u -%}
+
+<h1>search relatives of {{ language.language.name }}</h1>
+
+<div class="context-cards">
+    <div class="context-card language-context">
+        <span class="context-label">language</span>
+        <ul class="standalone-card">
+            {% call u::render_language_card(&language) %}
+        </ul>
+    </div>
+</div>

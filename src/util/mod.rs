@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     err::{AppError, AppResult, internal_error},
@@ -11,8 +11,10 @@ use argon2::{
 };
 pub mod extract_session;
 pub mod graph_svg;
+pub mod search_template;
 mod images;
 pub mod s3;
+use askama::Template;
 use axum::extract::Query;
 use base64::Engine;
 
@@ -49,7 +51,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
-use serde::{Deserialize as _, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uri_encode::encode_uri;
 use uuid::Uuid;
 use validator::ValidationError;
@@ -289,33 +291,64 @@ pub fn dfs(
     false
 }
 
-pub struct SearchTemplate<T, Q> {
-    pub current_user: Option<User>,
-    pub error: Option<AppError>,
-    pub search_action: String,
-    pub pagination: PaginationTemplate,
-
-    pub results: PaginatedResponse<T>,
-    pub previous_query: Q,
+pub fn trimmed_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(s.trim().to_string())
 }
 
-impl<T, Q: Serialize> SearchTemplate<T, Q> {
-    pub fn new(
-        current_user: Option<User>,
-        error: Option<AppError>,
-        search_action: String,
-        pagination: PaginatedRequest,
-        results: PaginatedResponse<T>,
-        previous_query: Q,
-    ) -> Self {
-        let pagination = PaginationTemplate::from_paginated_response(&search_action, &results, &pagination, &previous_query);
-        Self {
-            current_user,
-            error,
-            search_action,
-            pagination,
-            results,
-            previous_query,
-        }
+pub fn trimmed_string_opt<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Deserialize::deserialize(deserializer)?;
+    Ok(s.and_then(|s| {
+        let s = s.trim().to_string();
+        if s.is_empty() { None } else { Some(s) }
+    }))
+}
+
+pub trait HasTextQuery {
+    fn text_query(&self) -> Option<&str>;
+}
+
+mod tq {
+    macro_rules! text_query {
+        ($struct:ident) => {
+            impl crate::util::HasTextQuery for $struct {
+                fn text_query(&self) -> Option<&str> {
+                    self.q.as_deref()
+                }
+            }
+        };
+    }
+
+    pub(crate) use text_query;
+}
+
+pub(crate) use tq::text_query;
+
+#[derive(Template)]
+#[template(source = "", ext = "html")]
+pub struct EmptyTemplate;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListHeaderKind {
+    Preview,
+    Search,
+}
+
+#[derive(Deserialize)]
+pub struct BackQuery {
+    pub back: Option<String>,
+}
+
+pub fn is_discord(user_agent: Option<axum_extra::TypedHeader<axum_extra::headers::UserAgent>>) -> bool {
+    if let Some(ua) = user_agent {
+        ua.as_str().to_lowercase().contains("discordbot")
+    } else {
+        false
     }
 }

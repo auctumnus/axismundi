@@ -1,0 +1,9 @@
+<section>
+    <label for="owner">Owner username</label>
+    <input type="text" id="owner" name="owner" value="{{ owner.as_ref().unwrap_or(&"".to_string()) }}">
+</section>
+
+<section>
+    <label for="has_language">Contains language</label>
+    <input type="text" id="has_language" name="has_language" value="{{ has_language.as_ref().unwrap_or(&"".to_string()) }}">
+</section>

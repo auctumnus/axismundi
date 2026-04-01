@@ -1,0 +1,46 @@
+<section>
+    <label for="username">Reporter username</label>
+    <input type="text" id="username" name="username" value="{{ username.as_ref().unwrap_or(&"".to_string()) }}">
+</section>
+
+<section>
+    <label for="resolution_status">Status</label>
+    <select id="resolution_status" name="resolution_status">
+        <option value="">All statuses</option>
+        <option value="pending" {% if resolution_status == Some(crate::model::reports::ResolutionStatus::Pending) %}selected{% endif %}>Pending</option>
+        <option value="in_progress" {% if resolution_status == Some(crate::model::reports::ResolutionStatus::InProgress) %}selected{% endif %}>In Progress</option>
+        <option value="dismissed" {% if resolution_status == Some(crate::model::reports::ResolutionStatus::Dismissed) %}selected{% endif %}>Dismissed</option>
+        <option value="action_taken" {% if resolution_status == Some(crate::model::reports::ResolutionStatus::ActionTaken) %}selected{% endif %}>Action Taken</option>
+    </select>
+</section>
+
+<section>
+    <label for="priority">Priority</label>
+    <select id="priority" name="priority">
+        <option value="">All priorities</option>
+        <option value="low" {% if priority == Some(crate::model::reports::ReportPriority::Low) %}selected{% endif %}>Low</option>
+        <option value="medium" {% if priority == Some(crate::model::reports::ReportPriority::Medium) %}selected{% endif %}>Medium</option>
+        <option value="high" {% if priority == Some(crate::model::reports::ReportPriority::High) %}selected{% endif %}>High</option>
+        <option value="urgent" {% if priority == Some(crate::model::reports::ReportPriority::Urgent) %}selected{% endif %}>Urgent</option>
+    </select>
+</section>
+
+<section>
+    <label for="resource_type">Resource type</label>
+    <select id="resource_type" name="resource_type">
+        <option value="">All resources</option>
+        <option value="user" {% if resource_type == Some(crate::model::reports::ReportableResource::User) %}selected{% endif %}>User</option>
+        <option value="language" {% if resource_type == Some(crate::model::reports::ReportableResource::Language) %}selected{% endif %}>Language</option>
+        <option value="word" {% if resource_type == Some(crate::model::reports::ReportableResource::Word) %}selected{% endif %}>Word</option>
+        <option value="translation" {% if resource_type == Some(crate::model::reports::ReportableResource::Translation) %}selected{% endif %}>Translation</option>
+        <option value="translatable" {% if resource_type == Some(crate::model::reports::ReportableResource::Translatable) %}selected{% endif %}>Translatable</option>
+        <option value="word_relation" {% if resource_type == Some(crate::model::reports::ReportableResource::WordRelation) %}selected{% endif %}>Word Relation</option>
+        <option value="invite" {% if resource_type == Some(crate::model::reports::ReportableResource::Invite) %}selected{% endif %}>Invite</option>
+        <option value="permission" {% if resource_type == Some(crate::model::reports::ReportableResource::Permission) %}selected{% endif %}>Permission</option>
+    </select>
+</section>
+
+<section>
+    <label for="resource_id">Resource ID</label>
+    <input type="text" id="resource_id" name="resource_id" value="{% if let Some(id) = resource_id %}{{ id }}{% endif %}">
+</section>

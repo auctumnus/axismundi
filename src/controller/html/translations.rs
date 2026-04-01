@@ -28,8 +28,8 @@ use crate::{
         },
         users::{User, UserRepository},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{AppState, BackQuery, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 use axum::extract::State;
 
@@ -72,17 +72,18 @@ struct TranslationWithMeta {
 }
 
 #[derive(Template)]
-#[template(path = "translations/search.html")]
-#[allow(dead_code)]
-struct TranslationSearchTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    language: Language,
-    previous_query: TranslationSearch,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<TranslationWithMeta>>,
-    user_has_permission: bool,
+#[template(path = "translations/fragments/card.html")]
+struct TranslationPreviewCard {
+    translation: Translation,
+    creator: User,
+    language_code: String,
     back_url: String,
+}
+
+#[derive(Template)]
+#[template(path = "translations/fragments/list_header.html")]
+struct TranslationSearchHeader {
+    user_has_permission: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -94,16 +95,13 @@ async fn translation_search(
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
     Query(query): Query<TranslationSearch>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
-    let back_url = crate::util::back_url(
-        &format!("/languages/{}/translations", language.code),
-        &pagination,
-        &query,
-    );
+    let search_action = format!("/languages/{}/translations", language.code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -114,69 +112,65 @@ async fn translation_search(
         false
     };
 
-    let query = TranslationSearch {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
-    };
-
     let results = match translations
         .search(&language.id, pagination.clone(), query.clone())
         .await
     {
-        Ok(res) => res,
-        Err(e) => {
-            let template = TranslationSearchTemplate {
-                current_user,
-                error: Some(e),
-                language,
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                user_has_permission,
-                back_url,
-            };
-            let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body);
-        }
+        Ok(response) => {
+            let mut items = Vec::with_capacity(response.items.len());
+            for translation in response.items {
+                let creator = attempt!(s, users.find_by_id(translation.created_by).await);
+                items.push(TranslationWithMeta {
+                    translation,
+                    creator,
+                });
+            }
+            Ok(crate::pagination::PaginatedResponse {
+                items,
+                total: response.total,
+                limit: response.limit,
+                offset: response.offset,
+                has_more: response.has_more,
+            })
+        },
+        Err(e) => Err(e),
     };
 
-    let mut results_with_meta = vec![];
-    for translation in results.items {
-        let creator = attempt!(s, users.find_by_id(translation.created_by).await);
-        results_with_meta.push(TranslationWithMeta {
-            translation,
-            creator,
-        });
-    }
+    let lang_code = language.code.clone();
+    let render_item = move |item: &TranslationWithMeta| TranslationPreviewCard {
+        translation: item.translation.clone(),
+        creator: item.creator.clone(),
+        language_code: lang_code.clone(),
+        back_url: back_url.clone(),
+    };
 
-    let results_with_meta = Some(PaginatedResponse {
-        items: results_with_meta,
-        total: results.total,
-        limit: results.limit,
-        offset: results.offset,
-        has_more: results.has_more,
-    });
-
-    let template = TranslationSearchTemplate {
-        current_user,
-        error: None,
-        language,
-        previous_query: query,
-        previous_pagination: pagination,
-        results: results_with_meta,
+    let header = TranslationSearchHeader {
         user_has_permission,
-        back_url,
     };
 
-    let body = render_template(template);
-    okay(body)
+    let breadcrumbs = crate::controller::html::languages::Breadcrumb {
+        language: &language,
+    };
+
+    let footer = crate::controller::html::languages::Footer {
+        language: &language,
+        can_edit_language: user_has_permission,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template: crate::util::EmptyTemplate,
+        query,
+        results,
+        pagination,
+        search_name: "translations",
+        search_action,
+        render_item,
+    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
 }
 
 // Step 1: Select language
@@ -480,10 +474,7 @@ struct ViewTranslationTemplate {
     back_text: String,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 async fn view_translation(
     s: Session,

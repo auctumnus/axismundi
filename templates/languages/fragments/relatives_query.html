@@ -1,0 +1,4 @@
+<section>
+    <label for="family_code">Family code</label>
+    <input type="text" id="family_code" name="family_code" value="{{ query.family_code.as_ref().map(String::as_str).unwrap_or("") }}">
+</section>

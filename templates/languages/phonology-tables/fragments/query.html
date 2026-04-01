@@ -1,0 +1,9 @@
+<section>
+    <label for="created_after">Created after</label>
+    <input type="date" id="created_after" name="created_after" value="{% if let Some(date) = created_after %}{{ date.format("%Y-%m-%d").to_string() }}{% endif %}">
+</section>
+
+<section>
+    <label for="created_before">Created before</label>
+    <input type="date" id="created_before" name="created_before" value="{% if let Some(date) = created_before %}{{ date.format("%Y-%m-%d").to_string() }}{% endif %}">
+</section>

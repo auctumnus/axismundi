@@ -1,0 +1,28 @@
+<section>
+    <label for="kind">Relation type</label>
+    <div class="select-container">
+        <select id="kind" name="kind">
+            <option value="">any</option>
+            <option value="derived" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Derived) %}selected{% endif %}>derived</option>
+            <option value="descendant" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Descendant) %}selected{% endif %}>descendant</option>
+            <option value="compound" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Compound) %}selected{% endif %}>compound</option>
+            <option value="calque" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Calque) %}selected{% endif %}>calque</option>
+            <option value="borrowed" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Borrowed) %}selected{% endif %}>borrowed</option>
+            <option value="related" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Related) %}selected{% endif %}>related</option>
+            <option value="see_also" {% if query.kind == Some(crate::model::word_relations::WordRelationType::SeeAlso) %}selected{% endif %}>see also</option>
+        </select>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+    </div>
+</section>
+
+<section>
+    <label for="direction">Direction</label>
+    <div class="select-container">
+        <select id="direction" name="direction">
+            <option value="">any</option>
+            <option value="antecedent" {% if query.direction == Some(crate::model::word_relations::RelationDirection::Antecedent) %}selected{% endif %}>from (antecedent)</option>
+            <option value="consequent" {% if query.direction == Some(crate::model::word_relations::RelationDirection::Consequent) %}selected{% endif %}>into (consequent)</option>
+        </select>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+    </div>
+</section>

@@ -1,3 +1,4 @@
+use askama::Template;
 use chrono::{DateTime, Utc};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
@@ -583,7 +584,8 @@ impl TranslatableRepository {
     }
 }
 
-#[derive(Default, Debug, Deserialize, Clone)]
+#[derive(Default, Debug, Deserialize, Serialize, Clone, Template)]
+#[template(path = "translatables/fragments/query.html")]
 pub struct TranslatableSearch {
     pub q: Option<String>,
     pub source_language: Option<String>,
@@ -591,5 +593,7 @@ pub struct TranslatableSearch {
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
 }
+
+crate::util::text_query!(TranslatableSearch);
 
 crate::util::repo_from_parts!(TranslatableRepository);

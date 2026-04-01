@@ -13,7 +13,7 @@ use crate::{
         users::User,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, ensure_verified},
+    util::{AppState, ensure_verified, text_query},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -99,6 +99,17 @@ pub struct WordWithMeta {
     pub first_definition: Option<Definition>,
     pub creator: User,
     pub is_liked: bool,
+}
+
+impl WordWithMeta {
+    pub fn like_target(&self) -> String {
+        format!(
+            "/api/languages/{}/words/{}/{}",
+            self.word.language_code.as_ref().unwrap(),
+            self.word.slug,
+            self.word.lemma
+        )
+    }
 }
 
 impl WordRepository {
@@ -946,6 +957,8 @@ pub struct WordSearch {
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
 }
+
+text_query!(WordSearch);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WordSearchResult {

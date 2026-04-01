@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
+    controller::html::{LanguagesWithContributors, languages::{Breadcrumb, Footer}, okay, render_generic_error, render_template},
     err::AppError,
     get_user,
     md::render_md,
@@ -26,8 +26,8 @@ use crate::{
         },
         users::{User, UserRepository},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{AppState, BackQuery, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -101,19 +101,27 @@ struct OutputPair {
 // --- templates ---
 
 #[derive(Template)]
-#[template(path = "sound-change-sets/search.html")]
+#[template(path = "sound-change-sets/fragments/card.html")]
 #[allow(dead_code)]
-struct SearchTemplate {
-    current_user: Option<User>,
-    language: LanguagesWithContributors,
-    error: Option<AppError>,
-    previous_query: SearchSoundChangeSets,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<SoundChangeSet>>,
-    sets_with_meta: Vec<SoundChangeSetWithMeta>,
+struct ScsPreviewCard {
+    set: SoundChangeSet,
+    author: User,
+    language: Language,
     can_edit_language: bool,
-    can_delete_language: bool,
     back_url: String,
+}
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/fragments/list_header.html")]
+struct ScsSearchHeader {
+    can_edit_language: bool,
+    language_code: String,
+}
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/fragments/query.html")]
+struct ScsSearchQueryTemplate {
+    author: Option<String>,
 }
 
 #[derive(Template)]
@@ -130,10 +138,7 @@ struct ViewTemplate {
     back: String,
 }
 
-#[derive(Deserialize)]
-struct BackQuery {
-    back: Option<String>,
-}
+
 
 #[derive(Template)]
 #[template(path = "sound-change-sets/new.html")]
@@ -315,83 +320,83 @@ async fn search(
     contribution_stats: ContributionStatsRepository,
     Path(code): Path<String>,
     axum::extract::Query(query): axum::extract::Query<SearchSoundChangeSets>,
-    axum::extract::Query(pagination): axum::extract::Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let back_url = crate::util::back_url(
-        &format!("/languages/{}/sound-change-sets", code),
-        &pagination,
-        &query,
-    );
-
-    let query = SearchSoundChangeSets {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
-    };
+    let search_action = format!("/languages/{}/sound-change-sets", code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
 
     let (language_with_contributors, can_edit_language, can_delete_language) = attempt!(
         s,
         build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
     );
 
-    let results = match sets
-        .search(
-            &language_with_contributors.language,
-            pagination.clone(),
-            query.clone(),
-        )
-        .await
-    {
-        Ok(res) => res,
-        Err(e) => {
-            let template = SearchTemplate {
-                current_user,
-                language: language_with_contributors,
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                sets_with_meta: vec![],
-                can_edit_language,
-                can_delete_language,
-                back_url,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
+    let lang = &language_with_contributors.language;
+
+    let results = match sets.search(lang, pagination.clone(), query.clone()).await {
+        Ok(response) => {
+            let mut items = Vec::with_capacity(response.items.len());
+            for set in response.items {
+                let author = attempt!(s, users.find_by_id(set.created_by).await);
+                items.push(SoundChangeSetWithMeta {
+                    sound_change_set: set,
+                    author,
+                });
+            }
+            Ok(crate::pagination::PaginatedResponse {
+                items,
+                total: response.total,
+                limit: response.limit,
+                offset: response.offset,
+                has_more: response.has_more,
+            })
+        },
+        Err(e) => Err(e),
     };
 
-    let mut sets_with_meta = Vec::with_capacity(results.items.len());
-    for set in &results.items {
-        let author = attempt!(s, users.find_by_id(set.created_by).await);
-        sets_with_meta.push(SoundChangeSetWithMeta {
-            sound_change_set: set.clone(),
-            author,
-        });
-    }
-
-    let template = SearchTemplate {
-        current_user,
-        language: language_with_contributors,
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
-        results: Some(results),
-        sets_with_meta,
+    let lang_clone = language_with_contributors.language.clone();
+    let render_item = move |item: &SoundChangeSetWithMeta| ScsPreviewCard {
+        set: item.sound_change_set.clone(),
+        author: item.author.clone(),
+        language: lang_clone.clone(),
         can_edit_language,
-        can_delete_language,
-        back_url,
+        back_url: back_url.clone(),
     };
 
-    okay(render_template(template))
+    let header = ScsSearchHeader {
+        can_edit_language,
+        language_code: language_with_contributors.language.code.clone(),
+    };
+
+    let query_template = ScsSearchQueryTemplate {
+        author: query.author.clone(),
+    };
+
+    let breadcrumbs = Breadcrumb {
+        language: &language_with_contributors.language,
+    };
+
+    let footer = Footer {
+        language: &language_with_contributors.language,
+        can_edit_language: can_delete_language,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "sound change sets",
+        search_action,
+        render_item,
+    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
 }
 
 async fn view(

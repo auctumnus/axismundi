@@ -102,12 +102,15 @@ pub struct UpdateLanguageFamily {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, askama::Template)]
+#[template(path = "language_families/fragments/query.html")]
 pub struct SearchLanguageFamilies {
     pub q: Option<String>,
     pub owner: Option<String>,
     pub has_language: Option<String>,
 }
+
+crate::util::text_query!(SearchLanguageFamilies);
 
 pub struct LanguageFamilyRepository {
     state: AppState,
