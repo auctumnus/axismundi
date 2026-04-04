@@ -1,11 +1,12 @@
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
 <link rel="stylesheet" href="/static/phonology-table.css">
 <link rel="stylesheet" href="/static/language-card.css">
 <div class="context-cards">
     <div class="context-card language-context">
         <span class="context-label">in language</span>
         <ul class="standalone-card">
-            {% call u::render_language_card(&language) %}
+            {% call lang_card::render(&language) %}
         </ul>
     </div>
 </div>

@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "audit_log/fragments/card.html" as audit_log_card -%}
 
 {% block title %}audit log entry - axismundi{% endblock %}
 
@@ -40,7 +41,7 @@
         <div class="context-card">
             <span class="context-label">resource</span>
             <div class="context-card-link">
-                {% call u::audit_log_resource_link(&entry) %}
+                {% call audit_log_card::audit_log_resource_link(&entry) %}
             </div>
         </div>
     </div>

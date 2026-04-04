@@ -18,13 +18,12 @@ use uuid::Uuid;
 use crate::{
     attempt,
     controller::html::{
-        LanguagesWithContributors, TranslatableWithMeta, okay, render_generic_error,
+        LanguagesWithContributors, TranslatableWithMeta, okay,
         render_template,
     },
-    embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
+    embed::{EmbedTarget, render_embed},
     err::{AppError, bad_request},
     model::{
-        contribution_stats::ContributionStatsRepository,
         email_verification_tokens::EmailVerificationTokenRepository,
         language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
@@ -654,7 +653,6 @@ async fn profile(
     language_families: LanguageFamilyRepository,
     translatables: TranslatableRepository,
     activities: UserActivityRepository,
-    contribution_stats: ContributionStatsRepository,
     path: axum::extract::Path<String>,
     Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {

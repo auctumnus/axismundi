@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "audit_log/fragments/card.html" as audit_log_card -%}
 
 {% block title %}search languages - axismundi{% endblock %}
 
@@ -96,7 +97,7 @@
         {% let back_url = crate::util::back_url("/admin/audit-log", &previous_pagination, &previous_query) %}
         <ul class="card-list">
             {% for item in results.items %}
-                {% call u::audit_log_card(&item, &back_url) %}
+                {% call audit_log_card::render(&item, &back_url) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

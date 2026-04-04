@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "reports/fragments/card.html" as rc -%}
 
 {% block title %}my reports - axismundi{% endblock %}
 
@@ -86,7 +87,7 @@
     {% else %}
         <ul class="card-list">
             {% for item in results.items %}
-                {% call u::report_card(&item) %}
+                {% call rc::render(&item) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

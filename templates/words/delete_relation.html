@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block title %}delete relation? - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
@@ -32,5 +33,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, user_has_permission) %}
+{% call lang_f::language_section(&language, user_has_permission) %}
 {% endblock %}

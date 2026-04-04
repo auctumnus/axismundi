@@ -1,3 +1,53 @@
 {%- import "util.html" as u -%}
 
-{% call u::report_card(report, back_url) %}
+{% macro render(report, back="") %}
+<li class="report-card preview-card">
+    <span class="left">
+        <span class="report-summary">
+            <span class="resource-type">{% match report.resource_type %}
+                {% when crate::model::reports::ReportableResource::User %}user
+                {% when crate::model::reports::ReportableResource::Language %}language
+                {% when crate::model::reports::ReportableResource::Word %}word
+                {% when crate::model::reports::ReportableResource::Translation %}translation
+                {% when crate::model::reports::ReportableResource::Translatable %}translatable
+                {% when crate::model::reports::ReportableResource::WordRelation %}word relation
+                {% when crate::model::reports::ReportableResource::Invite %}invite
+                {% when crate::model::reports::ReportableResource::Permission %}permission
+            {% endmatch %}</span>
+            {% if let Some(priority) = report.priority %}
+                <span class="priority-badge priority-{% match priority %}
+                    {% when crate::model::reports::ReportPriority::Low %}low
+                    {% when crate::model::reports::ReportPriority::Medium %}medium
+                    {% when crate::model::reports::ReportPriority::High %}high
+                    {% when crate::model::reports::ReportPriority::Urgent %}urgent
+                {% endmatch %}">{% match priority %}
+                    {% when crate::model::reports::ReportPriority::Low %}low
+                    {% when crate::model::reports::ReportPriority::Medium %}medium
+                    {% when crate::model::reports::ReportPriority::High %}high
+                    {% when crate::model::reports::ReportPriority::Urgent %}urgent
+                {% endmatch %}</span>
+            {% endif %}
+            {% if let Some(status) = report.resolution_status %}
+                <span class="status-badge status-{% match status %}
+                    {% when crate::model::reports::ResolutionStatus::Pending %}pending
+                    {% when crate::model::reports::ResolutionStatus::InProgress %}in-progress
+                    {% when crate::model::reports::ResolutionStatus::Dismissed %}dismissed
+                    {% when crate::model::reports::ResolutionStatus::ActionTaken %}action-taken
+                {% endmatch %}">{% match status %}
+                    {% when crate::model::reports::ResolutionStatus::Pending %}pending
+                    {% when crate::model::reports::ResolutionStatus::InProgress %}in progress
+                    {% when crate::model::reports::ResolutionStatus::Dismissed %}dismissed
+                    {% when crate::model::reports::ResolutionStatus::ActionTaken %}action taken
+                {% endmatch %}</span>
+            {% endif %}
+        </span>
+        <span class="report-reason">{{ report.reason }}</span>
+        {% call u::relative(&report.reported_at) %}
+    </span>
+    <a href="/admin/reports/{{ report.id }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}" class="right button icon gray">
+        <svg class="icon chevron" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(report, back_url) %}

@@ -1,0 +1,94 @@
+{%- import "util.html" as u -%}
+
+{% macro audit_log_resource_link(audit_log) %}
+{% if let Some(resource) = &audit_log.resource %}
+    {% match resource %}
+        {% when crate::model::audit_log::AuditableResourceResolved::User(user) %}
+            {% call u::badge(user) %}
+        {% when crate::model::audit_log::AuditableResourceResolved::Language(language) %}
+            <a href="/languages/{{ language.code }}">{{ language.name }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::LanguageFamily(family) %}
+            <a href="/language-families/{{ family.code }}">{{ family.name }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::LanguageFamilyMember(_) %}
+            <span>a language family member</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Word(word) %}
+            <a href="/languages/{{ word.language_code.as_ref().unwrap() }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::WordClass(_) %}
+            <span>a word class</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Translation(translation) %}
+            <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ translation.language_code }}">a translation</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Translatable(translatable) %}
+            <a href="/translatable/{{ translatable.slug }}">{{ translatable.title }}</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::WordRelation(_) %}
+            <span>a word relation</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Invite(_) %}
+            <span>an invite</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Permission(_) %}
+            <span>a permission</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Quotation(quotation) %}
+            <a href="/quotations/{{ quotation.id }}">a quotation</a>
+        {% when crate::model::audit_log::AuditableResourceResolved::Definition(_) %}
+            <span>a definition</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::QuotationSuggestion(_) %}
+            <span>a quotation suggestion</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::Report(report) %}
+            <a href="/reports/{{ report.id }}">a report</a>
+    {% endmatch %}
+{% else %}
+    {% match audit_log.resource_type %}
+        {% when crate::model::audit_log::AuditableResource::User %}
+            <span>a user</span>
+        {% when crate::model::audit_log::AuditableResource::Language %}
+            <span>a language</span>
+        {% when crate::model::audit_log::AuditableResource::LanguageFamily %}
+            <span>a language family</span>
+        {% when crate::model::audit_log::AuditableResource::LanguageFamilyMember %}
+            <span>a language family member</span>
+        {% when crate::model::audit_log::AuditableResource::Word %}
+            <span>a word</span>
+        {% when crate::model::audit_log::AuditableResource::WordClass %}
+            <span>a word class</span>
+        {% when crate::model::audit_log::AuditableResource::Translation %}
+            <span>a translation</span>
+        {% when crate::model::audit_log::AuditableResource::Translatable %}
+            <span>a translatable</span>
+        {% when crate::model::audit_log::AuditableResource::WordRelation %}
+            <span>a word relation</span>
+        {% when crate::model::audit_log::AuditableResource::Invite %}
+            <span>an invite</span>
+        {% when crate::model::audit_log::AuditableResource::Permission %}
+            <span>a permission</span>
+        {% when crate::model::audit_log::AuditableResource::Quotation %}
+            <span>a quotation</span>
+        {% when crate::model::audit_log::AuditableResource::Definition %}
+            <span>a definition</span>
+        {% when crate::model::audit_log::AuditableResource::QuotationSuggestion %}
+            <span>a quotation suggestion</span>
+        {% when crate::model::audit_log::AuditableResource::Report %}
+            <span>a report</span>
+    {% endmatch %}
+{% endif %}
+{% endmacro %}
+
+{% macro render(entry, back="") %}
+<li class="audit-log-card">
+    <span class="left">
+        <span class="log-detail">
+            {% if let Some(user) = &entry.user %}
+                {% call u::badge(user) %}
+            {% else %}
+                <span>a deleted user</span>
+            {% endif %}
+            <span>{{ entry.action.as_str() }}</span>
+            {% call audit_log_resource_link(&entry) %}
+        </span>
+
+        {% call u::relative(&entry.action_at) %}
+    </span>
+    <a href="/admin/audit-log/{{ entry.id }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}" class="right button icon gray">
+        <svg class="icon chevron" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12.6 12L8.7 8.1q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.6 4.6q.15.15.213.325t.062.375t-.062.375t-.213.325l-4.6 4.6q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7z"/></svg>
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(entry, back) %}

@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
 {% block title %}edit permission - {{ family.name }} - axismundi{% endblock %}
 
@@ -40,7 +41,7 @@
         </div>
     </section>
     
-    {% call u::permission_level_helptext() %}
+    {% include "languages/permissions/fragments/help_text.html" %}
 
     <section class="button-row">
         <button type="submit">Save changes</button>
@@ -78,5 +79,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family, user_has_permission) %}
+{% call family_f::family_section(&family, user_has_permission) %}
 {% endblock %}

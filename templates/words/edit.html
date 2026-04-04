@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/fragments/footer.html" as word_f -%}
 
 {% block title %}edit {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
@@ -110,8 +111,7 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, true) %}
-{% call u::word_section(&word, &language, true) %}
+{% call word_f::word_section(&word, &language, true, false) %}
 {% endblock %}
 
 {% block scripts %}

@@ -221,11 +221,6 @@ async fn new_language_submit(
     }
 }
 
-pub struct TranslationWithAuthor {
-    translation: crate::model::translations::Translation,
-    translatable: crate::model::translatable::Translatable,
-    author: User,
-}
 
 #[derive(Template)]
 #[template(path = "languages/view.html")]
@@ -233,7 +228,7 @@ pub struct TranslationWithAuthor {
 struct ViewLanguageTemplate {
     current_user: Option<User>,
     recent_words: Vec<WordWithMeta>,
-    recent_translations: Vec<TranslationWithAuthor>,
+    recent_translations: Vec<super::translations::TranslationWithMeta>,
     language: Language,
     primary_family: Option<FamilyWithContributors>,
     other_families: Vec<FamilyWithContributors>,
@@ -260,7 +255,7 @@ async fn view_language(
     users: UserRepository,
     words: WordRepository,
     translations: TranslationRepository,
-    translatables: TranslatableRepository,
+    _translatables: TranslatableRepository,
     permissions: LanguagePermissionRepository,
     invites: crate::model::language_invites::LanguageInviteRepository,
     phonology_tables: PhonologyTableRepository,
@@ -349,15 +344,19 @@ async fn view_language(
         words_with_meta.push(word);
     }
 
-    // Fetch authors and translatables for each translation
+    // Fetch authors for each translation
     let mut translations_with_authors = Vec::new();
     for translation in recent_translations.items {
         let author = attempt!(s, users.find_by_id(translation.created_by).await);
-        let translatable = attempt!(s, translatables.find_by_id(translation.translatable).await);
-        translations_with_authors.push(TranslationWithAuthor {
+        let is_liked = if let Some(user) = s.user() {
+            translations.is_liked(&translation.id, &user.id).await.unwrap_or(false)
+        } else {
+            false
+        };
+        translations_with_authors.push(super::translations::TranslationWithMeta {
             translation,
-            translatable,
             author,
+            is_liked,
         });
     }
 

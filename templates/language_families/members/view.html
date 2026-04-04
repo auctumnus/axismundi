@@ -1,5 +1,11 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "languages/fragments/footer.html" as lang_footer -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_footer -%}
+
 
 {% block title %}{{ name }} in {{ member.family.name }} - axismundi{% endblock %}
 
@@ -39,7 +45,7 @@
         <div class="context-card language-context">
             <span class="context-label">for language</span>
             <ul class="standalone-card">
-                {% call u::render_language_card(&language_with_contributors) %}
+                {% call lang_card::render(&language_with_contributors) %}
             </ul>
         </div>
     {% endif %}
@@ -48,7 +54,7 @@
         <div class="context-card family-member-context">
             <span class="context-label">for parent member</span>
             <ul class="standalone-card">
-                {% call u::render_language_family_member(&parent_member, can_edit_family) %}
+                {% call member_card::render(&parent_member) %}
             </ul>
         </div>
     {% endif %}
@@ -56,7 +62,7 @@
     <div class="context-card family-context">
         <span class="context-label">in family</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_card(&family) %}
+            {% call family_card::render(&family) %}
         </ul>
     </div>
 </div>
@@ -87,7 +93,7 @@
     </div>
     <ul class="card-list">
         {% for member in children %}
-            {% call u::render_language_family_member(&member, can_edit_family) %}
+            {% call member_card::render(&member) %}
         {% endfor %}
     </ul>
 {% endif %}
@@ -100,8 +106,8 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family.family, can_edit_family) %}
+{% call family_footer::family_section(&family.family, can_edit_family) %}
 {% if let Some(language_with_contributors) = language %}
-    {% call u::language_section(&language_with_contributors.language, can_edit_language) %}
+    {% call lang_footer::language_section(&language_with_contributors.language, can_edit_language) %}
 {% endif %}
 {% endblock %}

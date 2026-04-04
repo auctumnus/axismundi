@@ -1,3 +1,25 @@
 {%- import "util.html" as u -%}
 
-{% call u::render_user_card(user, back_url) %}
+{% macro render(user, back="") %}
+<li class="user-card preview-card">
+    <a href="/users/{{ user.username}}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
+        <span class="left">
+            {% call u::pfp(&user, "large") %}
+            <span class="user-info">
+                {% if !user.gender.is_empty() %}
+                    <span class="display-name gendered" style="--color: #{{user.gender}}">{% call u::name(user) %}</span>
+                {% else %}
+                    <span class="display-name">{% call u::name(user) %}</span>
+                {% endif %}
+                {% if !user.description.is_empty() %}
+                    <span class="user-bio ellipse">{{ crate::util::first_sentence(&user.description) }}</span>
+                {% else %}
+                    <span class="user-bio ellipse empty-bio">no bio yet</span>
+                {% endif %}
+            </span>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(user, back_url) %}

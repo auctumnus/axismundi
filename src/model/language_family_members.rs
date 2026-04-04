@@ -1,3 +1,4 @@
+use askama::Template;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Type, prelude::FromRow};
@@ -218,7 +219,8 @@ pub struct CreateLanguageFamilyMember {
     pub notes: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Template, Serialize, Deserialize, Clone)]
+#[template(path = "language_families/members/fragments/query.html")]
 pub struct SearchLanguageFamilyMembers {
     pub family_code: Option<String>,
     pub parent_language_code: Option<String>,

@@ -43,6 +43,16 @@ pub struct Translation {
     pub translatable_slug: String,
     pub translatable_title: String,
     pub language_code: String,
+    pub language_name: String,
+}
+
+impl Translation {
+    pub fn like_target(&self) -> String {
+        format!(
+            "/api/translatable/{}/translations/{}",
+            self.translatable_slug, self.language_code
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -149,7 +159,8 @@ impl TranslationRepository {
                     t.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
@@ -184,7 +195,8 @@ impl TranslationRepository {
                     t.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
@@ -222,7 +234,8 @@ impl TranslationRepository {
                     t.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
@@ -330,7 +343,8 @@ impl TranslationRepository {
                     i.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM inserted i
                 JOIN translatable tr ON i.translatable = tr.id
                 JOIN languages l ON i.language = l.id
@@ -485,7 +499,8 @@ impl TranslationRepository {
                     u.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM updated u
                 JOIN translatable tr ON u.translatable = tr.id
                 JOIN languages l ON u.language = l.id
@@ -585,7 +600,8 @@ impl TranslationRepository {
                     t.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
@@ -649,7 +665,8 @@ impl TranslationRepository {
                     t.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
@@ -851,7 +868,8 @@ impl TranslationRepository {
                     t.updated_by,
                     tr.slug as translatable_slug,
                     tr.title as translatable_title,
-                    l.code as language_code
+                    l.code as language_code,
+                    l.name as language_name
                 FROM translation t
                 JOIN translatable tr ON t.translatable = tr.id
                 JOIN languages l ON t.language = l.id
@@ -952,6 +970,117 @@ impl TranslationRepository {
                 &items_query,
                 &count_query,
                 language_id,
+                &search,
+                &pagination,
+            )
+            .await?;
+
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+
+        Ok(PaginatedResponse {
+            items,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
+        })
+    }
+
+    fn build_search_by_translatable_queries(search: &TranslationSearch) -> (String, String, usize) {
+        let mut param_count = 1;
+
+        let mut items_query = String::from(
+            r"
+                SELECT
+                    t.id,
+                    t.translatable,
+                    t.language,
+                    t.ipa,
+                    t.gloss,
+                    t.notes,
+                    t.translated_text,
+                    t.translated_title,
+                    t.created_at,
+                    t.updated_at,
+                    t.like_count,
+                    t.created_by,
+                    t.updated_by,
+                    tr.slug as translatable_slug,
+                    tr.title as translatable_title,
+                    l.code as language_code,
+                    l.name as language_name
+                FROM translation t
+                JOIN translatable tr ON t.translatable = tr.id
+                JOIN languages l ON t.language = l.id
+                WHERE t.translatable = $1
+            ",
+        );
+
+        let mut count_query = String::from(
+            "SELECT COUNT(*) FROM translation t JOIN languages l ON t.language = l.id WHERE t.translatable = $1",
+        );
+
+        if search.q.is_some() {
+            param_count += 1;
+            let condition = format!(
+                " AND (l.name ILIKE ${p} OR t.notes ILIKE ${p} OR t.translated_text ILIKE ${p} OR t.translated_title ILIKE ${p})",
+                p = param_count
+            );
+            items_query.push_str(&condition);
+            count_query.push_str(&condition);
+        }
+
+        if search.created_before.is_some() {
+            param_count += 1;
+            let condition = format!(" AND t.created_at < ${}", param_count);
+            items_query.push_str(&condition);
+            count_query.push_str(&condition);
+        }
+
+        if search.created_after.is_some() {
+            param_count += 1;
+            let condition = format!(" AND t.created_at > ${}", param_count);
+            items_query.push_str(&condition);
+            count_query.push_str(&condition);
+        }
+
+        if search.q.is_some() {
+            // weight language name matches higher — search pattern is always $2
+            write!(
+                &mut items_query,
+                " ORDER BY CASE WHEN l.name ILIKE $2 THEN 0 ELSE 1 END, t.created_at DESC LIMIT ${} OFFSET ${}",
+                param_count + 1,
+                param_count + 2
+            )
+            .unwrap();
+        } else {
+            write!(
+                &mut items_query,
+                " ORDER BY t.created_at DESC LIMIT ${} OFFSET ${}",
+                param_count + 1,
+                param_count + 2
+            )
+            .unwrap();
+        }
+
+        (items_query, count_query, param_count)
+    }
+
+    pub async fn search_by_translatable(
+        &self,
+        translatable_id: &Uuid,
+        pagination: PaginatedRequest,
+        search: TranslationSearch,
+    ) -> AppResult<PaginatedResponse<Translation>> {
+        let (items_query, count_query, _param_count) =
+            TranslationRepository::build_search_by_translatable_queries(&search);
+
+        let (items, total) = self
+            .execute_search_queries(
+                &items_query,
+                &count_query,
+                translatable_id,
                 &search,
                 &pagination,
             )

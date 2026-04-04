@@ -1,5 +1,8 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
 {% block title %}remove member from {{ family.family.name }} - axismundi{% endblock %}
 
@@ -15,13 +18,13 @@
     <div class="context-card family-context">
         <span class="context-label">in family</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_card(&family) %}
+            {% call family_card::render(&family) %}
         </ul>
     </div>
     <div class="context-card family-member-context">
         <span class="context-label">member to delete</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_member(&member, can_edit_family) %}
+            {% call member_card::render(&member) %}
         </ul>
     </div>
 </div>
@@ -45,5 +48,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family.family, can_edit_family) %}
+{% call family_f::family_section(&family.family, can_edit_family) %}
 {% endblock %}

@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "sound-change-sets/fragments/card.html" as scs -%}
+{%- import "sound-change-sets/fragments/footer.html" as scs_f -%}
 
 {% block head %}
 <script src="/static/sound-change-runner.js" type="module" defer></script>
@@ -43,7 +45,7 @@
         <div class="context-card sound-change-set-context">
             <span class="context-label">for sound change set</span>
             <ul class="standalone-card">
-                {% call u::render_sound_change_set_card(&set_with_meta.sound_change_set, &set_with_meta.author, &language.language, can_edit_language) %}
+                {% call scs::render(&set_with_meta.sound_change_set, &set_with_meta.author, &language.language, can_edit_language) %}
             </ul>
         </div>
     </div>
@@ -156,7 +158,6 @@
 
 {% block footer %}
 {% if let Some((set_with_meta, language, can_edit_language)) = associated_sound_set %}
-    {% call u::sound_change_set_section(&set_with_meta.sound_change_set, &language.language.code, can_edit_language) %}
-    {% call u::language_section(&language.language, can_edit_language) %}
+    {% call scs_f::sound_change_set_section(&set_with_meta.sound_change_set, &language.language, can_edit_language) %}
 {% endif %}
 {% endblock %}

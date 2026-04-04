@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
 
 {% block title %}search language families - axismundi{% endblock %}
 
@@ -77,7 +78,7 @@
         {% let back_url = crate::util::back_url("/language-families", &previous_pagination, &previous_query) %}
         <ul class="card-list">
             {% for item in results.items %}
-                {% call u::render_language_family_card(&item, &back_url) %}
+                {% call family_card::render(&item, &back_url) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

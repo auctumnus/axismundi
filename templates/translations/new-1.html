@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
 
 {% block title %}new translation - axismundi{% endblock %}
 
@@ -39,8 +41,8 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable, can_edit_translatable) %}
+{% call ts_f::translatable_section(&translatable, can_edit_translatable) %}
 {% if let Some(lang) = language %}
-{% call u::language_section(lang, can_edit_language) %}
+{% call lang_f::language_section(lang, can_edit_language) %}
 {% endif %}
 {% endblock %}

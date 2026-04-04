@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "translatables/fragments/card.html" as tc -%}
 
 {% block title %}search translatables - axismundi{% endblock %}
 
@@ -60,7 +61,7 @@
     {% else %}
         <ul class="card-list">
             {% for translatable_with_meta in results.items %}
-                {% call u::translatable_card(translatable_with_meta, &back_url) %}
+                {% call tc::render(translatable_with_meta, &back_url) %}
             {% endfor %}
         </ul>
     {% endif %}

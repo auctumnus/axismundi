@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "sound-change-sets/fragments/footer.html" as scs_f -%}
 
 {% block title %}edit {{ sound_change_set.name }} - {{ language.name }} - axismundi{% endblock %}
 
@@ -65,6 +66,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, can_delete_language) %}
-{% call u::sound_change_set_section(&sound_change_set, &language.code, can_edit_language) %}
+{% call scs_f::sound_change_set_section(&sound_change_set, &language, can_edit_language) %}
 {% endblock %}

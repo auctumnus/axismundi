@@ -13,7 +13,7 @@ use futures::TryFutureExt;
 
 use crate::{
     attempt,
-    controller::html::{LanguagesWithContributors, okay, render_template},
+    controller::html::{self, LanguagesWithContributors, okay, render_template},
     err::AppError,
     get_user,
     model::{
@@ -250,25 +250,6 @@ impl MemberHeader<'_> {
     }
 }
 
-#[derive(Template)]
-#[template(path = "language_families/members/fragments/query.html")]
-struct MemberSearchOptions {
-    query: SearchLanguageFamilyMembers,
-}
-
-#[derive(Template)]
-#[template(path = "language_families/members/fragments/breadcrumb.html")]
-struct MemberBreadcrumb<'a> {
-    family: &'a LanguageFamily,
-}
-
-#[derive(Template)]
-#[template(path = "language_families/members/fragments/footer.html")]
-struct MemberFooter<'a> {
-    family: &'a LanguageFamily,
-    can_edit_family: bool,
-}
-
 async fn search_members(
     s: Session,
     language_families: LanguageFamilyRepository,
@@ -314,20 +295,13 @@ async fn search_members(
         kind: ListHeaderKind::Search,
     };
 
-    let query_template = MemberSearchOptions {
-        query: query.clone(),
-    };
-
-    let breadcrumbs = MemberBreadcrumb { family: &family };
-    let footer = MemberFooter {
-        family: &family,
-        can_edit_family,
-    };
+    let breadcrumbs = html::language_families::Breadcrumb { family: &family };
+    let footer = html::language_families::Footer { family: &family, can_edit_family };
 
     let template = make_search_layout(SearchTemplateArgs {
         current_user,
         header,
-        query_template,
+        query_template: query.clone(),
         query,
         results,
         pagination,
@@ -345,20 +319,8 @@ async fn search_members(
 
 #[derive(Template)]
 #[template(path = "languages/fragments/relatives_header.html")]
-struct RelativesHeader {
-    language: LanguagesWithContributors,
-}
-
-#[derive(Template)]
-#[template(path = "languages/fragments/relatives_breadcrumb.html")]
-struct RelativesBreadcrumb {
-    language: LanguagesWithContributors,
-}
-
-#[derive(Template)]
-#[template(path = "languages/fragments/relatives_query.html")]
-struct RelativesSearchOptions {
-    query: SearchLanguageFamilyMembers,
+struct RelativesHeader<'a> {
+    language: &'a LanguagesWithContributors,
 }
 
 async fn search_relatives(
@@ -392,19 +354,16 @@ async fn search_relatives(
     };
 
     let header = RelativesHeader {
-        language: language.clone(),
+        language: &language,
     };
 
-    let query_template = RelativesSearchOptions {
-        query: query.clone(),
-    };
-
-    let breadcrumbs = RelativesBreadcrumb { language };
+    let breadcrumbs = html::languages::Breadcrumb { language: &language.language };
+    let footer = html::languages::Footer { language: &language.language, can_edit_language: false };
 
     let template = make_search_layout(SearchTemplateArgs {
         current_user,
         header,
-        query_template,
+        query_template: query.clone(),
         query,
         results,
         pagination,
@@ -412,7 +371,8 @@ async fn search_relatives(
         search_action,
         render_item,
     })
-    .with_breadcrumbs(breadcrumbs);
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
 
     let status = template.status();
 

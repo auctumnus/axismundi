@@ -242,6 +242,7 @@ struct SaveChangesFormData {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct SaveToNewFormData {
     changes: String,
     #[serde(default)]

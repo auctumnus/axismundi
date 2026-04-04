@@ -1,4 +1,4 @@
 <section>
     <label for="parent_member_id">Parent member ID</label>
-    <input type="text" id="parent_member_id" name="parent_member_id" value="{{ query.parent_member_id.as_ref().map(ToString::to_string).unwrap_or("".to_string()) }}">
+    <input type="text" id="parent_member_id" name="parent_member_id" value="{{ parent_member_id.as_ref().map(ToString::to_string).unwrap_or("".to_string()) }}">
 </section>

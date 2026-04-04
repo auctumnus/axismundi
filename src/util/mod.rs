@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use crate::{
     err::{AppError, AppResult, internal_error},
     model::users::User,
-    pagination::{PaginatedRequest, PaginatedResponse, PaginationTemplate},
+    pagination::PaginatedRequest,
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -15,7 +15,6 @@ pub mod search_template;
 mod images;
 pub mod s3;
 use askama::Template;
-use axum::extract::Query;
 use base64::Engine;
 
 mod re {
@@ -51,7 +50,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use uri_encode::encode_uri;
 use uuid::Uuid;
 use validator::ValidationError;
@@ -253,14 +252,6 @@ pub fn back_url<T: Serialize>(base: &str, pagination: &PaginatedRequest, query: 
     }
 }
 
-pub fn back_url_simple(base: &str, query: &str) -> String {
-    if query.is_empty() {
-        base.to_string()
-    } else {
-        format!("{}?q={}", base, query)
-    }
-}
-
 pub fn urlencode(input: &str) -> String {
     encode_uri(input)
 }
@@ -289,25 +280,6 @@ pub fn dfs(
         }
     }
     false
-}
-
-pub fn trimmed_string<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(s.trim().to_string())
-}
-
-pub fn trimmed_string_opt<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Deserialize::deserialize(deserializer)?;
-    Ok(s.and_then(|s| {
-        let s = s.trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
-    }))
 }
 
 pub trait HasTextQuery {

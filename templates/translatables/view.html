@@ -1,5 +1,8 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "translations/fragments/card.html" as translation_card -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
+{%- import "translatables/fragments/full_card.html" as translatable_full_card -%}
 
 {% block title %}{{ translatable_with_meta.translatable.title }} - axismundi{% endblock %}
 {% block embed_title %}{{ translatable_with_meta.translatable.title }}{% endblock %}
@@ -19,7 +22,7 @@
 
 {% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
 
-{% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
+{% call translatable_full_card::render(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
 
 {% if translations.len() == 0 && current_user.is_some() %}
 <h2>translations</h2>
@@ -40,7 +43,7 @@
             <svg class="icon"><use href="#icon-plus"></use></svg>
             <span>add new</span>
         </a></li>
-        <li><a class="with-icon" href="/translatable/search">
+        <li><a class="with-icon" href="/translatable/{{ translatable_with_meta.translatable.slug }}/translations">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
             <span>view all</span>
         </a></li>
@@ -49,7 +52,7 @@
 
 <ul class="card-list">
 {% for translation in translations %}
-    {% call u::render_translation_card(&translation, &translation.language.code) %}
+    {% call translation_card::render(&translation, "", "translatable") %}
 {% endfor %}
 </ul>
 
@@ -63,5 +66,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
+{% call ts_f::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
 {% endblock %}

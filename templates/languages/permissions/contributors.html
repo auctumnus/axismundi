@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "languages/permissions/fragments/contributor_card.html" as contributor_card -%}
 
 {% block head %}
     <link rel="stylesheet" href="/static/contributor-card.css">
@@ -57,7 +59,7 @@
 {% else %}
     <ul class="contributor-list">
         {% for contributor in contributors %}
-            {% call u::contributor_card_with_stats(&contributor, "/languages/" ~ language.code) %}
+            {% call contributor_card::render(&contributor, "/languages/" ~ language.code) %}
         {% endfor %}
     </ul>
 {% endif %}
@@ -70,5 +72,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, user_has_permission) %}
+{% call lang_f::language_section(&language, user_has_permission) %}
 {% endblock %}

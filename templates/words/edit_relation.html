@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/fragments/footer.html" as word_f -%}
 
 {% block title %}edit relation - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
@@ -52,8 +53,7 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, user_has_permission) %}
-{% call u::word_section(&word, &language, user_has_permission) %}
-{% call u::word_section(&related_word, &related_language, user_has_permission_on_related) %}
+{% call word_f::word_section(&word, &language, user_has_permission, false) %}
+{% call word_f::word_section(&related_word, &related_language, user_has_permission_on_related, false) %}
 
 {% endblock %}

@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/relations/fragments/card.html" as relation_card -%}
+{%- import "words/fragments/footer.html" as word_f -%}
 
 {% block title %}{{ word.word }}{% if other_lemmata %} ({{ word.lemma }}){% endif %} - {{ language.name }} - axismundi{% endblock %}
 
@@ -94,7 +96,7 @@
 
 <ul class="card-list">
     {% for relation in recent_relations %}
-        {% call u::render_relation_card(&relation, "", &language.code, &word.slug, word.lemma, user_has_permission) %}
+        {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
     {% endfor %}
 </ul>
 
@@ -110,6 +112,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, user_has_permission) %}
-{% call u::word_section(&word, &language, user_has_permission, other_lemmata) %}
+{% call word_f::word_section(&word, &language, user_has_permission, other_lemmata) %}
 {% endblock %}

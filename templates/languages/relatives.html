@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
 
 {% block title %}search relatives of {{ language.language.name }} - axismundi{% endblock %}
 
@@ -26,7 +28,7 @@
     <div class="context-card language-context">
         <span class="context-label">language</span>
         <ul class="standalone-card">
-            {% call u::render_language_card(&language) %}
+            {% call lang_card::render(&language) %}
         </ul>
     </div>
 </div>
@@ -72,7 +74,7 @@
     {% else %}
         <ul class="card-list">
             {% for member in results.items %}
-                {% call u::render_language_family_member(&member, can_edit_family) %}
+                {% call member_card::render(&member) %}
             {% endfor %}
         </ul>
         <nav class="pagination">

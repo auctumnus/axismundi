@@ -1,6 +1,6 @@
 {%- import "util.html" as u -%}
 
-{% macro member_card(member_with_languages, back="") %}
+{% macro render(member_with_languages, back="") %}
 <li class="language-family-member-card preview-card">
     <a href="/language-families/{{ member_with_languages.family.code }}/members/{{ member_with_languages.member.id() }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
         <span class="left">
@@ -32,4 +32,4 @@
 </li>
 {% endmacro %}
 
-{% call member_card(member_with_languages, back_url) %}
+{% call render(member_with_languages, back_url) %}

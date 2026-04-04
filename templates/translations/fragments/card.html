@@ -1,13 +1,27 @@
-<li class="translation-card">
-    <div class="translatable-title">
-        <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ language_code }}?back={{ back_url|urlencode }}">
-            {{ translation.translatable_title }}
-        </a>
-    </div>
-    <div class="translated-text">
-        {{ translation.translated_text }}
-    </div>
-    <div class="meta">
-        Created by <a href="/user/{{ creator.username }}">{{ creator.username }}</a>
-    </div>
+{%- import "util.html" as u -%}
+
+{% macro render(translation_with_meta, back="", kind="translatable") %}
+<li class="preview-card">
+    <a href="/translatable/{{ translation_with_meta.translation.translatable_slug }}/translation/{{ translation_with_meta.translation.language_code }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
+        <span class="left">
+            <span class="translation-title title">
+                {% if kind == "language" %}
+                    {{ translation_with_meta.translation.language_name }}
+                {% else if !translation_with_meta.translation.translated_title.is_empty() %}
+                    {{ translation_with_meta.translation.translated_title }}
+                {% else %}
+                    {{ translation_with_meta.translation.translatable_title }}
+                {% endif %}
+            </span>
+            <span class="summary ellipse">{{ crate::util::first_sentence(&translation_with_meta.translation.translated_text) }}</span>
+            <span class="creator summary">
+                {% call u::user_display(&translation_with_meta.author, "small") %}
+                {% call u::relative(&translation_with_meta.translation.created_at) %}
+            </span>
+        </span>
+        {% call u::like_button(translation_with_meta.translation.like_target(), translation_with_meta.translation.like_count, translation_with_meta.is_liked, "Like this translation") %}
+    </a>
 </li>
+{% endmacro %}
+
+{% call render(translation_with_meta, back_url, kind) %}

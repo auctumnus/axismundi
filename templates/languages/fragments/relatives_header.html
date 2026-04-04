@@ -1,4 +1,5 @@
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
 
 <h1>search relatives of {{ language.language.name }}</h1>
 
@@ -6,7 +7,7 @@
     <div class="context-card language-context">
         <span class="context-label">language</span>
         <ul class="standalone-card">
-            {% call u::render_language_card(&language) %}
+            {% call lang_card::render(&language) %}
         </ul>
     </div>
 </div>

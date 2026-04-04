@@ -1,0 +1,18 @@
+{%- import "languages/fragments/footer.html" as l -%}
+
+{% macro sound_change_set_section(set, language, can_edit_language) %}
+    {% call l::language_section(language, can_edit_language) %}
+    <li>
+        <h2>{{ set.name }}</h2>
+        <ul>
+            <li><a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}">view sound change set</a></li>
+            <li><a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}/run">run sound change set</a></li>
+            {% if can_edit_language %}
+                <li><a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}/edit">edit sound change set</a></li>
+                <li><a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}/delete">delete sound change set</a></li>
+            {% endif %}
+        </ul>
+    </li>
+{% endmacro %}
+
+{% call sound_change_set_section(set, language, can_edit_language) %}

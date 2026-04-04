@@ -1,5 +1,9 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "translatables/fragments/card.html" as tc -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "activity.html" as activity -%}
 
 {% block title %}home - axismundi{% endblock %}
 
@@ -50,7 +54,7 @@
 </div>
 <ul class="card-list">
     {% for language_with_contributors in languages %}
-        {% call u::render_language_card(&language_with_contributors) %}
+        {% call lang_card::render(&language_with_contributors) %}
     {% endfor %}
 </ul>
 
@@ -81,7 +85,7 @@
 </div>
 <ul class="card-list">
     {% for family_with_contributors in families %}
-        {% call u::render_language_family_card(&family_with_contributors) %}
+        {% call family_card::render(&family_with_contributors) %}
     {% endfor %}
 </ul>
 {% endif %}
@@ -101,7 +105,7 @@
 </div>
 <ul class="card-list">
     {% for translatable_with_meta in translatables %}
-        {% call u::translatable_card(&translatable_with_meta) %}
+        {% call tc::render(&translatable_with_meta) %}
     {% endfor %}
 </ul>
 
@@ -111,7 +115,7 @@
 {% else %}
     <ul class="card-list activities">
         {% for activity in activities %}
-            {% call u::render_activity(&activity, true) %}
+            {% call activity::render(&activity, true) %}
         {% endfor %}
     </ul>
 {% endif %}

@@ -1,6 +1,6 @@
 {%- import "util.html" as u -%}
 
-{% macro translatable_card(translatable_with_meta, back="") %}
+{% macro render(translatable_with_meta, back="") %}
 <li class="preview-card">
     <a href="/translatable/{{ translatable_with_meta.translatable.slug }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
         <span class="left">
@@ -23,4 +23,4 @@
 </li>
 {% endmacro %}
 
-{% call translatable_card(translatable_with_meta, back_url) %}
+{% call render(translatable_with_meta, back_url) %}

@@ -1,5 +1,5 @@
 use crate::{
-    err::{AppResult, internal_error, unauthorized_no_session}, lexurgy::{self, send_scv1}, model::{
+    err::{AppResult, unauthorized_no_session}, lexurgy::{self, send_scv1}, model::{
         languages::LanguageRepository,
         sound_change_sets::{
             NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet,

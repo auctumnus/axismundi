@@ -1,5 +1,10 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
+{%- import "translations/fragments/footer.html" as translation_footer -%}
+{%- import "translatables/fragments/full_card.html" as translatable_full_card -%}
 
 {% block title %}edit translation - axismundi{% endblock %}
 
@@ -35,14 +40,14 @@
     <div class="context-card language-context">
         <span class="context-label">for language</span>
         <ul class="standalone-card">
-            {% call u::render_language_card(&language_with_contributors) %}
+            {% call lang_card::render(&language_with_contributors) %}
         </ul>
     </div>
     <div class="context-card translatable-context">
         <span class="context-label">for translatable</span>
         <ul class="standalone-card">
             <li>
-                {% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
+                {% call translatable_full_card::render(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
             </li>
         </ul>
     </div>
@@ -107,7 +112,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
-{% call u::language_section(&language, can_edit_language) %}
-{% call u::translation_section(&translatable_with_meta.translatable, &language, &translation, can_edit_translation) %}
+{% call translation_footer::translation_section(&translatable_with_meta.translatable, &language, &translation, can_edit_language, can_edit_translatable) %}
 {% endblock %}

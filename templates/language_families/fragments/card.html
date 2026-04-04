@@ -1,6 +1,6 @@
 {%- import "util.html" as u -%}
 
-{% macro family_card(family_with_contributors, back="") %}
+{% macro render(family_with_contributors, back="") %}
 <li class="language-family-card preview-card">
     <a href="/language-families/{{ family_with_contributors.family.code }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
         <span class="left">
@@ -18,15 +18,9 @@
                 {% endfor %}
             </ul>
         </span>
-        <span class="likes like-button {% if family_with_contributors.family.like_count > 0 %}liked{% endif %}" data-target="/api/language-families/{{ family_with_contributors.family.code }}" data-tooltip="Like this language family" role="button">
-            <span class="icon-button-container yellow">
-                <svg class="icon when-unliked" width="32" height="32"><use href="#icon-star-outline"></use></svg>
-                <svg class="icon when-liked" width="32" height="32"><use href="#icon-star-filled"></use></svg>
-            </span>
-            <span class="like-count">{{ family_with_contributors.family.like_count }}</span>
-        </span>
+        {% call u::like_button("/api/language-families/" ~ family_with_contributors.family.code, family_with_contributors.family.like_count, family_with_contributors.is_liked, "Like this language family") %}
     </a>
 </li>
 {% endmacro %}
 
-{% call family_card(family_with_contributors, back_url) %}
+{% call render(family_with_contributors, back_url) %}

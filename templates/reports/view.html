@@ -1,10 +1,21 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "users/fragments/card.html" as user_card -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "words/fragments/card.html" as word_card -%}
+{%- import "translations/fragments/card.html" as trans_card -%}
+{%- import "translatables/fragments/card.html" as tbl_card -%}
 
 {% block title %}report - axismundi{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/report-card.css">
+<link rel="stylesheet" href="/static/user-card.css">
+<link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/word-card.css">
+<link rel="stylesheet" href="/static/translation-card.css">
+<link rel="stylesheet" href="/static/translatable-card.css">
+<script src="/static/like-button.js" type="module" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -33,50 +44,38 @@
             {% match data %}
                 {% when crate::controller::html::reports::ReportableResourceData::User with { user } %}
                     <div class="context-card user-context">
-                        <span class="context-label">reported user</span>
-                        <a href="/users/{{ user.username }}" class="context-card-link">
-                            <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                            {% if !user.description.is_empty() %}
-                                <span class="context-text">{{ user.description }}</span>
-                            {% endif %}
-                        </a>
+                        <span class="context-label">reported</span>
+                        <ul class="standalone-card">
+                            {% call user_card::render(&user, "") %}
+                        </ul>
                     </div>
                 {% when crate::controller::html::reports::ReportableResourceData::Language with { language } %}
                     <div class="context-card language-context">
-                        <span class="context-label">reported language</span>
-                        <a href="/languages/{{ language.code }}" class="context-card-link">
-                            <span class="context-title">{{ language.name }} ({{ language.code }})</span>
-                            <span class="context-text">{% call u::language_summary(language) %}</span>
-                        </a>
+                        <span class="context-label">reported</span>
+                        <ul class="standalone-card">
+                            {% call lang_card::render(&language, "") %}
+                        </ul>
                     </div>
                 {% when crate::controller::html::reports::ReportableResourceData::Word with { word } %}
                     <div class="context-card word-context">
-                        <span class="context-label">reported word</span>
-                        {% if let Some(lang_code) = &word.language_code %}
-                            <a href="/languages/{{ lang_code }}/words/{{ word.slug }}/{{ word.lemma }}" class="context-card-link">
-                                <span class="context-title">{{ word.word }}{% if let Some(abbr) = &word.word_class_abbreviation %} <span class="word-class-abbreviation">({{ abbr }}.)</span>{% endif %}</span>
-                            </a>
-                        {% else %}
-                            <div class="context-card-link">
-                                <span class="context-title">{{ word.word }}{% if let Some(abbr) = &word.word_class_abbreviation %} <span class="word-class-abbreviation">({{ abbr }}.)</span>{% endif %}</span>
-                            </div>
-                        {% endif %}
+                        <span class="context-label">reported</span>
+                        <ul class="standalone-card">
+                            {% call word_card::render(&word, "") %}
+                        </ul>
                     </div>
                 {% when crate::controller::html::reports::ReportableResourceData::Translation with { translation } %}
                     <div class="context-card translation-context">
-                        <span class="context-label">reported translation</span>
-                        <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ translation.language_code }}" class="context-card-link">
-                            <span class="context-title">{{ translation.translatable_title }}</span>
-                            <span class="context-text">created {% call u::relative(&translation.created_at) %}</span>
-                        </a>
+                        <span class="context-label">reported</span>
+                        <ul class="standalone-card">
+                            {% call trans_card::render(&translation, "") %}
+                        </ul>
                     </div>
                 {% when crate::controller::html::reports::ReportableResourceData::Translatable with { translatable } %}
                     <div class="context-card translatable-context">
-                        <span class="context-label">reported translatable</span>
-                        <a href="/translatable/{{ translatable.slug }}" class="context-card-link">
-                            <span class="context-title">{{ translatable.title }}</span>
-                            <span class="context-text">{{ translatable.english }}</span>
-                        </a>
+                        <span class="context-label">reported</span>
+                        <ul class="standalone-card">
+                            {% call tbl_card::render(&translatable, "") %}
+                        </ul>
                     </div>
                 {% when crate::controller::html::reports::ReportableResourceData::Other %}
                     <div class="context-card">
@@ -119,12 +118,9 @@
             {% if let Some(user) = reporter %}
                 <div class="context-card user-context">
                     <span class="context-label">reported by</span>
-                    <a href="/users/{{ user.username }}" class="context-card-link">
-                        <span class="context-title">{% call u::name(user) %} (@{{ user.username }})</span>
-                        {% if !user.description.is_empty() %}
-                            <span class="context-text">{{ user.description }}</span>
-                        {% endif %}
-                    </a>
+                    <ul class="standalone-card">
+                        {% call user_card::render(&user, "") %}
+                    </ul>
                 </div>
             {% else %}
                 <div class="context-card">

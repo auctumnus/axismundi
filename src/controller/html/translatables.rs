@@ -24,7 +24,7 @@ use crate::{
         translations::{TranslationRepository, TranslationWithLanguageAndContributor},
         users::{User, UserRepository},
     },
-    pagination::{PaginatedRequest, PaginatedResponse, PaginationTemplate},
+    pagination::PaginatedRequest,
     util::{AppState, BackQuery, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
 
@@ -55,6 +55,7 @@ pub struct PreviewCard<'a> {
 
 #[derive(Template)]
 #[template(path = "translatables/fragments/list_header.html")]
+#[allow(dead_code)]
 pub struct Header<'a> {
     pub current_user: Option<&'a User>,
     pub kind: ListHeaderKind,

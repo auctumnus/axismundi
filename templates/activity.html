@@ -1,0 +1,67 @@
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "translatables/fragments/card.html" as translatable_card -%}
+{%- import "translations/fragments/card.html" as translation_card -%}
+{%- import "words/fragments/card.html" as word_card -%}
+
+{% macro entity_link(entity) %}
+    {% match entity %}
+        {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
+            <a href="/languages/{{ lang_code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}">{{ word.word.word }}</a>
+        {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+            <a href="/languages/{{ language.language.code }}">{{ language.language.name }}</a>
+        {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
+            <a href="/translatable/{{ translatable.translatable.slug }}">{{ translatable.translatable.title }}</a>
+        {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
+            <span>a</span>
+            <a href="/translatable/{{ translation.translatable.slug }}/translation/{{ lang_code }}">translation for {{ translation.translatable.title }}</a>
+        {% when crate::model::user_activities::ActivityEntity::LanguageFamily(family) %}
+            <a href="/language-families/{{ family.family.code }}">{{ family.family.name }}</a>
+        {% else %}
+            <span>something unknown</span>
+    {% endmatch %}
+{% endmacro %}
+
+{% macro entity_card(entity) %}
+        {% match entity %}
+            {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                {% call lang_card::render(language) %}
+            {% when crate::model::user_activities::ActivityEntity::Word(word, lang_code) %}
+                {% call word_card::render(word) %}
+            {% when crate::model::user_activities::ActivityEntity::Translatable(translatable) %}
+                {% call translatable_card::render(translatable) %}
+            {% when crate::model::user_activities::ActivityEntity::Translation(translation, lang_code) %}
+                {% call translation_card::render(translation, lang_code) %}
+            {% when crate::model::user_activities::ActivityEntity::LanguageFamily(family) %}
+                {% call family_card::render(family) %}
+            {% else %}
+                <li><div class="preview-card">Details not available.</div></li>
+        {% endmatch %}
+{% endmacro %}
+
+{% macro render(activity, show_user=true) %}
+<li class="activity-item">
+    <div class="top">
+        {% if show_user %}
+            {% call u::badge(&activity.user, "small") %}
+        {% endif %}
+        <span class="verb">{{ activity.activity.verb() }}</span>
+        {% if let Some(entity) = activity.related_entity %}
+            <span class="preposition">in</span>
+            {% match entity %}
+                {% when crate::model::user_activities::ActivityEntity::Language(language) %}
+                    <a href="/languages/{{ language.language.code }}">{{ language.language.name }}</a>
+                {% else %}
+                    <span>an unknown entity</span>
+            {% endmatch %}
+        {% endif %}
+        {% call u::relative(&activity.timestamp) %}
+    </div>
+    <ul>
+        {% call entity_card(activity.entity) %}
+    </ul>
+</li>
+{% endmacro %}
+
+{% call render(activity, show_user=true) %}

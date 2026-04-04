@@ -68,9 +68,23 @@ pub struct PreviewCard<'a> {
 
 #[derive(Template)]
 #[template(path = "language_families/fragments/list_header.html")]
+#[allow(dead_code)]
 pub struct Header<'a> {
     pub current_user: Option<&'a User>,
     pub kind: ListHeaderKind,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/fragments/breadcrumb.html")]
+pub struct Breadcrumb<'a> {
+    pub family: &'a LanguageFamily,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/fragments/footer.html")]
+pub struct Footer<'a> {
+    pub family: &'a LanguageFamily,
+    pub can_edit_family: bool,
 }
 
 async fn search_language_families(

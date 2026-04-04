@@ -1,6 +1,9 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 {%- import "words/fragments/card.html" as word_card -%}
+{%- import "translations/fragments/card.html" as translation_card -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block title %}{{ language.name }} - axismundi{% endblock %}
 {% block embed_title %}{{ language.name }}{% endblock %}
@@ -176,7 +179,7 @@
         </ul>
     </div>
     <ul class="card-list">
-        {% call u::render_language_family_card(&primary_family) %}
+        {% call family_card::render(&primary_family) %}
     </ul>
 {% endif %}
 
@@ -201,8 +204,8 @@
 </div>
 
 <ul class="card-list">
-{% for translation_with_author in recent_translations %}
-    {% call u::render_translation_card(&translation_with_author, language.code) %}
+{% for translation_with_meta in recent_translations %}
+    {% call translation_card::render(translation_with_meta) %}
 {% endfor %}
 </ul>
 
@@ -214,5 +217,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, can_edit_language) %}
+{% call lang_f::language_section(&language, can_edit_language) %}
 {% endblock %}

@@ -1,0 +1,17 @@
+{% import 'languages/fragments/footer.html' as l %}
+
+{% macro word_class_section(word_class, language, can_edit_language) %}
+    {% call l::language_section(language, can_edit_language) %}
+    <li>
+        <h2>{{ word_class.name }}</h2>
+        <ul>
+            <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}">view word class</a></li>
+            {% if can_edit_language %}
+                <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/edit">edit word class</a></li>
+                <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/delete">delete word class</a></li>
+            {% endif %}
+        </ul>
+    </li>
+{% endmacro %}
+
+{% call word_class_section(word_class, language, can_edit_language) %}

@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
-{%- import "util.html" as u -%}
+{%- import "languages/invites/card.html" as card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block head %}
     <link rel="stylesheet" href="/static/invite-card.css">
@@ -24,7 +25,7 @@
     <ul class="card-list">
         {% for invite_data in invites %}
             {% let language_code = &language.code %}
-            {% call u::render_invite_card(&invite_data.invite, &invite_data.inviting_user, &invite_data.invited_user, &invite_data.invite.permissions, format!("/languages/{}/invites/{}/revoke", language_code, invite_data.invite.id), invite_data.can_revoke) %}
+            {% call card::render_invite_card(&invite_data.invite, &invite_data.inviting_user, &invite_data.invited_user, &invite_data.invite.permissions, format!("/languages/{}/invites/{}/revoke", language_code, invite_data.invite.id), invite_data.can_revoke) %}
         {% endfor %}
     </ul>
 {% endif %}
@@ -37,5 +38,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, user_has_permission) %}
+{% call lang_f::language_section(&language, user_has_permission) %}
 {% endblock %}

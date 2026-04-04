@@ -1,0 +1,7 @@
+{% macro render(permission) %}
+<span class="text-badge {{ permission.color() }}">
+    {{ permission.display_name() }}
+</span>
+{% endmacro %}
+
+{% call render(self) %}

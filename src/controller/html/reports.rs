@@ -10,24 +10,26 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    controller::html::{okay, render_template},
+    controller::html::{LanguagesWithContributors, okay, render_template},
     err::AppError,
     get_user,
     model::{
-        languages::{Language, LanguageRepository},
+        languages::LanguageRepository,
         reports::{
             CreateReport, Report, ReportPriority, ReportRepository, ReportSearch,
             ReportableResource, ResolutionStatus,
         },
-        translatable::{Translatable, TranslatableRepository},
-        translations::{Translation, TranslationRepository},
+        translatable::{TranslatableRepository, TranslatableWithMeta},
+        translations::TranslationRepository,
         user_tags::UserTagRepository,
         users::{User, UserRepository},
-        words::{Word, WordRepository},
+        words::{WordRepository, WordWithMeta},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, BackQuery, ensure_verified, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
 };
+
+use super::translations::TranslationWithMeta;
 
 // Helper struct to group resource repositories for fetching reportable resource data
 struct ResourceRepositories {
@@ -61,30 +63,32 @@ impl ResourceRepositories {
                 .await
                 .ok()
                 .map(|u| ReportableResourceData::User { user: u }),
-            ReportableResource::Language => self
-                .languages
-                .find_by_id(resource_id)
-                .await
-                .ok()
-                .map(|l| ReportableResourceData::Language { language: l }),
-            ReportableResource::Word => self
-                .words
-                .find_by_id(resource_id)
-                .await
-                .ok()
-                .map(|w| ReportableResourceData::Word { word: w }),
-            ReportableResource::Translation => self
-                .translations
-                .find_by_id(resource_id)
-                .await
-                .ok()
-                .map(|t| ReportableResourceData::Translation { translation: t }),
-            ReportableResource::Translatable => self
-                .translatables
-                .find_by_id(resource_id)
-                .await
-                .ok()
-                .map(|t| ReportableResourceData::Translatable { translatable: t }),
+            ReportableResource::Language => {
+                let lang = self.languages.find_by_id(resource_id).await.ok()?;
+                let lwc = self.languages.materialize(lang, None).await.ok()?;
+                Some(ReportableResourceData::Language { language: lwc })
+            }
+            ReportableResource::Word => {
+                let word = self.words.find_by_id(resource_id).await.ok()?;
+                let word_with_meta = self.words.materialize(word, None).await.ok()?;
+                Some(ReportableResourceData::Word { word: word_with_meta })
+            }
+            ReportableResource::Translation => {
+                let t = self.translations.find_by_id(resource_id).await.ok()?;
+                let author = self.users.find_by_id(t.created_by).await.ok()?;
+                Some(ReportableResourceData::Translation {
+                    translation: TranslationWithMeta {
+                        translation: t,
+                        author,
+                        is_liked: false,
+                    },
+                })
+            }
+            ReportableResource::Translatable => {
+                let t = self.translatables.find_by_id(resource_id).await.ok()?;
+                let twm = self.translatables.materialize(t, None).await.ok()?;
+                Some(ReportableResourceData::Translatable { translatable: twm })
+            }
             _ => Some(ReportableResourceData::Other),
         }
     }
@@ -119,12 +123,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ReportableResourceData {
     User { user: User },
-    Language { language: Language },
-    Word { word: Word },
-    Translation { translation: Translation },
-    Translatable { translatable: Translatable },
-    // WordRelation, Invite, and Permission are more complex and less commonly reported
-    // For now, we'll handle them as "other"
+    Language { language: LanguagesWithContributors },
+    Word { word: WordWithMeta },
+    Translation { translation: TranslationWithMeta },
+    Translatable { translatable: TranslatableWithMeta },
     Other,
 }
 

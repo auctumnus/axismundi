@@ -1,3 +1,27 @@
 {%- import "util.html" as u -%}
 
-{% call u::render_relation_card(relation, back_url, current_word_language_code, current_word_slug, current_word_lemma, user_has_permission) %}
+{% macro render(relation, current_word_language_code, current_word_slug, current_word_lemma, user_has_permission, back="") %}
+<li class="relation-card preview-card">
+    <a href="/languages/{{ relation.language }}/words/{{ relation.word.slug }}/{{ relation.word.lemma }}{% if !back.is_empty() %}?back={{ back | urlencode }}{% endif %}">
+        <span class="left">
+            <span class="word-text">{{ relation.word.word }} {% if relation.into_other_language %}<span class="relation-language-code">{{ relation.language_code }}</span>{% endif %}</span>
+            <span class="relation-kind-container"><span class="relation-kind">{{ relation.relation.kind }}</span> <span class="relation-direction">{{ relation.direction.preposition() }}</span></span>
+            <span class="creator">
+                relation created by {% call u::user_display(&relation.creator, "small") %} {% call u::relative(&relation.created_at) %}
+            </span>
+        </span>
+    </a>
+    {% if user_has_permission %}
+    <div class="relation-actions">
+        <a class="icon button gray" href="/languages/{{ current_word_language_code }}/words/{{ current_word_slug }}/{{ current_word_lemma }}/relations/{{ relation.language_code }}/{{ relation.word.slug }}/{{ relation.word.lemma }}/edit" data-tooltip="Edit relation">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
+        </a>
+        <a class="icon button gray" href="/languages/{{ current_word_language_code }}/words/{{ current_word_slug }}/{{ current_word_lemma }}/relations/{{ relation.language_code }}/{{ relation.word.slug }}/{{ relation.word.lemma }}/delete" data-tooltip="Delete relation">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
+        </a>
+    </div>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% call render(relation, current_word_language_code, current_word_slug, current_word_lemma, user_has_permission, back_url) %}

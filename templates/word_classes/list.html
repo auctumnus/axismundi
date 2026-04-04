@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
-{%- import "util.html" as u -%}
+{%- import "word_classes/fragments/card.html" as wc_card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block title %}word classes - {{ language.name }} - axismundi{% endblock %}
 
@@ -27,7 +28,7 @@
 {% else %}
     <ul class="card-list">
         {% for wc in word_classes %}
-            {% call u::render_word_class_card(&wc.word_class, &language.code, &wc.creator) %}
+            {% call wc_card::render(&wc.word_class, &language.code, &wc.creator) %}
         {% endfor %}
     </ul>
 {% endif %}
@@ -40,5 +41,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, can_edit_language) %}
+{% call lang_f::language_section(&language, can_edit_language) %}
 {% endblock %}

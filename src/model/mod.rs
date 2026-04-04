@@ -26,3 +26,16 @@ pub mod users;
 pub mod word_classes;
 pub mod word_relations;
 pub mod words;
+
+// pub trait Resource {
+//     type Repository;
+//     type Materialized;
+// }
+
+// pub trait Repository<R: Resource> {
+//     fn new(state: AppState) -> Self;
+
+//     async fn get_by_id(&self, uuid: Uuid) -> Option<R>;
+
+//     async fn materialize(&self, resource: R, requestor: Option<&users::User>) -> R::Materialized;
+// }
