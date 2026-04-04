@@ -27,6 +27,7 @@ use crate::{
             CreateWordRelation, SearchWordRelations, WordRelationRepository,
             WordRelationSearchResult, WordRelationType,
         },
+        sound_change_sets::SoundChangeSet,
         words::{CreateWord, Word, WordRepository, WordSearch, WordWithMeta},
     },
     pagination::PaginatedRequest,
@@ -105,6 +106,7 @@ struct NewWordTemplate {
     previous_notes: String,
     user_has_permission: bool,
     will_create_audit_log: bool,
+    ipa_estimator: Option<SoundChangeSet>,
 }
 
 #[derive(Template)]
@@ -125,6 +127,7 @@ struct EditWordTemplate {
     previous_notes: String,
     user_has_permission: bool,
     will_create_audit_log: bool,
+    ipa_estimator: Option<SoundChangeSet>,
 }
 
 
@@ -425,6 +428,7 @@ async fn new_word(
     };
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
 
     let template = NewWordTemplate {
         current_user,
@@ -441,6 +445,7 @@ async fn new_word(
         previous_notes: String::new(),
         user_has_permission,
         will_create_audit_log,
+        ipa_estimator,
     };
 
     let body = render_template(template);
@@ -477,6 +482,7 @@ async fn new_word_submit(
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
 
     // Filter out empty definitions and limit to 10
     let definitions_text: Vec<String> = form
@@ -512,6 +518,7 @@ async fn new_word_submit(
             previous_notes: form.notes.clone().unwrap_or_default(),
             user_has_permission,
             will_create_audit_log,
+            ipa_estimator,
         };
 
         let body = render_template(template);
@@ -579,6 +586,7 @@ async fn new_word_submit(
                 previous_notes: form.notes.clone().unwrap_or_default(),
                 user_has_permission,
                 will_create_audit_log,
+                ipa_estimator,
             };
 
             let body = render_template(template);
@@ -797,6 +805,7 @@ async fn edit_word(
     };
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
 
     // Get current word class abbreviation
     let word_class_abbr = if let Some(wc_id) = word.word_class {
@@ -851,6 +860,7 @@ async fn edit_word(
         previous_notes: word.notes.clone(),
         user_has_permission,
         will_create_audit_log,
+        ipa_estimator,
     };
 
     let body = render_template(template);
@@ -893,6 +903,7 @@ async fn edit_word_submit(
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
 
     // Filter out empty definitions and limit to 10
     let definitions_text: Vec<String> = form
@@ -928,6 +939,7 @@ async fn edit_word_submit(
             previous_notes: form.notes.clone().unwrap_or_default(),
             user_has_permission,
             will_create_audit_log,
+            ipa_estimator,
         };
 
         let body = render_template(template);
@@ -1043,6 +1055,7 @@ async fn edit_word_submit(
                 previous_notes: form.notes.clone().unwrap_or_default(),
                 user_has_permission,
                 will_create_audit_log,
+                ipa_estimator,
             };
 
             let body = render_template(template);
@@ -1857,6 +1870,131 @@ async fn delete_word_submit(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+async fn estimate_ipa_submit(
+    s: Session,
+    State(state): State<AppState>,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_classes: WordClassRepository,
+    permissions: LanguagePermissionRepository,
+    sets: crate::model::sound_change_sets::SoundChangeSetRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<EditWordFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma)
+            .await
+    );
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+    let user_has_permission = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
+    let estimated_ipa = match &ipa_estimator {
+        Some(scs) => match sets.run_from_db(&scs.id, vec![form.word.clone()]).await {
+            Ok(response) => response.output_words.into_iter().next().unwrap_or_default(),
+            Err(_) => form.ipa.clone().unwrap_or_default(),
+        },
+        None => form.ipa.clone().unwrap_or_default(),
+    };
+
+    let template = EditWordTemplate {
+        current_user: Some(user),
+        error: None,
+        language,
+        word,
+        word_classes: word_classes_list,
+        previous_word: form.word.clone(),
+        previous_word_class: form.word_class.clone(),
+        previous_definitions: form.definitions.clone(),
+        previous_contexts: form.contexts.clone(),
+        previous_definition_ids: form.definition_ids.clone(),
+        previous_ipa: estimated_ipa,
+        previous_notes: form.notes.clone().unwrap_or_default(),
+        user_has_permission,
+        will_create_audit_log,
+        ipa_estimator,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
+async fn estimate_ipa_new_word(
+    s: Session,
+    State(state): State<AppState>,
+    languages: LanguageRepository,
+    word_classes: WordClassRepository,
+    permissions: LanguagePermissionRepository,
+    sets: crate::model::sound_change_sets::SoundChangeSetRepository,
+    Path(language_code): Path<String>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+    let user_has_permission = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
+    let estimated_ipa = match &ipa_estimator {
+        Some(scs) => match sets.run_from_db(&scs.id, vec![form.word.clone()]).await {
+            Ok(response) => response.output_words.into_iter().next().unwrap_or_default(),
+            Err(_) => form.ipa.clone().unwrap_or_default(),
+        },
+        None => form.ipa.clone().unwrap_or_default(),
+    };
+
+    let previous_definition = form.definitions.first().cloned().unwrap_or_default();
+    let previous_definitions = form.definitions.iter().skip(1).cloned().collect();
+    let previous_context = form.contexts.first().cloned().unwrap_or_default();
+    let previous_contexts = form.contexts.iter().skip(1).cloned().collect();
+
+    let template = NewWordTemplate {
+        current_user: Some(user),
+        error: None,
+        language,
+        word_classes: word_classes_list,
+        previous_word: form.word.clone(),
+        previous_word_class: form.word_class.clone(),
+        previous_definition,
+        previous_definitions,
+        previous_context,
+        previous_contexts,
+        previous_ipa: estimated_ipa,
+        previous_notes: form.notes.clone().unwrap_or_default(),
+        user_has_permission,
+        will_create_audit_log,
+        ipa_estimator,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/languages/{language}/new-word", axum::routing::get(new_word))
@@ -1864,6 +2002,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/languages/{language}/new-word", axum::routing::post(new_word_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::get(edit_word))
         .route("/languages/{language}/words/{slug}/{lemma}/edit", axum::routing::post(edit_word_submit))
+        .route("/languages/{language}/new-word/estimate-ipa", axum::routing::post(estimate_ipa_new_word))
+        .route("/languages/{language}/words/{slug}/{lemma}/estimate-ipa", axum::routing::post(estimate_ipa_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/delete", axum::routing::post(delete_word_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/delete", axum::routing::post(delete_relation_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::post(edit_relation_submit));

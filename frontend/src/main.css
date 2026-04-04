@@ -916,13 +916,16 @@ main > :is(h1, h2, h3), main .header-with-actions {
     margin: 0;
   }
 
-  &:has(ul.icons) {
-    align-items: flex-start;
+  &:has(ul.icons), &:has(.with-subtitle) {
     h1,
     h2 {
       line-height: initial;
       margin-top: 0.125rem;
     }
+  }
+
+  &:has(ul.icons) {
+    align-items: flex-start;
   }
 
   ul {
@@ -1009,6 +1012,15 @@ button.icon,
     color: var(--color-amber-400);
   }
 
+  &.green:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-green-600) 10%,
+      transparent 90%
+    );
+    color: var(--color-green-600);
+  }
+
   &.gray:hover {
     background-color: color-mix(
       in oklab,
@@ -1034,6 +1046,7 @@ button.with-icon {
   gap: 0.25rem;
   color: var(--foreground-secondary);
   cursor: pointer;
+  text-decoration: none;
 
   svg.icon {
     position: relative;
@@ -1200,4 +1213,8 @@ code {
 
 .preserve-breaks {
   white-space: pre-wrap;
+}
+
+.back-button + .context-cards {
+  margin-top: 1.5rem;
 }

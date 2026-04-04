@@ -15,16 +15,44 @@
 
 <form class="default" method="post" action="/sound-change-sets/save" id="new-sound-change-set-form">
     <section>
-        <label for="language_code">Language to save this set into</label>
+        <label>Save to</label>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="save_target" value="language" id="save-to-language" {% if previous_member_id.is_empty() %}checked{% endif %}>
+                a language i own
+            </label>
+            <label>
+                <input type="radio" name="save_target" value="member" id="save-to-member" {% if !previous_member_id.is_empty() %}checked{% endif %}>
+                a family member node
+            </label>
+        </div>
+    </section>
+
+    <section id="language-section" {% if !previous_member_id.is_empty() %}hidden{% endif %}>
+        <label for="language_code">Language</label>
         {% call u::field_error(name="language_code") %}
         <div class="select-container">
-            <select id="language_code" name="language_code" required>
+            <select id="language_code" name="language_code">
                 <option value="" disabled selected>-- select a language --</option>
                 {% for language in available_languages %}
                     <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
                 {% endfor %}
             </select>
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+        </div>
+    </section>
+
+    <section id="member-section" {% if previous_member_id.is_empty() %}hidden{% endif %}>
+        <label for="member_id">Family member</label>
+        {% call u::field_error(name="member_id") %}
+        <div class="select-container">
+            <select id="member_id" name="member_id">
+                <option value="" disabled selected>-- select a member --</option>
+                {% for m in available_members %}
+                    <option value="{{ m.id }}">{{ m.family_name }} / {{ m.display_name }}</option>
+                {% endfor %}
+            </select>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
         </div>
     </section>
 
@@ -46,6 +74,19 @@
         <button type="submit">Save</button>
     </section>
 </form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const radios = document.querySelectorAll('input[name="save_target"]');
+    const langSection = document.getElementById('language-section');
+    const memberSection = document.getElementById('member-section');
+    radios.forEach(r => r.addEventListener('change', () => {
+      const isMember = document.getElementById('save-to-member').checked;
+      langSection.hidden = isMember;
+      memberSection.hidden = !isMember;
+    }));
+  });
+</script>
 
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {

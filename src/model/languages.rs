@@ -10,10 +10,7 @@ use crate::{
     controller::html::LanguagesWithContributors,
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
-        contribution_stats::ContributionStatsRepository,
-        language_invites::PermissionLevel,
-        user_bans::UserBanRepository,
-        users::{USERNAME_REGEX, User, UserSearch},
+        contribution_stats::ContributionStatsRepository, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, sound_change_sets::{SoundChangeSet, SoundChangeSetRepository}, user_bans::UserBanRepository, users::{USERNAME_REGEX, User, UserSearch}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -878,6 +875,85 @@ impl LanguageRepository {
         }
 
         Ok(json_ld)
+    }
+
+    pub async fn set_ipa_estimator(&self, requestor: &User, language_id: Uuid, sound_change_set: Option<Uuid>) -> AppResult<()> {
+        ensure_verified(requestor)?;
+
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        if !permissions.has_permission(requestor.id, language_id, PermissionLevel::Editor).await? {
+            return Err(forbidden("you don't have permission to edit this language"));
+        }
+
+        // does there currently exist an IPA estimator for this language?
+        let current_estimator = sqlx::query_scalar!(
+            "SELECT sound_change_set_id FROM ipa_estimators WHERE language_id = $1",
+            language_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        if let Some(scs_id) = sound_change_set {
+            // Validate the sound change set exists
+            let scs_repo = SoundChangeSetRepository::new(self.state.clone());
+            let Some(scs) = scs_repo.get(scs_id).await? else {
+                return Err(not_found("sound change set not found"));
+            };
+
+            if scs.language_id != Some(language_id) {
+                return Err(bad_request("sound change set does not belong to this language"));
+            }
+
+            if let Some(current) = current_estimator {
+                // update existing estimator
+                sqlx::query!(
+                    "UPDATE ipa_estimators SET sound_change_set_id = $1 WHERE language_id = $2",
+                    scs_id,
+                    language_id
+                )
+                .execute(&self.state.pool)
+                .await?;
+            } else {
+                // create new estimator
+                sqlx::query!(
+                    "INSERT INTO ipa_estimators (language_id, sound_change_set_id) VALUES ($1, $2)",
+                    language_id,
+                    scs_id
+                )
+                .execute(&self.state.pool)
+                .await?;
+            }
+        } else {
+            // delete the IPA estimator if it exists
+            if current_estimator.is_some() {
+                sqlx::query!(
+                    "DELETE FROM ipa_estimators WHERE language_id = $1",
+                    language_id
+                )
+                .execute(&self.state.pool)
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_ipa_estimator(&self, language_id: Uuid) -> AppResult<Option<SoundChangeSet>> {
+        let scs_id = sqlx::query_scalar!(
+            "SELECT sound_change_set_id FROM ipa_estimators WHERE language_id = $1",
+            language_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        if let Some(scs_id) = scs_id {
+            let scs_repo = SoundChangeSetRepository::new(self.state.clone());
+            let scs = scs_repo.get(scs_id).await?;
+            Ok(scs)
+        } else {
+            Ok(None)
+        }
     }
 }
 

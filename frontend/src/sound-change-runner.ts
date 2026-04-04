@@ -9,7 +9,7 @@ import { acceptCompletion, completionKeymap } from "@codemirror/autocomplete"
 import text from "slate-react/dist/components/text"
 import { mountCombobox, mountRunButton, mountSaveButton } from "./sound-changer-buttons"
 
-const theme = EditorView.theme({
+export const theme = EditorView.theme({
     "&": {
         height: "100%",
         backgroundColor: "var(--editor-bg)",

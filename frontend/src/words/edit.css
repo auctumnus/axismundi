@@ -1,0 +1,19 @@
+.ipa-estimator {
+    display: flex;
+
+    flex-direction: column;
+
+    &:has(button) {
+        flex-direction: row;
+        gap: .5rem;
+
+        input {
+            flex: 1;
+        }
+
+        button {
+            width: 15ch;
+            text-align: center;
+        }
+    }
+}

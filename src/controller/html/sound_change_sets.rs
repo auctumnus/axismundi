@@ -17,11 +17,14 @@ use crate::{
     md::render_md,
     model::{
         contribution_stats::ContributionStatsRepository,
+        language_families::LanguageFamilyRepository,
+        language_family_members::{LanguageFamilyMemberRepository, MemberWithLanguages},
+        language_family_permissions::LanguageFamilyPermissionRepository,
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         sound_change_sets::{
-            NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet,
+            MemberTarget, NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet,
             SoundChangeSetRepository, UpdateSoundChangeSet,
         },
         users::{User, UserRepository},
@@ -45,12 +48,32 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             post(delete_submit),
         )
         .route(
+            "/languages/{code}/sound-change-sets/{id}/set-ipa-estimator",
+            post(set_ipa_estimator_submit),
+        )
+        .route(
+            "/languages/{code}/sound-change-sets/{id}/unset-ipa-estimator",
+            post(unset_ipa_estimator_submit),
+        )
+        .route(
             "/languages/{code}/sound-change-sets/{id}/save",
             post(save_changes),
         )
         .route(
             "/sound-change-sets/save",
             post(save_to_new_submit),
+        )
+        .route(
+            "/sound-change-sets/{id}/save",
+            post(save_global),
+        )
+        .route(
+            "/sound-change-sets/{id}/reassign",
+            post(reassign_submit),
+        )
+        .route(
+            "/language-families/{fam_code}/members/{member_id}/sound-change-sets/new",
+            post(new_for_member_submit),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -75,12 +98,32 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             get(delete_form),
         )
         .route(
+            "/languages/{code}/sound-change-sets/{id}/set-ipa-estimator",
+            get(set_ipa_estimator_form),
+        )
+        .route(
+            "/languages/{code}/sound-change-sets/{id}/unset-ipa-estimator",
+            get(unset_ipa_estimator_form),
+        )
+        .route(
             "/sound-change-sets/run",
             get(run_form).post(run_submit),
         )
         .route(
             "/sound-change-sets/save-to-new",
             post(save_to_new_form),
+        )
+        .route(
+            "/sound-change-sets/{id}",
+            get(view_global),
+        )
+        .route(
+            "/sound-change-sets/{id}/reassign",
+            get(reassign_form),
+        )
+        .route(
+            "/language-families/{fam_code}/members/{member_id}/sound-change-sets/new",
+            get(new_for_member_form),
         );
 
     (secure_routes, normal_routes)
@@ -124,19 +167,6 @@ struct ScsSearchQueryTemplate {
     author: Option<String>,
 }
 
-#[derive(Template)]
-#[template(path = "sound-change-sets/view.html")]
-#[allow(dead_code)]
-struct ViewTemplate {
-    current_user: Option<User>,
-    language: LanguagesWithContributors,
-    set: SoundChangeSet,
-    author: User,
-    rendered_description: String,
-    can_edit_language: bool,
-    can_delete_language: bool,
-    back: String,
-}
 
 
 
@@ -181,12 +211,34 @@ struct DeleteTemplate {
 }
 
 #[derive(Template)]
+#[template(path = "sound-change-sets/set-ipa-estimator.html")]
+#[allow(dead_code)]
+struct SetIpaEstimatorTemplate {
+    current_user: Option<User>,
+    language: Language,
+    set: SoundChangeSet,
+    can_edit_language: bool,
+    can_delete_language: bool,
+}
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/unset-ipa-estimator.html")]
+#[allow(dead_code)]
+struct UnsetIpaEstimatorTemplate {
+    current_user: Option<User>,
+    language: Language,
+    set: SoundChangeSet,
+    can_edit_language: bool,
+    can_delete_language: bool,
+}
+
+#[derive(Template)]
 #[template(path = "sound-change-sets/run.html")]
 #[allow(dead_code)]
 struct RunTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
-    associated_sound_set: Option<(SoundChangeSetWithMeta, LanguagesWithContributors, bool)>,
+    associated_sound_set: Option<(SoundChangeSetWithMeta, Option<LanguagesWithContributors>, bool)>,
     previous_input_words: String,
     previous_changes: String,
     previous_start_at: String,
@@ -204,7 +256,9 @@ struct SaveToNewTemplate {
     current_user: Option<User>,
     error: Option<AppError>,
     available_languages: Vec<Language>,
+    available_members: Vec<MemberTarget>,
     previous_language_code: String,
+    previous_member_id: String,
     previous_name: String,
     previous_description: String,
     changes: String,
@@ -251,7 +305,10 @@ struct SaveToNewFormData {
 
 #[derive(Deserialize)]
 struct SaveToNewSubmitFormData {
+    #[serde(default)]
     language_code: String,
+    #[serde(default)]
+    member_id: String,
     name: String,
     description: String,
     changes: String,
@@ -418,7 +475,7 @@ async fn view(
 
     let author = attempt!(s, users.find_by_id(set.created_by).await);
 
-    let (language_with_contributors, can_edit_language, can_delete_language) = attempt!(
+    let (language_with_contributors, can_edit_language, _can_delete_language) = attempt!(
         s,
         build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
     );
@@ -429,15 +486,24 @@ async fn view(
         String::new()
     };
 
-    let template = ViewTemplate {
+    let existing_estimator = attempt!(
+        s,
+        languages
+            .get_ipa_estimator(language_with_contributors.language.id)
+            .await
+    );
+    let language_has_ipa_estimator = existing_estimator.is_some();
+
+    let template = ViewGlobalTemplate {
         current_user: s.user().cloned(),
-        language: language_with_contributors,
         set,
         author,
         rendered_description,
-        can_edit_language,
-        can_delete_language,
+        can_edit: can_edit_language,
         back: back_query.back.unwrap_or_default(),
+        language: Some(language_with_contributors),
+        member: None,
+        language_has_ipa_estimator,
     };
 
     okay(render_template(template))
@@ -514,7 +580,7 @@ async fn new_submit(
     };
 
     match sets
-        .create(
+        .create_for_language(
             &user,
             &language,
             NewSoundChangeSet {
@@ -739,7 +805,12 @@ async fn run_form(
     let will_create_audit_log = if let Some(user) = &current_user {
         if let Some(set_id) = params.set {
             if let Ok(Some(set)) = sets.get(set_id).await {
-                crate::util::will_create_audit_log_for_language(&state, user, set.language_id).await
+                if let Some(language_id) = set.language_id {
+                    crate::util::will_create_audit_log_for_language(&state, user, language_id).await
+                } else {
+                    // TODO: audit log for family-owned SCS
+                    false
+                }
             } else {
                 false
             }
@@ -754,11 +825,21 @@ async fn run_form(
         match sets.get(set_id).await {
             Ok(Some(set)) => {
                 let author = attempt!(s, users.find_by_id(set.created_by).await);
-                let language = attempt!(s, languages.find_by_id(set.language_id).await);
-                let (lwc, can_edit, _) = attempt!(
-                    s,
-                    build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
-                );
+                let (lwc, can_edit) = if let Some(language_id) = set.language_id {
+                    let language = attempt!(s, languages.find_by_id(language_id).await);
+                    let (lwc, can_edit, _) = attempt!(
+                        s,
+                        build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
+                    );
+                    (Some(lwc), can_edit)
+                } else {
+                    let can_edit = if let Some(user) = s.user() {
+                        sets.can_edit(user.id, &set).await.unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    (None, can_edit)
+                };
                 let meta = SoundChangeSetWithMeta {
                     sound_change_set: set,
                     author,
@@ -809,7 +890,12 @@ async fn run_submit(
     let will_create_audit_log = if let Some(user) = &current_user {
         if let Some(set_id) = params.set {
             if let Ok(Some(set)) = sets.get(set_id).await {
-                crate::util::will_create_audit_log_for_language(&state, user, set.language_id).await
+                if let Some(language_id) = set.language_id {
+                    crate::util::will_create_audit_log_for_language(&state, user, language_id).await
+                } else {
+                    // TODO: audit log for family-owned SCS
+                    false
+                }
             } else {
                 false
             }
@@ -824,11 +910,21 @@ async fn run_submit(
         match sets.get(set_id).await {
             Ok(Some(set)) => {
                 let author = attempt!(s, users.find_by_id(set.created_by).await);
-                let language = attempt!(s, languages.find_by_id(set.language_id).await);
-                let (lwc, can_edit, _) = attempt!(
-                    s,
-                    build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
-                );
+                let (lwc, can_edit) = if let Some(language_id) = set.language_id {
+                    let language = attempt!(s, languages.find_by_id(language_id).await);
+                    let (lwc, can_edit, _) = attempt!(
+                        s,
+                        build_language_context(&s, &languages, &permissions, &contribution_stats, language).await
+                    );
+                    (Some(lwc), can_edit)
+                } else {
+                    let can_edit = if let Some(user) = s.user() {
+                        sets.can_edit(user.id, &set).await.unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    (None, can_edit)
+                };
                 let meta = SoundChangeSetWithMeta {
                     sound_change_set: set,
                     author,
@@ -1015,16 +1111,23 @@ async fn save_changes(
 async fn save_to_new_form(
     s: Session,
     languages: LanguageRepository,
+    sets: SoundChangeSetRepository,
     form: axum::Form<SaveToNewFormData>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let available_languages = attempt!(s, languages.list_editable_by_user(user.id).await);
+    let available_members = sets
+        .find_member_targets_for_user(user.id)
+        .await
+        .unwrap_or_default();
 
     let template = SaveToNewTemplate {
         current_user: Some(user),
         error: None,
         available_languages,
+        available_members,
         previous_language_code: String::new(),
+        previous_member_id: String::new(),
         previous_name: String::new(),
         previous_description: String::new(),
         changes: form.changes.clone(),
@@ -1037,17 +1140,39 @@ async fn save_to_new_submit(
     s: Session,
     languages: LanguageRepository,
     sets: SoundChangeSetRepository,
+    members: LanguageFamilyMemberRepository,
     form: axum::Form<SaveToNewSubmitFormData>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    if form.name.trim().is_empty() || form.language_code.trim().is_empty() {
-        let available_languages = attempt!(s, languages.list_editable_by_user(user.id).await);
+    let description = if form.description.trim().is_empty() {
+        None
+    } else {
+        Some(form.description.clone())
+    };
+
+    let new_set = NewSoundChangeSet {
+        name: form.name.clone(),
+        description,
+        changes: form.changes.clone(),
+    };
+
+    // dispatch: member_id takes priority over language_code
+    let member_id = form.member_id.trim().parse::<uuid::Uuid>().ok();
+
+    let name_empty = form.name.trim().is_empty();
+    let both_empty = form.language_code.trim().is_empty() && member_id.is_none();
+
+    if name_empty || both_empty {
+        let available_languages = languages.list_editable_by_user(user.id).await.unwrap_or_default();
+        let available_members = sets.find_member_targets_for_user(user.id).await.unwrap_or_default();
         let template = SaveToNewTemplate {
             current_user: Some(user),
-            error: Some(crate::err::bad_request("Language and name are required.")),
+            error: Some(crate::err::bad_request("A name and either a language or family member are required.")),
             available_languages,
+            available_members,
             previous_language_code: form.language_code.clone(),
+            previous_member_id: form.member_id.clone(),
             previous_name: form.name.clone(),
             previous_description: form.description.clone(),
             changes: form.changes.clone(),
@@ -1055,7 +1180,376 @@ async fn save_to_new_submit(
         return (StatusCode::BAD_REQUEST, render_template(template));
     }
 
-    let language = attempt!(s, languages.find_by_code(&form.language_code).await);
+    let result = if let Some(mid) = member_id {
+        let member = attempt!(s, members.find_by_id(mid).await);
+        sets.create_for_member(&user, &member, new_set).await
+    } else {
+        let language = attempt!(s, languages.find_by_code(&form.language_code).await);
+        sets.create_for_language(&user, &language, new_set).await
+    };
+
+    match result {
+        Ok(created) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/sound-change-sets/run?set={}", created.id)).into_response(),
+        ),
+        Err(e) => {
+            let available_languages = languages.list_editable_by_user(user.id).await.unwrap_or_default();
+            let available_members = sets.find_member_targets_for_user(user.id).await.unwrap_or_default();
+            let template = SaveToNewTemplate {
+                current_user: Some(user),
+                error: Some(e),
+                available_languages,
+                available_members,
+                previous_language_code: form.language_code.clone(),
+                previous_member_id: form.member_id.clone(),
+                previous_name: form.name.clone(),
+                previous_description: form.description.clone(),
+                changes: form.changes.clone(),
+            };
+            (StatusCode::BAD_REQUEST, render_template(template))
+        }
+    }
+}
+
+// --- global (non-language-scoped) handlers ---
+
+async fn save_global(
+    s: Session,
+    sets: SoundChangeSetRepository,
+    Path(id): Path<Uuid>,
+    form: axum::Form<SaveChangesFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let updates = UpdateSoundChangeSet {
+        name: None,
+        description: None,
+        changes: Some(form.changes.clone()),
+    };
+
+    match sets.update(&user, &id, updates).await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/sound-change-sets/run?set={}", id)).into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
+    }
+}
+
+// --- view_global ---
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/view-global.html")]
+#[allow(dead_code)]
+struct ViewGlobalTemplate {
+    current_user: Option<User>,
+    set: SoundChangeSet,
+    author: User,
+    rendered_description: String,
+    can_edit: bool,
+    back: String,
+    language: Option<LanguagesWithContributors>,
+    member: Option<MemberWithLanguages>,
+    language_has_ipa_estimator: bool,
+}
+
+async fn view_global(
+    s: Session,
+    sets: SoundChangeSetRepository,
+    users: UserRepository,
+    languages: LanguageRepository,
+    members: LanguageFamilyMemberRepository,
+    language_families: LanguageFamilyRepository,
+    permissions: LanguagePermissionRepository,
+    contribution_stats: ContributionStatsRepository,
+    family_permissions: LanguageFamilyPermissionRepository,
+    Path(id): Path<Uuid>,
+    Query(back_query): Query<BackQuery>,
+) -> (StatusCode, Response) {
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let author = attempt!(s, users.find_by_id(set.created_by).await);
+
+    let can_edit = if let Some(user) = s.user() {
+        sets.can_edit(user.id, &set).await.unwrap_or(false)
+    } else {
+        false
+    };
+
+    let rendered_description = if !set.description.is_empty() {
+        attempt!(s, render_md(&set.description).map_err(Into::into))
+    } else {
+        String::new()
+    };
+
+    let language = if let Some(language_id) = set.language_id {
+        let lang = attempt!(s, languages.find_by_id(language_id).await);
+        let top_contributors = attempt!(s, contribution_stats.get_top_contributors(&language_id, 5).await);
+        let is_liked = if let Some(user) = s.user() {
+            languages.is_liked(&user.id, &language_id).await.unwrap_or(false)
+        } else {
+            false
+        };
+        Some(LanguagesWithContributors {
+            language: lang,
+            top_contributors,
+            is_liked,
+        })
+    } else {
+        None
+    };
+
+    let language_has_ipa_estimator = if let Some(ref lang) = language {
+        let existing = attempt!(s, languages.get_ipa_estimator(lang.language.id).await);
+        existing.is_some()
+    } else {
+        false
+    };
+
+    let member = if let Some(member_id) = set.member_id {
+        let raw = attempt!(s, members.find_by_id(member_id).await);
+        Some(attempt!(s, members.materialize(raw).await))
+    } else {
+        None
+    };
+
+    let _ = (language_families, permissions, family_permissions); // used indirectly above
+
+    let template = ViewGlobalTemplate {
+        current_user: s.user().cloned(),
+        set,
+        author,
+        rendered_description,
+        can_edit,
+        back: back_query.back.unwrap_or_default(),
+        language,
+        member,
+        language_has_ipa_estimator,
+    };
+
+    okay(render_template(template))
+}
+
+// --- reassign ---
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/reassign.html")]
+#[allow(dead_code)]
+struct ReassignTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+    set: SoundChangeSet,
+    member_targets: Vec<MemberTarget>,
+    language_targets: Vec<Language>,
+    is_ipa_estimator: bool,
+    language: Option<Language>,
+}
+
+#[derive(Deserialize)]
+struct ReassignFormData {
+    #[serde(default)]
+    target_member_id: String,
+    #[serde(default)]
+    target_language_id: String,
+}
+
+async fn reassign_form(
+    s: Session,
+    sets: SoundChangeSetRepository,
+    languages: LanguageRepository,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let (member_targets, language, language_targets) = match set.language_id {
+        Some(language_id) => {
+            let targets = sets
+                .find_available_member_targets(user.id, language_id)
+                .await
+                .unwrap_or_default();
+            (targets, Some(attempt!(s, languages.find_by_id(language_id).await)), vec![])
+        }
+        None => {
+            let langs = languages.list_editable_by_user(user.id).await.unwrap_or_default();
+            (vec![], None, langs)
+        }
+    };
+
+    let is_ipa_estimator = attempt!(s, sets.is_ipa_estimator(set.id).await);
+
+    let template = ReassignTemplate {
+        current_user: Some(user),
+        error: None,
+        set,
+        member_targets,
+        language_targets,
+        is_ipa_estimator,
+        language,
+    };
+
+    okay(render_template(template))
+}
+
+async fn reassign_submit(
+    s: Session,
+    sets: SoundChangeSetRepository,
+    languages: LanguageRepository,
+    Path(id): Path<Uuid>,
+    form: axum::Form<ReassignFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let member_id = form.target_member_id.trim().parse::<Uuid>().ok();
+    let language_id = form.target_language_id.trim().parse::<Uuid>().ok();
+
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let is_ipa_estimator = attempt!(s, sets.is_ipa_estimator(set.id).await);
+
+    let result = match (member_id, language_id) {
+        (Some(mid), _) => sets.reassign_to_member(&user, id, mid).await,
+        (_, Some(lid)) => sets.reassign_to_language(&user, id, lid).await,
+        _ => {
+            let (member_targets, language, language_targets) = match set.language_id {
+                Some(language_id) => (
+                    sets.find_available_member_targets(user.id, language_id).await.unwrap_or_default(),
+                    Some(attempt!(s, languages.find_by_id(language_id).await)),
+                    vec![],
+                ),
+                None => (
+                    vec![],
+                    None,
+                    languages.list_editable_by_user(user.id).await.unwrap_or_default(),
+                ),
+            };
+            let template = ReassignTemplate {
+                current_user: Some(user),
+                error: Some(crate::err::bad_request("Please select a target.")),
+                set,
+                member_targets,
+                language_targets,
+                is_ipa_estimator,
+                language,
+            };
+            return (StatusCode::BAD_REQUEST, render_template(template));
+        }
+    };
+
+    match result {
+        Ok(updated) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/sound-change-sets/{}", updated.id)).into_response(),
+        ),
+        Err(e) => {
+            let (member_targets, language, language_targets) = match set.language_id {
+                Some(language_id) => (
+                    sets.find_available_member_targets(user.id, language_id).await.unwrap_or_default(),
+                    Some(attempt!(s, languages.find_by_id(language_id).await)),
+
+                    vec![],
+                ),
+                None => (
+                    vec![],
+                    None,
+                    languages.list_editable_by_user(user.id).await.unwrap_or_default(),
+                ),
+            };
+            let template = ReassignTemplate {
+                current_user: Some(user),
+                error: Some(e),
+                set,
+                member_targets,
+                language_targets,
+                is_ipa_estimator,
+                language,
+            };
+            (StatusCode::BAD_REQUEST, render_template(template))
+        }
+    }
+}
+
+// --- new for member ---
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/new-for-member.html")]
+#[allow(dead_code)]
+struct NewForMemberTemplate {
+    current_user: Option<User>,
+    fam_code: String,
+    member: MemberWithLanguages,
+    error: Option<AppError>,
+    previous_name: String,
+    previous_description: String,
+}
+
+async fn new_for_member_form(
+    s: Session,
+    members: LanguageFamilyMemberRepository,
+    language_families: LanguageFamilyRepository,
+    sets: SoundChangeSetRepository,
+    Path((fam_code, member_id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let _user = get_user!(s);
+    let _ = language_families;
+
+    let raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(raw).await);
+
+    // guard: if a SCS already exists, redirect to it
+    if let Ok(Some(existing)) = sets.get_for_member(member_id).await {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/sound-change-sets/{}", existing.id)).into_response(),
+        );
+    }
+
+    let template = NewForMemberTemplate {
+        current_user: s.user().cloned(),
+        fam_code,
+        member,
+        error: None,
+        previous_name: String::new(),
+        previous_description: String::new(),
+    };
+
+    okay(render_template(template))
+}
+
+async fn new_for_member_submit(
+    s: Session,
+    members: LanguageFamilyMemberRepository,
+    sets: SoundChangeSetRepository,
+    Path((fam_code, member_id)): Path<(String, Uuid)>,
+    form: axum::Form<NewFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let _ = fam_code;
+
+    let raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(raw).await);
+
+    if form.name.trim().is_empty() {
+        let template = NewForMemberTemplate {
+            current_user: Some(user),
+            fam_code: member.family.code.clone(),
+            member,
+            error: Some(crate::err::bad_request("Name is required.")),
+            previous_name: form.name.clone(),
+            previous_description: form.description.clone(),
+        };
+        return (StatusCode::BAD_REQUEST, render_template(template));
+    }
 
     let description = if form.description.trim().is_empty() {
         None
@@ -1064,13 +1558,13 @@ async fn save_to_new_submit(
     };
 
     match sets
-        .create(
+        .create_for_member(
             &user,
-            &language,
+            &member.member,
             NewSoundChangeSet {
                 name: form.name.clone(),
                 description,
-                changes: form.changes.clone(),
+                changes: String::new(),
             },
         )
         .await
@@ -1080,20 +1574,118 @@ async fn save_to_new_submit(
             Redirect::to(&format!("/sound-change-sets/run?set={}", created.id)).into_response(),
         ),
         Err(e) => {
-            let available_languages = languages
-                .list_editable_by_user(user.id)
-                .await
-                .unwrap_or_default();
-            let template = SaveToNewTemplate {
+            let template = NewForMemberTemplate {
                 current_user: Some(user),
+                fam_code: member.family.code.clone(),
+                member,
                 error: Some(e),
-                available_languages,
-                previous_language_code: form.language_code.clone(),
                 previous_name: form.name.clone(),
                 previous_description: form.description.clone(),
-                changes: form.changes.clone(),
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
+}
+
+async fn set_ipa_estimator_form(
+    s: Session,
+    languages: LanguageRepository,
+    sets: SoundChangeSetRepository,
+    permissions: LanguagePermissionRepository,
+    Path((code, id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let can_edit_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let can_delete_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Owner)
+        .await
+        .unwrap_or(false);
+
+    let template = SetIpaEstimatorTemplate {
+        current_user: Some(user),
+        language,
+        set,
+        can_edit_language,
+        can_delete_language,
+    };
+
+    okay(render_template(template))
+}
+
+async fn unset_ipa_estimator_form(
+    s: Session,
+    languages: LanguageRepository,
+    sets: SoundChangeSetRepository,
+    permissions: LanguagePermissionRepository,
+    Path((code, id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let can_edit_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let can_delete_language = permissions
+        .has_permission(user.id, language.id, PermissionLevel::Owner)
+        .await
+        .unwrap_or(false);
+
+    let template = UnsetIpaEstimatorTemplate {
+        current_user: Some(user),
+        language,
+        set,
+        can_edit_language,
+        can_delete_language,
+    };
+
+    okay(render_template(template))
+}
+
+async fn set_ipa_estimator_submit(
+    s: Session,
+    languages: LanguageRepository,
+    sets: SoundChangeSetRepository,
+    Path((code, id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+    attempt!(s, languages.set_ipa_estimator(&user, language.id, Some(set.id)).await);
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&format!("/languages/{}/sound-change-sets/{}", code, id)).into_response(),
+    )
+}
+
+async fn unset_ipa_estimator_submit(
+    s: Session,
+    languages: LanguageRepository,
+    Path((code, id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    attempt!(s, languages.set_ipa_estimator(&user, language.id, None).await);
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&format!("/languages/{}/sound-change-sets/{}", code, id)).into_response(),
+    )
 }

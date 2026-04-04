@@ -113,6 +113,7 @@ struct ViewMemberTemplate {
     language: Option<LanguagesWithContributors>,
     parent_member: Option<MemberWithLanguages>,
     children: Vec<MemberWithLanguages>,
+    member_scs: Option<crate::model::sound_change_sets::SoundChangeSet>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -124,6 +125,7 @@ async fn view_member(
     contribution_stats: ContributionStatsRepository,
     languages: LanguageRepository,
     permissions: LanguageFamilyPermissionRepository,
+    sets: crate::model::sound_change_sets::SoundChangeSetRepository,
     Path((code, id)): Path<(String, Uuid)>,
 ) -> (StatusCode, Response) {
     let family = attempt!(s, language_families.find_by_code(&code).await);
@@ -211,6 +213,8 @@ async fn view_member(
 
     let family = attempt!(s, language_families.materialize(family, s.user()).await);
 
+    let member_scs = sets.get_for_member(id).await.ok().flatten();
+
     let template = ViewMemberTemplate {
         name,
         current_user: s.user().cloned(),
@@ -221,6 +225,7 @@ async fn view_member(
         can_edit_language,
         parent_member,
         children: materialized_children,
+        member_scs,
     };
 
     okay(render_template(template))

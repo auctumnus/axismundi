@@ -62,6 +62,7 @@
       {
         devShells.default = pkgs.mkShell {
           inherit nativeBuildInputs buildInputs;
+          stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
       }

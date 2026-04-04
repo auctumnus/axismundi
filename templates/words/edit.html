@@ -5,6 +5,8 @@
 {% block title %}edit {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="/static/words/edit.css">
+<script defer src="/static/words/edit.js"></script>
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
@@ -42,7 +44,7 @@
                     <option value="{{ wc.abbreviation }}" {% if previous_word_class == wc.abbreviation %}selected{% endif %}>{{ wc.name }}</option>
                 {% endfor %}
             </select>
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            {% call u::icon("chevron-down") %}
         </div>
     </section>
 
@@ -90,8 +92,26 @@
     <section>
         <label for="ipa">IPA transcription (optional)</label>
         {% call u::field_error(name="ipa") %}
-        <input type="text" id="ipa" name="ipa" value="{{previous_ipa}}">
-    </section>
+        <div class="ipa-estimator">
+            <input type="text" id="ipa" name="ipa" value="{{previous_ipa}}">
+            {% if let Some(sound_change_set) = ipa_estimator %}
+                <button
+                    type="submit"
+                    id="estimate-ipa"
+                    class="secondary"
+                    formaction="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/estimate-ipa"
+                    data-sound-change-set="{{ sound_change_set.id }}"
+                >
+                    Estimate IPA
+                </button>
+            {% else %}
+                <span class="hint">to automatically estimate IPA, <a href="/languages/{{ language.code }}/sound-change-sets">create a sound change set</a> and mark it as an ipa estimator</span>
+            {% endif %}
+        </div>
+        {% if let Some(sound_change_set) = ipa_estimator %}
+            <span class="hint">using the sound change set "<a href="/languages/{{ language.code }}/sound-change-sets/{{ sound_change_set.id }}">{{ sound_change_set.name }}</a>" for estimation</span>
+        {% endif %}
+    </section>    
 
     <section>
         <label for="notes">Notes (optional)</label>

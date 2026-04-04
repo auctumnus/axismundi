@@ -1,0 +1,132 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_footer -%}
+{%- import "sound-change-sets/fragments/footer.html" as scs_f -%}
+
+{% block title %}{{ set.name }}{% if let Some(lang) = language %} in {{ lang.language.name }}{% endif %} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/language-card.css">
+<link rel="stylesheet" href="/static/sound-change-sets/view.css">
+<link rel="stylesheet" href="/static/sound-changer.css">
+<script src="/static/like-button.js" type="module" defer></script>
+<script src="/static/sound-change-sets/view.js" type="module" defer></script>
+{% endblock %}
+
+{% block content %}
+
+{% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
+
+<div class="context-cards">
+    {% if let Some(lang) = language %}
+        <div class="context-card language-context">
+            <span class="context-label">in language</span>
+            <ul class="standalone-card">
+                {% call lang_card::render(&lang) %}
+            </ul>
+        </div>
+    {% endif %}
+    {% if let Some(m) = member %}
+        <div class="context-card family-member-context">
+            <span class="context-label">for family member</span>
+            <ul class="standalone-card">
+                {% call member_card::render(&m) %}
+            </ul>
+        </div>
+    {% endif %}
+</div>
+
+<div class="sound-change-card full-card card">
+    <div class="header-with-actions">
+        <div class="with-subtitle">
+            <h1>{{ set.name }}</h1>
+            <div class="contributors">
+                <span>by</span>
+                {% call u::badge(&author, size="small") %}
+            </div>
+        </div>
+        <ul class="icons">
+            {% if can_edit %}
+                    <li>
+                        <a class="button icon gray" href="/sound-change-sets/{{ set.id }}/reassign" data-tooltip="Reassign">
+                            {% call u::icon("swap-horizontal") %}
+                        </a>
+                    </li>
+                {% if let Some(lang) = language %}
+                    <li>
+                        <a class="button icon gray" href="/languages/{{ lang.language.code }}/sound-change-sets/{{ set.id }}/edit" data-tooltip="Edit">
+                            {% call u::icon("edit") %}
+                        </a>
+                    </li>
+                    <li>
+                        <a class="button icon gray" href="/languages/{{ lang.language.code }}/sound-change-sets/{{ set.id }}/delete" data-tooltip="Delete">
+                            {% call u::icon("delete") %}
+                        </a>
+                    </li>
+                {% endif %}
+            {% endif %}
+        </ul>
+    </div>
+    {% if !rendered_description.is_empty() %}
+        <p>
+            {{ rendered_description | safe }}
+        </p>
+    {% endif %}
+</div>
+
+{% if let Some(lang) = language %}
+    {% if set.is_ipa_estimator || (!language_has_ipa_estimator && can_edit) %}
+    <div class="card">
+        {% if set.is_ipa_estimator %}
+            <p>This set is used to estimate IPA for this language.</p>
+            <div class="actions">
+                <a class="button" href="/languages/{{ lang.language.code }}/sound-change-sets/{{ set.id }}/unset-ipa-estimator">
+                    unset as ipa estimator
+                </a>
+            </div>
+        {% else if !language_has_ipa_estimator && can_edit %}
+            <p>This language has no IPA estimator. This set can be used as one.</p>
+            <div class="actions">
+                <a class="button" href="/languages/{{ lang.language.code }}/sound-change-sets/{{ set.id }}/set-ipa-estimator">
+                    set as ipa estimator
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    {% endif %}
+{% endif %}
+
+<div class="sound-change-set">
+    <a class="icon button green" href="/sound-change-sets/run?set={{ set.id }}" data-tooltip="Run and edit">
+        {% call u::icon("play") %}
+    </a>
+    <pre>{{ set.changes }}</pre>
+</div>
+
+{% endblock %}
+
+{% block breadcrumb %}
+{% if let Some(lang) = language %}
+    <span class="separator">/</span>
+    <a href="/languages/{{ lang.language.code }}" class="breadcrumb">{{ lang.language.name }}</a>
+    <span class="separator">/</span>
+    <a href="/languages/{{ lang.language.code }}/sound-change-sets" class="breadcrumb">sound change sets</a>
+{% endif %}
+{% if let Some(m) = member %}
+    <span class="separator">/</span>
+    <a href="/language-families/{{ m.family.code }}" class="breadcrumb">{{ m.family.name }}</a>
+    <span class="separator">/</span>
+    <a href="/language-families/{{ m.family.code }}/members/{{ m.member.id() }}" class="breadcrumb">{{ m.name() }}</a>
+{% endif %}
+{% endblock %}
+
+{% block footer %}
+{% if let Some(lang) = language %}
+    {% call scs_f::sound_change_set_section(&set, &lang.language, can_edit) %}
+{% endif %}
+{% if let Some(m) = member %}
+    {% call family_footer::family_section(&m.family, can_edit) %}
+{% endif %}
+{% endblock %}
