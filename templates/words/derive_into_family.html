@@ -1,0 +1,154 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}derive into family - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>derive into family</h1>
+
+<div class="context-cards">
+    <span class="context-label">from word</span>
+    <div class="context-card">
+        <div class="context-card-content">
+            <span class="word-text">{{ word.word }}</span>
+            {% if !word.ipa.is_empty() %}
+            <span class="word-ipa">/{{ word.ipa }}/</span>
+            {% endif %}
+            <span class="word-language">{{ language.name }} ({{ language.code }})</span>
+        </div>
+    </div>
+</div>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<h2>derive a descendant</h2>
+<p class="section-hint">derives the IPA (or word text if no IPA) using the sound change chain, then pre-fills the new word form</p>
+{% if descendants.is_empty() %}
+    <p class="empty-description">no sound change paths are set up for this language</p>
+{% else %}
+    <ul class="derive-options">
+        {% for opt in descendants %}
+            <li>
+                <a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-into-family?descendant={{ opt.language_code }}" class="button">
+                    {% if !single_family %}<span class="family-prefix">{{ opt.family_name }} — </span>{% endif %}{{ opt.language_name }}
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+<h2>add as a loan or related word</h2>
+<p class="section-hint">copies the word text and IPA as-is, then pre-fills the new word form</p>
+{% if loan_options.is_empty() %}
+    <p class="empty-description">you don't have edit access to any other languages</p>
+{% else %}
+    <form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-into-family">
+        <section>
+            <label for="target_language_code">Target language</label>
+            <div class="select-container">
+                <select id="target_language_code" name="target_language_code" required>
+                    {% for lang in loan_options %}
+                        <option value="{{ lang.code }}">{{ lang.name }} ({{ lang.code }})</option>
+                    {% endfor %}
+                </select>
+                {% call u::icon("chevron-down") %}
+            </div>
+        </section>
+        <section>
+            <label for="relation_kind">Relation type</label>
+            <div class="select-container">
+                <select id="relation_kind" name="relation_kind" required>
+                    <option value="borrowed">Borrowed</option>
+                    <option value="derived">Derived</option>
+                    <option value="calque">Calque</option>
+                    <option value="related">Related</option>
+                    <option value="see_also">See Also</option>
+                    <option value="compound">Compound</option>
+                    <option value="descendant">Descendant</option>
+                </select>
+                {% call u::icon("chevron-down") %}
+            </div>
+        </section>
+        <button type="submit">Continue to Edit Word</button>
+    </form>
+{% endif %}
+
+<style>
+.context-cards {
+    margin-bottom: 2rem;
+}
+
+.context-card {
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+}
+
+.context-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.context-card .word-text {
+    font-weight: 600;
+    color: var(--foreground-primary);
+    font-size: 1.125rem;
+}
+
+.context-card .word-ipa {
+    font-style: italic;
+    color: var(--foreground-secondary);
+    font-size: .875rem;
+}
+
+.context-card .word-language {
+    color: var(--foreground-tertiary);
+    font-size: .875rem;
+}
+
+.section-hint {
+    color: var(--foreground-tertiary);
+    font-size: .875rem;
+    margin-top: -0.5rem;
+    margin-bottom: 1rem;
+}
+
+.derive-options {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.derive-options li {
+    margin: 0;
+}
+
+.family-prefix {
+    color: var(--foreground-tertiary);
+}
+</style>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, true) %}
+{% endblock %}

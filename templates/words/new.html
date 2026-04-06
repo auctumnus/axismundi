@@ -8,12 +8,61 @@
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
+<style>
+.context-cards {
+    margin-bottom: 2rem;
+}
+.context-card {
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+}
+.context-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+.context-card .word-text {
+    font-weight: 600;
+    color: var(--foreground-primary);
+    font-size: 1.125rem;
+    text-decoration: none;
+}
+.context-card .word-text:hover {
+    text-decoration: underline;
+}
+.context-card .word-ipa {
+    font-style: italic;
+    color: var(--foreground-secondary);
+    font-size: .875rem;
+}
+.context-card .word-language {
+    color: var(--foreground-tertiary);
+    font-size: .875rem;
+}
+</style>
 {% endblock %}
 
 {% block content %}
 
 {% if will_create_audit_log %}
     {% call u::audit_log_banner() %}
+{% endif %}
+
+{% if let Some(antecedent) = antecedent %}
+<div class="context-cards">
+    <span class="context-label">derived from</span>
+    <div class="context-card">
+        <div class="context-card-content">
+            <a href="/languages/{{ antecedent.language.code }}/words/{{ antecedent.word.slug }}/{{ antecedent.word.lemma }}" class="word-text">{{ antecedent.word.word }}</a>
+            {% if !antecedent.word.ipa.is_empty() %}
+            <span class="word-ipa">/{{ antecedent.word.ipa }}/</span>
+            {% endif %}
+            <span class="word-language">{{ antecedent.language.name }} ({{ antecedent.language.code }})</span>
+        </div>
+    </div>
+</div>
 {% endif %}
 
 <h1>new word</h1>
@@ -95,6 +144,10 @@
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
+    {% if !antecedent_bookmark.is_empty() %}
+        <input type="hidden" name="antecedent_bookmark" value="{{ antecedent_bookmark }}">
+        <input type="hidden" name="relation_kind" value="{{ relation_kind }}">
+    {% endif %}
     <button type="submit">Create word</button>
     {% if let Some(_) = ipa_estimator %}
         <button

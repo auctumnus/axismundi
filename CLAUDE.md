@@ -20,6 +20,8 @@ when you need to test changes to the html controllers, don't bother running `jus
 
 the frontend has typescript stored in `frontend/src`; that's also where the css and such are
 
+please do not throw away AppErrors with things like .unwrap_or_default() or .ok(), it ends up hiding problems
+
 
 ## Debugging Strategies
 

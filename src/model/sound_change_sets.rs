@@ -92,6 +92,15 @@ pub struct DerivationPath {
     pub scs_ids: Vec<Uuid>,
 }
 
+#[derive(Debug, Clone)]
+pub struct FamilyLanguageInfo {
+    pub language_id: Uuid,
+    pub language_name: String,
+    pub language_code: String,
+    pub family_id: Uuid,
+    pub family_name: String,
+}
+
 crate::util::text_query!(SearchSoundChangeSets);
 
 pub struct SoundChangeSetRepository {
@@ -563,8 +572,7 @@ impl SoundChangeSetRepository {
             family_id: Uuid,
             family_name: String,
             family_code: String,
-            language_name: Option<String>,
-            title: String,
+            display_name: String,
         }
 
         let rows = sqlx::query_as!(
@@ -575,8 +583,7 @@ impl SoundChangeSetRepository {
                 lfm.family_id,
                 lf.name as family_name,
                 lf.code as family_code,
-                l.name  as language_name,
-                lfm.title
+                coalesce(l.name, lfm.title) as "display_name!"
             from language_family_members lfm
             join language_families lf on lf.id = lfm.family_id
             left join languages l on l.id = lfm.language_id
@@ -604,7 +611,7 @@ impl SoundChangeSetRepository {
                 family_id: r.family_id,
                 family_name: r.family_name,
                 family_code: r.family_code,
-                display_name: r.language_name.unwrap_or(r.title),
+                display_name: r.display_name,
             })
             .collect())
     }
@@ -623,8 +630,7 @@ impl SoundChangeSetRepository {
             family_id: Uuid,
             family_name: String,
             family_code: String,
-            language_name: Option<String>,
-            title: String,
+            display_name: String,
         }
 
         let rows = sqlx::query_as!(
@@ -635,8 +641,7 @@ impl SoundChangeSetRepository {
                 lfm.family_id,
                 lf.name as family_name,
                 lf.code as family_code,
-                l.name  as language_name,
-                lfm.title
+                coalesce(l.name, lfm.title) as "display_name!"
             from language_family_members lfm
             join language_families lf on lf.id = lfm.family_id
             left join languages l on l.id = lfm.language_id
@@ -652,8 +657,6 @@ impl SoundChangeSetRepository {
                   and lfp."user" = $1
                   and lfp.permission >= 'editor'
             )
-            -- exclude the member that IS the source language
-            and (lfm.language_id is null or lfm.language_id != $2)
             -- exclude members that already have a sound change set
             and not exists (
                 select 1 from sound_change_sets scs
@@ -674,7 +677,57 @@ impl SoundChangeSetRepository {
                 family_id: r.family_id,
                 family_name: r.family_name,
                 family_code: r.family_code,
-                display_name: r.language_name.unwrap_or(r.title),
+                display_name: r.display_name,
+            })
+            .collect())
+    }
+
+    /// Find all language members in families containing source_language_id,
+    /// excluding the source itself. Returns language + family info for display.
+    pub async fn find_family_language_infos(
+        &self,
+        source_language_id: Uuid,
+    ) -> AppResult<Vec<FamilyLanguageInfo>> {
+        #[derive(FromRow)]
+        struct Row {
+            language_id: Uuid,
+            language_name: String,
+            language_code: String,
+            family_id: Uuid,
+            family_name: String,
+        }
+
+        let rows = sqlx::query_as!(
+            Row,
+            r#"
+            SELECT DISTINCT ON (l.id)
+                l.id as "language_id!",
+                l.name as "language_name!",
+                l.code as "language_code!",
+                lf.id as "family_id!",
+                lf.name as "family_name!"
+            FROM language_family_members lfm
+            JOIN languages l ON l.id = lfm.language_id
+            JOIN language_families lf ON lf.id = lfm.family_id
+            WHERE lfm.family_id IN (
+                SELECT family_id FROM language_family_members WHERE language_id = $1
+            )
+            AND lfm.language_id != $1
+            ORDER BY l.id, lf.name
+            "#,
+            source_language_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| FamilyLanguageInfo {
+                language_id: r.language_id,
+                language_name: r.language_name,
+                language_code: r.language_code,
+                family_id: r.family_id,
+                family_name: r.family_name,
             })
             .collect())
     }

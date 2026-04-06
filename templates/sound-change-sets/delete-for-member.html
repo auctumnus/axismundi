@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "language_families/fragments/footer.html" as family_footer -%}
+
+{% block title %}delete {{ set.name }}? - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete sound change set</h1>
+
+<form class="default" method="post" action="/language-families/{{ fam_code }}/members/{{ member.member.id() }}/sound-change-sets/{{ set.id }}/delete">
+    <section>
+        <p>Are you sure you want to delete the sound change set <strong>{{ set.name }}</strong>?</p>
+        <p>This action cannot be undone and will delete all associated data.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete sound change set</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ fam_code }}" class="breadcrumb">{{ member.family.name }}</a>
+<span class="separator">/</span>
+<a href="/language-families/{{ fam_code }}/members/{{ member.member.id() }}" class="breadcrumb">{{ member.name() }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call family_footer::family_section(&member.family, can_edit) %}
+{% endblock %}

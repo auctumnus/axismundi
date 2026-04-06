@@ -74,6 +74,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/language-families/{fam_code}/members/{member_id}/sound-change-sets/new",
             post(new_for_member_submit),
+        )
+        .route(
+            "/language-families/{fam_code}/members/{member_id}/sound-change-sets/{id}/edit",
+            post(edit_meta_for_member_submit),
+        )
+        .route(
+            "/language-families/{fam_code}/members/{member_id}/sound-change-sets/{id}/delete",
+            post(delete_for_member_submit),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -124,6 +132,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/language-families/{fam_code}/members/{member_id}/sound-change-sets/new",
             get(new_for_member_form),
+        )
+        .route(
+            "/language-families/{fam_code}/members/{member_id}/sound-change-sets/{id}/edit",
+            get(edit_meta_for_member_form),
+        )
+        .route(
+            "/language-families/{fam_code}/members/{member_id}/sound-change-sets/{id}/delete",
+            get(delete_for_member_form),
         );
 
     (secure_routes, normal_routes)
@@ -1371,10 +1387,10 @@ async fn reassign_form(
 
     let (member_targets, language, language_targets) = match set.language_id {
         Some(language_id) => {
-            let targets = sets
+            let targets = attempt!(s, sets
                 .find_available_member_targets(user.id, language_id)
-                .await
-                .unwrap_or_default();
+                .await);
+
             (targets, Some(attempt!(s, languages.find_by_id(language_id).await)), vec![])
         }
         None => {
@@ -1477,6 +1493,35 @@ async fn reassign_submit(
             (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
+}
+
+// --- edit-meta and delete for member ---
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/edit-meta-for-member.html")]
+#[allow(dead_code)]
+struct EditMetaForMemberTemplate {
+    current_user: Option<User>,
+    fam_code: String,
+    member: MemberWithLanguages,
+    sound_change_set: SoundChangeSet,
+    error: Option<AppError>,
+    previous_name: String,
+    previous_description: String,
+    will_create_audit_log: bool,
+    can_edit: bool,
+}
+
+#[derive(Template)]
+#[template(path = "sound-change-sets/delete-for-member.html")]
+#[allow(dead_code)]
+struct DeleteForMemberTemplate {
+    current_user: Option<User>,
+    fam_code: String,
+    member: MemberWithLanguages,
+    set: SoundChangeSet,
+    will_create_audit_log: bool,
+    can_edit: bool,
 }
 
 // --- new for member ---
@@ -1584,6 +1629,168 @@ async fn new_for_member_submit(
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
+    }
+}
+
+async fn edit_meta_for_member_form(
+    s: Session,
+    State(state): State<AppState>,
+    members: LanguageFamilyMemberRepository,
+    sets: SoundChangeSetRepository,
+    family_permissions: LanguageFamilyPermissionRepository,
+    Path((fam_code, member_id, id)): Path<(String, Uuid, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(raw).await);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let can_edit = family_permissions
+        .has_permission(user.id, member.family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, member.family.id).await;
+
+    let template = EditMetaForMemberTemplate {
+        current_user: Some(user),
+        fam_code,
+        previous_name: set.name.clone(),
+        previous_description: set.description.clone(),
+        sound_change_set: set,
+        member,
+        error: None,
+        will_create_audit_log,
+        can_edit,
+    };
+
+    okay(render_template(template))
+}
+
+async fn edit_meta_for_member_submit(
+    s: Session,
+    State(state): State<AppState>,
+    members: LanguageFamilyMemberRepository,
+    sets: SoundChangeSetRepository,
+    family_permissions: LanguageFamilyPermissionRepository,
+    Path((fam_code, member_id, id)): Path<(String, Uuid, Uuid)>,
+    form: axum::Form<EditMetaFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(raw).await);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let can_edit = family_permissions
+        .has_permission(user.id, member.family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, member.family.id).await;
+
+    let description = if form.description.trim().is_empty() {
+        None
+    } else {
+        Some(form.description.clone())
+    };
+
+    let updates = UpdateSoundChangeSet {
+        name: if form.name == set.name {
+            None
+        } else {
+            Some(form.name.clone())
+        },
+        description: if description.as_deref().unwrap_or("") == set.description {
+            None
+        } else {
+            description
+        },
+        changes: None,
+    };
+
+    match sets.update(&user, &set.id, updates).await {
+        Ok(updated) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/sound-change-sets/{}", updated.id)).into_response(),
+        ),
+        Err(e) => {
+            let template = EditMetaForMemberTemplate {
+                current_user: Some(user),
+                fam_code,
+                member,
+                sound_change_set: set,
+                error: Some(e),
+                previous_name: form.name.clone(),
+                previous_description: form.description.clone(),
+                will_create_audit_log,
+                can_edit,
+            };
+            (StatusCode::BAD_REQUEST, render_template(template))
+        }
+    }
+}
+
+async fn delete_for_member_form(
+    s: Session,
+    State(state): State<AppState>,
+    members: LanguageFamilyMemberRepository,
+    sets: SoundChangeSetRepository,
+    family_permissions: LanguageFamilyPermissionRepository,
+    Path((fam_code, member_id, id)): Path<(String, Uuid, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(raw).await);
+    let set = attempt!(s, sets.get(id).await);
+    let Some(set) = set else {
+        return render_generic_error(s, crate::err::not_found("Sound change set not found")).await;
+    };
+
+    let can_edit = family_permissions
+        .has_permission(user.id, member.family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, member.family.id).await;
+
+    let template = DeleteForMemberTemplate {
+        current_user: Some(user),
+        fam_code,
+        member,
+        set,
+        will_create_audit_log,
+        can_edit,
+    };
+
+    okay(render_template(template))
+}
+
+async fn delete_for_member_submit(
+    s: Session,
+    sets: SoundChangeSetRepository,
+    Path((fam_code, member_id, id)): Path<(String, Uuid, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    match sets.delete(&user, &id).await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/language-families/{}/members/{}",
+                fam_code, member_id
+            ))
+            .into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
     }
 }
 

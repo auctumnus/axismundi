@@ -86,6 +86,10 @@
                 <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>add relation</span>
             </a></li>
+            <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-into-family">
+                {% call u::icon("translate") %}
+                <span>derive into family</span>
+            </a></li>
         {% endif %}
         <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">
             {% call u::icon("list") %}

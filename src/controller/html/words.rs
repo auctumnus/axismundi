@@ -13,7 +13,7 @@ use crate::{
     attempt,
     controller::html::{self, okay, render_generic_error, render_template},
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
-    err::{AppError, bad_request, not_found},
+    err::{AppError, bad_request, forbidden, not_found},
     get_user,
     model::{
         bookmarks::BookmarkRepository,
@@ -27,7 +27,7 @@ use crate::{
             CreateWordRelation, SearchWordRelations, WordRelationRepository,
             WordRelationSearchResult, WordRelationType,
         },
-        sound_change_sets::SoundChangeSet,
+        sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
         words::{CreateWord, Word, WordRepository, WordSearch, WordWithMeta},
     },
     pagination::PaginatedRequest,
@@ -107,6 +107,73 @@ struct NewWordTemplate {
     user_has_permission: bool,
     will_create_audit_log: bool,
     ipa_estimator: Option<SoundChangeSet>,
+    antecedent_bookmark: String,
+    relation_kind: String,
+    antecedent: Option<AntecedentContext>,
+}
+
+#[derive(Deserialize, Default)]
+struct NewWordPrefill {
+    word: Option<String>,
+    ipa: Option<String>,
+    word_class: Option<String>,
+    #[serde(default, rename = "definitions[]")]
+    definitions: Vec<String>,
+    #[serde(default, rename = "contexts[]")]
+    contexts: Vec<String>,
+    antecedent_bookmark: Option<String>,
+    relation_kind: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "words/derive_into_family.html")]
+#[allow(dead_code)]
+struct DeriveIntoFamilyTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: Word,
+    descendants: Vec<DescendantOption>,
+    loan_options: Vec<Language>,
+    single_family: bool,
+    error: Option<AppError>,
+}
+
+struct AntecedentContext {
+    word: Word,
+    language: Language,
+}
+
+async fn lookup_antecedent(
+    bookmarks: &BookmarkRepository,
+    words: &WordRepository,
+    languages: &LanguageRepository,
+    antecedent_bookmark: &str,
+) -> Option<AntecedentContext> {
+    if antecedent_bookmark.is_empty() {
+        return None;
+    }
+    let bookmark = bookmarks.get_by_slug(antecedent_bookmark).await.ok()?;
+    let word = words.find_by_id(bookmark.item).await.ok()?;
+    let language_code = word.language_code.clone()?;
+    let language = languages.find_by_code(&language_code).await.ok()?;
+    Some(AntecedentContext { word, language })
+}
+
+struct DescendantOption {
+    language_code: String,
+    language_name: String,
+    family_name: String,
+}
+
+#[derive(Deserialize, Default)]
+struct DeriveQuery {
+    descendant: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct DeriveIntoFamilyLoanForm {
+    target_language_code: String,
+    relation_kind: WordRelationType,
 }
 
 #[derive(Template)]
@@ -142,6 +209,8 @@ struct NewWordFormData {
     contexts: Vec<String>,
     ipa: Option<String>,
     notes: Option<String>,
+    antecedent_bookmark: Option<String>,
+    relation_kind: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -396,13 +465,17 @@ async fn view_lemmata(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn new_word(
     s: Session,
     State(state): State<AppState>,
     languages: LanguageRepository,
     word_classes: WordClassRepository,
+    words: WordRepository,
+    bookmarks: BookmarkRepository,
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
+    axum_extra::extract::Query(prefill): axum_extra::extract::Query<NewWordPrefill>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -430,22 +503,33 @@ async fn new_word(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
     let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
 
+    let previous_definition = prefill.definitions.first().cloned().unwrap_or_default();
+    let previous_definitions = prefill.definitions.iter().skip(1).cloned().collect();
+    let previous_context = prefill.contexts.first().cloned().unwrap_or_default();
+    let previous_contexts = prefill.contexts.iter().skip(1).cloned().collect();
+
+    let antecedent_bookmark_str = prefill.antecedent_bookmark.unwrap_or_default();
+    let antecedent = lookup_antecedent(&bookmarks, &words, &languages, &antecedent_bookmark_str).await;
+
     let template = NewWordTemplate {
         current_user,
         error: None,
         language,
         word_classes: word_classes_list,
-        previous_word: String::new(),
-        previous_word_class: String::new(),
-        previous_definition: String::new(),
-        previous_definitions: Vec::new(),
-        previous_context: String::new(),
-        previous_contexts: Vec::new(),
-        previous_ipa: String::new(),
+        previous_word: prefill.word.unwrap_or_default(),
+        previous_word_class: prefill.word_class.unwrap_or_default(),
+        previous_definition,
+        previous_definitions,
+        previous_context,
+        previous_contexts,
+        previous_ipa: prefill.ipa.unwrap_or_default(),
         previous_notes: String::new(),
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
+        antecedent_bookmark: antecedent_bookmark_str,
+        relation_kind: prefill.relation_kind.unwrap_or_default(),
+        antecedent,
     };
 
     let body = render_template(template);
@@ -461,6 +545,8 @@ async fn new_word_submit(
     words: WordRepository,
     definitions_repo: DefinitionRepository,
     permissions: LanguagePermissionRepository,
+    word_relations: WordRelationRepository,
+    bookmarks: BookmarkRepository,
     Path(language_code): Path<String>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
 ) -> (StatusCode, Response) {
@@ -484,6 +570,9 @@ async fn new_word_submit(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
     let ipa_estimator = languages.get_ipa_estimator(language.id).await.ok().flatten();
 
+    let antecedent_bookmark = form.antecedent_bookmark.clone().unwrap_or_default();
+    let relation_kind_str = form.relation_kind.clone().unwrap_or_default();
+
     // Filter out empty definitions and limit to 10
     let definitions_text: Vec<String> = form
         .definitions
@@ -501,6 +590,7 @@ async fn new_word_submit(
 
     // Require at least one definition
     if definitions_text.is_empty() {
+        let antecedent = lookup_antecedent(&bookmarks, &words, &languages, &antecedent_bookmark).await;
         let template = NewWordTemplate {
             current_user: Some(user),
             error: Some(crate::err::bad_request(
@@ -519,6 +609,9 @@ async fn new_word_submit(
             user_has_permission,
             will_create_audit_log,
             ipa_estimator,
+            antecedent_bookmark,
+            relation_kind: relation_kind_str,
+            antecedent,
         };
 
         let body = render_template(template);
@@ -562,15 +655,36 @@ async fn new_word_submit(
     .await;
 
     match result {
-        Ok(word) => (
-            StatusCode::SEE_OTHER,
-            Redirect::to(&format!(
-                "/languages/{}/words/{}/{}",
-                language_code, word.slug, word.lemma
-            ))
-            .into_response(),
-        ),
+        Ok(word) => {
+            // Optionally create word relation if antecedent was provided
+            let bm = form.antecedent_bookmark.as_deref().unwrap_or("").trim();
+            let kind_str = form.relation_kind.as_deref().unwrap_or("").trim();
+            if !bm.is_empty() && !kind_str.is_empty() {
+                if let Some(kind) = parse_word_relation_type(kind_str) {
+                    if let Ok(bookmark) = bookmarks.get_by_slug(bm).await {
+                        if let Ok(source_word) = words.find_by_id(bookmark.item).await {
+                            let relation = CreateWordRelation {
+                                antecedent: source_word,
+                                consequent: word.clone(),
+                                kind,
+                            };
+                            let _ = word_relations.create(&user, relation).await;
+                        }
+                    }
+                }
+            }
+
+            (
+                StatusCode::SEE_OTHER,
+                Redirect::to(&format!(
+                    "/languages/{}/words/{}/{}",
+                    language_code, word.slug, word.lemma
+                ))
+                .into_response(),
+            )
+        }
         Err(e) => {
+            let antecedent = lookup_antecedent(&bookmarks, &words, &languages, &antecedent_bookmark).await;
             let template = NewWordTemplate {
                 current_user: Some(user),
                 error: Some(e),
@@ -587,6 +701,9 @@ async fn new_word_submit(
                 user_has_permission,
                 will_create_audit_log,
                 ipa_estimator,
+                antecedent_bookmark,
+                relation_kind: relation_kind_str,
+                antecedent,
             };
 
             let body = render_template(template);
@@ -1934,11 +2051,14 @@ async fn estimate_ipa_submit(
     okay(body)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn estimate_ipa_new_word(
     s: Session,
     State(state): State<AppState>,
     languages: LanguageRepository,
     word_classes: WordClassRepository,
+    words: WordRepository,
+    bookmarks: BookmarkRepository,
     permissions: LanguagePermissionRepository,
     sets: crate::model::sound_change_sets::SoundChangeSetRepository,
     Path(language_code): Path<String>,
@@ -1973,6 +2093,9 @@ async fn estimate_ipa_new_word(
     let previous_context = form.contexts.first().cloned().unwrap_or_default();
     let previous_contexts = form.contexts.iter().skip(1).cloned().collect();
 
+    let antecedent_bookmark_str = form.antecedent_bookmark.clone().unwrap_or_default();
+    let antecedent = lookup_antecedent(&bookmarks, &words, &languages, &antecedent_bookmark_str).await;
+
     let template = NewWordTemplate {
         current_user: Some(user),
         error: None,
@@ -1989,10 +2112,338 @@ async fn estimate_ipa_new_word(
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
+        antecedent_bookmark: antecedent_bookmark_str,
+        relation_kind: form.relation_kind.clone().unwrap_or_default(),
+        antecedent,
     };
 
     let body = render_template(template);
     okay(body)
+}
+
+fn encode_query_value(s: &str) -> String {
+    percent_encoding::percent_encode(s.as_bytes(), percent_encoding::NON_ALPHANUMERIC).to_string()
+}
+
+fn parse_word_relation_type(s: &str) -> Option<WordRelationType> {
+    match s {
+        "derived" => Some(WordRelationType::Derived),
+        "descendant" => Some(WordRelationType::Descendant),
+        "compound" => Some(WordRelationType::Compound),
+        "calque" => Some(WordRelationType::Calque),
+        "borrowed" => Some(WordRelationType::Borrowed),
+        "related" => Some(WordRelationType::Related),
+        "see_also" => Some(WordRelationType::SeeAlso),
+        _ => None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn derive_into_family_form(
+    s: Session,
+    State(state): State<AppState>,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_classes: WordClassRepository,
+    language_permissions: LanguagePermissionRepository,
+    scs: SoundChangeSetRepository,
+    definitions_repo: DefinitionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Query(params): Query<DeriveQuery>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
+    if !has_permission {
+        return render_generic_error(
+            s,
+            forbidden("You don't have permission to derive words from this language"),
+        )
+        .await;
+    }
+
+    if let Some(descendant_code) = params.descendant {
+        // Derive descendant flow: compute derived form and redirect to new-word
+        let target_language = attempt!(s, languages.find_by_code(&descendant_code).await);
+
+        let has_target_permission = is_admin_or_mod
+            || attempt!(
+                s,
+                language_permissions
+                    .has_permission(current_user.id, target_language.id, PermissionLevel::Editor)
+                    .await
+            );
+        if !has_target_permission {
+            return render_generic_error(
+                s,
+                forbidden("You don't have permission to create words in the target language"),
+            )
+            .await;
+        }
+
+        let paths = attempt!(s, scs.find_derivation_paths(language.id).await);
+        let path = match paths.into_iter().find(|p| p.language_id == target_language.id) {
+            Some(p) => p,
+            None => {
+                return render_generic_error(
+                    s,
+                    not_found("No complete sound change path found to that language"),
+                )
+                .await
+            }
+        };
+
+        // Apply SCS chain to ipa (or word text if no ipa)
+        let (input, use_ipa) = if !word.ipa.is_empty() {
+            (word.ipa.clone(), true)
+        } else {
+            (word.word.clone(), false)
+        };
+
+        let mut current = input;
+        for scs_id in &path.scs_ids {
+            let resp = attempt!(s, scs.run_from_db(scs_id, vec![current]).await);
+            current = resp.output_words.into_iter().next().unwrap_or_default();
+        }
+
+        let derived_ipa = if use_ipa { current.clone() } else { String::new() };
+        let derived_word = if use_ipa { String::new() } else { current.clone() };
+
+        // Try to match word class by abbreviation in target language
+        let word_class_abbrev = if let Some(abbrev) = &word.word_class_abbreviation {
+            word_classes
+                .find_by_abbreviation(&target_language.id, abbrev)
+                .await
+                .ok()
+                .map(|wc| wc.abbreviation)
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        // Load source word's definitions
+        let defs = definitions_repo
+            .list_by_word(word.id, PaginatedRequest { limit: 100, offset: 0 })
+            .await
+            .map(|r| r.items)
+            .unwrap_or_default();
+
+        // Build redirect query string
+        let mut parts: Vec<String> = Vec::new();
+        if !derived_ipa.is_empty() {
+            parts.push(format!("ipa={}", encode_query_value(&derived_ipa)));
+        }
+        if !derived_word.is_empty() {
+            parts.push(format!("word={}", encode_query_value(&derived_word)));
+        }
+        if !word_class_abbrev.is_empty() {
+            parts.push(format!(
+                "word_class={}",
+                encode_query_value(&word_class_abbrev)
+            ));
+        }
+        for def in &defs {
+            parts.push(format!(
+                "definitions%5B%5D={}",
+                encode_query_value(&def.definition)
+            ));
+            parts.push(format!(
+                "contexts%5B%5D={}",
+                encode_query_value(&def.context)
+            ));
+        }
+        parts.push(format!(
+            "antecedent_bookmark={}",
+            encode_query_value(&word.bookmark)
+        ));
+        parts.push("relation_kind=descendant".to_string());
+
+        let redirect_url = format!(
+            "/languages/{}/new-word?{}",
+            target_language.code,
+            parts.join("&")
+        );
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&redirect_url).into_response(),
+        );
+    }
+
+    // Show step 1 page
+    let derivation_paths = attempt!(s, scs.find_derivation_paths(language.id).await);
+    let family_infos = attempt!(s, scs.find_family_language_infos(language.id).await);
+
+    let single_family = {
+        let family_ids: std::collections::HashSet<Uuid> =
+            family_infos.iter().map(|fi| fi.family_id).collect();
+        family_ids.len() <= 1
+    };
+
+    let descendants: Vec<DescendantOption> = derivation_paths
+        .into_iter()
+        .filter_map(|path| {
+            let fi = family_infos
+                .iter()
+                .find(|fi| fi.language_id == path.language_id)?;
+            Some(DescendantOption {
+                language_code: fi.language_code.clone(),
+                language_name: fi.language_name.clone(),
+                family_name: fi.family_name.clone(),
+            })
+        })
+        .collect();
+
+    let mut loan_options =
+        attempt!(s, languages.list_editable_by_user(current_user.id).await);
+    loan_options.retain(|l| l.id != language.id);
+
+    let template = DeriveIntoFamilyTemplate {
+        current_user: Some(current_user),
+        language,
+        word,
+        descendants,
+        loan_options,
+        single_family,
+        error: None,
+    };
+
+    let body = render_template(template);
+    okay(body)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn derive_into_family_loan(
+    s: Session,
+    State(state): State<AppState>,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_classes: WordClassRepository,
+    language_permissions: LanguagePermissionRepository,
+    definitions_repo: DefinitionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Form(form): Form<DeriveIntoFamilyLoanForm>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .await
+    );
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
+        .await
+        .unwrap_or(false);
+
+    let has_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, language.id, PermissionLevel::Editor)
+                .await
+        );
+    if !has_permission {
+        return render_generic_error(
+            s,
+            forbidden("You don't have permission to derive words from this language"),
+        )
+        .await;
+    }
+
+    let target_language = attempt!(s, languages.find_by_code(&form.target_language_code).await);
+
+    let has_target_permission = is_admin_or_mod
+        || attempt!(
+            s,
+            language_permissions
+                .has_permission(current_user.id, target_language.id, PermissionLevel::Editor)
+                .await
+        );
+    if !has_target_permission {
+        return render_generic_error(
+            s,
+            forbidden("You don't have permission to create words in the target language"),
+        )
+        .await;
+    }
+
+    // Try to match word class by abbreviation in target language
+    let word_class_abbrev = if let Some(abbrev) = &word.word_class_abbreviation {
+        word_classes
+            .find_by_abbreviation(&target_language.id, abbrev)
+            .await
+            .ok()
+            .map(|wc| wc.abbreviation)
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    // Load source word's definitions
+    let defs = definitions_repo
+        .list_by_word(word.id, PaginatedRequest { limit: 100, offset: 0 })
+        .await
+        .map(|r| r.items)
+        .unwrap_or_default();
+
+    // Build redirect query string (loan: copy word + ipa as-is)
+    let mut parts: Vec<String> = Vec::new();
+    parts.push(format!("word={}", encode_query_value(&word.word)));
+    if !word.ipa.is_empty() {
+        parts.push(format!("ipa={}", encode_query_value(&word.ipa)));
+    }
+    if !word_class_abbrev.is_empty() {
+        parts.push(format!(
+            "word_class={}",
+            encode_query_value(&word_class_abbrev)
+        ));
+    }
+    for def in &defs {
+        parts.push(format!(
+            "definitions%5B%5D={}",
+            encode_query_value(&def.definition)
+        ));
+        parts.push(format!(
+            "contexts%5B%5D={}",
+            encode_query_value(&def.context)
+        ));
+    }
+    parts.push(format!(
+        "antecedent_bookmark={}",
+        encode_query_value(&word.bookmark)
+    ));
+    parts.push(format!(
+        "relation_kind={}",
+        encode_query_value(&form.relation_kind.to_string())
+    ));
+
+    let redirect_url = format!(
+        "/languages/{}/new-word?{}",
+        target_language.code,
+        parts.join("&")
+    );
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&redirect_url).into_response(),
+    )
 }
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -2006,7 +2457,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/languages/{language}/words/{slug}/{lemma}/estimate-ipa", axum::routing::post(estimate_ipa_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/delete", axum::routing::post(delete_word_submit))
         .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/delete", axum::routing::post(delete_relation_submit))
-        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::post(edit_relation_submit));
+        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::post(edit_relation_submit))
+        .route("/languages/{language}/words/{slug}/{lemma}/derive-into-family", axum::routing::post(derive_into_family_loan));
 
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{language}/words", axum::routing::get(word_search))
@@ -2016,7 +2468,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/languages/{language}/words/{slug}/{lemma}/add-relation", axum::routing::get(add_relation_form))
         .route("/languages/{language}/words/{slug}/{lemma}/delete", axum::routing::get(delete_word_form))
         .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/delete", axum::routing::get(delete_relation_form))
-        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::get(edit_relation_form));
+        .route("/languages/{language}/words/{slug}/{lemma}/relations/{related_language}/{related_slug}/{related_lemma}/edit", axum::routing::get(edit_relation_form))
+        .route("/languages/{language}/words/{slug}/{lemma}/derive-into-family", axum::routing::get(derive_into_family_form));
 
     (secure_routes, normal_routes)
 }

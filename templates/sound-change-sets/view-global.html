@@ -66,6 +66,18 @@
                         </a>
                     </li>
                 {% endif %}
+                {% if let Some(m) = member %}
+                    <li>
+                        <a class="button icon gray" href="/language-families/{{ m.family.code }}/members/{{ m.member.id() }}/sound-change-sets/{{ set.id }}/edit" data-tooltip="Edit">
+                            {% call u::icon("edit") %}
+                        </a>
+                    </li>
+                    <li>
+                        <a class="button icon gray" href="/language-families/{{ m.family.code }}/members/{{ m.member.id() }}/sound-change-sets/{{ set.id }}/delete" data-tooltip="Delete">
+                            {% call u::icon("delete") %}
+                        </a>
+                    </li>
+                {% endif %}
             {% endif %}
         </ul>
     </div>
