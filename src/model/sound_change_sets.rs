@@ -318,19 +318,24 @@ impl SoundChangeSetRepository {
                     .has_permission(requestor.id, language_id, PermissionLevel::Editor)
                     .await?;
                 if !can_edit {
-                    return Err(forbidden("You do not have permission to edit this sound change set"));
+                    return Err(forbidden(
+                        "You do not have permission to edit this sound change set",
+                    ));
                 }
             }
             SoundChangeSetOwner::Member(member_id) => {
                 let member = LanguageFamilyMemberRepository::new(self.state.clone())
                     .find_by_id(member_id)
                     .await?;
-                let family_permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
+                let family_permissions =
+                    LanguageFamilyPermissionRepository::new(self.state.clone());
                 let can_edit = family_permissions
                     .has_permission(requestor.id, member.family_id(), PermissionLevel::Editor)
                     .await?;
                 if !can_edit {
-                    return Err(forbidden("You do not have permission to edit this sound change set"));
+                    return Err(forbidden(
+                        "You do not have permission to edit this sound change set",
+                    ));
                 }
             }
         }
@@ -354,7 +359,9 @@ impl SoundChangeSetRepository {
         let language_id = match set.owner() {
             SoundChangeSetOwner::Language(id) => id,
             SoundChangeSetOwner::Member(_) => {
-                return Err(crate::err::bad_request("Sound change set is already member-owned"));
+                return Err(crate::err::bad_request(
+                    "Sound change set is already member-owned",
+                ));
             }
         };
 
@@ -369,7 +376,9 @@ impl SoundChangeSetRepository {
             .has_permission(requestor.id, language_id, PermissionLevel::Editor)
             .await?;
         if !can_edit_language {
-            return Err(forbidden("You do not have permission to reassign this sound change set"));
+            return Err(forbidden(
+                "You do not have permission to reassign this sound change set",
+            ));
         }
 
         let member = LanguageFamilyMemberRepository::new(self.state.clone())
@@ -428,7 +437,9 @@ impl SoundChangeSetRepository {
         let member_id = match set.owner() {
             SoundChangeSetOwner::Member(id) => id,
             SoundChangeSetOwner::Language(_) => {
-                return Err(crate::err::bad_request("Sound change set is already language-owned"));
+                return Err(crate::err::bad_request(
+                    "Sound change set is already language-owned",
+                ));
             }
         };
 
@@ -441,7 +452,9 @@ impl SoundChangeSetRepository {
             .has_permission(requestor.id, member.family_id(), PermissionLevel::Editor)
             .await?;
         if !can_edit_family {
-            return Err(forbidden("You do not have permission to reassign this sound change set"));
+            return Err(forbidden(
+                "You do not have permission to reassign this sound change set",
+            ));
         }
 
         let language_permissions = LanguagePermissionRepository::new(self.state.clone());
@@ -553,7 +566,9 @@ impl SoundChangeSetRepository {
 
             match response {
                 Ok(response) => Ok(response),
-                Err(error) => Err(internal_error(format!("Failed to run sound changes: {error}"))),
+                Err(error) => Err(internal_error(format!(
+                    "Failed to run sound changes: {error}"
+                ))),
             }
         } else {
             Err(not_found(format!("sound change set with id {set_id}")))

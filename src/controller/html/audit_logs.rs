@@ -135,8 +135,6 @@ struct ViewAuditLogTemplate {
     back: String,
 }
 
-
-
 async fn view_audit_log(
     s: Session,
     audit_logs: AuditLogRepository,

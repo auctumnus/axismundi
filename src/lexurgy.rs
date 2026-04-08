@@ -76,11 +76,28 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::ParseError { message, line_number, column_number } => {
-                write!(f, "Parse error at line {}, column {}: {}", line_number, column_number, message)
+            Error::ParseError {
+                message,
+                line_number,
+                column_number,
+            } => {
+                write!(
+                    f,
+                    "Parse error at line {}, column {}: {}",
+                    line_number, column_number, message
+                )
             }
-            Error::InvalidExpression { message, rule, expression, expression_number } => {
-                write!(f, "Invalid expression in rule '{}', expression {}: {}. Expression was: '{}'", rule, expression_number, message, expression)
+            Error::InvalidExpression {
+                message,
+                rule,
+                expression,
+                expression_number,
+            } => {
+                write!(
+                    f,
+                    "Invalid expression in rule '{}', expression {}: {}. Expression was: '{}'",
+                    rule, expression_number, message, expression
+                )
             }
             Error::AnalysisError { message } => {
                 write!(f, "Analysis error: {}", message)
@@ -120,9 +137,13 @@ pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> 
         }
         Err(e) => {
             if e.is_timeout() {
-                Ok(Err(Error::Timeout { message: "The request timed out".to_string() }))
+                Ok(Err(Error::Timeout {
+                    message: "The request timed out".to_string(),
+                }))
             } else {
-                Ok(Err(Error::RuntimeError { message: format!("An error occurred while sending the request: {}", e) }))
+                Ok(Err(Error::RuntimeError {
+                    message: format!("An error occurred while sending the request: {}", e),
+                }))
             }
         }
     }

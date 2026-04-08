@@ -26,7 +26,11 @@ use crate::{
         words::{WordRepository, WordWithMeta},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, BackQuery, ensure_verified, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState, BackQuery, ensure_verified,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 use super::translations::TranslationWithMeta;
@@ -71,7 +75,9 @@ impl ResourceRepositories {
             ReportableResource::Word => {
                 let word = self.words.find_by_id(resource_id).await.ok()?;
                 let word_with_meta = self.words.materialize(word, None).await.ok()?;
-                Some(ReportableResourceData::Word { word: word_with_meta })
+                Some(ReportableResourceData::Word {
+                    word: word_with_meta,
+                })
             }
             ReportableResource::Translation => {
                 let t = self.translations.find_by_id(resource_id).await.ok()?;
@@ -367,8 +373,6 @@ struct ViewReportTemplate {
     reporter: Option<User>,
     back: String,
 }
-
-
 
 async fn view_report(
     s: Session,

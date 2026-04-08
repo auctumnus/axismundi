@@ -9,11 +9,16 @@ use uuid::Uuid;
 use validator::{Validate, ValidateArgs, ValidationErrors};
 
 use crate::{
-    config::CONFIG, embed::{GenericEmbed, truncate_description}, err::{AppResult, bad_request, internal_error, not_found}, model::{
+    config::CONFIG,
+    embed::{GenericEmbed, truncate_description},
+    err::{AppResult, bad_request, internal_error, not_found},
+    model::{
         email_verification_tokens::EmailVerificationToken,
         languages::Language,
         password_reset_tokens::{PasswordResetToken, PasswordResetTokenRepository},
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password}
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, PasswordValidationContext, ensure_verified, re, s3::S3, validate_password},
 };
 
 use super::email_verification_tokens::EmailVerificationTokenRepository;
@@ -409,7 +414,11 @@ impl UserRepository {
             updates
                 .display_name
                 .as_deref()
-                .unwrap_or(if requestor.display_name.is_empty() { "" } else { &requestor.display_name }),
+                .unwrap_or(if requestor.display_name.is_empty() {
+                    ""
+                } else {
+                    &requestor.display_name
+                }),
         ];
 
         updates.validate_with_args(&user_inputs.as_ref())?;
@@ -478,18 +487,18 @@ impl UserRepository {
         };
 
         // None = don't change, Some("") = clear, Some("value") = set
-        let display_name_final = updates.display_name.as_ref().map_or_else(
-            || requestor.display_name.clone(),
-            |s| s.clone(),
-        );
-        let description_final = updates.description.as_ref().map_or_else(
-            || requestor.description.clone(),
-            |s| s.clone(),
-        );
-        let pronouns_final = updates.pronouns.as_ref().map_or_else(
-            || requestor.pronouns.clone(),
-            |s| s.clone(),
-        );
+        let display_name_final = updates
+            .display_name
+            .as_ref()
+            .map_or_else(|| requestor.display_name.clone(), |s| s.clone());
+        let description_final = updates
+            .description
+            .as_ref()
+            .map_or_else(|| requestor.description.clone(), |s| s.clone());
+        let pronouns_final = updates
+            .pronouns
+            .as_ref()
+            .map_or_else(|| requestor.pronouns.clone(), |s| s.clone());
 
         // Handle gender (which includes # prefix stripping)
         let gender_final = if let Some(g) = &updates.gender {
@@ -820,11 +829,7 @@ impl UserRepository {
         let user = self.find_by_id(user_id).await?;
         validate_password(
             new_password,
-            &[
-                &user.username,
-                &user.email,
-                &user.display_name,
-            ],
+            &[&user.username, &user.email, &user.display_name],
         )
         .map_err(|e| {
             let mut errors = ValidationErrors::new();
@@ -940,7 +945,11 @@ impl UserRepository {
             description: truncate_description(&user.description),
             author: None,
             image: user.get_profile_picture_url(),
-            color: if user.gender.is_empty() { None } else { Some(format!("#{}", user.gender)) },
+            color: if user.gender.is_empty() {
+                None
+            } else {
+                Some(format!("#{}", user.gender))
+            },
         }
     }
 }

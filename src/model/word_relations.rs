@@ -16,9 +16,20 @@ use crate::{
     util::{AppState, ensure_verified, repo_from_parts},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    sqlx::Type,
+    strum::EnumString,
+    strum::Display,
+)]
 #[sqlx(type_name = "word_relation_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum WordRelationType {
     Derived,
     Descendant,
@@ -27,20 +38,6 @@ pub enum WordRelationType {
     Borrowed,
     Related,
     SeeAlso,
-}
-
-impl std::fmt::Display for WordRelationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WordRelationType::Derived => write!(f, "derived"),
-            WordRelationType::Descendant => write!(f, "descendant"),
-            WordRelationType::Compound => write!(f, "compound"),
-            WordRelationType::Calque => write!(f, "calque"),
-            WordRelationType::Borrowed => write!(f, "borrowed"),
-            WordRelationType::Related => write!(f, "related"),
-            WordRelationType::SeeAlso => write!(f, "see_also"),
-        }
-    }
 }
 
 impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
@@ -191,7 +188,9 @@ pub struct CreateWordRelation {
     pub kind: WordRelationType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, strum::Display, strum::EnumString)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[strum(serialize_all = "snake_case")]
 pub enum RelationDirection {
     Antecedent,
@@ -207,7 +206,7 @@ impl RelationDirection {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SearchWordRelations {
     pub q: Option<String>,
     pub kind: Option<WordRelationType>,
@@ -251,25 +250,35 @@ impl WordRelationRepository {
         Self { state }
     }
 
-    // TODO: might need a `create_with_tx`
     pub async fn create(
         &self,
         requestor: &User,
         relation: CreateWordRelation,
     ) -> AppResult<WordRelation> {
-        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
-        use crate::model::language_permissions::CheckPermissionReq;
-
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(requestor.id)
             .await?;
 
+        let mut tx = self.state.pool.begin().await?;
+        let word_relation = self.create_with_tx(requestor, relation, &mut tx).await?;
+        tx.commit().await?;
+
+        Ok(word_relation)
+    }
+
+    pub async fn create_with_tx(
+        &self,
+        requestor: &User,
+        relation: CreateWordRelation,
+        tx: &mut Transaction<'_, Postgres>,
+    ) -> AppResult<WordRelation> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::CheckPermissionReq;
+
         let antecedent = relation.antecedent;
         let consequent = relation.consequent;
-
-        let mut tx = self.state.pool.begin().await?;
 
         let word_relation = sqlx::query_as!(WordRelation,
                 r#"
@@ -301,7 +310,7 @@ impl WordRelationRepository {
                         "language_id": antecedent.language,
                     })),
                 },
-                &mut tx,
+                tx,
             )
             .await?;
 
@@ -320,7 +329,7 @@ impl WordRelationRepository {
                         "language_id": consequent.language,
                     })),
                 },
-                &mut tx,
+                tx,
             )
             .await?;
 
@@ -353,7 +362,7 @@ impl WordRelationRepository {
                     let CognacyInner::V1(antecedent_schema) = antecedent_cognacy.inner;
                     let CognacyInner::V1(consequent_schema) = consequent_cognacy.inner;
                     self.merge_v1(
-                        &mut tx,
+                        tx,
                         (antecedent_id, antecedent_schema),
                         Some((consequent_id, consequent_schema)),
                         edge,
@@ -363,7 +372,7 @@ impl WordRelationRepository {
                 (Some(cognacy), None) | (None, Some(cognacy)) => {
                     let id = cognacy.id;
                     let CognacyInner::V1(schema) = cognacy.inner;
-                    self.merge_v1(&mut tx, (id, schema), None, edge).await?;
+                    self.merge_v1(tx, (id, schema), None, edge).await?;
 
                     // update both words to point to the cognacy
                     sqlx::query!(
@@ -418,8 +427,6 @@ impl WordRelationRepository {
                 }
             }
         }
-
-        tx.commit().await?;
 
         Ok(word_relation)
     }

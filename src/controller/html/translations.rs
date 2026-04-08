@@ -29,7 +29,11 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{AppState, BackQuery, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState, BackQuery,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 use axum::extract::State;
 
@@ -140,7 +144,10 @@ async fn translation_search(
             for translation in response.items {
                 let author = attempt!(s, users.find_by_id(translation.created_by).await);
                 let is_liked = if let Some(user) = &current_user {
-                    translations.is_liked(&translation.id, &user.id).await.unwrap_or(false)
+                    translations
+                        .is_liked(&translation.id, &user.id)
+                        .await
+                        .unwrap_or(false)
                 } else {
                     false
                 };
@@ -157,7 +164,7 @@ async fn translation_search(
                 offset: response.offset,
                 has_more: response.has_more,
             })
-        },
+        }
         Err(e) => Err(e),
     };
 
@@ -194,7 +201,9 @@ async fn translation_search(
         search_name: "translations",
         search_action,
         render_item,
-    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
 
     let status = template.status();
     (status, render_template(template))
@@ -231,7 +240,10 @@ async fn translation_search_by_translatable(
             for translation in response.items {
                 let author = attempt!(s, users.find_by_id(translation.created_by).await);
                 let is_liked = if let Some(user) = &current_user {
-                    translations.is_liked(&translation.id, &user.id).await.unwrap_or(false)
+                    translations
+                        .is_liked(&translation.id, &user.id)
+                        .await
+                        .unwrap_or(false)
                 } else {
                     false
                 };
@@ -248,7 +260,7 @@ async fn translation_search_by_translatable(
                 offset: response.offset,
                 has_more: response.has_more,
             })
-        },
+        }
         Err(e) => Err(e),
     };
 
@@ -285,7 +297,9 @@ async fn translation_search_by_translatable(
         search_name: "translations",
         search_action,
         render_item,
-    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
 
     let status = template.status();
     (status, render_template(template))
@@ -592,8 +606,6 @@ struct ViewTranslationTemplate {
     back_text: String,
 }
 
-
-
 async fn view_translation(
     s: Session,
     user_agent: Option<TypedHeader<UserAgent>>,
@@ -702,10 +714,8 @@ async fn view_translation(
         None
     };
 
-    let translatable_with_meta = attempt!(
-        s,
-        translatables.materialize(translatable, s.user()).await
-    );
+    let translatable_with_meta =
+        attempt!(s, translatables.materialize(translatable, s.user()).await);
 
     let back_text = back_query
         .back
@@ -721,10 +731,12 @@ async fn view_translation(
         })
         .unwrap_or("back");
 
-    let back_url = back_query
-        .back
-        .clone()
-        .unwrap_or_else(|| format!("/translatable/{}", &translatable_with_meta.translatable.slug));
+    let back_url = back_query.back.clone().unwrap_or_else(|| {
+        format!(
+            "/translatable/{}",
+            &translatable_with_meta.translatable.slug
+        )
+    });
 
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),

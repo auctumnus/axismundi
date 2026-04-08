@@ -1,11 +1,15 @@
 use crate::{
-    err::{AppResult, unauthorized_no_session}, lexurgy::{self, send_scv1}, model::{
+    err::{AppResult, unauthorized_no_session},
+    lexurgy::{self, send_scv1},
+    model::{
         languages::LanguageRepository,
         sound_change_sets::{
-            NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet,
-            SoundChangeSetRepository, UpdateSoundChangeSet,
+            NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet, SoundChangeSetRepository,
+            UpdateSoundChangeSet,
         },
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::extract_session::Session
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::extract_session::Session,
 };
 use axum::{Json, extract::Path, http::StatusCode};
 use serde::Deserialize;
@@ -54,7 +58,9 @@ pub async fn create_sound_change_set(
 
     let language = languages.find_by_code(&code).await?;
 
-    sets.create_for_language(requestor, &language, req).await.map(Json)
+    sets.create_for_language(requestor, &language, req)
+        .await
+        .map(Json)
 }
 
 pub async fn list_sound_change_sets(
@@ -397,11 +403,19 @@ mod tests {
             &ctx.owner_token,
             &format!("sound-change-sets/{id}/run"),
             json!({ "input_words": input_words }),
-        ).await;
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         if response.status() != StatusCode::OK {
             let status = response.status();
-            let error_value: String = str::from_utf8(axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap().as_ref()).unwrap().to_string();
+            let error_value: String = str::from_utf8(
+                axum::body::to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .unwrap()
+                    .as_ref(),
+            )
+            .unwrap()
+            .to_string();
             panic!("Expected 200 OK, got {}: {:#?}", status, error_value);
         }
         assert_eq!(response.status(), StatusCode::OK);

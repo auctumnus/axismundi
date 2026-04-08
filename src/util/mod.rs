@@ -11,9 +11,9 @@ use argon2::{
 };
 pub mod extract_session;
 pub mod graph_svg;
-pub mod search_template;
 mod images;
 pub mod s3;
+pub mod search_template;
 use askama::Template;
 use base64::Engine;
 
@@ -187,7 +187,8 @@ pub fn sanitize_external_url(url: &str) -> Result<String, ValidationError> {
     let scheme = parsed.scheme();
 
     if scheme != "http" && scheme != "https" {
-        return Err(ValidationError::new("invalid_url").with_message("URL must start with http:// or https://".into()));
+        return Err(ValidationError::new("invalid_url")
+            .with_message("URL must start with http:// or https://".into()));
     }
 
     Ok(parsed.to_string())
@@ -317,7 +318,9 @@ pub struct BackQuery {
     pub back: Option<String>,
 }
 
-pub fn is_discord(user_agent: Option<axum_extra::TypedHeader<axum_extra::headers::UserAgent>>) -> bool {
+pub fn is_discord(
+    user_agent: Option<axum_extra::TypedHeader<axum_extra::headers::UserAgent>>,
+) -> bool {
     if let Some(ua) = user_agent {
         ua.as_str().to_lowercase().contains("discordbot")
     } else {

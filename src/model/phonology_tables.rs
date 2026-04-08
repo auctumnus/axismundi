@@ -271,11 +271,15 @@ impl PhonologyTable {
 
         let mut html = String::new();
         let body: Body = serde_json::from_value(self.body.clone())?;
-        
+
         html.push_str("<div class=\"phonology-table-container\">");
 
         html.push_str("<div class=\"header-with-actions\">");
-        write!(html, "<{} id=\"table-{}\">{}</{}>", options.header_el, self.id, self.name, options.header_el)?;
+        write!(
+            html,
+            "<{} id=\"table-{}\">{}</{}>",
+            options.header_el, self.id, self.name, options.header_el
+        )?;
         html.push_str("</h2><ul>");
         if let Some(standalone_link) = &options.standalone_link {
             html.push_str(&format!(
@@ -312,16 +316,20 @@ impl PhonologyTable {
         }
         html.push_str("</ul></div>");
 
-        write!(html, "<table class=\"phonology-table\" aria-labelledby=\"table-{}\">", self.id)?;
+        write!(
+            html,
+            "<table class=\"phonology-table\" aria-labelledby=\"table-{}\">",
+            self.id
+        )?;
 
         // --- thead: column headers ---
         let max_col_depth = Column::max_depth(&body.columns, 1);
         let max_row_depth = max_row_group_depth(&body.rows, 1);
 
         // BFS to build header rows
-        let mut header_rows: Vec<Vec<HeaderCell>> = (0..max_col_depth).map(|_| Vec::new()).collect();
-        let mut queue: VecDeque<(&Column, usize)> =
-            body.columns.iter().map(|c| (c, 0)).collect();
+        let mut header_rows: Vec<Vec<HeaderCell>> =
+            (0..max_col_depth).map(|_| Vec::new()).collect();
+        let mut queue: VecDeque<(&Column, usize)> = body.columns.iter().map(|c| (c, 0)).collect();
 
         while let Some((col, depth)) = queue.pop_front() {
             match col {
@@ -373,7 +381,13 @@ impl PhonologyTable {
         // --- tbody: data rows ---
         html.push_str("<tbody>");
         let mut pending_groups: Vec<(String, usize)> = Vec::new();
-        write_rows(&mut html, &body.rows, &mut pending_groups, max_row_depth + 1, 1);
+        write_rows(
+            &mut html,
+            &body.rows,
+            &mut pending_groups,
+            max_row_depth + 1,
+            1,
+        );
         html.push_str("</tbody>");
 
         html.push_str("</table>");

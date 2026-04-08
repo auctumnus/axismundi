@@ -25,7 +25,11 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{AppState, BackQuery, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState, BackQuery, ListHeaderKind,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -33,7 +37,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/new-translatable", post(new_translatable_submit))
         .route("/translatable/{slug}/edit", post(edit_translatable_submit))
         .route("/translatable/{slug}/edit-source", post(edit_source_submit))
-        .route("/translatable/{slug}/delete", post(delete_translatable_submit));
+        .route(
+            "/translatable/{slug}/delete",
+            post(delete_translatable_submit),
+        );
 
     let normal_routes = Router::<AppState>::new()
         .route("/new-translatable", get(new_translatable_form))
@@ -154,16 +161,13 @@ async fn search_translatables(
     let results = translatables
         .search(pagination.clone(), query.clone())
         .and_then(|response| {
-            response
-                .try_map_async(|translatable| translatables.materialize(translatable, s.user()))
+            response.try_map_async(|translatable| translatables.materialize(translatable, s.user()))
         })
         .await;
 
-    let render_item = |translatable_with_meta: &TranslatableWithMeta| {
-        PreviewCard {
-            translatable_with_meta: translatable_with_meta.clone(),
-            back_url: &back_url,
-        }
+    let render_item = |translatable_with_meta: &TranslatableWithMeta| PreviewCard {
+        translatable_with_meta: translatable_with_meta.clone(),
+        back_url: &back_url,
     };
 
     let header = Header {
@@ -254,10 +258,8 @@ async fn view_translatable(
         crate::md::render_md(&translatable.description).ok()
     };
 
-    let translatable_with_meta = attempt!(
-        s,
-        translatables.materialize(translatable, s.user()).await
-    );
+    let translatable_with_meta =
+        attempt!(s, translatables.materialize(translatable, s.user()).await);
 
     // Fetch the 3 most recent translations for this translatable
     let translations = attempt!(
@@ -271,9 +273,8 @@ async fn view_translatable(
                 }
             )
             .and_then(|response| {
-                response.try_map_async(|translation| {
-                    translations.materialize(translation, s.user())
-                })
+                response
+                    .try_map_async(|translation| translations.materialize(translation, s.user()))
             })
             .await
     );
@@ -332,7 +333,10 @@ async fn edit_translatable_submit(
     let user = get_user!(s);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
-    match translatables.update(&user, translatable.id, updates.clone()).await {
+    match translatables
+        .update(&user, translatable.id, updates.clone())
+        .await
+    {
         Ok(result) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
@@ -397,7 +401,10 @@ async fn edit_source_submit(
     let user = get_user!(s);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
-    match translatables.update(&user, translatable.id, form.clone()).await {
+    match translatables
+        .update(&user, translatable.id, form.clone())
+        .await
+    {
         Ok(result) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),

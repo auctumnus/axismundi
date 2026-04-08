@@ -7,7 +7,7 @@ use crate::err::{AppResult, bad_request, not_found};
 use crate::model::audit_log::{AuditActionType, PermissionCheck};
 use crate::model::language_invites::LanguageInvite;
 use crate::model::users::User;
-use crate::util::{AppState, ensure_verified};
+use crate::util::{AppState, ensure_verified, is_admin_or_mod};
 
 use super::language_invites::PermissionLevel;
 
@@ -441,6 +441,29 @@ impl LanguagePermissionRepository {
             } else {
                 Ok(PermissionCheck::NoPermission)
             }
+        }
+    }
+
+    pub async fn can_edit_language(
+        &self,
+        requestor: Option<&User>,
+        language: &Uuid,
+    ) -> AppResult<bool> {
+        if let Some(user) = requestor {
+            ensure_verified(user)?;
+
+            if is_admin_or_mod(&self.state, user.id).await? {
+                return Ok(true);
+            }
+
+            let perm = self.find_by_user_and_language(user.id, *language).await?;
+
+            Ok(match perm {
+                Some(p) => p.permission >= PermissionLevel::Editor,
+                None => false,
+            })
+        } else {
+            Ok(false)
         }
     }
 }

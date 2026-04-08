@@ -28,7 +28,11 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{AppState, BackQuery, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState, BackQuery, ListHeaderKind,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -149,8 +153,6 @@ struct ViewLanguageFamilyTemplate {
     back: String,
 }
 
-
-
 #[allow(clippy::too_many_arguments)]
 async fn view_language_family(
     s: Session,
@@ -179,7 +181,11 @@ async fn view_language_family(
                         family.like_count
                     ),
                     author: Some(owner.clone()),
-                    color: if owner.gender.is_empty() { None } else { Some(owner.gender.clone()) },
+                    color: if owner.gender.is_empty() {
+                        None
+                    } else {
+                        Some(owner.gender.clone())
+                    },
                     url: format!(
                         "{}/language-families/{}",
                         &crate::CONFIG.public_url_base,

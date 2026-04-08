@@ -164,10 +164,9 @@ mod tests {
     async fn create_test_context() -> TestContext {
         let email_service = Arc::new(MockEmailService::new());
         let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
-        let (app, _state) =
-            crate::tests::test_app_with_email_service_state(&email_service_trait)
-                .await
-                .unwrap();
+        let (app, _state) = crate::tests::test_app_with_email_service_state(&email_service_trait)
+            .await
+            .unwrap();
 
         let suffix = crate::tests::random_code();
         let owner_token =
@@ -215,7 +214,12 @@ mod tests {
             "name": crate::tests::random_name(),
             "body": valid_body(),
         });
-        let request = post(token, &format!("languages/{language_code}/phonology-tables"), body).await;
+        let request = post(
+            token,
+            &format!("languages/{language_code}/phonology-tables"),
+            body,
+        )
+        .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         crate::tests::response_to_value(response.into_body()).await
@@ -319,7 +323,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_phonology_table() {
         let mut ctx = create_test_context().await;
-        let table = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let table =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         let id = table["id"].as_str().unwrap();
 
         let request = get(&format!(
@@ -341,11 +346,7 @@ mod tests {
         create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
 
-        let request = get(&format!(
-            "languages/{}/phonology-tables",
-            ctx.language_code
-        ))
-        .await;
+        let request = get(&format!("languages/{}/phonology-tables", ctx.language_code)).await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -358,7 +359,8 @@ mod tests {
     #[tokio::test]
     async fn test_edit_phonology_table() {
         let mut ctx = create_test_context().await;
-        let table = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let table =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         let id = table["id"].as_str().unwrap();
 
         let update_body = json!({"name": "Renamed Table"});
@@ -377,7 +379,8 @@ mod tests {
     #[tokio::test]
     async fn test_edit_phonology_table_unauthorized() {
         let mut ctx = create_test_context().await;
-        let table = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let table =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         let id = table["id"].as_str().unwrap();
 
         let update_body = json!({"name": "Renamed Table"});
@@ -392,7 +395,8 @@ mod tests {
     #[tokio::test]
     async fn test_edit_phonology_table_forbidden() {
         let mut ctx = create_test_context().await;
-        let table = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let table =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         let id = table["id"].as_str().unwrap();
 
         let update_body = json!({"name": "Renamed Table"});
@@ -410,7 +414,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_phonology_table() {
         let mut ctx = create_test_context().await;
-        let table = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let table =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         let id = table["id"].as_str().unwrap();
 
         let request = delete(
@@ -424,12 +429,14 @@ mod tests {
     #[tokio::test]
     async fn test_delete_phonology_table_unauthorized() {
         let mut ctx = create_test_context().await;
-        let table = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let table =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
         let id = table["id"].as_str().unwrap();
 
-        let request = delete_without_auth(
-            &format!("languages/{}/phonology-tables/{id}", ctx.language_code),
-        );
+        let request = delete_without_auth(&format!(
+            "languages/{}/phonology-tables/{id}",
+            ctx.language_code
+        ));
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
@@ -437,9 +444,12 @@ mod tests {
     #[tokio::test]
     async fn test_delete_positions_reorder() {
         let mut ctx = create_test_context().await;
-        let t0 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
-        let t1 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
-        let t2 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t0 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t1 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t2 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
 
         assert_eq!(t0["position"], 0);
         assert_eq!(t1["position"], 1);
@@ -455,11 +465,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
         // list and verify positions are 0 and 1
-        let request = get(&format!(
-            "languages/{}/phonology-tables",
-            ctx.language_code
-        ))
-        .await;
+        let request = get(&format!("languages/{}/phonology-tables", ctx.language_code)).await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -467,7 +473,10 @@ mod tests {
         let items = value["items"].as_array().unwrap();
         assert_eq!(items.len(), 2);
 
-        let mut positions: Vec<i64> = items.iter().map(|i| i["position"].as_i64().unwrap()).collect();
+        let mut positions: Vec<i64> = items
+            .iter()
+            .map(|i| i["position"].as_i64().unwrap())
+            .collect();
         positions.sort();
         assert_eq!(positions, vec![0, 1]);
     }
@@ -477,8 +486,10 @@ mod tests {
     #[tokio::test]
     async fn test_swap_phonology_tables() {
         let mut ctx = create_test_context().await;
-        let t0 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
-        let t1 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t0 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t1 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
 
         assert_eq!(t0["position"], 0);
         assert_eq!(t1["position"], 1);
@@ -521,8 +532,10 @@ mod tests {
     #[tokio::test]
     async fn test_swap_phonology_tables_unauthorized() {
         let mut ctx = create_test_context().await;
-        let t0 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
-        let t1 = create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t0 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
+        let t1 =
+            create_test_phonology_table(&mut ctx.app, &ctx.owner_token, &ctx.language_code).await;
 
         let swap_body = json!({
             "id1": t0["id"],

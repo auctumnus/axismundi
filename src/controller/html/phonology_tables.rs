@@ -10,16 +10,32 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    attempt, controller::html::{LanguagesWithContributors, languages::{Breadcrumb, Footer}, okay, render_generic_error, render_template}, err::AppError, get_user, md::render_md, model::{
+    attempt,
+    controller::html::{
+        LanguagesWithContributors,
+        languages::{Breadcrumb, Footer},
+        okay, render_generic_error, render_template,
+    },
+    err::AppError,
+    get_user,
+    md::render_md,
+    model::{
         contribution_stats::ContributionStatsRepository,
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         phonology_tables::{
-            Body, Cell, Column, CreatePhonologyTable, PhonologyTable, PhonologyTableRepository, Row, SearchPhonologyTable, TableRenderOptions, UpdatePhonologyTable
+            Body, Cell, Column, CreatePhonologyTable, PhonologyTable, PhonologyTableRepository,
+            Row, SearchPhonologyTable, TableRenderOptions, UpdatePhonologyTable,
         },
         users::User,
-    }, pagination::PaginatedRequest, util::{AppState, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}}
+    },
+    pagination::PaginatedRequest,
+    util::{
+        AppState,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -159,7 +175,10 @@ async fn search_phonology_tables(
 
     let render_item = move |table: &PhonologyTable| {
         let options = TableRenderOptions {
-            standalone_link: Some(format!("/languages/{}/phonology-tables/{}", lang_code, table.id)),
+            standalone_link: Some(format!(
+                "/languages/{}/phonology-tables/{}",
+                lang_code, table.id
+            )),
             edit_links: None,
             header_el: "h3".to_string(),
         };
@@ -200,7 +219,9 @@ async fn search_phonology_tables(
         search_name: "phonology tables",
         search_action,
         render_item,
-    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
 
     let status = template.status();
     (status, render_template(template))
@@ -324,26 +345,41 @@ struct EditBodyFormData {
 fn default_empty_body() -> Body {
     Body {
         rows: vec![
-            Row::Individual { heading: "Row 1".to_string(), cells: vec![
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-            ] },
-             Row::Individual { heading: "Row 2".to_string(), cells: vec![
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-            ] },
-             Row::Individual { heading: "Row 3".to_string(), cells: vec![
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-            ] },
+            Row::Individual {
+                heading: "Row 1".to_string(),
+                cells: vec![
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                ],
+            },
+            Row::Individual {
+                heading: "Row 2".to_string(),
+                cells: vec![
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                ],
+            },
+            Row::Individual {
+                heading: "Row 3".to_string(),
+                cells: vec![
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                ],
+            },
         ],
         columns: vec![
-            Column::Individual { heading: "Column 1".to_string() },
-            Column::Individual { heading: "Column 2".to_string() },
-            Column::Individual { heading: "Column 3".to_string() },
+            Column::Individual {
+                heading: "Column 1".to_string(),
+            },
+            Column::Individual {
+                heading: "Column 2".to_string(),
+            },
+            Column::Individual {
+                heading: "Column 3".to_string(),
+            },
         ],
         annotations: vec![],
     }
@@ -506,7 +542,9 @@ async fn view_phonology_table(
 
     let top_contributors = attempt!(
         s,
-        contribution_stats.get_top_contributors(&language.id, 5).await
+        contribution_stats
+            .get_top_contributors(&language.id, 5)
+            .await
     );
     let is_liked = if let Some(user) = s.user() {
         attempt!(s, languages.is_liked(&user.id, &language.id).await)
@@ -525,9 +563,18 @@ async fn view_phonology_table(
 
     let edit_links = if can_edit_language {
         Some((
-            format!("/languages/{}/phonology-tables/{}/edit-meta", language.code, table.id),
-            format!("/languages/{}/phonology-tables/{}/edit-body", language.code, table.id),
-            format!("/languages/{}/phonology-tables/{}/delete", language.code, table.id),
+            format!(
+                "/languages/{}/phonology-tables/{}/edit-meta",
+                language.code, table.id
+            ),
+            format!(
+                "/languages/{}/phonology-tables/{}/edit-body",
+                language.code, table.id
+            ),
+            format!(
+                "/languages/{}/phonology-tables/{}/delete",
+                language.code, table.id
+            ),
         ))
     } else {
         None
@@ -694,8 +741,10 @@ async fn edit_body_form(
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
-    let previous_table_body: Body =
-        attempt!(s, serde_json::from_value(table.body.clone()).map_err(Into::into));
+    let previous_table_body: Body = attempt!(
+        s,
+        serde_json::from_value(table.body.clone()).map_err(Into::into)
+    );
 
     let template = EditBodyTemplate {
         current_user: Some(user),
@@ -736,8 +785,8 @@ async fn edit_body_submit(
     let body: Body = match serde_json::from_str(&form.body) {
         Ok(b) => b,
         Err(e) => {
-            let previous_table_body: Body = serde_json::from_value(table.body.clone())
-                .unwrap_or_else(|_| default_empty_body());
+            let previous_table_body: Body =
+                serde_json::from_value(table.body.clone()).unwrap_or_else(|_| default_empty_body());
 
             let template = EditBodyTemplate {
                 current_user: Some(user),

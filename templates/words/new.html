@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 {%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "words/fragments/card.html" as word_card -%}
 
 {% block title %}new word - {{ language.name }} - axismundi{% endblock %}
 
@@ -52,15 +53,11 @@
 
 {% if let Some(antecedent) = antecedent %}
 <div class="context-cards">
-    <span class="context-label">derived from</span>
     <div class="context-card">
-        <div class="context-card-content">
-            <a href="/languages/{{ antecedent.language.code }}/words/{{ antecedent.word.slug }}/{{ antecedent.word.lemma }}" class="word-text">{{ antecedent.word.word }}</a>
-            {% if !antecedent.word.ipa.is_empty() %}
-            <span class="word-ipa">/{{ antecedent.word.ipa }}/</span>
-            {% endif %}
-            <span class="word-language">{{ antecedent.language.name }} ({{ antecedent.language.code }})</span>
-        </div>
+        <span class="context-label">derived from</span>
+        <ul class="standalone-card">
+            {% call word_card::render(&antecedent) %}
+        </ul>
     </div>
 </div>
 {% endif %}
@@ -144,8 +141,8 @@
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
-    {% if !antecedent_bookmark.is_empty() %}
-        <input type="hidden" name="antecedent_bookmark" value="{{ antecedent_bookmark }}">
+    {% if let Some(antecedent) = antecedent %}
+        <input type="hidden" name="antecedent_bookmark" value="{{ antecedent.word.bookmark }}">
         <input type="hidden" name="relation_kind" value="{{ relation_kind }}">
     {% endif %}
     <button type="submit">Create word</button>

@@ -17,10 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{
-        LanguagesWithContributors, TranslatableWithMeta, okay,
-        render_template,
-    },
+    controller::html::{LanguagesWithContributors, TranslatableWithMeta, okay, render_template},
     embed::{EmbedTarget, render_embed},
     err::{AppError, bad_request},
     model::{
@@ -36,7 +33,10 @@ use crate::{
     },
     pagination::PaginatedRequest,
     util::{
-        AppState, BackQuery, EmptyTemplate, extract_session::{SESSION_COOKIE_NAME, Session}, is_discord, s3::S3,
+        AppState, BackQuery, EmptyTemplate,
+        extract_session::{SESSION_COOKIE_NAME, Session},
+        is_discord,
+        s3::S3,
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -308,7 +308,11 @@ mod ma {
             $previous_input
                 .as_ref()
                 .and_then(|p| p.$field.clone())
-                .unwrap_or_else(|| $current_user.as_ref().map_or(String::new(), |u| u.$field.clone()))
+                .unwrap_or_else(|| {
+                    $current_user
+                        .as_ref()
+                        .map_or(String::new(), |u| u.$field.clone())
+                })
         };
     }
     pub(crate) use prev;
@@ -663,69 +667,74 @@ async fn profile(
 
     if is_discord(user_agent) {
         return okay(
-            render_embed(
-                EmbedTarget::Discord,
-                UserRepository::as_embed(&user),
-            )
-            .await
-            .into_response(),
+            render_embed(EmbedTarget::Discord, UserRepository::as_embed(&user))
+                .await
+                .into_response(),
         );
     }
 
-    let languages = attempt!(s, languages
-        .search(
-            PaginatedRequest::preview(),
-            LanguageSearch {
-                owned_by: Some(username.clone()),
-                ..Default::default()
-            },
-        )
-        .and_then(|paginated| {
-            paginated.try_map_async(|language| {
-                languages.materialize(language, s.user())
+    let languages = attempt!(
+        s,
+        languages
+            .search(
+                PaginatedRequest::preview(),
+                LanguageSearch {
+                    owned_by: Some(username.clone()),
+                    ..Default::default()
+                },
+            )
+            .and_then(|paginated| {
+                paginated.try_map_async(|language| languages.materialize(language, s.user()))
             })
-        })
-        .await);
+            .await
+    );
 
-    let families_result = attempt!(s, language_families
-        .search(
-            SearchLanguageFamilies {
-                owner: Some(username.clone()),
-                q: None,
-                has_language: None,
-            },
-            PaginatedRequest::preview(),
-        )
-        .and_then(|paginated| {
-            paginated.try_map_async(|family| {
-                language_families.materialize(family, s.user())
+    let families_result = attempt!(
+        s,
+        language_families
+            .search(
+                SearchLanguageFamilies {
+                    owner: Some(username.clone()),
+                    q: None,
+                    has_language: None,
+                },
+                PaginatedRequest::preview(),
+            )
+            .and_then(|paginated| {
+                paginated.try_map_async(|family| language_families.materialize(family, s.user()))
             })
-        })
-        .await);
+            .await
+    );
 
-    let activities_result = attempt!(s, activities
-        .list_by_user(
-            current_user.as_ref(),
-            user.id,
-            None,
-            PaginatedRequest::preview(),
-        )
-        .await);
+    let activities_result = attempt!(
+        s,
+        activities
+            .list_by_user(
+                current_user.as_ref(),
+                user.id,
+                None,
+                PaginatedRequest::preview(),
+            )
+            .await
+    );
 
-    let translatables_result = attempt!(s, translatables
-        .search(
-            PaginatedRequest::preview(),
-            TranslatableSearch {
-                created_by: Some(username.clone()),
-                ..Default::default()
-            },
-        )
-        .and_then(|paginated| {
-            paginated.try_map_async(|translatable| {
-                translatables.materialize(translatable, current_user.as_ref())
+    let translatables_result = attempt!(
+        s,
+        translatables
+            .search(
+                PaginatedRequest::preview(),
+                TranslatableSearch {
+                    created_by: Some(username.clone()),
+                    ..Default::default()
+                },
+            )
+            .and_then(|paginated| {
+                paginated.try_map_async(|translatable| {
+                    translatables.materialize(translatable, current_user.as_ref())
+                })
             })
-        })
-        .await);
+            .await
+    );
 
     let rendered_description = UserRepository::render_description(&user).unwrap_or_default();
 

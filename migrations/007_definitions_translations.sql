@@ -5,6 +5,7 @@ create table definitions (
 
     definition text not null,
     context text not null default '',
+    position integer not null default 0,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

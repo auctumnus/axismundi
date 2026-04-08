@@ -12,7 +12,9 @@ use crate::model::users::User;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::util::AppState;
 
-#[derive(Template, Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Template, Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,
+)]
 #[sqlx(type_name = "permission_level", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 #[template(path = "languages/permissions/fragments/badge.html")]

@@ -28,6 +28,10 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
             get(list_definitions),
         )
         .route(
+            "/languages/{code}/words/{slug}/{lemma}/definitions/swap",
+            post(swap_definitions),
+        )
+        .route(
             "/languages/{code}/words/{slug}/{lemma}/definitions/{id}",
             get(get_definition),
         )
@@ -101,7 +105,40 @@ pub async fn edit_definition(
         return Err(unauthorized_no_session());
     };
 
-    definitions.update(requestor, id, updates).await.map(Json)
+    definitions
+        .update(requestor, id, updates, None)
+        .await
+        .map(Json)
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SwapDefinitionsRequest {
+    id1: Uuid,
+    id2: Uuid,
+}
+
+pub async fn swap_definitions(
+    s: Session,
+    Path((code, slug, lemma)): Path<(String, String, i32)>,
+    languages: LanguageRepository,
+    words: WordRepository,
+    definitions: DefinitionRepository,
+    Json(req): Json<SwapDefinitionsRequest>,
+) -> ApiResponse<StatusCode> {
+    let Some(requestor) = s.user() else {
+        return Err(unauthorized_no_session());
+    };
+
+    let language = languages.find_by_code(&code).await?;
+    let word = words
+        .find_by_slug_and_lemma(Some(requestor), language.id, &slug, lemma)
+        .await?;
+
+    definitions
+        .swap(requestor, word.id, req.id1, req.id2)
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn delete_definition(

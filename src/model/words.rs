@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use sqlx::FromRow;
@@ -6,11 +7,13 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
+    embed::{GenericEmbed, truncate_description},
     err::{AppResult, bad_request, internal_error, not_found},
     model::{
         definitions::{Definition, DefinitionRepository},
         language_invites::PermissionLevel,
-        users::User,
+        languages::LanguageRepository,
+        users::{User, UserRepository},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified, text_query},
@@ -200,6 +203,27 @@ impl WordRepository {
         language: Uuid,
         word: CreateWord,
     ) -> AppResult<Word> {
+        let mut tx = self.state.pool.begin().await?;
+
+        let id = self
+            .create_with_tx(requestor, language, word, &mut tx)
+            .await?;
+
+        tx.commit().await?;
+
+        // fetch the created word to get materialized fields
+        let created_word = self.find_by_id(id).await?;
+
+        Ok(created_word)
+    }
+
+    pub async fn create_with_tx(
+        &self,
+        requestor: &User,
+        language: Uuid,
+        word: CreateWord,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<Uuid> {
         word.validate()?;
 
         ensure_verified(requestor)?;
@@ -214,8 +238,6 @@ impl WordRepository {
             .await?;
 
         let (slug, lemma) = self.make_slug_and_lemma(language, &word.word).await?;
-
-        let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
@@ -236,7 +258,7 @@ impl WordRepository {
             word.extra,
             requestor.id
         )
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
 
         // Generate and insert bookmark
@@ -246,7 +268,7 @@ impl WordRepository {
             bookmark_slug,
             word_result.id
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
 
         let perm_check = permissions
@@ -263,18 +285,13 @@ impl WordRepository {
                         "word": word.word
                     })),
                 },
-                &mut tx,
+                tx,
             )
             .await?;
 
         if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
             return Err(bad_request("you don't have permission to create words"));
         }
-
-        tx.commit().await?;
-
-        // fetch the created word to get materialized fields
-        let created_word = self.find_by_id(word_result.id).await?;
 
         // Create activity if language is public
         let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
@@ -286,7 +303,7 @@ impl WordRepository {
                 .create(
                     requestor.id,
                     crate::model::user_activities::ActivityType::CreateWord,
-                    created_word.id,
+                    word_result.id,
                     "word",
                     Some(language),
                     Some("language"),
@@ -294,7 +311,7 @@ impl WordRepository {
                 .await?;
         }
 
-        Ok(created_word)
+        Ok(word_result.id)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Word> {
@@ -945,6 +962,93 @@ impl WordRepository {
 
         Ok(CrossLanguageSearchResponse {
             languages: language_groups,
+        })
+    }
+
+    pub async fn as_embed(&self, word: &Word) -> AppResult<GenericEmbed> {
+        let language = LanguageRepository::new(self.state.clone())
+            .find_by_id(word.language)
+            .await?;
+
+        let url = format!(
+            "{}/languages/{}/words/{}/{}",
+            crate::CONFIG.public_url_base,
+            language.code,
+            word.slug,
+            word.lemma
+        );
+
+        let title = if let Some(word_class) = &word.word_class_abbreviation {
+            format!("{} ({}.)", word.word, word_class)
+        } else {
+            word.word.clone()
+        };
+
+        let definitions = DefinitionRepository::new(self.state.clone())
+            .list_by_word(
+                word.id,
+                PaginatedRequest {
+                    limit: 3,
+                    offset: 0,
+                },
+            )
+            .await?;
+
+        let rendered_definitions = definitions
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, d)| {
+                let i = i + 1;
+
+                let context = if d.context.is_empty() {
+                    String::new()
+                } else {
+                    format!("({}) ", d.context)
+                };
+
+                let definition = if d.definition.len() > 50 {
+                    format!("{}...", &d.definition[..50])
+                } else {
+                    d.definition.clone()
+                };
+
+                format!("{i}. {context}{definition}")
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let notes = if word.notes.is_empty() {
+            String::new()
+        } else {
+            format!("\n\n{}", word.notes)
+        };
+
+        let combined = format!("{rendered_definitions}{notes}");
+        let description = format!(
+            "{}\n\n⭐️ {}",
+            truncate_description(&combined),
+            word.like_count
+        );
+
+        let user_repo = UserRepository::new(self.state.clone());
+
+        let author = word
+            ._created_by
+            .map(|creator_id| user_repo.find_by_id(creator_id));
+
+        let author = match author {
+            Some(u) => Some(u.await?),
+            _ => None,
+        };
+
+        Ok(GenericEmbed {
+            title,
+            description,
+            author,
+            color: None,
+            url,
+            image: None,
         })
     }
 }

@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
 use crate::{
-    err::AppError, model::users::User, pagination::{PaginatedRequest, PaginatedResponse, PaginationTemplate}, util::{EmptyTemplate, HasTextQuery}
+    err::AppError,
+    model::users::User,
+    pagination::{PaginatedRequest, PaginatedResponse, PaginationTemplate},
+    util::{EmptyTemplate, HasTextQuery},
 };
 use askama::Template;
 use serde::Serialize;
@@ -15,7 +18,7 @@ pub struct SearchTemplate<
     QueryTemplate: Template,
     Item: Template,
     ItemRenderer: Fn(&T) -> Item,
-    SearchName: Display, 
+    SearchName: Display,
     SearchAction: Display,
     Breadcrumbs: Template = EmptyTemplate,
     Footer: Template = EmptyTemplate,
@@ -41,7 +44,7 @@ pub struct SearchTemplateArgs<
     QueryTemplate: Template,
     Item: Template,
     ItemRenderer: Fn(&T) -> Item,
-    SearchName: Display, 
+    SearchName: Display,
     SearchAction: Display,
 > {
     pub current_user: Option<User>,
@@ -62,9 +65,31 @@ pub fn make_search_layout<
     QueryTemplate: Template,
     Item: Template,
     ItemRenderer: Fn(&T) -> Item,
-    SearchName: Display, 
+    SearchName: Display,
     SearchAction: Display,
->(layout: SearchTemplateArgs<T, Header, Query, QueryTemplate, Item, ItemRenderer, SearchName, SearchAction>) -> SearchTemplate<T, Header, Query, QueryTemplate, Item, ItemRenderer, SearchName, SearchAction, EmptyTemplate, EmptyTemplate> {
+>(
+    layout: SearchTemplateArgs<
+        T,
+        Header,
+        Query,
+        QueryTemplate,
+        Item,
+        ItemRenderer,
+        SearchName,
+        SearchAction,
+    >,
+) -> SearchTemplate<
+    T,
+    Header,
+    Query,
+    QueryTemplate,
+    Item,
+    ItemRenderer,
+    SearchName,
+    SearchAction,
+    EmptyTemplate,
+    EmptyTemplate,
+> {
     let SearchTemplateArgs {
         current_user,
         header,
@@ -78,7 +103,12 @@ pub fn make_search_layout<
     } = layout;
     match results {
         Ok(res) => {
-            let pagination = PaginationTemplate::from_paginated_response(search_action.to_string().as_str(), &res, &pagination, &query);
+            let pagination = PaginationTemplate::from_paginated_response(
+                search_action.to_string().as_str(),
+                &res,
+                &pagination,
+                &query,
+            );
             SearchTemplate {
                 current_user,
                 header,
@@ -93,9 +123,13 @@ pub fn make_search_layout<
                 breadcrumbs: None,
                 footer: None,
             }
-        },
+        }
         Err(e) => {
-            let pagination = PaginationTemplate::from_error(search_action.to_string().as_str(), &pagination, &query);
+            let pagination = PaginationTemplate::from_error(
+                search_action.to_string().as_str(),
+                &pagination,
+                &query,
+            );
             SearchTemplate {
                 current_user,
                 header,
@@ -121,11 +155,24 @@ impl<
     QueryTemplate: Template,
     Item: Template,
     ItemRenderer: Fn(&T) -> Item,
-    SearchName: Display, 
+    SearchName: Display,
     SearchAction: Display,
     Breadcrumbs: Template,
     Footer: Template,
-> SearchTemplate<T, Header, Query, QueryTemplate, Item, ItemRenderer, SearchName, SearchAction, Breadcrumbs, Footer> {
+>
+    SearchTemplate<
+        T,
+        Header,
+        Query,
+        QueryTemplate,
+        Item,
+        ItemRenderer,
+        SearchName,
+        SearchAction,
+        Breadcrumbs,
+        Footer,
+    >
+{
     pub fn status(&self) -> axum::http::StatusCode {
         if self.error.is_none() {
             axum::http::StatusCode::OK
@@ -134,7 +181,21 @@ impl<
         }
     }
 
-    pub fn with_breadcrumbs<NewBreadcrumbs: Template>(self, breadcrumbs: NewBreadcrumbs) -> SearchTemplate<T, Header, Query, QueryTemplate, Item, ItemRenderer, SearchName, SearchAction, NewBreadcrumbs, Footer> {
+    pub fn with_breadcrumbs<NewBreadcrumbs: Template>(
+        self,
+        breadcrumbs: NewBreadcrumbs,
+    ) -> SearchTemplate<
+        T,
+        Header,
+        Query,
+        QueryTemplate,
+        Item,
+        ItemRenderer,
+        SearchName,
+        SearchAction,
+        NewBreadcrumbs,
+        Footer,
+    > {
         let SearchTemplate {
             current_user,
             header,
@@ -165,7 +226,21 @@ impl<
         }
     }
 
-    pub fn with_footer<NewFooter: Template>(self, footer: NewFooter) -> SearchTemplate<T, Header, Query, QueryTemplate, Item, ItemRenderer, SearchName, SearchAction, Breadcrumbs, NewFooter> {
+    pub fn with_footer<NewFooter: Template>(
+        self,
+        footer: NewFooter,
+    ) -> SearchTemplate<
+        T,
+        Header,
+        Query,
+        QueryTemplate,
+        Item,
+        ItemRenderer,
+        SearchName,
+        SearchAction,
+        Breadcrumbs,
+        NewFooter,
+    > {
         let SearchTemplate {
             query_template,
             header,

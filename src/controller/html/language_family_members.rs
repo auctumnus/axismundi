@@ -30,7 +30,11 @@ use crate::{
         users::User,
     },
     pagination::PaginatedRequest,
-    util::{AppState, ListHeaderKind, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState, ListHeaderKind,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> Router<AppState> {
@@ -301,7 +305,10 @@ async fn search_members(
     };
 
     let breadcrumbs = html::language_families::Breadcrumb { family: &family };
-    let footer = html::language_families::Footer { family: &family, can_edit_family };
+    let footer = html::language_families::Footer {
+        family: &family,
+        can_edit_family,
+    };
 
     let template = make_search_layout(SearchTemplateArgs {
         current_user,
@@ -362,8 +369,13 @@ async fn search_relatives(
         language: &language,
     };
 
-    let breadcrumbs = html::languages::Breadcrumb { language: &language.language };
-    let footer = html::languages::Footer { language: &language.language, can_edit_language: false };
+    let breadcrumbs = html::languages::Breadcrumb {
+        language: &language.language,
+    };
+    let footer = html::languages::Footer {
+        language: &language.language,
+        can_edit_language: false,
+    };
 
     let template = make_search_layout(SearchTemplateArgs {
         current_user,

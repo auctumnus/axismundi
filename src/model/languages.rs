@@ -10,7 +10,12 @@ use crate::{
     controller::html::LanguagesWithContributors,
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
-        contribution_stats::ContributionStatsRepository, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, sound_change_sets::{SoundChangeSet, SoundChangeSetRepository}, user_bans::UserBanRepository, users::{USERNAME_REGEX, User, UserSearch}
+        contribution_stats::ContributionStatsRepository,
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
+        user_bans::UserBanRepository,
+        users::{USERNAME_REGEX, User, UserSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
@@ -877,12 +882,20 @@ impl LanguageRepository {
         Ok(json_ld)
     }
 
-    pub async fn set_ipa_estimator(&self, requestor: &User, language_id: Uuid, sound_change_set: Option<Uuid>) -> AppResult<()> {
+    pub async fn set_ipa_estimator(
+        &self,
+        requestor: &User,
+        language_id: Uuid,
+        sound_change_set: Option<Uuid>,
+    ) -> AppResult<()> {
         ensure_verified(requestor)?;
 
         let permissions = LanguagePermissionRepository::new(self.state.clone());
 
-        if !permissions.has_permission(requestor.id, language_id, PermissionLevel::Editor).await? {
+        if !permissions
+            .has_permission(requestor.id, language_id, PermissionLevel::Editor)
+            .await?
+        {
             return Err(forbidden("you don't have permission to edit this language"));
         }
 
@@ -902,7 +915,9 @@ impl LanguageRepository {
             };
 
             if scs.language_id != Some(language_id) {
-                return Err(bad_request("sound change set does not belong to this language"));
+                return Err(bad_request(
+                    "sound change set does not belong to this language",
+                ));
             }
 
             if let Some(current) = current_estimator {

@@ -18,12 +18,25 @@ use crate::{
     err::AppError,
     get_user,
     model::{
-        contribution_stats::ContributionStatsRepository, language_families::{
+        contribution_stats::ContributionStatsRepository,
+        language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
-        }, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch}, phonology_tables::{PhonologyTableRepository, SearchPhonologyTable, TableRenderOptions}, translatable::TranslatableRepository, translations::TranslationRepository, users::{User, UserRepository}, words::{WordRepository, WordSearch, WordWithMeta}
+        },
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch},
+        phonology_tables::{PhonologyTableRepository, SearchPhonologyTable, TableRenderOptions},
+        translatable::TranslatableRepository,
+        translations::TranslationRepository,
+        users::{User, UserRepository},
+        words::{WordRepository, WordSearch, WordWithMeta},
     },
     pagination::PaginatedRequest,
-    util::{AppState, BackQuery, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState, BackQuery,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -93,7 +106,9 @@ async fn search_languages(
             for language in response.items {
                 let top_contributors = attempt!(
                     s,
-                    contribution_stats.get_top_contributors(&language.id, 5).await
+                    contribution_stats
+                        .get_top_contributors(&language.id, 5)
+                        .await
                 );
                 let is_liked = if let Some(user) = &current_user {
                     languages
@@ -116,7 +131,7 @@ async fn search_languages(
                 offset: response.offset,
                 has_more: response.has_more,
             })
-        },
+        }
         Err(e) => Err(e),
     };
 
@@ -221,7 +236,6 @@ async fn new_language_submit(
     }
 }
 
-
 #[derive(Template)]
 #[template(path = "languages/view.html")]
 #[allow(dead_code)]
@@ -243,8 +257,6 @@ struct ViewLanguageTemplate {
     phonology_tables: Vec<String>,
     back: String,
 }
-
-
 
 #[allow(clippy::too_many_arguments)]
 async fn view_language(
@@ -279,7 +291,11 @@ async fn view_language(
                         language.like_count
                     ),
                     author: Some(owner.clone()),
-                    color: if owner.gender.is_empty() { None } else { Some(owner.gender.clone()) },
+                    color: if owner.gender.is_empty() {
+                        None
+                    } else {
+                        Some(owner.gender.clone())
+                    },
                     url: format!(
                         "{}/languages/{}",
                         &crate::CONFIG.public_url_base,
@@ -349,7 +365,10 @@ async fn view_language(
     for translation in recent_translations.items {
         let author = attempt!(s, users.find_by_id(translation.created_by).await);
         let is_liked = if let Some(user) = s.user() {
-            translations.is_liked(&translation.id, &user.id).await.unwrap_or(false)
+            translations
+                .is_liked(&translation.id, &user.id)
+                .await
+                .unwrap_or(false)
         } else {
             false
         };
@@ -424,12 +443,30 @@ async fn view_language(
         other_families_materialized.push(materialized);
     }
 
-    let all_tables = attempt!(s, phonology_tables.search(&language, PaginatedRequest { limit: 100, offset: 0 }, SearchPhonologyTable { q: None, created_after: None, created_before: None }).await);
+    let all_tables = attempt!(
+        s,
+        phonology_tables
+            .search(
+                &language,
+                PaginatedRequest {
+                    limit: 100,
+                    offset: 0
+                },
+                SearchPhonologyTable {
+                    q: None,
+                    created_after: None,
+                    created_before: None
+                }
+            )
+            .await
+    );
     let mut tables = Vec::new();
     for table in all_tables.items {
-
         let options = TableRenderOptions {
-            standalone_link: Some(format!("/languages/{}/phonology-tables/{}", language.code, table.id)),
+            standalone_link: Some(format!(
+                "/languages/{}/phonology-tables/{}",
+                language.code, table.id
+            )),
             edit_links: None,
             header_el: "h3".to_string(),
         };

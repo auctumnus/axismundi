@@ -22,7 +22,11 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{AppState, extract_session::Session, search_template::{SearchTemplateArgs, make_search_layout}},
+    util::{
+        AppState,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -118,42 +122,47 @@ async fn search_contributors(
         .search_top_contributors(&language.id, &search, &pagination)
         .await
         .map(|response| {
-            let items = response.items.into_iter().map(|record| {
-                let user = record.0;
-                let target_permission = record.2;
-                let permission_id = record.3;
+            let items = response
+                .items
+                .into_iter()
+                .map(|record| {
+                    let user = record.0;
+                    let target_permission = record.2;
+                    let permission_id = record.3;
 
-                let (can_edit, can_delete) = if let Some(current_perm) = current_user_permission {
-                    let is_self = current_user_id == Some(user.id);
+                    let (can_edit, can_delete) = if let Some(current_perm) = current_user_permission
+                    {
+                        let is_self = current_user_id == Some(user.id);
 
-                    if is_self {
-                        let can_delete_self = current_perm != PermissionLevel::Owner;
-                        (false, can_delete_self)
+                        if is_self {
+                            let can_delete_self = current_perm != PermissionLevel::Owner;
+                            (false, can_delete_self)
+                        } else {
+                            let can_modify = match (current_perm, target_permission) {
+                                (PermissionLevel::Owner, PermissionLevel::Owner) => false,
+                                (PermissionLevel::Owner, _) => true,
+                                (PermissionLevel::Admin, PermissionLevel::Editor) => true,
+                                (PermissionLevel::Admin, PermissionLevel::Viewer) => true,
+                                _ => false,
+                            };
+                            (can_modify, can_modify)
+                        }
                     } else {
-                        let can_modify = match (current_perm, target_permission) {
-                            (PermissionLevel::Owner, PermissionLevel::Owner) => false,
-                            (PermissionLevel::Owner, _) => true,
-                            (PermissionLevel::Admin, PermissionLevel::Editor) => true,
-                            (PermissionLevel::Admin, PermissionLevel::Viewer) => true,
-                            _ => false,
-                        };
-                        (can_modify, can_modify)
-                    }
-                } else {
-                    (false, false)
-                };
+                        (false, false)
+                    };
 
-                ContributorWithStats {
-                    user,
-                    permission: target_permission,
-                    permission_id,
-                    word_count: record.1.word_count,
-                    translation_count: record.1.translation_count,
-                    can_edit: can_edit && permission_id.is_some(),
-                    can_delete: can_delete && permission_id.is_some(),
-                    created_at: record.4,
-                }
-            }).collect();
+                    ContributorWithStats {
+                        user,
+                        permission: target_permission,
+                        permission_id,
+                        word_count: record.1.word_count,
+                        translation_count: record.1.translation_count,
+                        can_edit: can_edit && permission_id.is_some(),
+                        can_delete: can_delete && permission_id.is_some(),
+                        created_at: record.4,
+                    }
+                })
+                .collect();
             crate::pagination::PaginatedResponse {
                 items,
                 total: response.total,
@@ -177,7 +186,9 @@ async fn search_contributors(
         base_url: base_url.clone(),
     };
 
-    let breadcrumbs = html::languages::Breadcrumb { language: &language };
+    let breadcrumbs = html::languages::Breadcrumb {
+        language: &language,
+    };
     let footer = html::languages::Footer {
         can_edit_language,
         language: &language,
@@ -186,14 +197,18 @@ async fn search_contributors(
     let template = make_search_layout(SearchTemplateArgs {
         current_user: s.user().cloned(),
         header: Header,
-        query_template: QueryTemplate { query: search.clone() },
+        query_template: QueryTemplate {
+            query: search.clone(),
+        },
         query: search,
         results,
         pagination,
         search_name: "contributors",
         search_action,
         render_item,
-    }).with_breadcrumbs(breadcrumbs).with_footer(footer);
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
 
     let status = template.status();
     (status, render_template(template))
