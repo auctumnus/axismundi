@@ -11,12 +11,12 @@ use uuid::Uuid;
 use crate::{
     attempt,
     controller::html::{okay, render_template},
-    err::AppError,
+    err::{AppError, AppResult, forbidden},
     get_user,
     model::{
         definitions::{CreateDefinition, DefinitionRepository, UpdateDefinition},
         language_permissions::LanguagePermissionRepository,
-        languages::LanguageRepository,
+        languages::{Language, LanguageRepository},
         sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
         users::User,
         word_classes::{WordClass, WordClassRepository},
@@ -36,7 +36,7 @@ struct EditWordTemplate {
     word: Word,
     word_classes: Vec<WordClass>,
     previous_word: String,
-    previous_word_class: String,
+    previous_word_class: Option<String>,
     previous_definitions: Vec<String>,
     previous_contexts: Vec<String>,
     previous_definition_ids: Vec<String>,
@@ -61,48 +61,90 @@ pub(super) struct EditWordFormData {
     pub(super) notes: Option<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn edit_word(
-    s: Session,
-    State(state): State<AppState>,
-    languages: LanguageRepository,
-    words: WordRepository,
-    word_classes: WordClassRepository,
-    definitions_repo: DefinitionRepository,
-    permissions: LanguagePermissionRepository,
-    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
-) -> (StatusCode, Response) {
-    let current_user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(
-        s,
+struct EditCommon {
+    current_user: User,
+    language: Language,
+    word: Word,
+    word_classes_list: Vec<WordClass>,
+    ipa_estimator: Option<SoundChangeSet>,
+    can_edit_language: bool,
+    can_delete_language: bool,
+    will_create_audit_log: bool,
+}
+
+async fn edit_common(
+    s: &Session,
+    state: &AppState,
+    language_code: &str,
+    slug: &str,
+    lemma: i32,
+) -> AppResult<EditCommon> {
+    let languages = LanguageRepository::new(state.clone());
+    let permissions = LanguagePermissionRepository::new(state.clone());
+    let word_classes = WordClassRepository::new(state.clone());
+    let words = WordRepository::new(state.clone());
+
+    let Some(current_user) = s.user().cloned() else {
+        return Err(forbidden(""));
+    };
+    let language = languages.find_by_code(&language_code).await?;
+    let word = 
         words
             .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
-            .await
-    );
-
-    let user_has_permission = attempt!(
-        s,
+            .await?;
+    let word_classes_list = word_classes.list_all(language.id).await?;
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await?;
+    
+    let can_edit_language = 
         permissions
             .can_edit_language(Some(&current_user), &language.id)
-            .await
-    );
-
+            .await?;
+    let can_delete_language =
+        permissions
+            .can_delete_language(Some(&current_user), &language.id)
+            .await?;
     let will_create_audit_log =
         will_create_audit_log_for_language(&state, &current_user, language.id).await;
 
-    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
-    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
-    // Get current word class abbreviation
-    let word_class_abbr = if let Some(wc_id) = word.word_class {
-        match word_classes.find_by_id(wc_id).await {
-            Ok(wc) => wc.abbreviation,
-            Err(_) => String::new(),
-        }
-    } else {
-        String::new()
-    };
+    Ok(EditCommon {
+        current_user,
+        language,
+        word,
+        word_classes_list,
+        ipa_estimator,
+        can_edit_language,
+        can_delete_language,
+        will_create_audit_log,
+    })
+}
+
+pub(super) async fn edit_word(
+    s: Session,
+    State(state): State<AppState>,
+    definitions_repo: DefinitionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+) -> (StatusCode, Response) {
+    let EditCommon {
+        current_user,
+        language,
+        word,
+        word_classes_list,
+        ipa_estimator,
+        can_edit_language: user_has_permission,
+        will_create_audit_log,
+        ..
+    } = attempt!(
+        s,
+        edit_common(
+            &s,
+            &state,
+            &language_code,
+            &slug,
+            lemma
+        )
+        .await
+    );
 
     // Fetch existing definitions
     let (previous_definitions, previous_contexts, previous_definition_ids) = attempt!(
@@ -110,10 +152,7 @@ pub(super) async fn edit_word(
         definitions_repo
             .list_by_word(
                 word.id,
-                PaginatedRequest {
-                    limit: 100,
-                    offset: 0,
-                },
+                PaginatedRequest::first(100),
             )
             .await
             .map(|res| res
@@ -129,13 +168,13 @@ pub(super) async fn edit_word(
         language,
         word: word.clone(),
         word_classes: word_classes_list,
-        previous_word: word.word.clone(),
-        previous_word_class: word_class_abbr,
+        previous_word: word.word,
+        previous_word_class: word.word_class_abbreviation,
         previous_definitions,
         previous_contexts,
         previous_definition_ids,
-        previous_ipa: word.ipa.clone(),
-        previous_notes: word.notes.clone(),
+        previous_ipa: word.ipa,
+        previous_notes: word.notes,
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
@@ -157,27 +196,26 @@ pub(super) async fn edit_word_submit(
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<EditWordFormData>,
 ) -> (StatusCode, Response) {
-    let user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-    let word = attempt!(
+    let EditCommon {
+        current_user,
+        language,
+        word,
+        word_classes_list,
+        ipa_estimator,
+        can_edit_language: user_has_permission,
+        will_create_audit_log,
+        ..
+    } = attempt!(
         s,
-        words
-            .find_by_slug_and_lemma(Some(&user), language.id, &slug, lemma)
-            .await
+        edit_common(
+            &s,
+            &state,
+            &language_code,
+            &slug,
+            lemma
+        )
+        .await
     );
-
-    let user_has_permission = attempt!(
-        s,
-        permissions
-            .can_edit_language(Some(&user), &language.id)
-            .await
-    );
-
-    let will_create_audit_log =
-        will_create_audit_log_for_language(&state, &user, language.id).await;
-
-    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
-    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
     let render_err = |error: AppError| {
         let template = EditWordTemplate {
@@ -187,7 +225,7 @@ pub(super) async fn edit_word_submit(
             word: word.clone(),
             word_classes: word_classes_list,
             previous_word: form.word.clone(),
-            previous_word_class: form.word_class.clone(),
+            previous_word_class: Some(form.word_class.clone()),
             previous_definitions: form.definitions.clone(),
             previous_contexts: form.contexts.clone(),
             previous_definition_ids: form.definition_ids.clone(),

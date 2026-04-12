@@ -12,8 +12,7 @@ use uuid::Uuid;
 use crate::{
     attempt,
     controller::html::{okay, render_template},
-    err::{AppError, AppResult, bad_request, field_error},
-    get_user,
+    err::{AppError, AppResult, bad_request, field_error, forbidden},
     model::{
         bookmarks::BookmarkRepository,
         definitions::{CreateDefinition, DefinitionRepository},
@@ -44,7 +43,8 @@ struct NewWordTemplate {
     previous_contexts: Vec<String>,
     previous_ipa: String,
     previous_notes: String,
-    user_has_permission: bool,
+    can_edit_language: bool,
+    can_delete_language: bool,
     will_create_audit_log: bool,
     ipa_estimator: Option<SoundChangeSet>,
     relation_kind: String,
@@ -101,38 +101,76 @@ async fn lookup_antecedent(
     words.materialize(word, Some(user)).await.ok()
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn new_word(
-    s: Session,
-    State(state): State<AppState>,
-    languages: LanguageRepository,
-    word_classes: WordClassRepository,
-    permissions: LanguagePermissionRepository,
-    Path(language_code): Path<String>,
-    axum_extra::extract::Query(prefill): axum_extra::extract::Query<NewWordPrefill>,
-) -> (StatusCode, Response) {
-    let current_user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
+struct CreateCommon {
+    current_user: User,
+    language: Language,
+    word_classes_list: Vec<WordClass>,
+    ipa_estimator: Option<SoundChangeSet>,
+    antecedent: Option<WordWithMeta>,
+    can_edit_language: bool,
+    can_delete_language: bool,
+    will_create_audit_log: bool,
+}
 
-    let user_has_permission = attempt!(
-        s,
+/// Shared logic for the different routes.
+async fn create_common(
+    s: &Session,
+    state: &AppState,
+    language_code: &str,
+    antecedent_bookmark: Option<&str>
+) -> AppResult<CreateCommon> {
+    let languages = LanguageRepository::new(state.clone());
+    let permissions = LanguagePermissionRepository::new(state.clone());
+    let word_classes = WordClassRepository::new(state.clone());
+
+    let Some(current_user) = s.user().cloned() else {
+        return Err(forbidden(""));
+    };
+    let language = languages.find_by_code(language_code).await?;
+    let word_classes_list = word_classes.list_all(language.id).await?;
+    let ipa_estimator = languages.get_ipa_estimator(language.id).await?;
+    let antecedent = lookup_antecedent(state, antecedent_bookmark, &current_user).await;
+
+    let can_edit_language = 
         permissions
             .can_edit_language(Some(&current_user), &language.id)
-            .await
-    );
-
+            .await?;
+    let can_delete_language =
+        permissions
+            .can_delete_language(Some(&current_user), &language.id)
+            .await?;
     let will_create_audit_log =
         will_create_audit_log_for_language(&state, &current_user, language.id).await;
 
-    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
-    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
+    return Ok(CreateCommon {
+        current_user,
+        language,
+        antecedent,
+        can_edit_language,
+        can_delete_language,
+        will_create_audit_log,
+        word_classes_list,
+        ipa_estimator
+    });
+}
 
-    let antecedent = lookup_antecedent(
-        &state,
-        prefill.antecedent_bookmark.as_deref(),
-        &current_user,
-    )
-    .await;
+pub(super) async fn new_word(
+    s: Session,
+    State(state): State<AppState>,
+    Path(language_code): Path<String>,
+    axum_extra::extract::Query(prefill): axum_extra::extract::Query<NewWordPrefill>,
+) -> (StatusCode, Response) {
+    let antecedent_bookmark = prefill.antecedent_bookmark.as_deref();
+    let CreateCommon {
+        current_user,
+        language,
+        word_classes_list,
+        ipa_estimator,
+        antecedent,
+        can_edit_language,
+        can_delete_language,
+        will_create_audit_log,
+    } = attempt!(s, create_common(&s, &state, &language_code, antecedent_bookmark).await);
 
     let (previous_definition, previous_definitions) = split_first(prefill.definitions);
     let (previous_context, previous_contexts) = split_first(prefill.contexts);
@@ -154,7 +192,8 @@ pub(super) async fn new_word(
         previous_contexts,
         previous_notes: String::new(),
 
-        user_has_permission,
+        can_edit_language,
+        can_delete_language,
         will_create_audit_log,
         ipa_estimator,
         antecedent,
@@ -205,32 +244,26 @@ async fn create_word_and_definitions(
 pub(super) async fn new_word_submit(
     s: Session,
     State(state): State<AppState>,
-    languages: LanguageRepository,
-    word_classes: WordClassRepository,
-    permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
 ) -> (StatusCode, Response) {
-    let user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-
-    let user_has_permission = attempt!(
-        s,
-        permissions
-            .can_edit_language(Some(&user), &language.id)
-            .await
-    );
-
-    let will_create_audit_log =
-        will_create_audit_log_for_language(&state, &user, language.id).await;
-
-    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
-    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
-
-    let antecedent = lookup_antecedent(&state, form.antecedent_bookmark.as_deref(), &user).await;
+    let antecedent_bookmark = form.antecedent_bookmark.as_deref();
+    let CreateCommon {
+        current_user,
+        language,
+        word_classes_list,
+        ipa_estimator,
+        antecedent,
+        can_edit_language,
+        can_delete_language,
+        will_create_audit_log,
+    } = attempt!(s, create_common(&s, &state, &language_code, antecedent_bookmark).await);
 
     let relation_kind_str = form.relation_kind.clone().unwrap_or_default();
 
+    // We need to keep a copy of the form definitions and contexts for the `render_err` closure;
+    // otherwise, the original `Vec`s get moved into the `render_err` closure and can't be accessed
+    // for `create_definitions`.
     let definitions_for_err = form.definitions.clone();
     let contexts_for_err = form.contexts.clone();
 
@@ -239,7 +272,7 @@ pub(super) async fn new_word_submit(
         let (previous_context, previous_contexts) = split_first(contexts_for_err.clone());
 
         let template = NewWordTemplate {
-            current_user: Some(user.clone()),
+            current_user: Some(current_user.clone()),
             error: Some(error),
             language: language.clone(),
             word_classes: word_classes_list,
@@ -251,7 +284,8 @@ pub(super) async fn new_word_submit(
             previous_contexts,
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
-            user_has_permission,
+            can_edit_language,
+            can_delete_language,
             will_create_audit_log,
             ipa_estimator,
             relation_kind: relation_kind_str.clone(),
@@ -321,7 +355,7 @@ pub(super) async fn new_word_submit(
         .and_then(|kind| antecedent.as_ref().map(|ant| (ant, kind)));
 
     let result = create_word_and_definitions(
-        &user,
+        &current_user,
         language.id,
         create_word,
         create_definitions,
@@ -343,41 +377,9 @@ pub(super) async fn new_word_submit(
     }
 }
 
-pub(super) async fn estimate_ipa_new_word(
-    s: Session,
-    State(state): State<AppState>,
-    languages: LanguageRepository,
-    word_classes: WordClassRepository,
-    permissions: LanguagePermissionRepository,
-    sets: SoundChangeSetRepository,
-    Path(language_code): Path<String>,
-    axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
-) -> (StatusCode, Response) {
-    let current_user = get_user!(s);
-    let language = attempt!(s, languages.find_by_code(&language_code).await);
-
-    let user_has_permission = attempt!(
-        s,
-        permissions
-            .can_edit_language(Some(&current_user), &language.id)
-            .await
-    );
-
-    let will_create_audit_log =
-        will_create_audit_log_for_language(&state, &current_user, language.id).await;
-
-    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
-    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
-
-    let antecedent =
-        lookup_antecedent(&state, form.antecedent_bookmark.as_deref(), &current_user).await;
-
-    let (previous_definition, previous_definitions) = split_first(form.definitions);
-    let (previous_context, previous_contexts) = split_first(form.contexts);
-
-    let estimated_ipa = if let Some(estimator) = &ipa_estimator {
-        let estimated = sets
-            .run_from_db(&estimator.id, vec![form.word.clone()])
+async fn estimate_ipa(sets: SoundChangeSetRepository, ipa_estimator: &Uuid, word: &str) -> AppResult<String> {
+    sets
+            .run_from_db(ipa_estimator, vec![word.to_string()])
             .await
             .and_then(|results| {
                 if let Some(errors) = results.errors {
@@ -397,9 +399,34 @@ pub(super) async fn estimate_ipa_new_word(
                     Ok(results.output_words.get(0).cloned().unwrap_or_default())
                 }
             })
-            .map_err(|e| field_error("ipa", e.to_string()));
+            .map_err(|e| field_error("ipa", e.to_string()))
+    
+}
 
-        match estimated {
+pub(super) async fn estimate_ipa_new_word(
+    s: Session,
+    State(state): State<AppState>,
+    sets: SoundChangeSetRepository,
+    Path(language_code): Path<String>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
+) -> (StatusCode, Response) {
+    let antecedent_bookmark = form.antecedent_bookmark.as_deref();
+    let CreateCommon {
+        current_user,
+        language,
+        word_classes_list,
+        ipa_estimator,
+        antecedent,
+        can_edit_language,
+        can_delete_language,
+        will_create_audit_log,
+    } = attempt!(s, create_common(&s, &state, &language_code, antecedent_bookmark).await);
+
+    let (previous_definition, previous_definitions) = split_first(form.definitions);
+    let (previous_context, previous_contexts) = split_first(form.contexts);
+
+    let estimated_ipa = if let Some(estimator) = &ipa_estimator {
+        match estimate_ipa(sets, &estimator.id, &form.word).await {
             Ok(ipa) => Some(ipa),
             Err(error) => {
                 let template = NewWordTemplate {
@@ -419,7 +446,8 @@ pub(super) async fn estimate_ipa_new_word(
                     previous_contexts,
                     previous_notes: form.notes.unwrap_or_default(),
 
-                    user_has_permission,
+                    can_edit_language,
+                    can_delete_language,
                     will_create_audit_log,
                     ipa_estimator,
                     antecedent,
@@ -450,7 +478,8 @@ pub(super) async fn estimate_ipa_new_word(
         previous_contexts,
         previous_notes: form.notes.unwrap_or_default(),
 
-        user_has_permission,
+        can_edit_language,
+        can_delete_language,
         will_create_audit_log,
         ipa_estimator,
         antecedent,

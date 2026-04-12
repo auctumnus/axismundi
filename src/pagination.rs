@@ -103,6 +103,13 @@ impl PaginatedRequest {
             offset: 0,
         }
     }
+
+    pub fn first(n: PaginationSize) -> Self {
+        Self {
+            limit: n,
+            offset: 0,
+        }
+    }
 }
 
 fn default_limit() -> PaginationSize {

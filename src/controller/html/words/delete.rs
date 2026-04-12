@@ -10,7 +10,6 @@ use crate::{
     controller::html::{okay, render_generic_error, render_template},
     get_user,
     model::{
-        language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         users::User,
@@ -26,7 +25,8 @@ struct DeleteWordTemplate {
     current_user: Option<User>,
     language: Language,
     word: Word,
-    user_has_permission: bool,
+    can_edit_language: bool,
+    can_delete_language: bool,
     will_create_audit_log: bool,
 }
 
@@ -47,15 +47,14 @@ pub(super) async fn delete_word_form(
             .await
     );
 
-    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
-        .await
-        .unwrap_or(false);
-
-    let user_has_permission = is_admin_or_mod
-        || permissions
-            .has_permission(user.id, language.id, PermissionLevel::Editor)
-            .await
-            .unwrap_or(false);
+    let can_edit_language = 
+        attempt!(s, permissions
+            .can_edit_language(Some(&user), &language.id)
+            .await);
+    let can_delete_language =
+        attempt!(s, permissions
+            .can_delete_language(Some(&user), &language.id)
+            .await);
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
@@ -64,7 +63,8 @@ pub(super) async fn delete_word_form(
         current_user: Some(user),
         language,
         word,
-        user_has_permission,
+        can_edit_language,
+        can_delete_language,
         will_create_audit_log,
     };
 

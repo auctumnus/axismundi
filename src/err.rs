@@ -118,7 +118,7 @@ pub fn needs_verification() -> AppError {
 pub fn field_error(field: &str, message: impl Display) -> AppError {
     let mut validation_errors = validator::ValidationErrors::new();
     validation_errors.add(
-        field,
+        field.clone(),
         validator::ValidationError {
             code: "custom".into(),
             message: Some(message.to_string().into()),

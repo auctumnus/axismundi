@@ -466,6 +466,29 @@ impl LanguagePermissionRepository {
             Ok(false)
         }
     }
+
+    pub async fn can_delete_language(
+        &self,
+        requestor: Option<&User>,
+        language: &Uuid,
+    ) -> AppResult<bool> {
+        if let Some(user) = requestor {
+            ensure_verified(user)?;
+
+            if is_admin_or_mod(&self.state, user.id).await? {
+                return Ok(true);
+            }
+
+            let perm = self.find_by_user_and_language(user.id, *language).await?;
+
+            Ok(match perm {
+                Some(p) => p.permission >= PermissionLevel::Owner,
+                None => false,
+            })
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 crate::util::repo_from_parts!(LanguagePermissionRepository);
