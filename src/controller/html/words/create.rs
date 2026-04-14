@@ -6,13 +6,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{okay, render_template},
-    err::{AppError, AppResult, bad_request, field_error, forbidden},
+    controller::html::{okay, render_template, words::estimate_ipa},
+    err::{AppError, AppResult, bad_request, field_error, forbidden, internal_error},
     model::{
         bookmarks::BookmarkRepository,
         definitions::{CreateDefinition, DefinitionRepository},
@@ -41,27 +41,41 @@ struct NewWordTemplate {
     previous_definitions: Vec<String>,
     previous_context: String,
     previous_contexts: Vec<String>,
+    previous_definitions_json: String,
     previous_ipa: String,
     previous_notes: String,
     can_edit_language: bool,
     can_delete_language: bool,
     will_create_audit_log: bool,
     ipa_estimator: Option<SoundChangeSet>,
-    relation_kind: String,
-    antecedent: Option<WordWithMeta>,
+    derived_from: Option<(WordWithMeta, WordRelationType)>,
+    nojs_slots: Vec<(String, String)>,
 }
 
-#[derive(Deserialize, Default)]
+fn nojs_slots_new(first_def: &str, first_ctx: &str, rest_defs: &[String], rest_ctxs: &[String]) -> Vec<(String, String)> {
+    let mut slots: Vec<(String, String)> = Vec::with_capacity(5);
+    slots.push((first_def.to_string(), first_ctx.to_string()));
+    for (i, def) in rest_defs.iter().enumerate().take(4) {
+        let ctx = rest_ctxs.get(i).map(|s| s.as_str()).unwrap_or("").to_string();
+        slots.push((def.clone(), ctx));
+    }
+    while slots.len() < 5 {
+        slots.push((String::new(), String::new()));
+    }
+    slots
+}
+
+#[derive(Deserialize, Default, Serialize)]
 pub(super) struct NewWordPrefill {
-    word: Option<String>,
-    ipa: Option<String>,
-    word_class: Option<String>,
+    pub word: Option<String>,
+    pub ipa: Option<String>,
+    pub word_class: Option<String>,
     #[serde(default, rename = "definitions[]")]
-    definitions: Vec<String>,
+    pub definitions: Vec<String>,
     #[serde(default, rename = "contexts[]")]
-    contexts: Vec<String>,
-    antecedent_bookmark: Option<String>,
-    relation_kind: Option<String>,
+    pub contexts: Vec<String>,
+    pub antecedent_bookmark: Option<String>,
+    pub relation_kind: Option<WordRelationType>,
 }
 
 #[derive(Deserialize)]
@@ -75,7 +89,7 @@ pub(super) struct NewWordFormData {
     pub(super) ipa: Option<String>,
     pub(super) notes: Option<String>,
     pub(super) antecedent_bookmark: Option<String>,
-    pub(super) relation_kind: Option<String>,
+    pub(super) relation_kind: Option<WordRelationType>,
 }
 
 fn split_first(v: Vec<String>) -> (String, Vec<String>) {
@@ -83,6 +97,18 @@ fn split_first(v: Vec<String>) -> (String, Vec<String>) {
     let first = iter.next().unwrap_or_default();
     let rest = iter.collect();
     (first, rest)
+}
+
+fn build_definitions_json(defs: &[String], ctxs: &[String]) -> String {
+    let items: Vec<serde_json::Value> = defs
+        .iter()
+        .enumerate()
+        .map(|(i, def)| {
+            let ctx = ctxs.get(i).map(|s| s.as_str()).unwrap_or("");
+            serde_json::json!({"id": "", "definition": def, "context": ctx})
+        })
+        .collect();
+    serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
 }
 
 async fn lookup_antecedent(
@@ -117,7 +143,7 @@ async fn create_common(
     s: &Session,
     state: &AppState,
     language_code: &str,
-    antecedent_bookmark: Option<&str>
+    antecedent_bookmark: Option<&str>,
 ) -> AppResult<CreateCommon> {
     let languages = LanguageRepository::new(state.clone());
     let permissions = LanguagePermissionRepository::new(state.clone());
@@ -131,14 +157,12 @@ async fn create_common(
     let ipa_estimator = languages.get_ipa_estimator(language.id).await?;
     let antecedent = lookup_antecedent(state, antecedent_bookmark, &current_user).await;
 
-    let can_edit_language = 
-        permissions
-            .can_edit_language(Some(&current_user), &language.id)
-            .await?;
-    let can_delete_language =
-        permissions
-            .can_delete_language(Some(&current_user), &language.id)
-            .await?;
+    let can_edit_language = permissions
+        .can_edit_language(Some(&current_user), &language.id)
+        .await?;
+    let can_delete_language = permissions
+        .can_delete_language(Some(&current_user), &language.id)
+        .await?;
     let will_create_audit_log =
         will_create_audit_log_for_language(&state, &current_user, language.id).await;
 
@@ -150,7 +174,7 @@ async fn create_common(
         can_delete_language,
         will_create_audit_log,
         word_classes_list,
-        ipa_estimator
+        ipa_estimator,
     });
 }
 
@@ -170,33 +194,50 @@ pub(super) async fn new_word(
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
-    } = attempt!(s, create_common(&s, &state, &language_code, antecedent_bookmark).await);
+    } = attempt!(
+        s,
+        create_common(&s, &state, &language_code, antecedent_bookmark).await
+    );
 
+    let previous_definitions_json = build_definitions_json(&prefill.definitions, &prefill.contexts);
     let (previous_definition, previous_definitions) = split_first(prefill.definitions);
     let (previous_context, previous_contexts) = split_first(prefill.contexts);
+    let nojs_slots = nojs_slots_new(&previous_definition, &previous_context, &previous_definitions, &previous_contexts);
+
+    let (error, derived_from) = match antecedent {
+        None => (None, None),
+        Some(ant) => match prefill.relation_kind {
+            Some(rk) => (None, Some((ant, rk))),
+            None => (
+                Some(internal_error("no relation kind was found in the word prefill; please report!")),
+                None
+            )
+        }
+    };
 
     let template = NewWordTemplate {
         current_user: Some(current_user),
-        error: None,
+        error,
         language,
         word_classes: word_classes_list,
 
         previous_word: prefill.word.unwrap_or_default(),
         previous_word_class: prefill.word_class.unwrap_or_default(),
         previous_ipa: prefill.ipa.unwrap_or_default(),
-        relation_kind: prefill.relation_kind.unwrap_or_default(),
 
         previous_definition,
         previous_definitions,
         previous_context,
         previous_contexts,
+        previous_definitions_json,
         previous_notes: String::new(),
 
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
         ipa_estimator,
-        antecedent,
+        derived_from,
+        nojs_slots,
     };
 
     let body = render_template(template);
@@ -214,21 +255,20 @@ async fn create_word_and_definitions(
     let words = WordRepository::new(state.clone());
     let definitions_repo = DefinitionRepository::new(state.clone());
     let mut tx = state.pool.begin().await?;
-    let word = words
+    let word_id = words
         .create_with_tx(user, language_id, create_word, &mut tx)
         .await?;
     for create_definition in create_definitions.into_iter() {
         let _ = definitions_repo
-            .create_with_tx(user, word, language_id, create_definition, &mut tx)
+            .create_with_tx(user, word_id, language_id, create_definition, &mut tx)
             .await?;
     }
-    let word = words.find_by_id(word).await?;
 
     if let Some((source_word, kind)) = word_relation {
         let word_relations = WordRelationRepository::new(state.clone());
         let relation = CreateWordRelation {
-            antecedent: source_word.word.clone(),
-            consequent: word.clone(),
+            antecedent: source_word.word.id,
+            consequent: word_id,
             kind,
         };
         let _ = word_relations
@@ -238,6 +278,7 @@ async fn create_word_and_definitions(
 
     tx.commit().await?;
 
+    let word = words.find_by_id(word_id).await?;
     Ok(word)
 }
 
@@ -257,9 +298,21 @@ pub(super) async fn new_word_submit(
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
-    } = attempt!(s, create_common(&s, &state, &language_code, antecedent_bookmark).await);
+    } = attempt!(
+        s,
+        create_common(&s, &state, &language_code, antecedent_bookmark).await
+    );
 
-    let relation_kind_str = form.relation_kind.clone().unwrap_or_default();
+    let (error, derived_from) = match antecedent {
+        None => (None, None),
+        Some(ant) => match form.relation_kind {
+            Some(rk) => (None, Some((ant, rk))),
+            None => (
+                Some(internal_error("no relation kind was found in the word prefill; please report!")),
+                None
+            )
+        }
+    };
 
     // We need to keep a copy of the form definitions and contexts for the `render_err` closure;
     // otherwise, the original `Vec`s get moved into the `render_err` closure and can't be accessed
@@ -268,8 +321,10 @@ pub(super) async fn new_word_submit(
     let contexts_for_err = form.contexts.clone();
 
     let render_err = |error: AppError| {
+        let previous_definitions_json = build_definitions_json(&definitions_for_err, &contexts_for_err);
         let (previous_definition, previous_definitions) = split_first(definitions_for_err.clone());
         let (previous_context, previous_contexts) = split_first(contexts_for_err.clone());
+        let nojs_slots = nojs_slots_new(&previous_definition, &previous_context, &previous_definitions, &previous_contexts);
 
         let template = NewWordTemplate {
             current_user: Some(current_user.clone()),
@@ -282,14 +337,15 @@ pub(super) async fn new_word_submit(
             previous_definitions,
             previous_context,
             previous_contexts,
+            previous_definitions_json,
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
             can_edit_language,
             can_delete_language,
             will_create_audit_log,
             ipa_estimator,
-            relation_kind: relation_kind_str.clone(),
-            antecedent: antecedent.clone(),
+            derived_from: derived_from.clone(),
+            nojs_slots,
         };
 
         let body = render_template(template);
@@ -350,17 +406,13 @@ pub(super) async fn new_word_submit(
         extra: None,
     };
 
-    let word_relation = WordRelationType::from_str(&relation_kind_str)
-        .ok()
-        .and_then(|kind| antecedent.as_ref().map(|ant| (ant, kind)));
-
     let result = create_word_and_definitions(
         &current_user,
         language.id,
         create_word,
         create_definitions,
         &state,
-        word_relation,
+        derived_from.as_ref().map(|(w, rk)| (w, *rk)),
     )
     .await;
 
@@ -375,32 +427,6 @@ pub(super) async fn new_word_submit(
         ),
         Err(e) => render_err(e),
     }
-}
-
-async fn estimate_ipa(sets: SoundChangeSetRepository, ipa_estimator: &Uuid, word: &str) -> AppResult<String> {
-    sets
-            .run_from_db(ipa_estimator, vec![word.to_string()])
-            .await
-            .and_then(|results| {
-                if let Some(errors) = results.errors {
-                    if errors.is_empty() {
-                        Ok(results.output_words.get(0).cloned().unwrap_or_default())
-                    } else {
-                        Err(bad_request(format!(
-                            "IPA estimation failed: {}",
-                            errors
-                                .into_iter()
-                                .map(|e| e.message)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )))
-                    }
-                } else {
-                    Ok(results.output_words.get(0).cloned().unwrap_or_default())
-                }
-            })
-            .map_err(|e| field_error("ipa", e.to_string()))
-    
 }
 
 pub(super) async fn estimate_ipa_new_word(
@@ -420,10 +446,26 @@ pub(super) async fn estimate_ipa_new_word(
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
-    } = attempt!(s, create_common(&s, &state, &language_code, antecedent_bookmark).await);
+    } = attempt!(
+        s,
+        create_common(&s, &state, &language_code, antecedent_bookmark).await
+    );
 
+    let (error, derived_from) = match antecedent {
+        None => (None, None),
+        Some(ant) => match form.relation_kind {
+            Some(rk) => (None, Some((ant, rk))),
+            None => (
+                Some(internal_error("no relation kind was found in the word prefill; please report!")),
+                None
+            )
+        }
+    };
+
+    let previous_definitions_json = build_definitions_json(&form.definitions, &form.contexts);
     let (previous_definition, previous_definitions) = split_first(form.definitions);
     let (previous_context, previous_contexts) = split_first(form.contexts);
+    let nojs_slots = nojs_slots_new(&previous_definition, &previous_context, &previous_definitions, &previous_contexts);
 
     let estimated_ipa = if let Some(estimator) = &ipa_estimator {
         match estimate_ipa(sets, &estimator.id, &form.word).await {
@@ -438,19 +480,20 @@ pub(super) async fn estimate_ipa_new_word(
                     previous_word: form.word,
                     previous_word_class: form.word_class,
                     previous_ipa: form.ipa.unwrap_or_default(),
-                    relation_kind: form.relation_kind.unwrap_or_default(),
 
                     previous_definition,
                     previous_definitions,
                     previous_context,
                     previous_contexts,
+                    previous_definitions_json: previous_definitions_json.clone(),
                     previous_notes: form.notes.unwrap_or_default(),
 
                     can_edit_language,
                     can_delete_language,
                     will_create_audit_log,
                     ipa_estimator,
-                    antecedent,
+                    derived_from,
+                    nojs_slots,
                 };
 
                 let body = render_template(template);
@@ -463,26 +506,27 @@ pub(super) async fn estimate_ipa_new_word(
 
     let template = NewWordTemplate {
         current_user: Some(current_user),
-        error: None,
+        error,
         language,
         word_classes: word_classes_list,
 
         previous_word: form.word,
         previous_word_class: form.word_class,
         previous_ipa: estimated_ipa.unwrap_or_default(),
-        relation_kind: form.relation_kind.unwrap_or_default(),
 
         previous_definition,
         previous_definitions,
         previous_context,
         previous_contexts,
+        previous_definitions_json,
         previous_notes: form.notes.unwrap_or_default(),
 
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
         ipa_estimator,
-        antecedent,
+        derived_from,
+        nojs_slots,
     };
 
     let body = render_template(template);

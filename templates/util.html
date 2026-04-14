@@ -27,7 +27,7 @@
 {% endmacro %}
 
 {% macro icon(name) %}
-<svg class="icon"><use href="#icon-{{ name }}"></use></svg>
+<svg class="icon" aria-hidden><use href="#icon-{{ name }}"></use></svg>
 {% endmacro %}
 
 {% macro back_button(href, label="to search") %}

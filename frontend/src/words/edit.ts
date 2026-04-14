@@ -6,12 +6,33 @@ const estimate = async (word: string, soundChangeSetId: string) => {
         },
         body: JSON.stringify({ input_words: [word] }),
     });
-    const data = await response.json();
     if (response.ok) {
+        const data = await response.json();
         return data.outputWords[0];
     }
-    throw new Error(data.error || "Failed to estimate IPA");
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to estimate IPA");
 }
+
+const getOrCreateFieldErrors = (section: HTMLElement): HTMLUListElement => {
+    let ul = section.querySelector<HTMLUListElement>("ul.field-errors");
+    if (!ul) {
+        ul = document.createElement("ul");
+        ul.className = "field-errors";
+        const ipaEstimator = section.querySelector(".ipa-estimator");
+        if (ipaEstimator) {
+            section.insertBefore(ul, ipaEstimator);
+        } else {
+            section.appendChild(ul);
+        }
+    }
+    return ul;
+};
+
+const clearFieldErrors = (section: HTMLElement) => {
+    const ul = section.querySelector("ul.field-errors");
+    if (ul) ul.remove();
+};
 
 document.addEventListener("DOMContentLoaded", () => {
     const wordInput = document.getElementById("word") as HTMLInputElement | null;
@@ -21,9 +42,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const estimateButton = document.getElementById("estimate-ipa") as HTMLButtonElement | null;
     if (estimateButton) {
+        const ipaSection = ipaInput.closest("section") as HTMLElement | null;
+
         const setRunning = () => {
             estimateButton.disabled = true;
             estimateButton.textContent = "Estimating...";
+            if (ipaSection) clearFieldErrors(ipaSection);
         }
 
         const setIdle = () => {
@@ -31,9 +55,16 @@ document.addEventListener("DOMContentLoaded", () => {
             estimateButton.textContent = "Estimate IPA";
         }
 
-        const setErrored = () => {
+        const setErrored = (message: string) => {
             estimateButton.disabled = false;
-            estimateButton.textContent = "Error :(";
+            estimateButton.textContent = "Estimate IPA";
+            if (ipaSection) {
+                const ul = getOrCreateFieldErrors(ipaSection);
+                ul.innerHTML = "";
+                const li = document.createElement("li");
+                li.textContent = message;
+                ul.appendChild(li);
+            }
         }
 
         const estimatorHint = document.getElementById("ipa-estimator-hint");
@@ -59,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 setIdle();
             } catch (error) {
                 console.error("Error estimating IPA:", error);
-                setErrored();
+                setErrored(error instanceof Error ? error.message : "Failed to estimate IPA");
             }
         });
     }

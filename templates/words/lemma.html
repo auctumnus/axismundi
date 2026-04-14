@@ -86,9 +86,13 @@
                 <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>add relation</span>
             </a></li>
-            <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-into-family">
-                {% call u::icon("translate") %}
-                <span>derive into family</span>
+            <li><a id="derive-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive">
+                {% call u::icon("arrow-split") %}
+                <span>derive</span>
+            </a></li>
+            <li><a id="loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">
+                {% call u::icon("forward") %}
+                <span>loan</span>
             </a></li>
         {% endif %}
         <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">

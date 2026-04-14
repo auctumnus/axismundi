@@ -9,12 +9,58 @@ mod view;
 pub use fragments::*;
 
 use axum::Router;
+use uuid::Uuid;
 
-use crate::util::AppState;
+use crate::{err::{AppError, AppResult, bad_request}, model::sound_change_sets::SoundChangeSetRepository, util::AppState};
 
 use axum::routing::{get, post};
 
 pub const MAX_DEFINITIONS: usize = 10;
+
+async fn estimate_ipa(
+    sets: SoundChangeSetRepository,
+    ipa_estimator: &Uuid,
+    word: &str,
+) -> AppResult<String> {
+    sets.run_from_db(ipa_estimator, vec![word.to_string()])
+        .await
+        .and_then(|results| {
+            if let Some(errors) = results.errors {
+                if errors.is_empty() {
+                    Ok(results.output_words.first().cloned().unwrap_or_default())
+                } else {
+                    Err(bad_request(format!(
+                        "IPA estimation failed: {}",
+                        errors
+                            .into_iter()
+                            .map(|e| e.message)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )))
+                }
+            } else {
+                Ok(results.output_words.first().cloned().unwrap_or_default())
+            }
+        })
+        .map_err(|e| {
+            let mut validation_errors = validator::ValidationErrors::new();
+            validation_errors.add(
+                "ipa",
+                validator::ValidationError {
+                    code: "custom".into(),
+                    message: Some(e.message.into()),
+                    params: std::collections::HashMap::new(),
+                },
+            );
+
+            AppError {
+                message: "Failed to estimate IPA".into(),
+                status_code: e.status_code,
+                validation_errors: Some(validation_errors),
+                extra: None,
+            }
+        })
+}
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
@@ -44,8 +90,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             post(delete::delete_word_submit),
         )
         .route(
-            "/languages/{language}/words/{slug}/{lemma}/derive-into-family",
-            post(derive::derive_into_family_loan),
+            "/languages/{language}/words/{slug}/{lemma}/derive",
+            post(derive::derive_submit),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -63,8 +109,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             get(delete::delete_word_form),
         )
         .route(
-            "/languages/{language}/words/{slug}/{lemma}/derive-into-family",
-            get(derive::derive_into_family_form),
+            "/languages/{language}/words/{slug}/{lemma}/derive",
+            get(derive::derive_form),
         );
 
     (secure_routes, normal_routes)

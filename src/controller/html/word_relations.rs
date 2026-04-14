@@ -202,8 +202,8 @@ async fn add_relation_submit(
 
     // Create the relation
     let relation = CreateWordRelation {
-        antecedent: word.clone(),
-        consequent: target_word.clone(),
+        antecedent: word.id,
+        consequent: target_word.id,
         kind: form.kind,
     };
 

@@ -68,8 +68,8 @@ pub async fn add_relation(
         .create(
             requestor,
             CreateWordRelation {
-                antecedent,
-                consequent,
+                antecedent: antecedent.id,
+                consequent: consequent.id,
                 kind: req.kind,
             },
         )

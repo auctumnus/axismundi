@@ -74,6 +74,15 @@ impl AppError {
             Some(_) => None,
         }
     }
+
+    pub fn with_prefix(self, prefix: impl Display) -> Self {
+        Self {
+            message: format!("{}: {}", prefix, self.message),
+            status_code: self.status_code,
+            validation_errors: self.validation_errors,
+            extra: self.extra,
+        }
+    }
 }
 
 pub fn not_found(item: impl Display) -> AppError {
@@ -115,10 +124,10 @@ pub fn needs_verification() -> AppError {
     )
 }
 
-pub fn field_error(field: &str, message: impl Display) -> AppError {
+pub fn field_error(field: &'static str, message: impl Display) -> AppError {
     let mut validation_errors = validator::ValidationErrors::new();
     validation_errors.add(
-        field.clone(),
+        field,
         validator::ValidationError {
             code: "custom".into(),
             message: Some(message.to_string().into()),
@@ -213,6 +222,12 @@ impl From<std::fmt::Error> for AppError {
 
 impl From<reqwest::Error> for AppError {
     fn from(err: reqwest::Error) -> Self {
+        internal_error(err)
+    }
+}
+
+impl From<serde_html_form::ser::Error> for AppError {
+    fn from(err: serde_html_form::ser::Error) -> Self {
         internal_error(err)
     }
 }

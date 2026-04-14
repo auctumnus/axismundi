@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{okay, render_template},
+    controller::html::{okay, render_template, words::estimate_ipa},
     err::{AppError, AppResult, forbidden},
     get_user,
     model::{
@@ -40,11 +40,41 @@ struct EditWordTemplate {
     previous_definitions: Vec<String>,
     previous_contexts: Vec<String>,
     previous_definition_ids: Vec<String>,
+    definitions_json: String,
     previous_ipa: String,
     previous_notes: String,
     user_has_permission: bool,
     will_create_audit_log: bool,
     ipa_estimator: Option<SoundChangeSet>,
+    nojs_slots: Vec<(String, String, String)>,
+}
+
+fn nojs_slots_edit(defs: &[String], ctxs: &[String], ids: &[String]) -> Vec<(String, String, String)> {
+    let mut slots: Vec<(String, String, String)> = (0..defs.len())
+        .map(|i| (
+            defs[i].clone(),
+            ctxs.get(i).cloned().unwrap_or_default(),
+            ids.get(i).cloned().unwrap_or_default(),
+        ))
+        .take(5)
+        .collect();
+    while slots.len() < 5 {
+        slots.push((String::new(), String::new(), String::new()));
+    }
+    slots
+}
+
+fn build_definitions_json(defs: &[String], ctxs: &[String], ids: &[String]) -> String {
+    let items: Vec<serde_json::Value> = defs
+        .iter()
+        .enumerate()
+        .map(|(i, def)| {
+            let ctx = ctxs.get(i).map(|s| s.as_str()).unwrap_or("");
+            let id = ids.get(i).map(|s| s.as_str()).unwrap_or("");
+            serde_json::json!({"id": id, "definition": def, "context": ctx})
+        })
+        .collect();
+    serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
 }
 
 #[derive(Deserialize)]
@@ -88,24 +118,20 @@ async fn edit_common(
         return Err(forbidden(""));
     };
     let language = languages.find_by_code(&language_code).await?;
-    let word = 
-        words
-            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
-            .await?;
+    let word = words
+        .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+        .await?;
     let word_classes_list = word_classes.list_all(language.id).await?;
     let ipa_estimator = languages.get_ipa_estimator(language.id).await?;
-    
-    let can_edit_language = 
-        permissions
-            .can_edit_language(Some(&current_user), &language.id)
-            .await?;
-    let can_delete_language =
-        permissions
-            .can_delete_language(Some(&current_user), &language.id)
-            .await?;
+
+    let can_edit_language = permissions
+        .can_edit_language(Some(&current_user), &language.id)
+        .await?;
+    let can_delete_language = permissions
+        .can_delete_language(Some(&current_user), &language.id)
+        .await?;
     let will_create_audit_log =
         will_create_audit_log_for_language(&state, &current_user, language.id).await;
-
 
     Ok(EditCommon {
         current_user,
@@ -136,24 +162,14 @@ pub(super) async fn edit_word(
         ..
     } = attempt!(
         s,
-        edit_common(
-            &s,
-            &state,
-            &language_code,
-            &slug,
-            lemma
-        )
-        .await
+        edit_common(&s, &state, &language_code, &slug, lemma).await
     );
 
     // Fetch existing definitions
-    let (previous_definitions, previous_contexts, previous_definition_ids) = attempt!(
+    let (previous_definitions, previous_contexts, previous_definition_ids): (Vec<String>, Vec<String>, Vec<String>) = attempt!(
         s,
         definitions_repo
-            .list_by_word(
-                word.id,
-                PaginatedRequest::first(100),
-            )
+            .list_by_word(word.id, PaginatedRequest::first(100),)
             .await
             .map(|res| res
                 .items
@@ -161,6 +177,9 @@ pub(super) async fn edit_word(
                 .map(|d| (d.definition, d.context, d.id.to_string()))
                 .multiunzip())
     );
+
+    let definitions_json = build_definitions_json(&previous_definitions, &previous_contexts, &previous_definition_ids);
+    let nojs_slots = nojs_slots_edit(&previous_definitions, &previous_contexts, &previous_definition_ids);
 
     let template = EditWordTemplate {
         current_user: Some(current_user),
@@ -173,11 +192,13 @@ pub(super) async fn edit_word(
         previous_definitions,
         previous_contexts,
         previous_definition_ids,
+        definitions_json,
         previous_ipa: word.ipa,
         previous_notes: word.notes,
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
+        nojs_slots,
     };
 
     let body = render_template(template);
@@ -207,19 +228,14 @@ pub(super) async fn edit_word_submit(
         ..
     } = attempt!(
         s,
-        edit_common(
-            &s,
-            &state,
-            &language_code,
-            &slug,
-            lemma
-        )
-        .await
+        edit_common(&s, &state, &language_code, &slug, lemma).await
     );
 
     let render_err = |error: AppError| {
+        let definitions_json = build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
+        let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
         let template = EditWordTemplate {
-            current_user: Some(user.clone()),
+            current_user: Some(current_user.clone()),
             error: Some(error),
             language: language.clone(),
             word: word.clone(),
@@ -229,11 +245,13 @@ pub(super) async fn edit_word_submit(
             previous_definitions: form.definitions.clone(),
             previous_contexts: form.contexts.clone(),
             previous_definition_ids: form.definition_ids.clone(),
+            definitions_json,
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
             user_has_permission,
             will_create_audit_log,
             ipa_estimator,
+            nojs_slots,
         };
         let body = render_template(template);
         (StatusCode::BAD_REQUEST, body)
@@ -256,7 +274,9 @@ pub(super) async fn edit_word_submit(
 
     // Require at least one definition
     if definitions_text.is_empty() {
-        return render_err(crate::err::bad_request("At least one definition is required"));
+        return render_err(crate::err::bad_request(
+            "At least one definition is required",
+        ));
     }
 
     // Update the word
@@ -270,7 +290,7 @@ pub(super) async fn edit_word_submit(
 
     let result = async {
         let word_result = words
-            .update_by_lemma(&user, language.id, &slug, lemma, update_word)
+            .update_by_lemma(&current_user, language.id, &slug, lemma, update_word)
             .await?;
 
         // Handle definitions: update existing, create new, delete removed
@@ -303,14 +323,12 @@ pub(super) async fn edit_word_submit(
 
         // Update or create definitions
         for (i, def_text) in definitions_text.iter().enumerate() {
-            let context = form.contexts.get(i).and_then(|c| {
-                let trimmed = c.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed.to_string())
-                }
-            });
+            let context = Some(
+                form.contexts
+                    .get(i)
+                    .map(|c| c.trim().to_string())
+                    .unwrap_or_default(),
+            );
 
             if let Some(Some(def_id)) = definition_ids.get(i) {
                 // Update existing definition
@@ -320,7 +338,7 @@ pub(super) async fn edit_word_submit(
                     context: context.clone(),
                 };
                 definitions_repo
-                    .update(&user, *def_id, update, Some(i as i32))
+                    .update(&current_user, *def_id, update, Some(i as i32))
                     .await?;
             } else {
                 // Create new definition
@@ -329,7 +347,7 @@ pub(super) async fn edit_word_submit(
                     context,
                 };
                 definitions_repo
-                    .create(&user, word_result.id, create_def)
+                    .create(&current_user, word_result.id, create_def)
                     .await?;
             }
         }
@@ -337,7 +355,9 @@ pub(super) async fn edit_word_submit(
         // Delete definitions that were removed
         for existing_def in existing_defs {
             if !kept_ids.contains(&existing_def.id) {
-                definitions_repo.delete(&user, existing_def.id).await?;
+                definitions_repo
+                    .delete(&current_user, existing_def.id)
+                    .await?;
             }
         }
 
@@ -392,13 +412,41 @@ pub(super) async fn estimate_ipa_submit(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
     let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
+    let definitions_json = build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
+    let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
+
     let estimated_ipa = match &ipa_estimator {
-        Some(scs) => match sets.run_from_db(&scs.id, vec![form.word.clone()]).await {
-            Ok(response) => response.output_words.into_iter().next().unwrap_or_default(),
-            Err(_) => form.ipa.clone().unwrap_or_default(),
+        Some(scs) => match estimate_ipa(sets, &scs.id, &form.word).await {
+            Ok(response) => response,
+            Err(error) => {
+                let status = error.status_code;
+                let template = EditWordTemplate {
+                    current_user: Some(user),
+                    error: Some(error),
+                    language,
+                    word,
+                    word_classes: word_classes_list,
+                    previous_word: form.word.clone(),
+                    previous_word_class: Some(form.word_class.clone()),
+                    previous_definitions: form.definitions.clone(),
+                    previous_contexts: form.contexts.clone(),
+                    previous_definition_ids: form.definition_ids.clone(),
+                    definitions_json,
+                    previous_ipa: form.ipa.clone().unwrap_or_default(),
+                    previous_notes: form.notes.clone().unwrap_or_default(),
+                    user_has_permission,
+                    will_create_audit_log,
+                    ipa_estimator,
+                    nojs_slots,
+                };
+
+                let body = render_template(template);
+                return (status, body);
+            },
         },
         None => form.ipa.clone().unwrap_or_default(),
     };
+
 
     let template = EditWordTemplate {
         current_user: Some(user),
@@ -407,15 +455,17 @@ pub(super) async fn estimate_ipa_submit(
         word,
         word_classes: word_classes_list,
         previous_word: form.word.clone(),
-        previous_word_class: form.word_class.clone(),
+        previous_word_class: Some(form.word_class.clone()),
         previous_definitions: form.definitions.clone(),
         previous_contexts: form.contexts.clone(),
         previous_definition_ids: form.definition_ids.clone(),
+        definitions_json,
         previous_ipa: estimated_ipa,
         previous_notes: form.notes.clone().unwrap_or_default(),
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
+        nojs_slots,
     };
 
     let body = render_template(template);

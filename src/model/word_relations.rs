@@ -183,8 +183,8 @@ pub struct WordRelationRepository {
 
 #[derive(Debug, Clone)]
 pub struct CreateWordRelation {
-    pub antecedent: Word,
-    pub consequent: Word,
+    pub antecedent: Uuid,
+    pub consequent: Uuid,
     pub kind: WordRelationType,
 }
 
@@ -280,17 +280,31 @@ impl WordRelationRepository {
         let antecedent = relation.antecedent;
         let consequent = relation.consequent;
 
+        let ante_word = sqlx::query!(
+            "SELECT language, cognacy FROM words WHERE id = $1",
+            antecedent,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
+        let cons_word = sqlx::query!(
+            "SELECT language, cognacy FROM words WHERE id = $1",
+            consequent,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
         let word_relation = sqlx::query_as!(WordRelation,
                 r#"
                     INSERT INTO word_relations (antecedent, consequent, kind, created_by, updated_by)
                     VALUES ($1, $2, $3 :: word_relation_type, $4, $4)
                     RETURNING id, antecedent, consequent, kind as "kind: WordRelationType", created_at, updated_at, created_by, updated_by
                 "#,
-                antecedent.id,
-                consequent.id,
+                antecedent,
+                consequent,
                 relation.kind as WordRelationType,
                 requestor.id,
-            ).fetch_one(&mut *tx).await?;
+            ).fetch_one(&mut **tx).await?;
 
         // Check permissions on both languages with audit
         let permissions = LanguagePermissionRepository::new(self.state.clone());
@@ -299,15 +313,15 @@ impl WordRelationRepository {
             .check_permission_with_audit(
                 CheckPermissionReq {
                     user: requestor.id,
-                    language: antecedent.language,
+                    language: ante_word.language,
                     required_level: PermissionLevel::Editor,
                     action_type: AuditActionType::Created,
                     resource_type: AuditableResource::WordRelation,
                     resource_id: word_relation.id,
                     context: Some(serde_json::json!({
                         "role": "antecedent",
-                        "word_id": antecedent.id,
-                        "language_id": antecedent.language,
+                        "word_id": antecedent,
+                        "language_id": ante_word.language,
                     })),
                 },
                 tx,
@@ -318,15 +332,15 @@ impl WordRelationRepository {
             .check_permission_with_audit(
                 CheckPermissionReq {
                     user: requestor.id,
-                    language: consequent.language,
+                    language: cons_word.language,
                     required_level: PermissionLevel::Editor,
                     action_type: AuditActionType::Created,
                     resource_type: AuditableResource::WordRelation,
                     resource_id: word_relation.id,
                     context: Some(serde_json::json!({
                         "role": "consequent",
-                        "word_id": consequent.id,
-                        "language_id": consequent.language,
+                        "word_id": consequent,
+                        "language_id": cons_word.language,
                     })),
                 },
                 tx,
@@ -345,14 +359,14 @@ impl WordRelationRepository {
         if let Ok(cognacy_relation_kind) = CognacyRelationKindV1::try_from(relation.kind) {
             let edge = CognacyEdgeV1 {
                 id: word_relation.id,
-                antecedent: antecedent.id,
-                consequent: consequent.id,
+                antecedent,
+                consequent,
                 kind: cognacy_relation_kind,
             };
 
             let (antecedent_cognacy, consequent_cognacy) = tokio::try_join!(
-                self.find_cognacy(&antecedent),
-                self.find_cognacy(&consequent),
+                self.find_cognacy(ante_word.cognacy),
+                self.find_cognacy(cons_word.cognacy),
             )?;
 
             match (antecedent_cognacy, consequent_cognacy) {
@@ -382,10 +396,10 @@ impl WordRelationRepository {
                             WHERE id = $2 OR id = $3
                         "#,
                         id,
-                        antecedent.id,
-                        consequent.id,
+                        antecedent,
+                        consequent,
                     )
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
                 }
                 (None, None) => {
@@ -408,7 +422,7 @@ impl WordRelationRepository {
                         )))?,
                         new_cognacy.schema_version,
                     )
-                    .fetch_one(&mut *tx)
+                    .fetch_one(&mut **tx)
                     .await?;
 
                     // update both words to point to the new cognacy
@@ -419,10 +433,10 @@ impl WordRelationRepository {
                             WHERE id = $2 OR id = $3
                         "#,
                         cognacy_id,
-                        antecedent.id,
-                        consequent.id,
+                        antecedent,
+                        consequent,
                     )
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
                 }
             }
@@ -431,8 +445,8 @@ impl WordRelationRepository {
         Ok(word_relation)
     }
 
-    async fn find_cognacy(&self, word: &Word) -> AppResult<Option<Cognacy>> {
-        if let Some(cognacy_id) = word.cognacy {
+    async fn find_cognacy(&self, cognacy_id: Option<Uuid>) -> AppResult<Option<Cognacy>> {
+        if let Some(cognacy_id) = cognacy_id {
             let cognacy = sqlx::query_as::<_, DBCognacy>("SELECT * FROM cognacies WHERE id = $1")
                 .bind(cognacy_id)
                 .fetch_optional(&self.state.pool)
@@ -610,7 +624,7 @@ impl WordRelationRepository {
         // if this was an etymological relation, we need to update the cognacy graph
         if CognacyRelationKindV1::try_from(relation.kind).is_ok() {
             // get the cognacy for the antecedent
-            if let Some(cognacy) = self.find_cognacy(antecedent).await? {
+            if let Some(cognacy) = self.find_cognacy(antecedent.cognacy).await? {
                 let CognacyInner::V1(mut schema) = cognacy.inner;
 
                 // remove the edge from the schema
@@ -923,7 +937,7 @@ impl WordRelationRepository {
 
         // If both types affect cognacy, we need to update the cognacy graph edge
         if old_affects_cognacy && new_affects_cognacy {
-            if let Some(cognacy) = self.find_cognacy(antecedent).await? {
+            if let Some(cognacy) = self.find_cognacy(antecedent.cognacy).await? {
                 let new_cognacy_kind = CognacyRelationKindV1::try_from(new_kind)?;
                 let CognacyInner::V1(mut schema) = cognacy.inner;
 
@@ -1142,7 +1156,7 @@ impl WordRelationRepository {
     }
 
     pub async fn get_cognacy(&self, word: &Word) -> AppResult<Option<CognacyFull>> {
-        let cognacy = self.find_cognacy(word).await?;
+        let cognacy = self.find_cognacy(word.cognacy).await?;
 
         if let Some(cognacy) = cognacy {
             // get all word IDs from the cognacy graph

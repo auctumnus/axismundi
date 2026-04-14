@@ -53,7 +53,9 @@ pub struct Response {
 pub enum Error {
     ParseError {
         message: String,
+        #[serde(rename = "lineNumber")]
         line_number: u32,
+        #[serde(rename = "columnNumber")]
         column_number: u32,
     },
     InvalidExpression {
@@ -127,7 +129,7 @@ pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> 
 
     match response {
         Ok(response) => {
-            if response.status() == 400 {
+            if !response.status().is_success() {
                 let error = response.json::<Error>().await?;
                 Ok(Err(error))
             } else {

@@ -180,40 +180,12 @@ impl UserActivityRepository {
         entity_type: &str,
         related_entity_id: Option<Uuid>,
         related_entity_type: Option<&str>,
-    ) -> AppResult<UserActivity> {
+    ) -> AppResult<Uuid> {
         let record = sqlx::query!(
             r#"
-                WITH inserted AS (
-                    INSERT INTO user_activities (user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    RETURNING id, user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type, timestamp
-                )
-                SELECT
-                    inserted.id,
-                    inserted.user_id,
-                    inserted.activity as "activity!: ActivityType",
-                    inserted.entity_id,
-                    inserted.entity_type,
-                    inserted.related_entity_id,
-                    inserted.related_entity_type,
-                    inserted.timestamp,
-                    u.id as "u_id!",
-                    u.username as "u_username!",
-                    u.email as "u_email!",
-                    u.password_hash as "u_password_hash!",
-                    u.display_name as "u_display_name",
-                    u.description as "u_description",
-                    u.pronouns as "u_pronouns",
-                    u.gender as "u_gender",
-                    u.profile_picture_object_id as "u_profile_picture_object_id",
-                    u.tags as "u_tags!",
-                    u.created_at as "u_created_at!",
-                    u.updated_at as "u_updated_at!",
-                    u.verified_at as "u_verified_at",
-                    COALESCE(b.slug, '')::text as "u_bookmark!"
-                FROM inserted
-                JOIN users u ON inserted.user_id = u.id
-                LEFT JOIN bookmarks b ON b.item = u.id AND b.resource = 'user'
+                INSERT INTO user_activities (user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
             "#,
             user_id,
             activity as ActivityType,
@@ -225,48 +197,38 @@ impl UserActivityRepository {
         .fetch_one(&self.state.pool)
         .await?;
 
-        let user = UserRepository::new(self.state.clone())
-            .find_by_id(user_id)
-            .await?;
+        Ok(record.id)
+    }
 
-        Ok(UserActivity {
-            id: record.id,
-            user_id: record.user_id,
-            activity: record.activity,
-            entity_id: record.entity_id,
-            related_entity_id: record.related_entity_id,
-            timestamp: record.timestamp,
-            user: User {
-                id: record.u_id,
-                username: record.u_username,
-                email: record.u_email,
-                password_hash: record.u_password_hash,
-                display_name: record.u_display_name,
-                description: record.u_description,
-                pronouns: record.u_pronouns,
-                gender: record.u_gender,
-                profile_picture_object_id: record.u_profile_picture_object_id,
-                tags: record.u_tags,
-                created_at: record.u_created_at,
-                updated_at: record.u_updated_at,
-                verified_at: record.u_verified_at,
-                bookmark: record.u_bookmark,
-            },
-            entity: self
-                .resolve_entity(record.entity_id, record.entity_type.as_str(), Some(&user))
-                .await?,
-            related_entity: if let Some(related_id) = record.related_entity_id {
-                self.resolve_related(
-                    related_id,
-                    record.related_entity_type.as_deref().unwrap_or(""),
-                )
-                .await?
-            } else {
-                None
-            },
-            entity_type: record.entity_type,
-            related_entity_type: record.related_entity_type,
-        })
+    /// Create a new activity within an existing transaction. Use this when the entity being
+    /// recorded hasn't been committed yet, so that the activity and entity are atomic.
+    pub async fn create_with_tx(
+        &self,
+        user_id: Uuid,
+        activity: ActivityType,
+        entity_id: Uuid,
+        entity_type: &str,
+        related_entity_id: Option<Uuid>,
+        related_entity_type: Option<&str>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<Uuid> {
+        let record = sqlx::query!(
+            r#"
+                INSERT INTO user_activities (user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+            "#,
+            user_id,
+            activity as ActivityType,
+            entity_id,
+            entity_type,
+            related_entity_id,
+            related_entity_type
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(record.id)
     }
 
     /// Delete an activity by its ID. Only the related user can delete their own activities.

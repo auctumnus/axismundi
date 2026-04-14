@@ -1029,6 +1029,11 @@ button.icon,
     );
     color: var(--foreground-secondary);
   }
+
+  &.disabled, &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .ellipse {
@@ -1217,4 +1222,19 @@ code {
 
 .back-button + .context-cards {
   margin-top: 1.5rem;
+}
+
+.skip-to-main-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background-color: var(--background-page);
+  color: var(--foreground-primary);
+  padding: 0.5rem;
+  z-index: 1000;
+  transition: top var(--duration-fast) ease-in-out;
+
+  &:focus {
+    top: 0;
+  }
 }

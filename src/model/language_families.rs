@@ -102,7 +102,7 @@ pub struct UpdateLanguageFamily {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, askama::Template)]
+#[derive(Clone, Serialize, Deserialize, askama::Template, Default)]
 #[template(path = "language_families/fragments/query.html")]
 pub struct SearchLanguageFamilies {
     pub q: Option<String>,

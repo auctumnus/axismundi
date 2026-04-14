@@ -4,7 +4,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::{
-    err::{AppResult, forbidden, internal_error, not_found},
+    err::{AppError, AppResult, forbidden, internal_error, not_found},
     lexurgy,
     model::{
         language_family_members::{LanguageFamilyMember, LanguageFamilyMemberRepository},
@@ -89,7 +89,14 @@ pub struct MemberTarget {
 #[derive(Debug, Clone)]
 pub struct DerivationPath {
     pub language_id: Uuid,
+    pub language_name: String,
+    pub language_code: String,
+    pub family_id: Uuid,
+    pub family_name: String,
     pub scs_ids: Vec<Uuid>,
+    /// True if the requestor has a direct editor+ permission on this language.
+    /// False if they can see it only because they are a moderator or admin.
+    pub has_direct_permission: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -566,9 +573,7 @@ impl SoundChangeSetRepository {
 
             match response {
                 Ok(response) => Ok(response),
-                Err(error) => Err(internal_error(format!(
-                    "Failed to run sound changes: {error}"
-                ))),
+                Err(error) => Err(error.into()),
             }
         } else {
             Err(not_found(format!("sound change set with id {set_id}")))
@@ -750,14 +755,22 @@ impl SoundChangeSetRepository {
     /// Find all descendant languages reachable from `source_language_id` by a complete
     /// chain of sound change sets (one per edge). Returns each reachable language paired
     /// with the ordered list of sound change set ids from source → target.
+    /// The final list is filtered to exclude languages that the requestor does not have edit access to.
+    /// (If the user is a moderator or admin, this will simply return all reachable languages.)
     pub async fn find_derivation_paths(
         &self,
+        requestor: &User,
         source_language_id: Uuid,
     ) -> AppResult<Vec<DerivationPath>> {
         #[derive(FromRow)]
         struct Row {
             language_id: Option<Uuid>,
+            language_name: Option<String>,
+            language_code: Option<String>,
+            family_id: Option<Uuid>,
+            family_name: Option<String>,
             scs_ids: Option<Vec<Uuid>>,
+            has_direct_permission: Option<bool>,
         }
 
         let rows = sqlx::query_as!(
@@ -767,6 +780,7 @@ impl SoundChangeSetRepository {
                 select
                     m.id           as member_id,
                     m.language_id,
+                    m.family_id,
                     array[]::uuid[] as scs_ids,
                     true            as complete
                 from language_family_members m
@@ -778,6 +792,7 @@ impl SoundChangeSetRepository {
                 select
                     child.id,
                     child.language_id,
+                    child.family_id,
                     dp.scs_ids || scs.id,
                     dp.complete and scs.id is not null
                 from language_family_members child
@@ -785,13 +800,37 @@ impl SoundChangeSetRepository {
                 left join sound_change_sets scs on scs.member_id = child.id
                 where dp.complete
             )
-            select dp.language_id, dp.scs_ids as "scs_ids: Vec<Uuid>"
+            select
+                dp.language_id,
+                l.name as language_name,
+                l.code as language_code,
+                dp.family_id,
+                lf.name as family_name,
+                dp.scs_ids as "scs_ids: Vec<Uuid>",
+                exists(
+                    select 1 from language_permissions
+                    where "user" = $2
+                      and language = dp.language_id
+                      and permission >= 'editor'
+                ) as has_direct_permission
             from derivation_paths dp
+            join languages l on l.id = dp.language_id
+            join language_families lf on lf.id = dp.family_id
             where dp.language_id is not null
               and dp.complete
               and dp.language_id != $1
+              and (
+                exists(select 1 from user_tags where user_id = $2 and tag in ('admin', 'moderator'))
+                or exists(
+                    select 1 from language_permissions
+                    where "user" = $2
+                      and language = dp.language_id
+                      and permission >= 'editor'
+                )
+              )
             "#,
-            source_language_id
+            source_language_id,
+            requestor.id
         )
         .fetch_all(&self.state.pool)
         .await?;
@@ -799,12 +838,59 @@ impl SoundChangeSetRepository {
         Ok(rows
             .into_iter()
             .filter_map(|r| {
-                r.language_id.map(|language_id| DerivationPath {
-                    language_id,
+                Some(DerivationPath {
+                    language_id: r.language_id?,
+                    language_name: r.language_name?,
+                    language_code: r.language_code?,
+                    family_id: r.family_id?,
+                    family_name: r.family_name?,
                     scs_ids: r.scs_ids.unwrap_or_default(),
+                    has_direct_permission: r.has_direct_permission.unwrap_or(false),
                 })
             })
             .collect())
+    }
+
+    pub async fn run_derivation_path(
+        &self,
+        scs_ids: Vec<Uuid>,
+        input_words: Vec<String>,
+    ) -> AppResult<Option<lexurgy::Response>> {
+        #[derive(FromRow)]
+        struct Row {
+            changes: String,
+            name: String,
+        }
+
+        let scs = sqlx::query_as!(
+            Row,
+            "
+            select changes, name from sound_change_sets
+            where id = any($1)
+            order by array_position($1, id)
+            ",
+            &scs_ids
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        let mut response = None;
+        let mut input_words = input_words;
+
+        for Row { changes, name } in scs {
+            let res = crate::lexurgy::run_sound_changes(changes, input_words.clone(), None, None, None).await
+                .map_err(|e| e.with_prefix(format!("in set {name}")))?;
+            match res {
+                Ok(res) => {
+                    input_words.clone_from(&res.output_words);
+                    response = Some(res);
+                }
+                Err(e) => {
+                    return Err(Into::<AppError>::into(e).with_prefix(format!("in set {name}")));
+                }
+            }
+        }
+        Ok(response)
     }
 }
 

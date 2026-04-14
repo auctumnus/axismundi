@@ -6,43 +6,13 @@
 {% block title %}new word - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="/static/components/modal.css">
+<link rel="stylesheet" href="/static/words/edit.css">
+<script defer src="/static/words/edit.js"></script>
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
-<style>
-.context-cards {
-    margin-bottom: 2rem;
-}
-.context-card {
-    border: var(--border);
-    border-radius: var(--rounding);
-    background-color: var(--background-panel);
-    padding: 1rem;
-}
-.context-card-content {
-    display: flex;
-    flex-direction: column;
-    gap: .25rem;
-}
-.context-card .word-text {
-    font-weight: 600;
-    color: var(--foreground-primary);
-    font-size: 1.125rem;
-    text-decoration: none;
-}
-.context-card .word-text:hover {
-    text-decoration: underline;
-}
-.context-card .word-ipa {
-    font-style: italic;
-    color: var(--foreground-secondary);
-    font-size: .875rem;
-}
-.context-card .word-language {
-    color: var(--foreground-tertiary);
-    font-size: .875rem;
-}
-</style>
+<script type="module" src="/static/definitions-editor.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -51,9 +21,9 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-{% if let Some(antecedent) = antecedent %}
+{% if let Some((antecedent, _)) = derived_from %}
 <div class="context-cards">
-    <div class="context-card">
+    <div class="context-card word-context">
         <span class="context-label">derived from</span>
         <ul class="standalone-card">
             {% call word_card::render(&antecedent) %}
@@ -94,45 +64,44 @@
     </section>
 
     <section>
-        <label>Definitions</label>
         {% call u::field_error(name="definitions") %}
-        <div id="definitions-container">
-            <div class="first-definition">
-                <label class="small" id="definition-label" for="definition-0-def">Definition</label>
-                <label class="small" id="context-label" for="definition-0-ctx">Context (optional)</label>
-                <input type="text" id="definition-0-def" name="definitions[]" required aria-label="Definition" value="{{previous_definition}}" class="definition-input">
-                <input type="text" id="definition-0-ctx" name="contexts[]" aria-label="Context (optional)" value="{{previous_context}}">
+        <div id="definitions-editor-mount">
+            <label>Definitions</label>
+            <div class="definitions-header nojs-only">
+                <label for="definitions[]" class="definitions-col-label" id="definitions-definition-label">definition</label>
+                <label for="contexts[]" class="definitions-col-label" id="definitions-context-label">context (optional)</label>
             </div>
-        {% for (def, ctx) in previous_definitions.iter().zip(previous_contexts.iter()) %}
+            {% for (def, ctx) in nojs_slots %}
             <div class="definition-item">
-                <input type="text" name="definitions[]" required aria-label="Definition" value="{{def}}" class="definition-input">
-                <input type="text" name="contexts[]" aria-label="Context (optional)" value="{{ctx}}">
-                <button type="button" class="remove-definition">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
-                </button>
+                <input type="text" name="definitions[]" value="{{ def }}" placeholder="definition" aria-label="Definition">
+                <input type="text" name="contexts[]" value="{{ ctx }}" placeholder="context (optional)" aria-label="Context (optional)">
             </div>
-        {% endfor %}
+            {% endfor %}
         </div>
-        <button type="button" id="add-definition" class="button-small with-icon">
-            <svg class="icon"><use href="#icon-plus"></use></svg>
-            <span>add definition</span>
-        </button>
     </section>
-
-    <template id="definition-template">
-        <div class="definition-item">
-            <input type="text" name="definitions[]" aria-label="Definition" class="definition-input">
-            <input type="text" name="contexts[]" aria-label="Context (optional)">
-            <button type="button" class="remove-definition">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
-            </button>
-        </div>
-    </template>
 
     <section>
         <label for="ipa">IPA transcription (optional)</label>
         {% call u::field_error(name="ipa") %}
-        <input type="text" id="ipa" name="ipa" value="{{previous_ipa}}">
+        <div class="ipa-estimator">
+            <input type="text" id="ipa" name="ipa" value="{{previous_ipa}}">
+            {% if let Some(sound_change_set) = ipa_estimator %}
+                <button
+                    type="submit"
+                    id="estimate-ipa"
+                    class="secondary"
+                    formaction="/languages/{{ language.code }}/new-word/estimate-ipa"
+                    data-sound-change-set="{{ sound_change_set.id }}"
+                >
+                    Estimate IPA
+                </button>
+            {% else %}
+                <span class="hint">to automatically estimate IPA, <a href="/languages/{{ language.code }}/sound-change-sets">create a sound change set</a> and mark it as an ipa estimator</span>
+            {% endif %}
+        </div>
+        {% if let Some(sound_change_set) = ipa_estimator %}
+            <span class="hint">using the sound change set "<a href="/languages/{{ language.code }}/sound-change-sets/{{ sound_change_set.id }}">{{ sound_change_set.name }}</a>" for estimation</span>
+        {% endif %}
     </section>
 
     <section>
@@ -141,19 +110,11 @@
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
-    {% if let Some(antecedent) = antecedent %}
+    {% if let Some((antecedent, relation_kind)) = derived_from %}
         <input type="hidden" name="antecedent_bookmark" value="{{ antecedent.word.bookmark }}">
         <input type="hidden" name="relation_kind" value="{{ relation_kind }}">
     {% endif %}
     <button type="submit">Create word</button>
-    {% if let Some(_) = ipa_estimator %}
-        <button
-            type="submit"
-            formaction="/languages/{{ language.code }}/new-word/estimate-ipa"
-        >
-            Estimate IPA
-        </button>
-    {% endif %}
 </form>
 {% endblock %}
 
@@ -167,40 +128,15 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function() {
-    const MAX_DEFINITIONS = 10;
-    const container = document.getElementById('definitions-container');
-    const template = document.getElementById('definition-template');
-    const addButton = document.getElementById('add-definition');
-
-    addButton.addEventListener('click', function() {
-        const currentCount = container.querySelectorAll('.definition-item').length;
-
-        if (currentCount >= MAX_DEFINITIONS) {
-            alert('Maximum ' + MAX_DEFINITIONS + ' definitions allowed');
-            return;
-        }
-
-        const clone = template.content.cloneNode(true);
-        const removeButton = clone.querySelector('.remove-definition');
-
-        removeButton.addEventListener('click', function() {
-            this.parentElement.remove();
-        });
-
-        container.appendChild(clone);
-    });
-
-    document.querySelectorAll('.remove-definition').forEach(function(button) {
-        button.addEventListener('click', function() {
-            this.parentElement.remove();
-        });
-    });
-})();
-</script>
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountDefinitionsEditor) {
+      const initial = JSON.parse(document.getElementById('definitions-initial').textContent);
+      window.mountDefinitionsEditor('definitions-editor-mount', {
+        initialItems: initial,
+        isEdit: false,
+      });
+    }
     if (window.mountFormEditor) {
       const notesTextarea = document.getElementById('notes');
       const notesDiv = document.createElement('div');
@@ -215,5 +151,6 @@
     }
   });
 </script>
+<script type="application/json" id="definitions-initial">{{ previous_definitions_json | safe }}</script>
 <script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 {% endblock %}

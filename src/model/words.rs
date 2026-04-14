@@ -300,13 +300,14 @@ impl WordRepository {
             let activity_repo =
                 crate::model::user_activities::UserActivityRepository::new(self.state.clone());
             let _activity = activity_repo
-                .create(
+                .create_with_tx(
                     requestor.id,
                     crate::model::user_activities::ActivityType::CreateWord,
                     word_result.id,
                     "word",
                     Some(language),
                     Some("language"),
+                    tx,
                 )
                 .await?;
         }

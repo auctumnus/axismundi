@@ -328,6 +328,25 @@ mod macros {
                 Err(e) => return $crate::controller::html::render_generic_error($session, e).await,
             }
         };
+
+        ($render_error:expr, $session:expr, $expr:expr) => {
+            match $expr {
+                Ok(val) => val,
+                Err(e) => {
+                    let status = e.status_code;
+                    match $render_error(e).await {
+                        Ok(template) => {
+                            let body = $crate::controller::html::render_template(template);
+                            return (status, body);
+                        }
+                        Err(e) => {
+                            return $crate::controller::html::render_generic_error($session, e)
+                                .await;
+                        }
+                    }
+                }
+            }
+        };
     }
 
     #[macro_export]

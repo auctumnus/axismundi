@@ -47,14 +47,18 @@ pub(super) async fn delete_word_form(
             .await
     );
 
-    let can_edit_language = 
-        attempt!(s, permissions
+    let can_edit_language = attempt!(
+        s,
+        permissions
             .can_edit_language(Some(&user), &language.id)
-            .await);
-    let can_delete_language =
-        attempt!(s, permissions
+            .await
+    );
+    let can_delete_language = attempt!(
+        s,
+        permissions
             .can_delete_language(Some(&user), &language.id)
-            .await);
+            .await
+    );
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;

@@ -1,8 +1,0 @@
-                  id                  |              family_id               |  family_name  | family_code |    language_name    |        title        
---------------------------------------+--------------------------------------+---------------+-------------+---------------------+---------------------
- 019d5ac1-bbfc-7a91-9122-5e9c9371a403 | 019d5ab2-401f-7161-91ab-c1cfe071bc18 | Indo-European | ie          | Old English         | 
- 019d5ac1-7b1f-7e65-92a5-9536299afb83 | 019d5ab2-401f-7161-91ab-c1cfe071bc18 | Indo-European | ie          | Proto-Germanic      | 
- 019d5abf-f2e4-7d7d-913c-76360532fa6c | 019d5ab2-401f-7161-91ab-c1cfe071bc18 | Indo-European | ie          | Proto-Indo-European | 
- 019d5ac1-a0ea-7ae8-98b5-1c5bc36a5fce | 019d5ab2-401f-7161-91ab-c1cfe071bc18 | Indo-European | ie          |                     | Proto-West-Germanic
-(4 rows)
-
