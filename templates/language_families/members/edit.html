@@ -1,9 +1,10 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 {%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
 {%- import "language_families/fragments/footer.html" as family_f -%}
 
-{% block title %}add root grouping to {{ family.family.name }} - axismundi{% endblock %}
+{% block title %}edit {{ member.name() }} - axismundi{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/slate-editor.css">
@@ -17,7 +18,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>add root grouping to {{ family.family.name }}</h1>
+<h1>edit {{ member.name() }}</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -26,34 +27,22 @@
     </div>
 {% endif %}
 
-<div class="context-cards">
-    <div class="context-card family-context">
-        <span class="context-label">in family</span>
-        <ul class="standalone-card">
-            {% call family_card::render(&family) %}
-        </ul>
-    </div>
-</div>
-
-<div class="warning">
-    <h2>creating root member</h2>
-    <p>since this is the first member in the family, it automatically forms the root.</p>
-</div>
-
-<form id="add-root-grouping-form" class="default" method="post" action="/language-families/{{ family.family.code }}/add-root/grouping">
+<form id="edit-member-form" class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/edit">
+    {% if let Some(_) = member.member.as_grouping() %}
     <section>
         <label for="title">Title</label>
         {% call u::field_error(name="title") %}
-        <input type="text" id="title" name="title" required value="{{previous_title}}">
+        <input type="text" id="title" name="title" required value="{{ previous_title }}">
     </section>
+    {% endif %}
 
     <section>
         <label for="notes">Notes</label>
         {% call u::field_error(name="notes") %}
-        <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
+        <textarea id="notes" name="notes" rows="4">{{ previous_notes }}</textarea>
     </section>
 
-    <button type="submit">Add root</button>
+    <button type="submit">Save changes</button>
 </form>
 
 <script type="module">
@@ -67,7 +56,7 @@
       window.mountFormEditor('notes', {
         initialValue: initialValue,
         inputName: 'notes',
-        formId: 'add-root-grouping-form'
+        formId: 'edit-member-form'
       });
     }
   });
@@ -79,7 +68,7 @@
 <span class="separator">/</span>
 <a href="/language-families/{{ family.family.code }}" class="breadcrumb">{{ family.family.name }}</a>
 <span class="separator">/</span>
-<a href="/language-families/{{ family.family.code }}/add-root" class="breadcrumb">add root</a>
+<a href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}" class="breadcrumb">{{ member.name() }}</a>
 {% endblock %}
 
 {% block footer %}

@@ -29,6 +29,24 @@
   }
 }
 
+.word-header {
+  font-family: var(--font-normal);
+}
+
 .rendered-notes {
   margin-top: 0.5rem;
+}
+
+.when-small {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  .when-large {
+    display: none !important;
+  }
+
+  .when-small {
+    display: inline-flex !important;
+  }
 }

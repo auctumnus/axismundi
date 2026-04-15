@@ -140,9 +140,8 @@ struct OutputPair {
 struct ScsPreviewCard {
     set: SoundChangeSet,
     author: User,
-    language: Language,
+    link: String,
     can_edit_language: bool,
-    back_url: String,
 }
 
 #[derive(Template)]
@@ -407,12 +406,22 @@ async fn search(
     };
 
     let lang_clone = language_with_contributors.language.clone();
-    let render_item = move |item: &SoundChangeSetWithMeta| ScsPreviewCard {
-        set: item.sound_change_set.clone(),
-        author: item.author.clone(),
-        language: lang_clone.clone(),
-        can_edit_language,
-        back_url: back_url.clone(),
+    let render_item = move |item: &SoundChangeSetWithMeta| {
+        let base = format!(
+            "/languages/{}/sound-change-sets/{}",
+            lang_clone.code, item.sound_change_set.id
+        );
+        let link = if back_url.is_empty() {
+            base
+        } else {
+            format!("{}?back={}", base, crate::util::urlencode(&back_url))
+        };
+        ScsPreviewCard {
+            set: item.sound_change_set.clone(),
+            author: item.author.clone(),
+            link,
+            can_edit_language,
+        }
     };
 
     let header = ScsSearchHeader {

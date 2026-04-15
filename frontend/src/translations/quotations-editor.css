@@ -1,0 +1,67 @@
+.quotations-editor {
+    .controls, .controls-container {
+        display: flex;
+        flex-direction: row;
+    }
+
+    .controls-container {
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .controls-header {
+        padding: 0.325rem 0.75rem;
+        font-family: var(--font-heading);
+        font-size: 0.9rem;
+        color: var(--foreground-secondary);
+        background-color: var(--background-panel);
+        border-bottom-left-radius: var(--rounding);
+        border-top-left-radius: var(--rounding);
+        border: var(--border);
+        border-right: 1px solid var(--input-border);
+    }
+
+    .control-button {
+        padding: 0.325rem 0.75rem;
+        border: 1px solid var(--input-border);
+        border-left: 1px solid transparent;
+        background: var(--input-background);
+        cursor: pointer;
+        color: var(--foreground-secondary);
+        transition:
+            color 0.2s,
+            background-color var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15),
+            opacity var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15);
+        font-family: var(--font-normal);
+        font-size: 0.9rem;
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+
+        svg {
+            width: 20px;
+            height: 20px;
+            color: inherit;
+        }
+
+        :last-child > & {
+            border-top-right-radius: var(--rounding);
+            border-bottom-right-radius: var(--rounding);
+        }
+
+        &.disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+            background-color: transparent;
+        }
+
+        &:not(.disabled):hover {
+            background-color: var(--input-background-focus);
+            border-color: var(--input-border-focus);
+            border-left: 1px solid var(--input-border-focus);
+            border-bottom: 1px solid var(--input-border-focus);
+        }
+    }
+}

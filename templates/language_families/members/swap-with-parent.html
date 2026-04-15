@@ -4,7 +4,7 @@
 {%- import "language_families/members/fragments/card.html" as member_card -%}
 {%- import "language_families/fragments/footer.html" as family_f -%}
 
-{% block title %}unassociate language from {{ member.name() }} - axismundi{% endblock %}
+{% block title %}swap positions in {{ family.family.name }} - axismundi{% endblock %}
 
 {% block content %}
 
@@ -12,7 +12,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>unassociate language from {{ member.name() }}</h1>
+<h1>swap with parent</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -23,27 +23,27 @@
 
 <div class="context-cards">
     <div class="context-card family-member-context">
-        <span class="context-label">for member</span>
+        <span class="context-label">member</span>
         <ul class="standalone-card">
             {% call member_card::render(&member) %}
         </ul>
     </div>
-    <div class="context-card family-context">
-        <span class="context-label">in family</span>
+    <div class="context-card family-member-context">
+        <span class="context-label">current parent</span>
         <ul class="standalone-card">
-            {% call family_card::render(&family) %}
+            {% call member_card::render(&parent_member) %}
         </ul>
     </div>
 </div>
 
-<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-grouping">
-    <section>
-        <p>Are you sure you want to unassociate the language from the language family member <strong>{{ member.name() }}</strong>?</p>
-        <p>The language itself will not be deleted.</p>
-    </section>
+<p>{{ member.name() }} will take the position of {{ parent_member.name() }} in the tree. {{ parent_member.name() }} will become a child of {{ member.name() }}.</p>
 
-    <button type="submit">Unassociate</button>
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/swap-with-parent">
+    <section class="button-row">
+        <button type="submit">Swap Positions</button>
+    </section>
 </form>
+
 {% endblock %}
 
 {% block breadcrumb %}

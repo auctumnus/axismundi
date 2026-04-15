@@ -395,6 +395,93 @@ impl LanguageFamilyRepository {
         }
     }
 
+    #[allow(irrefutable_let_patterns)]
+    pub async fn swap_in_tree(
+        &self,
+        family: LanguageFamily,
+        member_id: Uuid,
+        parent_id: Uuid,
+        grandparent_id: Option<Uuid>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<LanguageFamily> {
+        let schema = family.tree_schema()?;
+
+        if let LanguageFamilyInner::V1(mut v1_schema) = schema {
+            for edge in &mut v1_schema.edges {
+                if edge.child_member_id == member_id
+                    && edge.relation_kind == FamilyRelationKindV1::Descendant
+                {
+                    edge.parent_member_id = grandparent_id;
+                } else if edge.child_member_id == parent_id
+                    && edge.relation_kind == FamilyRelationKindV1::Descendant
+                {
+                    edge.parent_member_id = Some(member_id);
+                }
+            }
+
+            let new_tree =
+                serde_json::to_value(LanguageFamilyInner::V1(v1_schema)).map_err(|e| {
+                    internal_error(format!("Failed to serialize updated tree schema: {}", e))
+                })?;
+            self.update_tree(family, new_tree, tx).await
+        } else {
+            Err(internal_error("Unsupported language family schema version"))
+        }
+    }
+
+    #[allow(irrefutable_let_patterns)]
+    pub async fn change_parent_in_tree(
+        &self,
+        family: LanguageFamily,
+        member_id: Uuid,
+        new_parent_id: Uuid,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<LanguageFamily> {
+        use std::collections::HashMap;
+
+        let schema = family.tree_schema()?;
+
+        if let LanguageFamilyInner::V1(mut v1_schema) = schema {
+            let mut adjacency_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+            for e in &v1_schema.edges {
+                if let Some(pid) = e.parent_member_id {
+                    adjacency_list.entry(pid).or_default().push(e.child_member_id);
+                }
+            }
+
+            if crate::util::dfs(&adjacency_list, member_id, new_parent_id, &mut HashMap::new()) {
+                return Err(crate::err::bad_request(
+                    "changing parent would create a cycle in the language family tree",
+                ));
+            }
+
+            let mut found = false;
+            for edge in &mut v1_schema.edges {
+                if edge.child_member_id == member_id
+                    && edge.relation_kind == FamilyRelationKindV1::Descendant
+                {
+                    edge.parent_member_id = Some(new_parent_id);
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                return Err(internal_error(
+                    "member's descendant edge not found in tree",
+                ));
+            }
+
+            let new_tree =
+                serde_json::to_value(LanguageFamilyInner::V1(v1_schema)).map_err(|e| {
+                    internal_error(format!("Failed to serialize updated tree schema: {}", e))
+                })?;
+            self.update_tree(family, new_tree, tx).await
+        } else {
+            Err(internal_error("Unsupported language family schema version"))
+        }
+    }
+
     pub async fn update_tree(
         &self,
         family: LanguageFamily,

@@ -47,7 +47,7 @@
 {% let render_item = &render_item %}
 {% if let Some(results) = results %}
     {% if results.items.is_empty() %}
-        <div class="empty-search-results">No results found.</div>
+        <div class="empty-search-results">no results</div>
     {% else %}
         <ul class="card-list">
             {% for item in results.items %}

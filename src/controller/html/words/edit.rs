@@ -91,6 +91,7 @@ pub(super) struct EditWordFormData {
     pub(super) notes: Option<String>,
 }
 
+#[allow(dead_code)]
 struct EditCommon {
     current_user: User,
     language: Language,
@@ -205,15 +206,11 @@ pub(super) async fn edit_word(
     okay(body)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn edit_word_submit(
     s: Session,
     State(state): State<AppState>,
-    languages: LanguageRepository,
     words: WordRepository,
-    word_classes: WordClassRepository,
     definitions_repo: DefinitionRepository,
-    permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<EditWordFormData>,
 ) -> (StatusCode, Response) {

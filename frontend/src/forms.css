@@ -534,3 +534,11 @@ div.permission-level-helptext-container {
     font-weight: bold;
   }
 }
+
+.empty-search-results {
+  text-align: center;
+  color: var(--foreground-secondary);
+  padding: 2rem;
+  margin-top: 25vh;
+  font-style: italic;
+}

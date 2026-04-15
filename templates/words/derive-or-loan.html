@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}derive or loan {{ word.word.word }}? - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/words/derive-or-loan.css">
+{% endblock %}
+
+{% block content %}
+
+<h1>derive or loan {{ word.word.word }}?</h1>
+
+<ul class="derive-or-loan-options">
+    <li>
+        <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive">
+            <div class="left" aria-hidden>
+                {% call u::icon("arrow-split") %}
+            </div>
+            <div class="spacer"></div>
+            <div class="right">
+                <h2>derive</h2>
+                <span>run sound changes to derive into a descendant in this language's family</span>
+            </div>
+        </a>
+    </li>
+    <li>
+        <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/loan">
+            <div class="left" aria-hidden>
+                {% call u::icon("forward") %}
+            </div>
+            <div class="spacer"></div>
+            <div class="right">
+                <h2>loan</h2>
+                <span>borrow this as a loanword into another language</span>
+            </div>
+        </a>
+    </li>
+</ul>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}" class="breadcrumb">{{ word.word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

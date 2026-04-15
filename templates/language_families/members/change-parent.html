@@ -4,7 +4,7 @@
 {%- import "language_families/members/fragments/card.html" as member_card -%}
 {%- import "language_families/fragments/footer.html" as family_f -%}
 
-{% block title %}unassociate language from {{ member.name() }} - axismundi{% endblock %}
+{% block title %}change parent of {{ member.name() }} - axismundi{% endblock %}
 
 {% block content %}
 
@@ -12,7 +12,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>unassociate language from {{ member.name() }}</h1>
+<h1>change parent</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -23,7 +23,7 @@
 
 <div class="context-cards">
     <div class="context-card family-member-context">
-        <span class="context-label">for member</span>
+        <span class="context-label">member</span>
         <ul class="standalone-card">
             {% call member_card::render(&member) %}
         </ul>
@@ -36,14 +36,26 @@
     </div>
 </div>
 
-<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-grouping">
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/change-parent">
     <section>
-        <p>Are you sure you want to unassociate the language from the language family member <strong>{{ member.name() }}</strong>?</p>
-        <p>The language itself will not be deleted.</p>
+        <label for="new_parent_id">new parent</label>
+        {% call u::field_error(name="new_parent_id") %}
+        <div class="select-container">
+            <select id="new_parent_id" name="new_parent_id" required>
+                <option value="" disabled selected>-- select a member --</option>
+                {% for m in available_members %}
+                    <option value="{{ m.member.id() }}" {% if previous_parent_id == m.member.id().to_string() %}selected{% endif %}>{{ m.name() }}</option>
+                {% endfor %}
+            </select>
+            {% call u::icon("chevron-down") %}
+        </div>
     </section>
 
-    <button type="submit">Unassociate</button>
+    <section class="button-row">
+        <button type="submit">Change Parent</button>
+    </section>
 </form>
+
 {% endblock %}
 
 {% block breadcrumb %}

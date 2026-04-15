@@ -205,7 +205,6 @@ pub(super) async fn view_lemmata(
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn view_lemma(
     s: Session,
-    State(state): State<AppState>,
     languages: LanguageRepository,
     words: WordRepository,
     definitions_repo: DefinitionRepository,

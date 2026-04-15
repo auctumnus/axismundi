@@ -49,6 +49,20 @@ pub struct UpdateQuotation {
     pub span_end: Option<i32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct QuotationWithWordInfo {
+    pub id: Uuid,
+    pub span_start: i32,
+    pub span_end: i32,
+    pub definition_id: Uuid,
+    pub definition_text: String,
+    pub word_slug: String,
+    pub word_lemma: i32,
+    pub word: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 pub struct QuotationRepository {
     state: AppState,
 }
@@ -366,6 +380,7 @@ impl QuotationRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    #[allow(dead_code)]
     pub async fn list_by_translation(
         &self,
         translation_id: Uuid,
@@ -387,6 +402,64 @@ impl QuotationRepository {
                 FROM quotation
                 WHERE translation = $1
                 ORDER BY span_start ASC
+                LIMIT $2
+                OFFSET $3
+            "#,
+            translation_id,
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
+        )
+        .fetch_all(&self.state.pool);
+
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
+                FROM quotation
+                WHERE translation = $1
+            "#,
+            translation_id
+        )
+        .fetch_one(&self.state.pool);
+
+        let (items, total_count) = tokio::try_join!(items_future, count_future)?;
+
+        let total = total_count.unwrap_or(0);
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+
+        Ok(PaginatedResponse {
+            items,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
+        })
+    }
+
+    pub async fn list_by_translation_with_word_info(
+        &self,
+        translation_id: Uuid,
+        pagination: PaginatedRequest,
+    ) -> AppResult<PaginatedResponse<QuotationWithWordInfo>> {
+        let items_future = sqlx::query_as!(
+            QuotationWithWordInfo,
+            r#"
+                SELECT
+                    q.id,
+                    q.span_start,
+                    q.span_end,
+                    d.id         AS definition_id,
+                    d.definition AS definition_text,
+                    w.slug       AS word_slug,
+                    w.lemma      AS word_lemma,
+                    w.word       AS word,
+                    q.created_at,
+                    q.updated_at
+                FROM quotation q
+                JOIN definitions d ON d.id = q.definition
+                JOIN words w       ON w.id = d.word
+                WHERE q.translation = $1
+                ORDER BY q.span_start ASC
                 LIMIT $2
                 OFFSET $3
             "#,

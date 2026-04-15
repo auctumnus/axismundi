@@ -15,84 +15,119 @@
 {% endblock %}
 
 {% block content %}
+
+<div class="card">
+    <div class="header-with-actions">
+        <div class="with-subtitle">
+            <h2>{{ name }}</h2>
+            <div class="contributors">
+                <span>added by</span>
+                {% call u::badge(&member.creator, size="small") %}
+            </div>
+        </div>
+        <ul class="icons">
+            {% if can_edit_family %}
+                <li>
+                    <a class="icon button gray" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/edit">
+                        {% call u::icon("edit") %}
+                    </a>
+                </li>
+                <li>
+                    <a class="icon button red" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/delete">
+                        {% call u::icon("delete") %}
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% if member.notes.is_empty() %}
+        <p class="empty-description">
+            no notes yet
+        </p>
+    {% else %}
+        <p>
+            {{ member.notes | safe }}
+        </p>
+    {% endif %}
+</div>
+
 <div class="header-with-actions">
-    <h2 class="with-action">{{ name }}</h2>
-    <ul>
-    {% if can_edit_family %}
-        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/delete">
-            {% call u::icon("delete") %}
-        <span>delete member</span>
-        </a></li>
-        {% if let Some(_) = member.member.as_language() %}
-        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-grouping">
-            {% call u::icon("article") %}
-            <span>convert to grouping</span>
-        </a></li>
-        {% endif %}
-        {% if let Some(_) = member.member.as_grouping() %}
-        <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-language">
-            {% call u::icon("translate") %}
-            <span>convert to language</span>
-        </a></li>
-        {% endif %}
-    {% endif %}
+        <h2>family</h2>
+        <ul>
+            {% if can_edit_family %}
+                <li>
+                    <a class="with-icon" href="/language-families/{{ family.family.code }}/members">
+                        {% call u::icon("list") %}
+                        <span>view all members</span>
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+<ul class="card-list">
+    {% call family_card::render(&family) %}
+</ul>
 
-    </ul>
-</div>
-
-<div class="context-cards">
-    {% if let Some(language_with_contributors) = language %}
-        <div class="context-card language-context">
-            <span class="context-label">for language</span>
-            <ul class="standalone-card">
+{% if let Some(language_with_contributors) = language %}
+<div class="header-with-actions">
+        <h2>language</h2>
+        <ul>
+            {% if can_edit_family %}
+                <li>
+                    <a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-grouping">
+                        {% call u::icon("close-small") %}
+                        <span>unassociate language</span>
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+    <ul class="card-list">
                 {% call lang_card::render(&language_with_contributors) %}
-            </ul>
+    </ul>
+{% else %}
+<div class="card first-interaction-card">
+    <h2>no language associated</h2>
+    <p>this member does not have a language associated to it yet.</p>
+    {% if can_edit_family %}
+        <div class="actions">
+            <a class="button primary-button" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-language">
+                associate a language
+            </a>
         </div>
     {% endif %}
-
-    {% if let Some(parent_member) = parent_member %}
-        <div class="context-card family-member-context">
-            <span class="context-label">for parent member</span>
-            <ul class="standalone-card">
-                {% call member_card::render(&parent_member) %}
-            </ul>
-        </div>
-    {% endif %}
-
-    <div class="context-card family-context">
-        <span class="context-label">in family</span>
-        <ul class="standalone-card">
-            {% call family_card::render(&family) %}
-        </ul>
-    </div>
 </div>
+{% endif %}
 
-{% if let Some(scs) = member_scs %}
+{% if let Some(parent_member) = parent_member %}
     <div class="header-with-actions">
-        <h2>sound change set</h2>
+        <h2>parent member</h2>
         <ul>
-            <li><a class="with-icon" href="/sound-change-sets/{{ scs.id }}">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM7 9h10v2H7zm0 4h7v2H7z"/></svg>
-                <span>view sound change set</span>
-            </a></li>
+            {% if can_edit_family %}
+                <li>
+                    <a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/swap-with-parent">
+                        {% call u::icon("swap-vertical") %}
+                        <span>swap with parent</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/change-parent">
+                        {% call u::icon("swap-horizontal") %}
+                        <span>change parent</span>
+                    </a>
+                </li>
+            {% endif %}
         </ul>
     </div>
-{% else if can_edit_family %}
-    <div class="header-with-actions">
-        <h2>sound change set</h2>
-        <ul>
-            <li><a class="with-icon" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/sound-change-sets/new">
-                <svg class="icon"><use href="#icon-plus"></use></svg>
-                <span>new sound change set</span>
-            </a></li>
-        </ul>
-    </div>
+    <ul class="card-list">
+        {% call member_card::render(&parent_member) %}
+    </ul>
 {% endif %}
 
 {% if children.len() == 0 && can_edit_family %}
     <div class="card">
         <h2>no children yet</h2>
-        <p>add the first child member to get started</p>
+        <p>you can create a new member as a child of this node</p>
         <div class="actions">
             <a class="button primary-button" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/add-child">new child</a>
         </div>
@@ -118,6 +153,35 @@
             {% call member_card::render(&member) %}
         {% endfor %}
     </ul>
+{% endif %}
+
+{% if let Some(scs) = member_scs %}
+    <div class="card">
+        <h2>sound change set</h2>
+        <p>
+            this member has a sound change set associated to it, for use with deriving words.
+        </p>
+        <div class="actions">
+            <a class="button" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/sound-change-set">
+                view sound change set
+            </a>
+        </div>
+    </div>
+{% else if can_edit_family %}
+    {% if let Some(_) = parent_member %}
+        <div class="card">
+            <h2>no sound change set</h2>
+            <p>
+                this member does not have a sound change set associated to it.
+                in order to derive words into it automatically, you can create a sound change set for it.
+            </p>
+            <div class="actions">
+                <a class="button primary-button" href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/sound-change-sets/new">
+                    create sound change set
+                </a>
+            </div>
+        </div>
+    {% endif %}
 {% endif %}
 
 {% endblock %}

@@ -4,7 +4,7 @@
 {%- import "language_families/members/fragments/card.html" as member_card -%}
 {%- import "language_families/fragments/footer.html" as family_f -%}
 
-{% block title %}convert {{ member.name() }} to language - axismundi{% endblock %}
+{% block title %}associate language to {{ member.name() }} - axismundi{% endblock %}
 
 {% block content %}
 
@@ -12,7 +12,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>convert to language</h1>
+<h1>associate language to {{ member.name() }}</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -23,7 +23,7 @@
 
 <div class="context-cards">
     <div class="context-card family-member-context">
-        <span class="context-label">converting member</span>
+        <span class="context-label">for member</span>
         <ul class="standalone-card">
             {% call member_card::render(&member) %}
         </ul>
@@ -35,8 +35,6 @@
         </ul>
     </div>
 </div>
-
-<p>this will replace the grouping label with a language. the member keeps its position in the tree.</p>
 
 <form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-language">
     <section>
@@ -53,7 +51,7 @@
         </div>
     </section>
 
-    <button type="submit">Convert to Language</button>
+    <button type="submit">Associate</button>
 </form>
 {% endblock %}
 

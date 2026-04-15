@@ -10,7 +10,7 @@ use crate::{
         language_families::FamilyWithContributors,
         translatable::TranslatableWithMeta,
         translations::TranslationWithLanguageAndContributor,
-        users::{User, UserRepository},
+        users::User,
         words::WordWithMeta,
     },
     pagination::{PaginatedRequest, PaginatedResponse},

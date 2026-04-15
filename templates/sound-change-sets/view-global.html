@@ -19,25 +19,6 @@
 
 {% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
 
-<div class="context-cards">
-    {% if let Some(lang) = language %}
-        <div class="context-card language-context">
-            <span class="context-label">in language</span>
-            <ul class="standalone-card">
-                {% call lang_card::render(&lang) %}
-            </ul>
-        </div>
-    {% endif %}
-    {% if let Some(m) = member %}
-        <div class="context-card family-member-context">
-            <span class="context-label">for family member</span>
-            <ul class="standalone-card">
-                {% call member_card::render(&m) %}
-            </ul>
-        </div>
-    {% endif %}
-</div>
-
 <div class="sound-change-card full-card card">
     <div class="header-with-actions">
         <div class="with-subtitle">
@@ -49,11 +30,6 @@
         </div>
         <ul class="icons">
             {% if can_edit %}
-                    <li>
-                        <a class="button icon gray" href="/sound-change-sets/{{ set.id }}/reassign" data-tooltip="Reassign">
-                            {% call u::icon("swap-horizontal") %}
-                        </a>
-                    </li>
                 {% if let Some(lang) = language %}
                     <li>
                         <a class="button icon gray" href="/languages/{{ lang.language.code }}/sound-change-sets/{{ set.id }}/edit" data-tooltip="Edit">
@@ -89,6 +65,44 @@
 </div>
 
 {% if let Some(lang) = language %}
+<div class="header-with-actions">
+    <h2>language</h2>
+    <ul>
+        {% if can_edit %}
+            <li>
+                <a class="with-icon" href="/sound-change-sets/{{ set.id }}/reassign">
+                    {% call u::icon("swap-horizontal") %}
+                    <span>reassign</span>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</div>
+<ul class="card-list">
+    {% call lang_card::render(&lang) %}
+</ul>
+{% endif %}
+{% if let Some(m) = member %}
+<div class="header-with-actions">
+    <h2>family member</h2>
+    <ul>
+        {% if can_edit %}
+            <li>
+                <a class="with-icon" href="/sound-change-sets/{{ set.id }}/reassign">
+                    {% call u::icon("swap-horizontal") %}
+                    <span>reassign</span>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</div>
+<ul class="card-list">
+    {% call member_card::render(&m) %}
+</ul>
+{% endif %}
+
+
+{% if let Some(lang) = language %}
     {% if set.is_ipa_estimator || (!language_has_ipa_estimator && can_edit) %}
     <div class="card">
         {% if set.is_ipa_estimator %}
@@ -110,10 +124,21 @@
     {% endif %}
 {% endif %}
 
+<div class="header-with-actions">
+    <h2>sound changes</h2>
+    <ul>
+        {% if can_edit %}
+            <li>
+                <a class="with-icon" href="/sound-change-sets/run?set={{ set.id }}">
+                    {% call u::icon("play") %}
+                    <span>run and edit</span>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</div>
+
 <div class="sound-change-set">
-    <a class="icon button green" href="/sound-change-sets/run?set={{ set.id }}" data-tooltip="Run and edit">
-        {% call u::icon("play") %}
-    </a>
     <pre>{{ set.changes }}</pre>
 </div>
 

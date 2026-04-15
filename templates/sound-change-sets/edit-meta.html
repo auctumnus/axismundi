@@ -19,6 +19,13 @@
 
 {% call u::top_level_error() %}
 
+<div class="info-banner">
+  <p>to edit the sound changes themselves, go to the runner</p>
+  <div class="actions">
+    <a href="/sound-change-sets/run?set={{ sound_change_set.id }}" class="button primary">open runner</a>
+  </div>
+</div>
+
 <form class="default" method="post" action="/languages/{{ language.code }}/sound-change-sets/{{ sound_change_set.id }}/edit" id="edit-sound-change-set-form">
     <section>
         <label for="name">Name</label>
@@ -31,6 +38,7 @@
         {% call u::field_error(name="description") %}
         <textarea id="description" name="description" rows="4">{{ previous_description }}</textarea>
     </section>
+
 
     <section class="button-row">
         <button type="submit">Save</button>

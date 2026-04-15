@@ -112,7 +112,7 @@ pub async fn edit_definition(
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct SwapDefinitionsRequest {
+pub struct SwapDefinitionsRequest {
     id1: Uuid,
     id2: Uuid,
 }

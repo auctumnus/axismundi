@@ -17,82 +17,89 @@
 
 <div class="card">
     <div class="header-with-actions">
-        <h1>
-            <span>{{ word.word }}</span>
-            {% if let Some(abbreviation) = word.word_class_abbreviation %}
-            <span class="word-class-container">
-                (<a href="/languages/{{ language.code }}/word-classes/{{ abbreviation }}" class="word-class">{{ abbreviation }}</a>.)
-            </span>
-            {% endif %}
-        </h1>
-        <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
-            {% if user_has_permission %}
-                <a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit" data-tooltip="Edit word">
-                    {% call u::icon("edit") %}
-                </a>
-                <a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete" data-tooltip="Delete word">
-                    {% call u::icon("delete") %}
-                </a>
-            {% endif %}
-            <span class="likes like-button {% if is_liked %}liked{% endif %}" data-target="/api/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" data-tooltip="Like this word" role="button">
-                <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked"><use href="#icon-star-outline"></use></svg>
-                    <svg class="icon when-liked"><use href="#icon-star-filled"></use></svg>
+        <div class="with-subtitle">
+            <h1 class="word-header">
+                <span>{{ word.word }}</span>
+                {% if let Some(abbreviation) = word.word_class_abbreviation %}
+                <span class="word-class-container">
+                    (<a href="/languages/{{ language.code }}/word-classes/{{ abbreviation }}" class="word-class">{{ abbreviation }}</a>.)
                 </span>
-                <span class="like-count">{{ word.like_count }}</span>
-            </span>
+                {% endif %}
+            </h1>
+            <div class="contributors">
+                <span>by</span>
+                {% call u::badge(&creator, size="small") %}
+                {% if contributor_count > 0 %}
+                    <span>and {{ contributor_count }} other contributor{% if contributor_count != 1 %}s{% endif %}</span>
+                {% endif %}
+            </div>
         </div>
-    </div>
+        <ul class="icons">
+            {% if user_has_permission %}
+                <li><a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit" data-tooltip="Edit word">
+                    {% call u::icon("edit") %}
+                </a></li>
+                <li><a class="icon button red" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete" data-tooltip="Delete word">
+                    {% call u::icon("delete") %}
+                </a></li>
+            {% endif %}
+            <li>
+                <span class="likes like-button {% if is_liked %}liked{% endif %}" data-target="/api/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" data-tooltip="Like this word" role="button">
+                    <span class="icon-button-container yellow">
+                        <svg class="icon when-unliked"><use href="#icon-star-outline"></use></svg>
+                        <svg class="icon when-liked"><use href="#icon-star-filled"></use></svg>
+                    </span>
+                    <span class="like-count">{{ word.like_count }}</span>
+                </span>
+            </li>
+        </div>
 
-    <div class="contributors">
-        <span>by</span>
-        {% call u::badge(&creator, size="small") %}
-        {% if contributor_count > 0 %}
-            <span>and {{ contributor_count }} other contributor{% if contributor_count != 1 %}s{% endif %}</span>
+        <div class="word-meta">
+            {% if !word.ipa.is_empty() %}<span class="ipa">/{{ word.ipa }}/</span>{% endif %}
+        </div>
+
+        {% if !definitions.is_empty() %}
+            <ol class="definitions-list">
+                {% for definition in definitions %}
+                    <li>
+                        {% if !definition.context.is_empty() %}
+                        <span class="context-container">
+                            (<span class="context">{{ definition.context }}</span>)
+                        </span>
+                        {% endif %}
+                        {{ definition.definition }}
+                    </li>
+                {% endfor %}
+            </ol>
+        {% else %}
+            <p class="empty-description">no definitions yet</p>
+        {% endif %}
+
+        {% if !rendered_notes.is_empty() %}
+            <div class="rendered-notes markdown-content">{{ rendered_notes|safe }}</div>
         {% endif %}
     </div>
-
-    <div class="word-meta">
-        {% if !word.ipa.is_empty() %}<span class="ipa">/{{ word.ipa }}/</span>{% endif %}
-    </div>
-
-    {% if !definitions.is_empty() %}
-        <ol class="definitions-list">
-            {% for definition in definitions %}
-                <li>
-                    {% if !definition.context.is_empty() %}
-                    <span class="context-container">
-                        (<span class="context">{{ definition.context }}</span>)
-                    </span>
-                    {% endif %}
-                    {{ definition.definition }}
-                </li>
-            {% endfor %}
-        </ol>
-    {% else %}
-        <p class="empty-description">no definitions yet</p>
-    {% endif %}
-
-    {% if !rendered_notes.is_empty() %}
-        <div class="rendered-notes markdown-content">{{ rendered_notes|safe }}</div>
-    {% endif %}
 </div>
 
 <div class="header-with-actions">
     <h2>word relations</h2>
     <ul>
         {% if user_has_permission %}
-            <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
+            <li class="when-large"><a id="add-relation-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
                 <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>add relation</span>
             </a></li>
-            <li><a id="derive-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive">
+            <li class="when-large"><a id="derive-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive">
                 {% call u::icon("arrow-split") %}
                 <span>derive</span>
             </a></li>
-            <li><a id="loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">
+            <li class="when-large"><a id="loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">
                 {% call u::icon("forward") %}
                 <span>loan</span>
+            </a></li>
+            <li class="when-small"><a id="derive-or-loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-or-loan">
+                {% call u::icon("arrow-split") %}
+                <span>derive or loan</span>
             </a></li>
         {% endif %}
         <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">

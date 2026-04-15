@@ -1,5 +1,3 @@
-use std::str::FromStr as _;
-
 use askama::Template;
 use axum::{
     extract::{Path, State},
@@ -12,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     attempt,
     controller::html::{okay, render_template, words::estimate_ipa},
-    err::{AppError, AppResult, bad_request, field_error, forbidden, internal_error},
+    err::{AppError, AppResult, bad_request, forbidden, internal_error},
     model::{
         bookmarks::BookmarkRepository,
         definitions::{CreateDefinition, DefinitionRepository},
@@ -303,7 +301,7 @@ pub(super) async fn new_word_submit(
         create_common(&s, &state, &language_code, antecedent_bookmark).await
     );
 
-    let (error, derived_from) = match antecedent {
+    let (_, derived_from) = match antecedent {
         None => (None, None),
         Some(ant) => match form.relation_kind {
             Some(rk) => (None, Some((ant, rk))),

@@ -469,6 +469,14 @@ button.normal {
   }
 }
 
+a.card {
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--foreground-secondary);
+  }
+}
+
 h3 {
   font-family: var(--font-heading);
   font-size: 1.2rem;
@@ -1237,4 +1245,12 @@ code {
   &:focus {
     top: 0;
   }
+}
+
+.card-list + .card {
+  margin-top: 1rem;
+}
+
+.card:has(+ .card) {
+  margin-bottom: .5rem;
 }

@@ -292,6 +292,47 @@ impl LanguageRepository {
         result.ok_or_else(|| not_found(format!("language with code '{code}'")))
     }
 
+    /// List all languages the user has at least Editor permission on, excluding those already
+    /// associated as a descendant in any language family.
+    pub async fn list_editable_by_user_without_family(
+        &self,
+        user_id: Uuid,
+    ) -> AppResult<Vec<Language>> {
+        let results = sqlx::query_as!(
+            Language,
+            r#"
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.like_count,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                JOIN language_permissions ON language_permissions.language = languages.id
+                WHERE language_permissions."user" = $1
+                AND language_permissions.permission IN ('editor', 'admin', 'owner')
+                AND NOT EXISTS (
+                    SELECT 1 FROM language_family_members
+                    WHERE language_family_members.language_id = languages.id
+                    AND language_family_members.relation_type = 'descendant'
+                )
+                ORDER BY languages.name
+            "#,
+            user_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(results)
+    }
+
     /// List all languages the user has at least Editor permission on.
     pub async fn list_editable_by_user(&self, user_id: Uuid) -> AppResult<Vec<Language>> {
         let results = sqlx::query_as!(
@@ -920,7 +961,7 @@ impl LanguageRepository {
                 ));
             }
 
-            if let Some(current) = current_estimator {
+            if current_estimator.is_some() {
                 // update existing estimator
                 sqlx::query!(
                     "UPDATE ipa_estimators SET sound_change_set_id = $1 WHERE language_id = $2",

@@ -16,6 +16,7 @@
 </script>
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/translatables/full-card.css">
+<link rel="stylesheet" href="/static/slate-editor.css">
 {% endblock %}
 
 
@@ -62,7 +63,7 @@
     </div>
 
     {% if translation.ipa.is_empty() && translation.gloss.is_empty() && translation.notes.is_empty() %}
-        <p class="preserve-breaks">{{ translation.translated_text }}</p>
+        <p class="preserve-breaks">{% for seg in quotation_segments %}{% if let Some(q) = &seg.quotation %}<a href="/languages/{{ language.code }}/words/{{ q.word_slug }}/{{ q.word_lemma }}" title="{{ q.definition_text }}" class="quoted-word">{{ seg.text }}</a>{% else %}{{ seg.text }}{% endif %}{% endfor %}</p>
     {% else %}
         <div class="tabs">
             <div class="tab-wrap">
@@ -85,7 +86,7 @@
                 {% endif %}
             </div>
             <div class="translated-content">
-                <p class="preserve-breaks">{{ translation.translated_text }}</p>
+                <p class="preserve-breaks">{% for seg in quotation_segments %}{% if let Some(q) = &seg.quotation %}<a href="/languages/{{ language.code }}/words/{{ q.word_slug }}/{{ q.word_lemma }}" title="{{ q.definition_text }}" class="quoted-word">{{ seg.text }}</a>{% else %}{{ seg.text }}{% endif %}{% endfor %}</p>
             </div>
             {% if !translation.ipa.is_empty() %}
                 <div class="ipa-content">

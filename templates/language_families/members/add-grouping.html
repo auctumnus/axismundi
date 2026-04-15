@@ -6,6 +6,12 @@
 
 {% block title %}add grouping in {{ family.family.name }} - axismundi{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
 {% block content %}
 
 {% if will_create_audit_log %}
@@ -36,7 +42,7 @@
     </div>
 </div>
 
-<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-grouping">
+<form id="add-grouping-form" class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-grouping">
     <section>
         <label for="title">Title</label>
         {% call u::field_error(name="title") %}
@@ -46,11 +52,29 @@
     <section>
         <label for="notes">Notes</label>
         {% call u::field_error(name="notes") %}
-        <input type="text" id="notes" name="notes" value="{{previous_notes}}">
+        <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
     <button type="submit">Add grouping</button>
 </form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const notesTextarea = document.getElementById('notes');
+      const notesDiv = document.createElement('div');
+      notesDiv.id = 'notes';
+      notesTextarea.replaceWith(notesDiv);
+      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
+      window.mountFormEditor('notes', {
+        initialValue: initialValue,
+        inputName: 'notes',
+        formId: 'add-grouping-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 {% endblock %}
 
 {% block breadcrumb %}

@@ -12,7 +12,7 @@ use crate::{
     model::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
-        languages::{Language, LanguageRepository},
+        languages::LanguageRepository,
         word_classes::{WordClass, WordClassRepository},
         words::{WordRepository, WordSearch, WordWithMeta},
     },

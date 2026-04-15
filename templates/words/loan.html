@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "words/fragments/card.html" as word_card -%}
+{%- import "words/fragments/footer.html" as word_f -%}
+
+{% block title %}loan from {{ word.word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>loan word</h1>
+
+<div class="context-cards">
+    <div class="context-card word-context">
+        <span class="context-label">for word</span>
+        <ul class="standalone-card">
+            {% call word_card::render(&word) %}
+        </ul>
+    </div>
+</div>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+{% if goes_from_word %}
+    <div class="info-banner">
+        <h2>raw derivation</h2>
+        <p>this word has no ipa set, so the the word itself will be loaned, rather than its ipa</p>
+    </div>
+{% endif %}
+
+<form id="loan-word-form" class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/loan">
+    <label for="loan_target">target language</label>
+    <div class="select-container">
+        <select id="loan_target" name="loan_target" required>
+            <option value="" disabled selected>-- select a language --</option>
+            {% for language in languages %}
+                <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
+            {% endfor %}
+        </select>
+        {% call u::icon("chevron-down") %}
+    </div>
+    <button type="submit" class="button">loan</button>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}" class="breadcrumb">{{ word.word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call word_f::word_section(word.word, language, true, other_lemmata) %}
+{% endblock %}

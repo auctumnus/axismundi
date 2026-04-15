@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
 {%- import "sound-change-sets/fragments/footer.html" as scs_f -%}
+{%- import "sound-change-sets/fragments/card.html" as scs_card -%}
 {%- import "languages/fragments/card.html" as lang_card -%}
 
 {% block head %}
@@ -52,10 +53,9 @@
         {% endif %}
         <div class="context-card sound-change-set-context">
             <span class="context-label">sound change set</span>
-            <div class="preview-card">
-                <span class="title">{{ set_with_meta.sound_change_set.name }}</span>
-                <span class="creator">{% call u::user_display(&set_with_meta.author, size="small") %}</span>
-            </div>
+            <ul class="standalone-card">
+                {% call scs_card::render(&set_with_meta.sound_change_set, &set_with_meta.author, &format!("/sound-change-sets/{}", set_with_meta.sound_change_set.id), can_edit_language) %}
+            </ul>
         </div>
     </div>
 

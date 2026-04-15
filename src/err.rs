@@ -124,25 +124,6 @@ pub fn needs_verification() -> AppError {
     )
 }
 
-pub fn field_error(field: &'static str, message: impl Display) -> AppError {
-    let mut validation_errors = validator::ValidationErrors::new();
-    validation_errors.add(
-        field,
-        validator::ValidationError {
-            code: "custom".into(),
-            message: Some(message.to_string().into()),
-            params: std::collections::HashMap::new(),
-        },
-    );
-
-    AppError {
-        message: "validation error".to_string(),
-        status_code: StatusCode::BAD_REQUEST,
-        validation_errors: Some(validation_errors),
-        extra: None,
-    }
-}
-
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.status_code, self.message)

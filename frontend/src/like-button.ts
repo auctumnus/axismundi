@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const likeButtons = document.querySelectorAll(".like-button");
+  const likeButtons = document.querySelectorAll(".like-button") as NodeListOf<HTMLElement>;
 
   for (const button of likeButtons) {
     const target = button.getAttribute("data-target");
@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let isLiked = button.classList.contains("liked");
     let likeCount = parseInt(likeCountSpan?.textContent || "0", 10);
 
-    button.addEventListener("click", async (e) => {
+    const update = async (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -47,6 +47,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch (error) {
         console.error("Error toggling like status:", error);
+      }
+    };
+
+    button.addEventListener("click", update);
+    button.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        update(e);
       }
     });
   }

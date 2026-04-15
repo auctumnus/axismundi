@@ -78,6 +78,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/sound-change-runner.ts',
   'src/sound-change-sets/view.ts',
   'src/tooltip.ts',
+  'src/translations/quotations-editor.tsx',
 ];
 
 async function bundleReactFiles() {

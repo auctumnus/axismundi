@@ -21,10 +21,10 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-{% if let Some((antecedent, _)) = derived_from %}
+{% if let Some((antecedent, relation_kind)) = derived_from %}
 <div class="context-cards">
     <div class="context-card word-context">
-        <span class="context-label">derived from</span>
+        <span class="context-label">{{ relation_kind }} from</span>
         <ul class="standalone-card">
             {% call word_card::render(&antecedent) %}
         </ul>

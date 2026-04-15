@@ -1,35 +1,32 @@
 use askama::Template;
 use axum::{
     Form,
-    extract::{Path, Query, State},
+    extract::Path,
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
 use futures::TryFutureExt;
 use itertools::Itertools;
 use serde::Deserialize;
-use url::form_urlencoded;
 use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{okay, render_generic_error, render_template, words::create::NewWordPrefill},
-    err::{AppError, forbidden, internal_error, not_found},
+    controller::html::{okay, render_template, words::create::NewWordPrefill},
+    err::{AppError, internal_error, not_found},
     get_user,
     model::{
         definitions::DefinitionRepository,
         language_families::{LanguageFamily, LanguageFamilyRepository, SearchLanguageFamilies},
-        language_invites::PermissionLevel,
-        language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         sound_change_sets::{DerivationPath, SoundChangeSetRepository},
         users::User,
         word_classes::WordClassRepository,
         word_relations::WordRelationType,
-        words::{Word, WordRepository, WordWithMeta},
+        words::{WordRepository, WordWithMeta},
     },
     pagination::PaginatedRequest,
-    util::{AppState, extract_session::Session},
+    util::extract_session::Session,
 };
 
 #[derive(Template)]
@@ -47,6 +44,7 @@ struct DeriveIntoFamilyTemplate {
     goes_from_word: bool,
 }
 
+#[allow(dead_code)]
 struct DescendantOption {
     language_code: String,
     language_name: String,
@@ -54,18 +52,16 @@ struct DescendantOption {
 }
 
 #[derive(Deserialize, Default)]
+#[allow(dead_code)]
 pub(super) struct DeriveQuery {
     descendant: Option<String>,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub(super) struct DeriveIntoFamilyLoanForm {
     target_language_code: String,
     relation_kind: WordRelationType,
-}
-
-fn encode_query_value(s: &str) -> String {
-    percent_encoding::percent_encode(s.as_bytes(), percent_encoding::NON_ALPHANUMERIC).to_string()
 }
 
 pub(super) async fn derive_form(
@@ -147,6 +143,7 @@ pub(super) struct DeriveForm {
     derivation_target: Uuid,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn derive_submit(
     s: Session,
     languages: LanguageRepository,
@@ -307,129 +304,4 @@ pub(super) async fn derive_submit(
         StatusCode::SEE_OTHER,
         Redirect::to(&redirect_url).into_response(),
     )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn derive_into_family_loan(
-    s: Session,
-    State(state): State<AppState>,
-    languages: LanguageRepository,
-    words: WordRepository,
-    word_classes: WordClassRepository,
-    language_permissions: LanguagePermissionRepository,
-    definitions_repo: DefinitionRepository,
-    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
-    Form(form): Form<DeriveIntoFamilyLoanForm>,
-) -> (StatusCode, Response) {
-    todo!()
-    // let current_user = get_user!(&s);
-    // let language = attempt!(s, languages.find_by_code(&language_code).await);
-    // let word = attempt!(
-    //     s,
-    //     words
-    //         .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
-    //         .await
-    // );
-
-    // let is_admin_or_mod = crate::util::is_admin_or_mod(&state, current_user.id)
-    //     .await
-    //     .unwrap_or(false);
-
-    // let has_permission = is_admin_or_mod
-    //     || attempt!(
-    //         s,
-    //         language_permissions
-    //             .has_permission(current_user.id, language.id, PermissionLevel::Editor)
-    //             .await
-    //     );
-    // if !has_permission {
-    //     return render_generic_error(
-    //         s,
-    //         forbidden("You don't have permission to derive words from this language"),
-    //     )
-    //     .await;
-    // }
-
-    // let target_language = attempt!(s, languages.find_by_code(&form.target_language_code).await);
-
-    // let has_target_permission = is_admin_or_mod
-    //     || attempt!(
-    //         s,
-    //         language_permissions
-    //             .has_permission(current_user.id, target_language.id, PermissionLevel::Editor)
-    //             .await
-    //     );
-    // if !has_target_permission {
-    //     return render_generic_error(
-    //         s,
-    //         forbidden("You don't have permission to create words in the target language"),
-    //     )
-    //     .await;
-    // }
-
-    // // Try to match word class by abbreviation in target language
-    // let word_class_abbrev = if let Some(abbrev) = &word.word_class_abbreviation {
-    //     word_classes
-    //         .find_by_abbreviation(&target_language.id, abbrev)
-    //         .await
-    //         .ok()
-    //         .map(|wc| wc.abbreviation)
-    //         .unwrap_or_default()
-    // } else {
-    //     String::new()
-    // };
-
-    // // Load source word's definitions
-    // let defs = definitions_repo
-    //     .list_by_word(
-    //         word.id,
-    //         PaginatedRequest {
-    //             limit: 100,
-    //             offset: 0,
-    //         },
-    //     )
-    //     .await
-    //     .map(|r| r.items)
-    //     .unwrap_or_default();
-
-    // // Build redirect query string (loan: copy word + ipa as-is)
-    // let mut parts: Vec<String> = Vec::new();
-    // parts.push(format!("word={}", encode_query_value(&word.word)));
-    // if !word.ipa.is_empty() {
-    //     parts.push(format!("ipa={}", encode_query_value(&word.ipa)));
-    // }
-    // if !word_class_abbrev.is_empty() {
-    //     parts.push(format!(
-    //         "word_class={}",
-    //         encode_query_value(&word_class_abbrev)
-    //     ));
-    // }
-    // for def in &defs {
-    //     parts.push(format!(
-    //         "definitions%5B%5D={}",
-    //         encode_query_value(&def.definition)
-    //     ));
-    //     parts.push(format!(
-    //         "contexts%5B%5D={}",
-    //         encode_query_value(&def.context)
-    //     ));
-    // }
-    // parts.push(format!(
-    //     "antecedent_bookmark={}",
-    //     encode_query_value(&word.bookmark)
-    // ));
-    // parts.push(format!(
-    //     "relation_kind={}",
-    //     encode_query_value(&form.relation_kind.to_string())
-    // ));
-
-    // let redirect_url = format!(
-    //     "/languages/{}/new-word?{}",
-    //     target_language.code,
-    //     parts.join("&")
-    // );
-    // (
-    //     StatusCode::SEE_OTHER,
-    //     Redirect::to(&redirect_url).into_response(),
-    // )
 }

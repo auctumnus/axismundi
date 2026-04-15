@@ -1,8 +1,10 @@
 mod create;
 mod delete;
 mod derive;
+mod derive_or_loan;
 mod edit;
 mod fragments;
+mod loan;
 mod search;
 mod view;
 
@@ -92,6 +94,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/languages/{language}/words/{slug}/{lemma}/derive",
             post(derive::derive_submit),
+        )
+        .route(
+            "/languages/{language}/words/{slug}/{lemma}/loan",
+            post(loan::loan_submit),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -111,6 +117,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/languages/{language}/words/{slug}/{lemma}/derive",
             get(derive::derive_form),
+        )
+        .route(
+            "/languages/{language}/words/{slug}/{lemma}/loan",
+            get(loan::loan_form),
+        )
+        .route(
+            "/languages/{language}/words/{slug}/{lemma}/derive-or-loan",
+            get(derive_or_loan::derive_or_loan_form),
         );
 
     (secure_routes, normal_routes)

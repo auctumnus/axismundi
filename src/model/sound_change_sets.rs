@@ -4,7 +4,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::{
-    err::{AppError, AppResult, forbidden, internal_error, not_found},
+    err::{AppError, AppResult, forbidden, not_found},
     lexurgy,
     model::{
         language_family_members::{LanguageFamilyMember, LanguageFamilyMemberRepository},
@@ -78,6 +78,7 @@ pub struct SearchSoundChangeSets {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MemberTarget {
     pub id: Uuid,
     pub family_id: Uuid,
@@ -87,6 +88,7 @@ pub struct MemberTarget {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DerivationPath {
     pub language_id: Uuid,
     pub language_name: String,
@@ -97,15 +99,6 @@ pub struct DerivationPath {
     /// True if the requestor has a direct editor+ permission on this language.
     /// False if they can see it only because they are a moderator or admin.
     pub has_direct_permission: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct FamilyLanguageInfo {
-    pub language_id: Uuid,
-    pub language_name: String,
-    pub language_code: String,
-    pub family_id: Uuid,
-    pub family_name: String,
 }
 
 crate::util::text_query!(SearchSoundChangeSets);
@@ -698,56 +691,6 @@ impl SoundChangeSetRepository {
                 family_name: r.family_name,
                 family_code: r.family_code,
                 display_name: r.display_name,
-            })
-            .collect())
-    }
-
-    /// Find all language members in families containing source_language_id,
-    /// excluding the source itself. Returns language + family info for display.
-    pub async fn find_family_language_infos(
-        &self,
-        source_language_id: Uuid,
-    ) -> AppResult<Vec<FamilyLanguageInfo>> {
-        #[derive(FromRow)]
-        struct Row {
-            language_id: Uuid,
-            language_name: String,
-            language_code: String,
-            family_id: Uuid,
-            family_name: String,
-        }
-
-        let rows = sqlx::query_as!(
-            Row,
-            r#"
-            SELECT DISTINCT ON (l.id)
-                l.id as "language_id!",
-                l.name as "language_name!",
-                l.code as "language_code!",
-                lf.id as "family_id!",
-                lf.name as "family_name!"
-            FROM language_family_members lfm
-            JOIN languages l ON l.id = lfm.language_id
-            JOIN language_families lf ON lf.id = lfm.family_id
-            WHERE lfm.family_id IN (
-                SELECT family_id FROM language_family_members WHERE language_id = $1
-            )
-            AND lfm.language_id != $1
-            ORDER BY l.id, lf.name
-            "#,
-            source_language_id
-        )
-        .fetch_all(&self.state.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|r| FamilyLanguageInfo {
-                language_id: r.language_id,
-                language_name: r.language_name,
-                language_code: r.language_code,
-                family_id: r.family_id,
-                family_name: r.family_name,
             })
             .collect())
     }

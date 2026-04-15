@@ -1,8 +1,8 @@
 {%- import "util.html" as u -%}
 
-{% macro render(set, author, language, can_edit_language, back="") %}
+{% macro render(set, author, link, can_edit_language) %}
     <li class="sound-change-set-preview-card preview-card">
-        <a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
+        <a href="{{ link }}">
             <span class="left">
                 <span class="title">{{ set.name }}</span>
                 <span class="summary ellipse">{% if !set.description.is_empty() %}{{ crate::util::first_sentence(&set.description) }}{% endif %}</span>
@@ -14,4 +14,4 @@
     </li>
 {% endmacro %}
 
-{% call render(set, author, language, can_edit_language, back_url) %}
+{% call render(set, author, link, can_edit_language) %}

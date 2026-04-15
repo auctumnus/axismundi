@@ -21,6 +21,7 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
+        quotations::{QuotationRepository, QuotationWithWordInfo},
         translatable::{Translatable, TranslatableRepository},
         translations::{
             CreateTranslation, Translation, TranslationRepository, TranslationSearch,
@@ -35,6 +36,57 @@ use crate::{
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
+
+pub struct QuotationLink {
+    pub word_slug: String,
+    pub word_lemma: i32,
+    pub definition_text: String,
+}
+
+pub struct TextSegment {
+    pub text: String,
+    pub quotation: Option<QuotationLink>,
+}
+
+fn build_text_segments(text: &str, quotations: &[QuotationWithWordInfo]) -> Vec<TextSegment> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut segments = Vec::new();
+    let mut pos: usize = 0;
+
+    for q in quotations {
+        let start = (q.span_start as usize).min(chars.len());
+        let end = (q.span_end as usize).min(chars.len());
+
+        if start > pos {
+            segments.push(TextSegment {
+                text: chars[pos..start].iter().collect(),
+                quotation: None,
+            });
+        }
+
+        if start < end {
+            segments.push(TextSegment {
+                text: chars[start..end].iter().collect(),
+                quotation: Some(QuotationLink {
+                    word_slug: q.word_slug.clone(),
+                    word_lemma: q.word_lemma,
+                    definition_text: q.definition_text.clone(),
+                }),
+            });
+        }
+
+        pos = end.max(pos);
+    }
+
+    if pos < chars.len() {
+        segments.push(TextSegment {
+            text: chars[pos..].iter().collect(),
+            quotation: None,
+        });
+    }
+
+    segments
+}
 use axum::extract::State;
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -604,6 +656,7 @@ struct ViewTranslationTemplate {
     rendered_description: Option<String>,
     back: String,
     back_text: String,
+    quotation_segments: Vec<TextSegment>,
 }
 
 async fn view_translation(
@@ -614,6 +667,7 @@ async fn view_translation(
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
     users: UserRepository,
+    quotations: QuotationRepository,
     Path((slug, code)): Path<(String, String)>,
     Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
@@ -717,6 +771,17 @@ async fn view_translation(
     let translatable_with_meta =
         attempt!(s, translatables.materialize(translatable, s.user()).await);
 
+    let quotation_list = attempt!(
+        s,
+        quotations
+            .list_by_translation_with_word_info(
+                translation.id,
+                PaginatedRequest { limit: 500, offset: 0 },
+            )
+            .await
+    );
+    let quotation_segments = build_text_segments(&translation.translated_text, &quotation_list.items);
+
     let back_text = back_query
         .back
         .as_ref()
@@ -753,6 +818,7 @@ async fn view_translation(
         rendered_description,
         back: back_url,
         back_text: back_text.to_string(),
+        quotation_segments,
     };
 
     let body = render_template(template);

@@ -14,14 +14,14 @@ interface ControlState {
     isCellSelected: boolean;
 }
 
-interface ControlButtonProps {
+export interface ControlButtonProps {
     onClick: () => void;
     title: string;
     children: React.ReactNode;
     enabled: boolean;
 }
 
-const ControlButton = ({ onClick, title, children, enabled }: ControlButtonProps) => {
+export const ControlButton = ({ onClick, title, children, enabled }: ControlButtonProps) => {
     return (
         <Tooltip content={title}>
             <button type="button" className={`control-button ${enabled ? "" : "disabled"}`} onClick={onClick} disabled={!enabled}>

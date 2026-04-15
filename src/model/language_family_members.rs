@@ -197,6 +197,7 @@ pub struct MemberWithLanguages {
     pub family: LanguageFamily,
     pub creator: User,
     pub updater: User,
+    pub notes: String,
 }
 
 impl MemberWithLanguages {
@@ -290,6 +291,8 @@ impl LanguageFamilyMemberRepository {
 
         let updater = users.find_by_id(member.updated_by()).await?;
 
+        let notes = crate::md::render_md(member.notes())?;
+
         Ok(MemberWithLanguages {
             member,
             language,
@@ -297,6 +300,7 @@ impl LanguageFamilyMemberRepository {
             family,
             creator,
             updater,
+            notes,
         })
     }
 
@@ -686,7 +690,7 @@ impl LanguageFamilyMemberRepository {
 
         if has_descendant.is_some() {
             return Err(crate::err::bad_request(
-                "this language already belongs to a family tree as a descendant",
+                "this language is associated to a different family tree already",
             ));
         }
 
@@ -879,6 +883,285 @@ impl LanguageFamilyMemberRepository {
             offset: pagination.offset,
             has_more,
         })
+    }
+
+    pub async fn all_for_family(
+        &self,
+        family_id: Uuid,
+    ) -> AppResult<Vec<LanguageFamilyMember>> {
+        let rows = sqlx::query_as!(
+            LanguageFamilyMemberRow,
+            r#"
+                SELECT id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+                FROM language_family_members
+                WHERE family_id = $1
+            "#,
+            family_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(LanguageFamilyMember::try_from)
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    pub async fn swap_with_parent(
+        &self,
+        requestor: &User,
+        member_id: Uuid,
+    ) -> AppResult<()> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let member = self.find_by_id(member_id).await?;
+
+        let parent_id = member
+            .parent_member_id()
+            .ok_or_else(|| crate::err::bad_request("this member has no parent to swap with"))?;
+
+        let parent = self.find_by_id(parent_id).await?;
+
+        if let LanguageFamilyMember::Language(ref data) = member {
+            if data.relation_type == LanguageFamilyRelationType::Hybrid
+                && parent.parent_member_id().is_none()
+            {
+                return Err(crate::err::bad_request(
+                    "a hybrid member cannot become the root; it must always have a parent",
+                ));
+            }
+        }
+
+        let grandparent_id = parent.parent_member_id();
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let family = LanguageFamilyRepository::new(self.state.clone())
+            .find_by_id(member.family_id())
+            .await?;
+
+        let perm = LanguageFamilyPermissionRepository::new(self.state.clone())
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    family: family.id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamilyMember,
+                    resource_id: member_id,
+                    context: Some(serde_json::json!({
+                        "action": "swap_with_parent",
+                        "parent_id": parent_id,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm == PermissionCheck::NoPermission {
+            return Err(crate::err::forbidden(
+                "user lacks permission to edit this language family member",
+            ));
+        }
+
+        sqlx::query!(
+            r#"
+                UPDATE language_family_members
+                SET parent_member_id = $1, updated_by = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+            "#,
+            grandparent_id,
+            requestor.id,
+            member_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query!(
+            r#"
+                UPDATE language_family_members
+                SET parent_member_id = $1, updated_by = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+            "#,
+            member_id,
+            requestor.id,
+            parent_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        LanguageFamilyRepository::new(self.state.clone())
+            .swap_in_tree(family, member_id, parent_id, grandparent_id, &mut tx)
+            .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    pub async fn change_parent(
+        &self,
+        requestor: &User,
+        member_id: Uuid,
+        new_parent_id: Uuid,
+    ) -> AppResult<()> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let member = self.find_by_id(member_id).await?;
+
+        if new_parent_id == member_id {
+            return Err(crate::err::bad_request("a member cannot be its own parent"));
+        }
+
+        let new_parent = self.find_by_id(new_parent_id).await?;
+
+        if new_parent.family_id() != member.family_id() {
+            return Err(crate::err::bad_request(
+                "new parent must be in the same family",
+            ));
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let family = LanguageFamilyRepository::new(self.state.clone())
+            .find_by_id(member.family_id())
+            .await?;
+
+        let perm = LanguageFamilyPermissionRepository::new(self.state.clone())
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    family: family.id,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamilyMember,
+                    resource_id: member_id,
+                    context: Some(serde_json::json!({
+                        "action": "change_parent",
+                        "new_parent_id": new_parent_id,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm == PermissionCheck::NoPermission {
+            return Err(crate::err::forbidden(
+                "user lacks permission to edit this language family member",
+            ));
+        }
+
+        // cycle check + tree update (change_parent_in_tree does the DFS)
+        let updated_family = LanguageFamilyRepository::new(self.state.clone())
+            .change_parent_in_tree(family, member_id, new_parent_id, &mut tx)
+            .await?;
+
+        // only write the DB row if the tree update succeeded without a cycle
+        let _ = updated_family;
+
+        sqlx::query!(
+            r#"
+                UPDATE language_family_members
+                SET parent_member_id = $1, updated_by = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+            "#,
+            new_parent_id,
+            requestor.id,
+            member_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    pub async fn update(
+        &self,
+        requestor: &User,
+        member_id: Uuid,
+        title: Option<String>,
+        notes: String,
+    ) -> AppResult<LanguageFamilyMember> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_family_permissions::CheckPermissionReq;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let existing = self.find_by_id(member_id).await?;
+
+        let new_title = match &existing {
+            LanguageFamilyMember::Grouping(g) => {
+                let t = title.as_deref().unwrap_or(&g.title).to_string();
+                if t.trim().is_empty() {
+                    return Err(bad_request("grouping title cannot be empty"));
+                }
+                t
+            }
+            LanguageFamilyMember::Language(_) => String::new(),
+        };
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let family_permissions = LanguageFamilyPermissionRepository::new(self.state.clone());
+        let perm = family_permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    family: existing.family_id(),
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::LanguageFamilyMember,
+                    resource_id: member_id,
+                    context: Some(serde_json::json!({
+                        "title": title,
+                        "notes": notes,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm == PermissionCheck::NoPermission {
+            return Err(forbidden("user lacks permission to edit this language family member"));
+        }
+
+        let row = sqlx::query_as!(
+            LanguageFamilyMemberRow,
+            r#"
+                UPDATE language_family_members
+                SET title = $1,
+                    notes = $2,
+                    updated_at = CURRENT_TIMESTAMP,
+                    updated_by = $3
+                WHERE id = $4
+                RETURNING id, family_id, language_id, title, parent_member_id, relation_type as "relation_type: LanguageFamilyRelationType", created_at, updated_at, created_by, updated_by, notes
+            "#,
+            new_title,
+            notes,
+            requestor.id,
+            member_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let result: LanguageFamilyMember = row.try_into()?;
+
+        tx.commit().await?;
+
+        Ok(result)
     }
 
     // avoid exposing to frontend
