@@ -12,13 +12,20 @@ export interface QuotationWithWordInfo {
     word: string;
 }
 
-type CustomElement = { type: 'paragraph'; children: CustomText[] }
-type CustomText = { text: string }
+export type TextElement = { type: 'text'; text: string }
+export type QuotationElement = {
+    type: 'quotation';
+    definitionId: string;
+    wordSlug: string;
+    wordLemma: number;
+    word: string;
+}
+export type QuotationsEditorElement = TextElement | QuotationElement
 
 declare module 'slate' {
   interface CustomTypes {
     Editor: BaseEditor & ReactEditor
-    Element: CustomElement
-    Text: CustomText
+    Element: QuotationsEditorElement
+    Text: TextElement
   }
 }

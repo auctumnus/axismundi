@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
-import type { QuotationWithWordInfo } from "./types";
+import type { QuotationsEditorElement, QuotationWithWordInfo } from "./types";
 import { ControlButton } from "../phonology-editor/controls";
-import { Slate, withReact } from "slate-react";
-import { createEditor } from "slate";
+import { Editable, Slate, withReact, type RenderElementProps } from "slate-react";
+import { createEditor, Editor, Element, Transforms } from "slate";
 
 
 
@@ -25,26 +25,61 @@ const QuotationsEditorControls = () => {
   )
 }
 
-const initialValue = (initialText: string) => [
+const initialValue = (initialText: string): QuotationsEditorElement[] => [
   {
-    type: 'paragraph',
-    children: [{ text: initialText }],
+    type: 'text',
+    text: initialText,
   },
 ]
 
+const TextElement = ({ attributes, children, element }: RenderElementProps) => {
+  return <span {...attributes}>{children}</span>
+}
+
+const QuotationElement = ({ attributes, children, element }: RenderElementProps) => {
+  return <span {...attributes} className="quotation">{children}</span>
+}
+
 const QuotationsEditor = (props: QuotationsEditorProps) => {
   const [editor] = useState(() => withReact(createEditor()))
+
+  const renderElement = useCallback((props: RenderElementProps) => {
+    switch (props.element.type) {
+      case 'quotation':
+        return <QuotationElement {...props} />
+      default:
+        return <TextElement {...props} />
+    }
+  }, [])
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    console.log(event)
+    if (event.key === 'k' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+
+      Transforms.setNodes(
+        editor,
+        { type: 'quotation' },
+        { match: n => Element.isElement(n) && Editor.isBlock(editor, n)  }
+      )
+    }
+  }
+
   return (
     <>
       <div className="quotations-editor">
         <QuotationsEditorControls />
-        <Slate editor={editor} initialValue={initialValue(props.text)} />
+        <Slate editor={editor} initialValue={initialValue(props.text)}>
+          <Editable
+            renderElement={renderElement}
+            onKeyDown={onKeyDown}
+          />
+        </Slate>
         <input id="translated_text" name="translated_text" required hidden readOnly value={props.text} />
       </div>
     </>
   )
 }
-
 
 export const mountQuotationsEditor = (
   containerId: string,
