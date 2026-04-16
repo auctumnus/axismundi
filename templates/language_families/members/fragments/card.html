@@ -6,20 +6,12 @@
         <span class="left">
         {% if let Some(data) = member_with_languages.member.as_language() %}
             <span class="language title">{{ member_with_languages.name() }}</span>
-            {% if let Some(parent_language) = member_with_languages.parent_language %}
-                <span>from</span>
-                <span class="parent-language">{{ parent_language.name }}</span>
-            {% endif %}
             {% if !data.notes.is_empty() %}
                 <span class="summary notes ellipse">{{ data.notes }}</span>
             {% endif %}
         {% endif %}
         {% if let Some(g) = member_with_languages.member.as_grouping() %}
             <span class="title">{{ g.title }}</span>
-            {% if let Some(parent_language) = member_with_languages.parent_language %}
-                <span>from</span>
-                <span class="parent-language">{{ parent_language.name }}</span>
-            {% endif %}
             {% if !g.notes.is_empty() %}
                 <span class="summary notes ellipse">{{ g.notes }}</span>
             {% endif %}

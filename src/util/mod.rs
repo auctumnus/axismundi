@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    err::{AppError, AppResult, internal_error},
-    model::users::User,
-    pagination::PaginatedRequest,
+    err::{AppError, AppResult, internal_error}, md::render_md, model::users::User, pagination::PaginatedRequest
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -224,11 +222,19 @@ pub fn relative_time(timestamp: &chrono::DateTime<Utc>) -> String {
     chrono_humanize::HumanTime::from(dt).to_string()
 }
 
-pub fn first_sentence(text: &str) -> &str {
+pub fn strip(text: &str) -> String {
+    ammonia::Builder::empty()
+        .clean(text)
+        .to_string()
+}
+
+pub fn first_sentence(text: &str) -> String {
+    let text = render_md(text).unwrap_or_default();
+    let text = strip(&text);
     if let Some(pos) = text.find('.') {
-        &text[..=pos]
+        text[..=pos].to_string()
     } else {
-        text.split_at(100.min(text.len())).0
+        text.split_at(100.min(text.len())).0.to_string()
     }
 }
 
