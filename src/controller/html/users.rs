@@ -631,11 +631,9 @@ async fn change_banner(
             StatusCode::SEE_OTHER,
             Redirect::to("/settings").into_response(),
         ),
-        Ok(None) => render_settings_error(
-            &user,
-            bad_request("User not found"),
-            StatusCode::NOT_FOUND,
-        ),
+        Ok(None) => {
+            render_settings_error(&user, bad_request("User not found"), StatusCode::NOT_FOUND)
+        }
         Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
@@ -714,9 +712,7 @@ async fn change_profile_images(
     }
 
     if let Some((data, ct)) = pfp_data {
-        if let Err(response) =
-            upload_and_update_profile_picture(&users, &user, &data, &ct).await
-        {
+        if let Err(response) = upload_and_update_profile_picture(&users, &user, &data, &ct).await {
             return *response;
         }
     }
@@ -745,10 +741,7 @@ async fn change_profile_images(
     )
 }
 
-async fn clear_profile_picture(
-    s: Session,
-    users: UserRepository,
-) -> (StatusCode, Response) {
+async fn clear_profile_picture(s: Session, users: UserRepository) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (
             StatusCode::SEE_OTHER,
@@ -757,15 +750,15 @@ async fn clear_profile_picture(
     };
 
     match users.update_profile_picture(&user, user.id, "").await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
         Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
-async fn clear_banner(
-    s: Session,
-    users: UserRepository,
-) -> (StatusCode, Response) {
+async fn clear_banner(s: Session, users: UserRepository) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (
             StatusCode::SEE_OTHER,
@@ -774,7 +767,10 @@ async fn clear_banner(
     };
 
     match users.update_banner(&user, user.id, "").await {
-        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
         Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
     }
 }

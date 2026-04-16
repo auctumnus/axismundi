@@ -7,9 +7,12 @@ use vizoxide::{
     render::{Format, render_to_string},
 };
 
-use crate::{err::{AppResult, internal_error}, model::word_relations::{RelationDirection, WordRelationType}};
 use crate::model::language_families::{FamilyRelationKindV1, LanguageFamilySchemaV1};
 use crate::model::word_relations::{CognacyRelationKindV1, LeveledCognacy};
+use crate::{
+    err::{AppResult, internal_error},
+    model::word_relations::{RelationDirection, WordRelationType},
+};
 
 /// Convert a `LeveledCognacy` to an SVG string.
 ///
@@ -19,7 +22,10 @@ use crate::model::word_relations::{CognacyRelationKindV1, LeveledCognacy};
 /// - Compound: bold line
 /// - Calque: dashed line
 /// - Borrowed: dotted line
-pub fn cognacy_to_svg(cognacy: &LeveledCognacy, current_word_id: Option<Uuid>) -> AppResult<String> {
+pub fn cognacy_to_svg(
+    cognacy: &LeveledCognacy,
+    current_word_id: Option<Uuid>,
+) -> AppResult<String> {
     let ctx = Context::new()
         .map_err(|e| internal_error(format!("Failed to create graphviz context: {}", e)))?;
 
@@ -47,7 +53,10 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy, current_word_id: Option<Uuid>) -
         };
 
         let word_url = word.language_code.as_deref().map(|lang_code| {
-            format!("/languages/{}/words/{}/{}", lang_code, word.slug, word.lemma)
+            format!(
+                "/languages/{}/words/{}/{}",
+                lang_code, word.slug, word.lemma
+            )
         });
 
         let mut node_builder = g
@@ -86,7 +95,11 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy, current_word_id: Option<Uuid>) -
             .attribute("arrowhead", "vee")
             .attribute("arrowsize", "0.75")
             .attribute("class", "cognacy-edge")
-            .attribute("tooltip", <CognacyRelationKindV1 as Into<WordRelationType>>::into(edge_data.kind).text(&RelationDirection::Antecedent))
+            .attribute(
+                "tooltip",
+                <CognacyRelationKindV1 as Into<WordRelationType>>::into(edge_data.kind)
+                    .text(&RelationDirection::Antecedent),
+            )
             .build()
             .map_err(|e| internal_error(format!("Failed to create edge: {}", e)))?;
     }

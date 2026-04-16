@@ -49,13 +49,19 @@ struct EditWordTemplate {
     nojs_slots: Vec<(String, String, String)>,
 }
 
-fn nojs_slots_edit(defs: &[String], ctxs: &[String], ids: &[String]) -> Vec<(String, String, String)> {
+fn nojs_slots_edit(
+    defs: &[String],
+    ctxs: &[String],
+    ids: &[String],
+) -> Vec<(String, String, String)> {
     let mut slots: Vec<(String, String, String)> = (0..defs.len())
-        .map(|i| (
-            defs[i].clone(),
-            ctxs.get(i).cloned().unwrap_or_default(),
-            ids.get(i).cloned().unwrap_or_default(),
-        ))
+        .map(|i| {
+            (
+                defs[i].clone(),
+                ctxs.get(i).cloned().unwrap_or_default(),
+                ids.get(i).cloned().unwrap_or_default(),
+            )
+        })
         .take(5)
         .collect();
     while slots.len() < 5 {
@@ -167,7 +173,11 @@ pub(super) async fn edit_word(
     );
 
     // Fetch existing definitions
-    let (previous_definitions, previous_contexts, previous_definition_ids): (Vec<String>, Vec<String>, Vec<String>) = attempt!(
+    let (previous_definitions, previous_contexts, previous_definition_ids): (
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+    ) = attempt!(
         s,
         definitions_repo
             .list_by_word(word.id, PaginatedRequest::first(100),)
@@ -179,8 +189,16 @@ pub(super) async fn edit_word(
                 .multiunzip())
     );
 
-    let definitions_json = build_definitions_json(&previous_definitions, &previous_contexts, &previous_definition_ids);
-    let nojs_slots = nojs_slots_edit(&previous_definitions, &previous_contexts, &previous_definition_ids);
+    let definitions_json = build_definitions_json(
+        &previous_definitions,
+        &previous_contexts,
+        &previous_definition_ids,
+    );
+    let nojs_slots = nojs_slots_edit(
+        &previous_definitions,
+        &previous_contexts,
+        &previous_definition_ids,
+    );
 
     let template = EditWordTemplate {
         current_user: Some(current_user),
@@ -229,7 +247,8 @@ pub(super) async fn edit_word_submit(
     );
 
     let render_err = |error: AppError| {
-        let definitions_json = build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
+        let definitions_json =
+            build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
         let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
         let template = EditWordTemplate {
             current_user: Some(current_user.clone()),
@@ -409,7 +428,8 @@ pub(super) async fn estimate_ipa_submit(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
     let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
-    let definitions_json = build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
+    let definitions_json =
+        build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
     let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
 
     let estimated_ipa = match &ipa_estimator {
@@ -439,11 +459,10 @@ pub(super) async fn estimate_ipa_submit(
 
                 let body = render_template(template);
                 return (status, body);
-            },
+            }
         },
         None => form.ipa.clone().unwrap_or_default(),
     };
-
 
     let template = EditWordTemplate {
         current_user: Some(user),

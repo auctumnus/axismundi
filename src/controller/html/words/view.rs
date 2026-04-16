@@ -13,7 +13,17 @@ use crate::{
     embed::{EmbedTarget, render_embed},
     err::not_found,
     model::{
-        definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository}, quotations::{Quotation, QuotationRepository, QuotationWithSpan, SearchQuotationsByDefinition}, users::User, word_classes::WordClassRepository, word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult}, words::{Word, WordRepository, WordSearch}
+        definitions::{Definition, DefinitionRepository},
+        language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        languages::{Language, LanguageRepository},
+        quotations::{
+            Quotation, QuotationRepository, QuotationWithSpan, SearchQuotationsByDefinition,
+        },
+        users::User,
+        word_classes::WordClassRepository,
+        word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult},
+        words::{Word, WordRepository, WordSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, BackQuery, extract_session::Session, graph_svg::cognacy_to_svg, is_discord},
@@ -58,7 +68,6 @@ struct LemmaTemplate {
     cognacy: Option<String>,
     non_cognacy_relations: Vec<WordRelationSearchResult>,
 }
-
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn view_lemmata(
@@ -260,10 +269,20 @@ pub(super) async fn view_lemma(
             )
             .and_then(async |res: PaginatedResponse<Definition>| {
                 res.try_map_async(async |d| {
-                    let quotations = quotations.search_by_definition(d.clone(), Default::default(), PaginatedRequest { limit: 5, offset: 0 }).await?;
+                    let quotations = quotations
+                        .search_by_definition(
+                            d.clone(),
+                            Default::default(),
+                            PaginatedRequest {
+                                limit: 5,
+                                offset: 0,
+                            },
+                        )
+                        .await?;
                     let has_more = quotations.total > 5;
                     Ok((d, quotations.items, has_more))
-                }).await
+                })
+                .await
             })
             .await
             .map(|defs| (defs.items, defs.has_more))
@@ -286,7 +305,12 @@ pub(super) async fn view_lemma(
     };
 
     let cognacy = attempt!(s, word_relations.get_leveled_cognacy(&word).await);
-    let cognacy = attempt!(s, cognacy.map(|c| cognacy_to_svg(&c, Some(word.id))).transpose());
+    let cognacy = attempt!(
+        s,
+        cognacy
+            .map(|c| cognacy_to_svg(&c, Some(word.id)))
+            .transpose()
+    );
 
     // Fetch recent word relations (3 most recent, with cognacy relations first)
     let (recent_relations, total_relations) = attempt!(

@@ -623,10 +623,7 @@ async fn clear_language_family_banner(
     let user = get_user!(s);
     let family = attempt!(s, language_families.find_by_code(&code).await);
 
-    match language_families
-        .update_banner(&user, family.id, "")
-        .await
-    {
+    match language_families.update_banner(&user, family.id, "").await {
         Ok(_) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/language-families/{code}/edit")).into_response(),

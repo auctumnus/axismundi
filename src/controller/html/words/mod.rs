@@ -13,7 +13,11 @@ pub use fragments::*;
 use axum::Router;
 use uuid::Uuid;
 
-use crate::{err::{AppError, AppResult, bad_request}, model::sound_change_sets::SoundChangeSetRepository, util::AppState};
+use crate::{
+    err::{AppError, AppResult, bad_request},
+    model::sound_change_sets::SoundChangeSetRepository,
+    util::AppState,
+};
 
 use axum::routing::{get, post};
 

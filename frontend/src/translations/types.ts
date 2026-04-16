@@ -1,6 +1,6 @@
-import type { BaseEditor, Descendant } from 'slate'
-import type { HistoryEditor } from 'slate-history';
-import type { ReactEditor } from 'slate-react'
+import type { BaseEditor, Descendant } from "slate";
+import type { HistoryEditor } from "slate-history";
+import type { ReactEditor } from "slate-react";
 
 export interface QuotationWithWordInfo {
   id: string;
@@ -16,26 +16,29 @@ export interface QuotationWithWordInfo {
   word: string;
 }
 
-export interface QuotationPossiblyNew extends Omit<QuotationWithWordInfo, 'id'> {
+export interface QuotationPossiblyNew extends Omit<
+  QuotationWithWordInfo,
+  "id"
+> {
   id?: string;
 }
 
 export type TextElement = {
-  type: 'text';
+  type: "text";
   text: string;
   quotation?: QuotationPossiblyNew;
-}
+};
 
 export type ParagraphElement = {
-  type: 'paragraph';
+  type: "paragraph";
   children: TextElement[];
-}
-export type QuotationsEditorElement = ParagraphElement
+};
+export type QuotationsEditorElement = ParagraphElement;
 
-declare module 'slate' {
+declare module "slate" {
   interface CustomTypes {
     Editor: BaseEditor & ReactEditor & HistoryEditor;
-    Element: QuotationsEditorElement
-    Text: TextElement
+    Element: QuotationsEditorElement;
+    Text: TextElement;
   }
 }

@@ -29,7 +29,11 @@ pub(super) fn convert_gif_to_animated_webp(data: &[u8]) -> AppResult<Vec<u8>> {
 
     for frame in &frames {
         let (numer, denom) = frame.delay().numer_denom_ms();
-        let frame_duration_ms = if denom == 0 { 100 } else { (numer / denom) as i32 };
+        let frame_duration_ms = if denom == 0 {
+            100
+        } else {
+            (numer / denom) as i32
+        };
 
         encoder
             .add_frame(frame.buffer().as_raw(), timestamp_ms)

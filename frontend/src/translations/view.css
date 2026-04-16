@@ -1,7 +1,7 @@
 main a.quoted-word {
-    text-decoration: dotted underline;
+  text-decoration: dotted underline;
 
-    &:hover {
-        color: var(--foreground-secondary);
-    }
+  &:hover {
+    color: var(--foreground-secondary);
+  }
 }

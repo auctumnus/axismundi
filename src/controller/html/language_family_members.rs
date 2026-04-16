@@ -1234,8 +1234,12 @@ async fn convert_to_language_form(
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
-    let available_languages =
-        attempt!(s, languages.list_editable_by_user_without_family(user.id).await);
+    let available_languages = attempt!(
+        s,
+        languages
+            .list_editable_by_user_without_family(user.id)
+            .await
+    );
     let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
 
     let template = ConvertToLanguageTemplate {
@@ -1515,7 +1519,10 @@ async fn change_parent_submit(
     let user = get_user!(s);
     let family = attempt!(s, language_families.find_by_code(&code).await);
 
-    match members.change_parent(&user, member_id, form.new_parent_id).await {
+    match members
+        .change_parent(&user, member_id, form.new_parent_id)
+        .await
+    {
         Ok(()) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!(
@@ -1620,9 +1627,7 @@ async fn edit_member_form(
     }
 
     let previous_title = match &member.member {
-        crate::model::language_family_members::LanguageFamilyMember::Grouping(g) => {
-            g.title.clone()
-        }
+        crate::model::language_family_members::LanguageFamilyMember::Grouping(g) => g.title.clone(),
         crate::model::language_family_members::LanguageFamilyMember::Language(_) => String::new(),
     };
     let previous_notes = member.member.notes().to_string();
@@ -1676,14 +1681,12 @@ async fn edit_member_submit(
             .into_response(),
         ),
         Err(e) => {
-            let previous_title = form.title.clone().unwrap_or_else(|| {
-                match &member.member {
-                    crate::model::language_family_members::LanguageFamilyMember::Grouping(g) => {
-                        g.title.clone()
-                    }
-                    crate::model::language_family_members::LanguageFamilyMember::Language(_) => {
-                        String::new()
-                    }
+            let previous_title = form.title.clone().unwrap_or_else(|| match &member.member {
+                crate::model::language_family_members::LanguageFamilyMember::Grouping(g) => {
+                    g.title.clone()
+                }
+                crate::model::language_family_members::LanguageFamilyMember::Language(_) => {
+                    String::new()
                 }
             });
             let will_create_audit_log =

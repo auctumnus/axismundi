@@ -1,23 +1,24 @@
 .sound-change-set {
-    position: relative;
+  position: relative;
 
-    pre {
-        font-family: var(--font-monospace);
-    }
-    .cm-editor, pre {
-        min-height: 25rem;
-    }
+  pre {
+    font-family: var(--font-monospace);
+  }
+  .cm-editor,
+  pre {
+    min-height: 25rem;
+  }
 
-    a {
-        position: absolute;
-        top: .5rem;
-        right: .5rem;
-        z-index: 100;
-    }
+  a {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 100;
+  }
 }
 
 .sound-change-card {
-    .header-with-actions {
-        margin-top: 0.5rem;
-    }
+  .header-with-actions {
+    margin-top: 0.5rem;
+  }
 }

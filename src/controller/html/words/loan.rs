@@ -122,20 +122,38 @@ pub(super) async fn loan_submit(
         render_error,
         s,
         definitions
-            .list_by_word(word.word.id, PaginatedRequest { limit: 100, offset: 0 })
+            .list_by_word(
+                word.word.id,
+                PaginatedRequest {
+                    limit: 100,
+                    offset: 0
+                }
+            )
             .await
-            .map(|r| r.items.into_iter().map(|d| (d.definition, d.context)).unzip())
+            .map(|r| r
+                .items
+                .into_iter()
+                .map(|d| (d.definition, d.context))
+                .unzip())
     );
 
     let word_class = if let Some(abbrev) = &word.word.word_class_abbreviation {
-        match word_classes.find_by_abbreviation(&language.id, abbrev).await {
+        match word_classes
+            .find_by_abbreviation(&language.id, abbrev)
+            .await
+        {
             Ok(wc) => Some(wc.abbreviation),
             Err(e) => {
                 let status_code = e.status_code;
                 if status_code == StatusCode::NOT_FOUND {
                     None
                 } else {
-                    return attempt!(s, render_error(e).await.map(|t| (status_code, render_template(t))));
+                    return attempt!(
+                        s,
+                        render_error(e)
+                            .await
+                            .map(|t| (status_code, render_template(t)))
+                    );
                 }
             }
         }
@@ -167,8 +185,7 @@ pub(super) async fn loan_submit(
 
     let redirect_url = format!(
         "/languages/{}/new-word?{}",
-        target_language.code,
-        query_string
+        target_language.code, query_string
     );
 
     (

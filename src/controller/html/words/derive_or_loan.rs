@@ -1,9 +1,5 @@
 use askama::Template;
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::Response,
-};
+use axum::{extract::Path, http::StatusCode, response::Response};
 use futures::TryFutureExt;
 
 use crate::{

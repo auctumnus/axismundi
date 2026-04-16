@@ -821,8 +821,10 @@ impl SoundChangeSetRepository {
         let mut input_words = input_words;
 
         for Row { changes, name } in scs {
-            let res = crate::lexurgy::run_sound_changes(changes, input_words.clone(), None, None, None).await
-                .map_err(|e| e.with_prefix(format!("in set {name}")))?;
+            let res =
+                crate::lexurgy::run_sound_changes(changes, input_words.clone(), None, None, None)
+                    .await
+                    .map_err(|e| e.with_prefix(format!("in set {name}")))?;
             match res {
                 Ok(res) => {
                     input_words.clone_from(&res.output_words);

@@ -7,11 +7,8 @@ use crate::{
     controller::html::LanguagesWithContributors,
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
-        language_families::FamilyWithContributors,
-        translatable::TranslatableWithMeta,
-        translations::TranslationWithLanguageAndContributor,
-        users::User,
-        words::WordWithMeta,
+        language_families::FamilyWithContributors, translatable::TranslatableWithMeta,
+        translations::TranslationWithLanguageAndContributor, users::User, words::WordWithMeta,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::AppState,

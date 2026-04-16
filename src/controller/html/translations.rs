@@ -814,11 +814,15 @@ async fn view_translation(
         quotations
             .list_by_translation_with_word_info(
                 translation.id,
-                PaginatedRequest { limit: 500, offset: 0 },
+                PaginatedRequest {
+                    limit: 500,
+                    offset: 0
+                },
             )
             .await
     );
-    let quotation_segments = build_text_segments(&translation.translated_text, &quotation_list.items);
+    let quotation_segments =
+        build_text_segments(&translation.translated_text, &quotation_list.items);
 
     let back_text = back_query
         .back
@@ -960,10 +964,15 @@ async fn edit_translation_form(
 
     let quotations = attempt!(
         s,
-        quotations.list_by_translation_with_word_info(
-            translation.id,
-            PaginatedRequest { limit: 500, offset: 0 },
-        ).await
+        quotations
+            .list_by_translation_with_word_info(
+                translation.id,
+                PaginatedRequest {
+                    limit: 500,
+                    offset: 0
+                },
+            )
+            .await
     );
 
     let template = EditTranslationTemplate {
@@ -983,7 +992,11 @@ async fn edit_translation_form(
         can_edit_translation,
         will_create_audit_log,
         rendered_description,
-        previous_quotations: quotations.items.into_iter().map(QuotationPossiblyNew::from).collect(),
+        previous_quotations: quotations
+            .items
+            .into_iter()
+            .map(QuotationPossiblyNew::from)
+            .collect(),
     };
 
     okay(render_template(template))

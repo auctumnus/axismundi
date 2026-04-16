@@ -50,11 +50,20 @@ struct NewWordTemplate {
     nojs_slots: Vec<(String, String)>,
 }
 
-fn nojs_slots_new(first_def: &str, first_ctx: &str, rest_defs: &[String], rest_ctxs: &[String]) -> Vec<(String, String)> {
+fn nojs_slots_new(
+    first_def: &str,
+    first_ctx: &str,
+    rest_defs: &[String],
+    rest_ctxs: &[String],
+) -> Vec<(String, String)> {
     let mut slots: Vec<(String, String)> = Vec::with_capacity(5);
     slots.push((first_def.to_string(), first_ctx.to_string()));
     for (i, def) in rest_defs.iter().enumerate().take(4) {
-        let ctx = rest_ctxs.get(i).map(|s| s.as_str()).unwrap_or("").to_string();
+        let ctx = rest_ctxs
+            .get(i)
+            .map(|s| s.as_str())
+            .unwrap_or("")
+            .to_string();
         slots.push((def.clone(), ctx));
     }
     while slots.len() < 5 {
@@ -200,17 +209,24 @@ pub(super) async fn new_word(
     let previous_definitions_json = build_definitions_json(&prefill.definitions, &prefill.contexts);
     let (previous_definition, previous_definitions) = split_first(prefill.definitions);
     let (previous_context, previous_contexts) = split_first(prefill.contexts);
-    let nojs_slots = nojs_slots_new(&previous_definition, &previous_context, &previous_definitions, &previous_contexts);
+    let nojs_slots = nojs_slots_new(
+        &previous_definition,
+        &previous_context,
+        &previous_definitions,
+        &previous_contexts,
+    );
 
     let (error, derived_from) = match antecedent {
         None => (None, None),
         Some(ant) => match prefill.relation_kind {
             Some(rk) => (None, Some((ant, rk))),
             None => (
-                Some(internal_error("no relation kind was found in the word prefill; please report!")),
-                None
-            )
-        }
+                Some(internal_error(
+                    "no relation kind was found in the word prefill; please report!",
+                )),
+                None,
+            ),
+        },
     };
 
     let template = NewWordTemplate {
@@ -306,10 +322,12 @@ pub(super) async fn new_word_submit(
         Some(ant) => match form.relation_kind {
             Some(rk) => (None, Some((ant, rk))),
             None => (
-                Some(internal_error("no relation kind was found in the word prefill; please report!")),
-                None
-            )
-        }
+                Some(internal_error(
+                    "no relation kind was found in the word prefill; please report!",
+                )),
+                None,
+            ),
+        },
     };
 
     // We need to keep a copy of the form definitions and contexts for the `render_err` closure;
@@ -319,10 +337,16 @@ pub(super) async fn new_word_submit(
     let contexts_for_err = form.contexts.clone();
 
     let render_err = |error: AppError| {
-        let previous_definitions_json = build_definitions_json(&definitions_for_err, &contexts_for_err);
+        let previous_definitions_json =
+            build_definitions_json(&definitions_for_err, &contexts_for_err);
         let (previous_definition, previous_definitions) = split_first(definitions_for_err.clone());
         let (previous_context, previous_contexts) = split_first(contexts_for_err.clone());
-        let nojs_slots = nojs_slots_new(&previous_definition, &previous_context, &previous_definitions, &previous_contexts);
+        let nojs_slots = nojs_slots_new(
+            &previous_definition,
+            &previous_context,
+            &previous_definitions,
+            &previous_contexts,
+        );
 
         let template = NewWordTemplate {
             current_user: Some(current_user.clone()),
@@ -454,16 +478,23 @@ pub(super) async fn estimate_ipa_new_word(
         Some(ant) => match form.relation_kind {
             Some(rk) => (None, Some((ant, rk))),
             None => (
-                Some(internal_error("no relation kind was found in the word prefill; please report!")),
-                None
-            )
-        }
+                Some(internal_error(
+                    "no relation kind was found in the word prefill; please report!",
+                )),
+                None,
+            ),
+        },
     };
 
     let previous_definitions_json = build_definitions_json(&form.definitions, &form.contexts);
     let (previous_definition, previous_definitions) = split_first(form.definitions);
     let (previous_context, previous_contexts) = split_first(form.contexts);
-    let nojs_slots = nojs_slots_new(&previous_definition, &previous_context, &previous_definitions, &previous_contexts);
+    let nojs_slots = nojs_slots_new(
+        &previous_definition,
+        &previous_context,
+        &previous_definitions,
+        &previous_contexts,
+    );
 
     let estimated_ipa = if let Some(estimator) = &ipa_estimator {
         match estimate_ipa(sets, &estimator.id, &form.word).await {

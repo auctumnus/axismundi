@@ -456,11 +456,19 @@ impl LanguageFamilyRepository {
             let mut adjacency_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
             for e in &v1_schema.edges {
                 if let Some(pid) = e.parent_member_id {
-                    adjacency_list.entry(pid).or_default().push(e.child_member_id);
+                    adjacency_list
+                        .entry(pid)
+                        .or_default()
+                        .push(e.child_member_id);
                 }
             }
 
-            if crate::util::dfs(&adjacency_list, member_id, new_parent_id, &mut HashMap::new()) {
+            if crate::util::dfs(
+                &adjacency_list,
+                member_id,
+                new_parent_id,
+                &mut HashMap::new(),
+            ) {
                 return Err(crate::err::bad_request(
                     "changing parent would create a cycle in the language family tree",
                 ));
@@ -478,9 +486,7 @@ impl LanguageFamilyRepository {
             }
 
             if !found {
-                return Err(internal_error(
-                    "member's descendant edge not found in tree",
-                ));
+                return Err(internal_error("member's descendant edge not found in tree"));
             }
 
             let new_tree =

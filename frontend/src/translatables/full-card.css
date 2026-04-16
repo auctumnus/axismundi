@@ -1,28 +1,31 @@
 .tabs {
-    .english-content, .source-content {
-        display: none;
+  .english-content,
+  .source-content {
+    display: none;
+  }
+
+  .tab-wrap {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    margin-bottom: 1rem;
+    border-bottom: var(--border);
+
+    .tab-head {
+      display: none;
     }
 
-    .tab-wrap {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-evenly;
-        margin-bottom: 1rem;
-        border-bottom: var(--border);
-
-        .tab-head {
-            display: none;
-        }
-
-        .tab-label {
-            cursor: pointer;
-            padding: .5rem 1rem;
-            font-weight: 450;
-            border-bottom: 2px solid transparent;
-            color: var(--foreground-secondary);
-            transition: border .2s ease-in-out, color .2s ease-in-out;
-        }
+    .tab-label {
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      font-weight: 450;
+      border-bottom: 2px solid transparent;
+      color: var(--foreground-secondary);
+      transition:
+        border 0.2s ease-in-out,
+        color 0.2s ease-in-out;
     }
+  }
 }
 
 .tabs:has(#english-tab:checked) .english-content,
@@ -32,7 +35,7 @@
 .tabs:has(#ipa-tab:checked) .ipa-content,
 .tabs:has(#gloss-tab:checked) .gloss-content,
 .tabs:has(#notes-tab:checked) .notes-content {
-    display: block;
+  display: block;
 }
 
 .tabs:has(#english-tab:checked) label[for="english-tab"],
@@ -42,73 +45,77 @@
 .tabs:has(#ipa-tab:checked) label[for="ipa-tab"],
 .tabs:has(#gloss-tab:checked) label[for="gloss-tab"],
 .tabs:has(#notes-tab:checked) label[for="notes-tab"] {
-    color: var(--foreground-primary);
-    border-bottom: 2px solid var(--foreground-accent);
+  color: var(--foreground-primary);
+  border-bottom: 2px solid var(--foreground-accent);
 }
 
 .full-card hr {
-    border-top: var(--border);
-    margin-bottom: 1rem;
+  border-top: var(--border);
+  margin-bottom: 1rem;
 }
 
 .expandable {
-    position: relative;
+  position: relative;
 
-    .expandable-content {
-        max-height: 15rem;
-        overflow: hidden;
+  .expandable-content {
+    max-height: 15rem;
+    overflow: hidden;
+  }
+
+  &.always-expanded .expandable-content {
+    max-height: none;
+  }
+
+  .expandable-control {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--background-panel) 3.5rem
+    );
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding-top: 2.5rem;
+  }
+
+  .expandable-label {
+    color: var(--foreground-secondary);
+    font-size: 0.9rem;
+    transition: color 0.2s ease-in-out;
+
+    padding: 0.5rem;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--foreground-primary);
     }
+  }
 
-    &.always-expanded .expandable-content {
-        max-height: none;
+  .expandable-input,
+  .see-less {
+    display: none;
+  }
+
+  &:has(.expandable-input:checked) {
+    .expandable-content {
+      max-height: none;
     }
 
     .expandable-control {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background:
-            linear-gradient(to bottom, transparent, var(--background-panel) 3.5rem);
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        align-items: center;
-        padding-top: 2.5rem;
+      position: static;
     }
 
-    .expandable-label {
-        color: var(--foreground-secondary);
-        font-size: .9rem;
-        transition: color .2s ease-in-out;
-
-        padding: .5rem;
-        cursor: pointer;
-
-        &:hover {
-            color: var(--foreground-primary);
-        }
+    .see-more {
+      display: none;
     }
 
-    .expandable-input, .see-less {
-        display: none;
+    .see-less {
+      display: block;
     }
-
-    &:has(.expandable-input:checked) {
-        .expandable-content {
-            max-height: none;
-        }
-
-        .expandable-control {
-            position: static;
-        }
-
-        .see-more {
-            display: none;
-        }
-
-        .see-less {
-            display: block;
-        }
-    }
+  }
 }

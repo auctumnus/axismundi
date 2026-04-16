@@ -5,7 +5,11 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    err::{AppResult, bad_request, not_found}, md::render_md, model::{definitions::Definition, language_invites::PermissionLevel, users::User}, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, ensure_verified}
+    err::{AppResult, bad_request, not_found},
+    md::render_md,
+    model::{definitions::Definition, language_invites::PermissionLevel, users::User},
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::{AppState, ensure_verified},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -109,14 +113,19 @@ fn utf16_to_byte_offset(s: &str, utf16_offset: usize) -> Option<usize> {
         }
         utf16_pos += ch.len_utf16();
     }
-    if utf16_pos == utf16_offset { Some(s.len()) } else { None }
+    if utf16_pos == utf16_offset {
+        Some(s.len())
+    } else {
+        None
+    }
 }
 
 impl QuotationWithSpan {
     pub fn render(&self) -> String {
         // <span class="highlight"> around the highlighted portion, if any
         // highlight_start/end are UTF-16 code unit offsets (from the browser selection API)
-        if let (Some(hs), Some(he)) = (self.quotation.highlight_start, self.quotation.highlight_end) {
+        if let (Some(hs), Some(he)) = (self.quotation.highlight_start, self.quotation.highlight_end)
+        {
             if let (Some(hs_byte), Some(he_byte)) = (
                 utf16_to_byte_offset(&self.span_text, hs as usize),
                 utf16_to_byte_offset(&self.span_text, he as usize),
@@ -714,7 +723,10 @@ impl QuotationRepository {
         }
 
         // Check for overlapping spans
-        let mut sorted: Vec<(i32, i32)> = submitted.iter().map(|q| (q.span_start, q.span_end)).collect();
+        let mut sorted: Vec<(i32, i32)> = submitted
+            .iter()
+            .map(|q| (q.span_start, q.span_end))
+            .collect();
         sorted.sort_by_key(|s| s.0);
         for window in sorted.windows(2) {
             if window[0].1 > window[1].0 {
@@ -921,26 +933,28 @@ impl QuotationRepository {
 
         let items: Vec<QuotationWithSpan> = rows
             .into_iter()
-            .map(|row| Ok(QuotationWithSpan {
-                notes: render_md(&row.notes)?,
-                quotation: Quotation {
-                    id: row.id,
-                    translation: row.translation,
-                    definition: row.definition,
-                    span_start: row.span_start,
-                    span_end: row.span_end,
-                    highlight_start: row.highlight_start,
-                    highlight_end: row.highlight_end,
-                    notes: row.notes,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    created_by: row.created_by,
-                    updated_by: row.updated_by,
-                },
-                span_text: row.span_text,
-                translatable_code: row.translatable_code,
-                language_code: row.language_code,
-            }))
+            .map(|row| {
+                Ok(QuotationWithSpan {
+                    notes: render_md(&row.notes)?,
+                    quotation: Quotation {
+                        id: row.id,
+                        translation: row.translation,
+                        definition: row.definition,
+                        span_start: row.span_start,
+                        span_end: row.span_end,
+                        highlight_start: row.highlight_start,
+                        highlight_end: row.highlight_end,
+                        notes: row.notes,
+                        created_at: row.created_at,
+                        updated_at: row.updated_at,
+                        created_by: row.created_by,
+                        updated_by: row.updated_by,
+                    },
+                    span_text: row.span_text,
+                    translatable_code: row.translatable_code,
+                    language_code: row.language_code,
+                })
+            })
             .collect::<AppResult<Vec<QuotationWithSpan>>>()?;
 
         let total = total_count.unwrap_or(0);

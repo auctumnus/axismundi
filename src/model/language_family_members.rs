@@ -885,10 +885,7 @@ impl LanguageFamilyMemberRepository {
         })
     }
 
-    pub async fn all_for_family(
-        &self,
-        family_id: Uuid,
-    ) -> AppResult<Vec<LanguageFamilyMember>> {
+    pub async fn all_for_family(&self, family_id: Uuid) -> AppResult<Vec<LanguageFamilyMember>> {
         let rows = sqlx::query_as!(
             LanguageFamilyMemberRow,
             r#"
@@ -906,11 +903,7 @@ impl LanguageFamilyMemberRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    pub async fn swap_with_parent(
-        &self,
-        requestor: &User,
-        member_id: Uuid,
-    ) -> AppResult<()> {
+    pub async fn swap_with_parent(&self, requestor: &User, member_id: Uuid) -> AppResult<()> {
         use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
         use crate::model::language_family_permissions::CheckPermissionReq;
 
@@ -1135,7 +1128,9 @@ impl LanguageFamilyMemberRepository {
             .await?;
 
         if perm == PermissionCheck::NoPermission {
-            return Err(forbidden("user lacks permission to edit this language family member"));
+            return Err(forbidden(
+                "user lacks permission to edit this language family member",
+            ));
         }
 
         let row = sqlx::query_as!(

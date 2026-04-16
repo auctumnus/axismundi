@@ -45,8 +45,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/new-language", post(new_language_submit))
         .route("/languages/{code}/edit", post(edit_language_submit))
         .route("/languages/{code}/delete", post(delete_language_submit))
-        .route("/languages/{code}/change-banner", post(change_language_banner))
-        .route("/languages/{code}/clear-banner", post(clear_language_banner));
+        .route(
+            "/languages/{code}/change-banner",
+            post(change_language_banner),
+        )
+        .route(
+            "/languages/{code}/clear-banner",
+            post(clear_language_banner),
+        );
 
     let normal_routes = Router::<AppState>::new()
         .route("/new-language", get(new_language_form))

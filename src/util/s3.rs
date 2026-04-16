@@ -97,7 +97,10 @@ impl S3Config {
         content_type: &str,
     ) -> AppResult<String> {
         let (upload_data, upload_type): (Vec<u8>, &str) = if content_type == "image/gif" {
-            (super::images::convert_gif_to_animated_webp(file_data)?, "image/webp")
+            (
+                super::images::convert_gif_to_animated_webp(file_data)?,
+                "image/webp",
+            )
         } else {
             (file_data.to_vec(), content_type)
         };
@@ -127,9 +130,17 @@ impl S3Config {
 
     /// generates a signed imagor url with smart cropping and webp output
     pub fn get_image_url_smart(&self, filename: &str, width: u32, height: u32) -> String {
-        let path = format!("{}x{}/smart/filters:format(webp)/originals/{}", width, height, filename);
+        let path = format!(
+            "{}x{}/smart/filters:format(webp)/originals/{}",
+            width, height, filename
+        );
         let hash = sign_imagor_path(&path, &self.imagor_secret);
-        format!("{}/{}/{}", self.imagor_base_url.trim_end_matches('/'), hash, path)
+        format!(
+            "{}/{}/{}",
+            self.imagor_base_url.trim_end_matches('/'),
+            hash,
+            path
+        )
     }
 
     pub fn get_profile_picture_url(&self, filename: &str) -> String {
@@ -148,7 +159,10 @@ impl S3Config {
         content_type: &str,
     ) -> AppResult<String> {
         let (upload_data, upload_type): (Vec<u8>, &str) = if content_type == "image/gif" {
-            (super::images::convert_gif_to_animated_webp(file_data)?, "image/webp")
+            (
+                super::images::convert_gif_to_animated_webp(file_data)?,
+                "image/webp",
+            )
         } else {
             (file_data.to_vec(), content_type)
         };
@@ -162,7 +176,13 @@ impl S3Config {
             _ => return Err(internal_error("unsupported image type")),
         };
 
-        let filename = format!("banner-{}-{}-{}.{}", entity_type, entity_id, Uuid::new_v4(), extension);
+        let filename = format!(
+            "banner-{}-{}-{}.{}",
+            entity_type,
+            entity_id,
+            Uuid::new_v4(),
+            extension
+        );
         self.upload_image_original(&filename, &upload_data, upload_type)
             .await
     }

@@ -239,20 +239,38 @@ pub(super) async fn derive_submit(
         render_error,
         s,
         definitions
-            .list_by_word(word.word.id, PaginatedRequest { limit: 100, offset: 0 })
+            .list_by_word(
+                word.word.id,
+                PaginatedRequest {
+                    limit: 100,
+                    offset: 0
+                }
+            )
             .await
-            .map(|r| r.items.into_iter().map(|d| (d.definition, d.context)).unzip())
+            .map(|r| r
+                .items
+                .into_iter()
+                .map(|d| (d.definition, d.context))
+                .unzip())
     );
 
     let word_class = if let Some(abbrev) = &word.word.word_class_abbreviation {
-        match word_classes.find_by_abbreviation(&language.id, abbrev).await {
+        match word_classes
+            .find_by_abbreviation(&language.id, abbrev)
+            .await
+        {
             Ok(wc) => Some(wc.abbreviation),
             Err(e) => {
                 let status_code = e.status_code;
                 if status_code == StatusCode::NOT_FOUND {
                     None
                 } else {
-                    return attempt!(s, render_error(e).await.map(|t| (status_code, render_template(t))));
+                    return attempt!(
+                        s,
+                        render_error(e)
+                            .await
+                            .map(|t| (status_code, render_template(t)))
+                    );
                 }
             }
         }
@@ -268,13 +286,26 @@ pub(super) async fn derive_submit(
 
     let input_words = vec![input_word];
 
-    let response = attempt!(render_error, s, scs.run_derivation_path(path.scs_ids, input_words).await);
+    let response = attempt!(
+        render_error,
+        s,
+        scs.run_derivation_path(path.scs_ids, input_words).await
+    );
 
-    let response = attempt!(render_error, s, response.ok_or(internal_error("derivation path of 0 length")));
+    let response = attempt!(
+        render_error,
+        s,
+        response.ok_or(internal_error("derivation path of 0 length"))
+    );
 
-    let derived_word = attempt!(render_error, s, response.output_words.into_iter().next().ok_or_else(|| {
-        internal_error("derivation path did not produce any output words")
-    }));
+    let derived_word =
+        attempt!(
+            render_error,
+            s,
+            response.output_words.into_iter().next().ok_or_else(|| {
+                internal_error("derivation path did not produce any output words")
+            })
+        );
 
     let (derived_word, derived_ipa) = if is_from_ipa {
         (String::new(), derived_word)
@@ -292,12 +323,15 @@ pub(super) async fn derive_submit(
         relation_kind: Some(WordRelationType::Derived),
     };
 
-    let query_string = attempt!(render_error, s, serde_html_form::to_string(&prefill).map_err(Into::<AppError>::into));
+    let query_string = attempt!(
+        render_error,
+        s,
+        serde_html_form::to_string(&prefill).map_err(Into::<AppError>::into)
+    );
 
     let redirect_url = format!(
         "/languages/{}/new-word?{}",
-        target_language.code,
-        query_string
+        target_language.code, query_string
     );
 
     (
