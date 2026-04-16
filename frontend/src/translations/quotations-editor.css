@@ -7,7 +7,6 @@
     .controls-container {
         gap: 1rem;
         flex-wrap: wrap;
-        justify-content: center;
     }
 
     .controls-header {
@@ -64,4 +63,155 @@
             border-bottom: 1px solid var(--input-border-focus);
         }
     }
+
+    .quotation {
+        background-color: color-mix(in oklab, var(--background-panel) 50%, transparent);
+        cursor: pointer;
+        padding: .125rem .25rem;
+        border-radius: var(--rounding);
+        outline: var(--border);
+        margin-inline: .125rem;
+
+        transition: all 150ms ease-in-out;
+
+        .highlight {
+            font-weight: bold;
+        }
+
+        &.selected {
+            color: 
+            light-dark(
+                color-mix(
+                    in oklab, 
+                    var(--foreground-primary),
+                    black 10%,
+                ),
+                color-mix(
+                    in oklab, 
+                    var(--foreground-primary),
+                    white 10%,
+                )
+            );
+            outline: 1px solid var(--input-border-focus);
+            background-color: var(--input-background-focus);
+            background-color: color-mix(in oklab, var(--color-sky-500) 15%, color-mix(in oklab, var(--background-panel) 50%, transparent));
+        }
+    }
+}
+
+.highlight-picker-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.highlight-picker {
+    padding: 0.4rem 0.6rem;
+    border: var(--input-border);
+    border-radius: var(--rounding);
+    background: var(--input-background);
+    cursor: text;
+    user-select: text;
+    line-height: 1.6;
+
+    mark {
+        font-weight: bold;
+        background-color: transparent;
+    }
+}
+
+.highlight-picker-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    align-items: center;
+    min-height: 1.5rem;
+}
+
+.confirm-highlight,
+.clear-highlight {
+    font-size: 0.8rem;
+    color: var(--foreground-secondary);
+    cursor: pointer;
+    background: none;
+    border: none;
+    text-decoration: underline;
+    padding: 0;
+    white-space: nowrap;
+
+    &:hover {
+        color: var(--foreground-primary);
+    }
+}
+
+.definition-option {
+    display: flex;
+    flex-direction: row;
+    gap: .25rem;
+
+    .context-container {
+        color: var(--foreground-secondary);
+
+        .context {
+            font-style: italic;
+        }
+    }
+}
+
+.help-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex-direction: column;
+
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 1rem;
+
+    kbd, .keybind {
+    font-family: var(--font-monospace);
+    background-color: var(--background-panel);
+    border: var(--border);
+    border-radius: var(--rounding);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+
+    & + kbd,
+    & + .keybind {
+        margin-left: 0.5rem;
+    }
+
+    svg {
+        display: inline;
+    }
+    }
+
+    .keybind-list {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        row-gap: .5rem;
+        column-gap: .5rem;
+
+        dt {
+            display: flex;
+            justify-content: flex-end;
+        }
+    }
+}
+
+@media (max-width: 600px) {
+    .controls-header {
+        display: none;
+    }
+
+    .control-button.first {
+        border-top-left-radius: var(--rounding);
+        border-bottom-left-radius: var(--rounding);
+        border-left-color: var(--input-border);
+    }
+}
+
+[data-slate-editor].quotation-editor {
+    border-top-left-radius: var(--rounding);
+    border-top-right-radius: var(--rounding);
 }

@@ -21,6 +21,8 @@ pub struct Quotation {
     pub definition: Uuid,
     pub span_start: i32,
     pub span_end: i32,
+    pub highlight_start: Option<i32>,
+    pub highlight_end: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[allow(dead_code)]
@@ -39,6 +41,17 @@ pub struct CreateQuotation {
     pub span_start: i32,
     #[validate(range(min = 0))]
     pub span_end: i32,
+
+    pub highlight_start: Option<i32>,
+    pub highlight_end: Option<i32>,
+}
+
+fn deserialize_optional_nullable<'de, D, T>(d: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    Ok(Some(Option::deserialize(d)?))
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -47,6 +60,11 @@ pub struct UpdateQuotation {
     pub span_start: Option<i32>,
     #[validate(range(min = 0))]
     pub span_end: Option<i32>,
+
+    #[serde(default, deserialize_with = "deserialize_optional_nullable")]
+    pub highlight_start: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "deserialize_optional_nullable")]
+    pub highlight_end: Option<Option<i32>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -54,6 +72,8 @@ pub struct QuotationWithWordInfo {
     pub id: Uuid,
     pub span_start: i32,
     pub span_end: i32,
+    pub highlight_start: Option<i32>,
+    pub highlight_end: Option<i32>,
     pub definition_id: Uuid,
     pub definition_text: String,
     pub word_slug: String,
@@ -61,6 +81,72 @@ pub struct QuotationWithWordInfo {
     pub word: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotationWithSpan {
+    pub quotation: Quotation,
+    pub span_text: String,
+    pub translatable_code: String,
+    pub language_code: String,
+}
+
+impl QuotationWithSpan {
+    pub fn render(&self) -> String {
+        // <span class="highlight"> around the highlighted portion, if any
+        if let (Some(hs), Some(he)) = (self.quotation.highlight_start, self.quotation.highlight_end) {
+            let before = &self.span_text[0..hs as usize];
+            let highlighted = &self.span_text[hs as usize..he as usize];
+            let after = &self.span_text[he as usize..];
+            let before = ammonia::clean_text(before);
+            let highlighted = ammonia::clean_text(highlighted);
+            let after = ammonia::clean_text(after);
+            format!(
+                "{}<span class=\"highlight\">{}</span>{}",
+                before, highlighted, after
+            )
+        } else {
+            ammonia::clean_text(&self.span_text)
+        }
+    }
+}
+
+// keep in sync with QuotationWithWordInfo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotationPossiblyNew {
+    #[serde(default)]
+    pub id: Option<Uuid>,
+    pub span_start: i32,
+    pub span_end: i32,
+    pub highlight_start: Option<i32>,
+    pub highlight_end: Option<i32>,
+    pub definition_id: Uuid,
+    pub definition_text: String,
+    pub word_slug: String,
+    pub word_lemma: i32,
+    pub word: String,
+}
+
+impl From<QuotationWithWordInfo> for QuotationPossiblyNew {
+    fn from(q: QuotationWithWordInfo) -> Self {
+        Self {
+            id: Some(q.id),
+            span_start: q.span_start,
+            span_end: q.span_end,
+            highlight_start: q.highlight_start,
+            highlight_end: q.highlight_end,
+            definition_id: q.definition_id,
+            definition_text: q.definition_text,
+            word_slug: q.word_slug,
+            word_lemma: q.word_lemma,
+            word: q.word.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SearchQuotationsByDefinition {
+    pub q: Option<String>,
 }
 
 pub struct QuotationRepository {
@@ -82,6 +168,8 @@ impl QuotationRepository {
                     definition,
                     span_start,
                     span_end,
+                    highlight_start,
+                    highlight_end,
                     created_at,
                     updated_at,
                     created_by,
@@ -105,6 +193,26 @@ impl QuotationRepository {
         quotation: CreateQuotation,
     ) -> AppResult<Quotation> {
         quotation.validate()?;
+
+        match (quotation.highlight_start, quotation.highlight_end) {
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(bad_request(
+                    "highlight_start and highlight_end must both be set or both be null",
+                ));
+            }
+            (Some(hs), Some(he)) => {
+                if hs < 0 {
+                    return Err(bad_request("highlight_start must be non-negative"));
+                }
+                let span_len = quotation.span_end - quotation.span_start;
+                if he >= span_len {
+                    return Err(bad_request(
+                        "highlight_end must be less than the span length",
+                    ));
+                }
+            }
+            (None, None) => {}
+        }
 
         ensure_verified(requestor)?;
 
@@ -158,14 +266,16 @@ impl QuotationRepository {
         let result = sqlx::query_as!(
             Quotation,
             r#"
-                INSERT INTO quotation (translation, definition, span_start, span_end, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $5, $5)
-                RETURNING id, translation, definition, span_start, span_end, created_at, updated_at, created_by, updated_by
+                INSERT INTO quotation (translation, definition, span_start, span_end, highlight_start, highlight_end, created_by, updated_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+                RETURNING id, translation, definition, span_start, span_end, highlight_start, highlight_end, created_at, updated_at, created_by, updated_by
             "#,
             translation_id,
             definition_id,
             quotation.span_start,
             quotation.span_end,
+            quotation.highlight_start,
+            quotation.highlight_end,
             requestor.id
         )
         .fetch_one(&mut *tx)
@@ -188,7 +298,9 @@ impl QuotationRepository {
                         "translation_id": translation_id,
                         "definition_id": definition_id,
                         "span_start": quotation.span_start,
-                        "span_end": quotation.span_end
+                        "span_end": quotation.span_end,
+                        "highlight_start": quotation.highlight_start,
+                        "highlight_end": quotation.highlight_end
                     })),
                 },
                 &mut tx,
@@ -249,6 +361,35 @@ impl QuotationRepository {
             return Err(bad_request("span_end exceeds length of translated text"));
         }
 
+        let new_highlight_start = match updates.highlight_start {
+            None => existing.highlight_start,
+            Some(v) => v,
+        };
+        let new_highlight_end = match updates.highlight_end {
+            None => existing.highlight_end,
+            Some(v) => v,
+        };
+
+        match (new_highlight_start, new_highlight_end) {
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(bad_request(
+                    "highlight_start and highlight_end must both be set or both be null",
+                ));
+            }
+            (Some(hs), Some(he)) => {
+                if hs < 0 {
+                    return Err(bad_request("highlight_start must be non-negative"));
+                }
+                let span_len = span_end - span_start;
+                if he >= span_len {
+                    return Err(bad_request(
+                        "highlight_end must be less than the span length",
+                    ));
+                }
+            }
+            (None, None) => {}
+        }
+
         let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
@@ -303,16 +444,20 @@ impl QuotationRepository {
             Quotation,
             r#"
                 UPDATE quotation
-                SET span_start = COALESCE($2, span_start),
-                    span_end = COALESCE($3, span_end),
-                    updated_by = $4,
+                SET span_start = $2,
+                    span_end = $3,
+                    highlight_start = $4,
+                    highlight_end = $5,
+                    updated_by = $6,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING id, translation, definition, span_start, span_end, created_at, updated_at, created_by, updated_by
+                RETURNING id, translation, definition, span_start, span_end, highlight_start, highlight_end, created_at, updated_at, created_by, updated_by
             "#,
             id,
-            updates.span_start,
-            updates.span_end,
+            span_start,
+            span_end,
+            new_highlight_start,
+            new_highlight_end,
             requestor.id
         )
         .fetch_optional(&mut *tx)
@@ -358,7 +503,9 @@ impl QuotationRepository {
                         "language_id": translation.language,
                         "translation_id": existing.translation,
                         "span_start": existing.span_start,
-                        "span_end": existing.span_end
+                        "span_end": existing.span_end,
+                        "highlight_start": existing.highlight_start,
+                        "highlight_end": existing.highlight_end
                     })),
                 },
                 &mut tx,
@@ -395,6 +542,8 @@ impl QuotationRepository {
                     definition,
                     span_start,
                     span_end,
+                    highlight_start,
+                    highlight_end,
                     created_at,
                     updated_at,
                     created_by,
@@ -448,6 +597,8 @@ impl QuotationRepository {
                     q.id,
                     q.span_start,
                     q.span_end,
+                    q.highlight_start,
+                    q.highlight_end,
                     d.id         AS definition_id,
                     d.definition AS definition_text,
                     w.slug       AS word_slug,
@@ -494,6 +645,125 @@ impl QuotationRepository {
         })
     }
 
+    pub async fn sync_for_translation_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        requestor: &User,
+        translation_id: Uuid,
+        submitted: &[QuotationPossiblyNew],
+    ) -> AppResult<()> {
+        // Validate each submitted quotation
+        for q in submitted {
+            if q.span_start < 0 || q.span_end < 0 {
+                return Err(bad_request("span positions must be non-negative"));
+            }
+            if q.span_start >= q.span_end {
+                return Err(bad_request("span_start must be less than span_end"));
+            }
+            match (q.highlight_start, q.highlight_end) {
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err(bad_request(
+                        "highlight_start and highlight_end must both be set or both be null",
+                    ));
+                }
+                (Some(hs), Some(he)) => {
+                    let span_len = q.span_end - q.span_start;
+                    if hs < 0 || hs >= he || he > span_len {
+                        return Err(bad_request("highlight range is out of span bounds"));
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+
+        // Check for overlapping spans
+        let mut sorted: Vec<(i32, i32)> = submitted.iter().map(|q| (q.span_start, q.span_end)).collect();
+        sorted.sort_by_key(|s| s.0);
+        for window in sorted.windows(2) {
+            if window[0].1 > window[1].0 {
+                return Err(bad_request("quotation spans overlap"));
+            }
+        }
+
+        // Fetch existing quotation IDs for this translation
+        let existing_ids: Vec<Uuid> = sqlx::query_scalar!(
+            "SELECT id FROM quotation WHERE translation = $1",
+            translation_id
+        )
+        .fetch_all(&mut **tx)
+        .await?;
+
+        let existing_id_set: std::collections::HashSet<Uuid> = existing_ids.into_iter().collect();
+        let submitted_id_set: std::collections::HashSet<Uuid> =
+            submitted.iter().filter_map(|q| q.id).collect();
+
+        // Delete quotations that were removed
+        let to_delete: Vec<Uuid> = existing_id_set
+            .difference(&submitted_id_set)
+            .copied()
+            .collect();
+        if !to_delete.is_empty() {
+            sqlx::query!(
+                "DELETE FROM quotation WHERE id = ANY($1) AND translation = $2",
+                &to_delete as &[Uuid],
+                translation_id
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+
+        // Update existing or insert new quotations
+        for q in submitted {
+            if let Some(id) = q.id {
+                if existing_id_set.contains(&id) {
+                    sqlx::query!(
+                        r#"
+                            UPDATE quotation
+                            SET span_start    = $2,
+                                span_end      = $3,
+                                highlight_start = $4,
+                                highlight_end   = $5,
+                                definition    = $6,
+                                updated_by    = $7,
+                                updated_at    = CURRENT_TIMESTAMP
+                            WHERE id = $1 AND translation = $8
+                        "#,
+                        id,
+                        q.span_start,
+                        q.span_end,
+                        q.highlight_start,
+                        q.highlight_end,
+                        q.definition_id,
+                        requestor.id,
+                        translation_id
+                    )
+                    .execute(&mut **tx)
+                    .await?;
+                    continue;
+                }
+            }
+            // Insert new quotation
+            sqlx::query!(
+                r#"
+                    INSERT INTO quotation
+                        (translation, definition, span_start, span_end, highlight_start, highlight_end, created_by, updated_by)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+                "#,
+                translation_id,
+                q.definition_id,
+                q.span_start,
+                q.span_end,
+                q.highlight_start,
+                q.highlight_end,
+                requestor.id
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn list_by_definition(
         &self,
         definition_id: Uuid,
@@ -508,6 +778,8 @@ impl QuotationRepository {
                     definition,
                     span_start,
                     span_end,
+                    highlight_start,
+                    highlight_end,
                     created_at,
                     updated_at,
                     created_by,
@@ -535,6 +807,92 @@ impl QuotationRepository {
         .fetch_one(&self.state.pool);
 
         let (items, total_count) = tokio::try_join!(items_future, count_future)?;
+
+        let total = total_count.unwrap_or(0);
+        let has_more =
+            (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
+
+        Ok(PaginatedResponse {
+            items,
+            total,
+            offset: pagination.offset,
+            limit: pagination.limit,
+            has_more,
+        })
+    }
+
+    pub async fn search_by_definition(
+        &self,
+        search: SearchQuotationsByDefinition,
+        pagination: PaginatedRequest,
+    ) -> AppResult<PaginatedResponse<QuotationWithSpan>> {
+        let items_future = sqlx::query!(
+            r#"
+                SELECT
+                    q.id,
+                    q.translation,
+                    q.definition,
+                    q.span_start,
+                    q.span_end,
+                    q.highlight_start,
+                    q.highlight_end,
+                    q.created_at,
+                    q.updated_at,
+                    q.created_by,
+                    q.updated_by,
+                    SUBSTRING(t.translated_text FROM q.span_start + 1 FOR q.span_end - q.span_start) AS "span_text!",
+                    tr.slug AS "translatable_code!",
+                    l.code  AS "language_code!"
+                FROM quotation q
+                JOIN definitions d  ON d.id  = q.definition
+                JOIN translation t  ON t.id  = q.translation
+                JOIN translatable tr ON tr.id = t.translatable
+                JOIN languages l    ON l.id  = t.language
+                WHERE ($1::TEXT IS NULL OR d.definition ILIKE '%' || $1 || '%')
+                ORDER BY (CASE WHEN $1::TEXT IS NOT NULL THEN similarity(d.definition, $1) ELSE 0 END) DESC, q.created_at DESC
+                LIMIT $2
+                OFFSET $3
+            "#,
+            search.q.clone() as Option<String>,
+            i64::from(pagination.limit),
+            i64::from(pagination.offset)
+        )
+        .fetch_all(&self.state.pool);
+
+        let count_future = sqlx::query_scalar!(
+            r#"
+                SELECT COUNT(*)
+                FROM quotation q
+                JOIN definitions d ON d.id = q.definition
+                WHERE ($1::TEXT IS NULL OR d.definition ILIKE '%' || $1 || '%')
+            "#,
+            search.q as Option<String>
+        )
+        .fetch_one(&self.state.pool);
+
+        let (rows, total_count) = tokio::try_join!(items_future, count_future)?;
+
+        let items: Vec<QuotationWithSpan> = rows
+            .into_iter()
+            .map(|row| QuotationWithSpan {
+                quotation: Quotation {
+                    id: row.id,
+                    translation: row.translation,
+                    definition: row.definition,
+                    span_start: row.span_start,
+                    span_end: row.span_end,
+                    highlight_start: row.highlight_start,
+                    highlight_end: row.highlight_end,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    created_by: row.created_by,
+                    updated_by: row.updated_by,
+                },
+                span_text: row.span_text,
+                translatable_code: row.translatable_code,
+                language_code: row.language_code,
+            })
+            .collect();
 
         let total = total_count.unwrap_or(0);
         let has_more =
@@ -698,6 +1056,8 @@ mod tests {
                     definition: definition.id,
                     span_start: 0,
                     span_end: 10,
+                    highlight_start: None,
+                    highlight_end: None,
                 },
             )
             .await
@@ -856,6 +1216,8 @@ mod tests {
                     definition: definition.id,
                     span_start: 0,
                     span_end: 10,
+                    highlight_start: None,
+                    highlight_end: None,
                 },
             )
             .await
@@ -869,6 +1231,8 @@ mod tests {
                 UpdateQuotation {
                     span_start: Some(5),
                     span_end: Some(15),
+                    highlight_start: None,
+                    highlight_end: None,
                 },
             )
             .await
@@ -1031,6 +1395,8 @@ mod tests {
                     definition: definition.id,
                     span_start: 0,
                     span_end: 10,
+                    highlight_start: None,
+                    highlight_end: None,
                 },
             )
             .await

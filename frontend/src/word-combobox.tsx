@@ -1,10 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import AsyncSelect from "react-select/async";
+import { AsyncSelect } from "./components/async-select";
 import type { GroupBase, OptionsOrGroups, StylesConfig } from "react-select";
-import "./word-combobox.css";
 
-interface WordSearchResult {
+export interface WordSearchResult {
   id: string;
   word: string;
   slug: string;
@@ -26,7 +25,7 @@ interface CrossLanguageSearchResponse {
   languages: LanguageWordsGroup[];
 }
 
-interface WordOption extends WordSearchResult {
+export interface WordOption extends WordSearchResult {
   label: string;
   value: string;
   language_name: string;
@@ -35,24 +34,59 @@ interface WordOption extends WordSearchResult {
 interface WordComboboxProps {
   inputId: string;
   inputName: string;
-  placeholder?: string;
   initialValue?: string;
+  initialOption?: WordOption | null;
   required?: boolean;
   excludeId?: string;
+  onChange?: (selected: WordOption | null) => void;
+  languageFilter?: string; // Optional filter for languages (single language code)
+  initialSearch?: string; // Pre-fill the search input and preload results
 }
 
-function WordCombobox({
+export function WordCombobox({
   inputId,
   inputName,
-  placeholder = "",
   initialValue = "",
+  initialOption = null,
   required = false,
   excludeId,
+  onChange,
+  languageFilter,
+  initialSearch,
 }: WordComboboxProps) {
   const [selectedBookmark, setSelectedBookmark] = React.useState(initialValue);
   const [selectedOption, setSelectedOption] = React.useState<WordOption | null>(
-    null,
+    initialOption,
   );
+  const [preloadedOptions, setPreloadedOptions] = React.useState<
+    OptionsOrGroups<WordOption, GroupBase<WordOption>> | boolean
+  >(false);
+
+  React.useEffect(() => {
+    if (!initialSearch || initialSearch.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (languageFilter) {
+          const params = new URLSearchParams({ q: initialSearch, limit: "20" });
+          const response = await fetch(`/api/languages/${languageFilter}/words?${params}`);
+          if (!response.ok || cancelled) return;
+          const data: { items: WordSearchResult[] } = await response.json();
+          if (!cancelled) {
+            setPreloadedOptions(data.items.map(word => ({
+              ...word,
+              label: word.word,
+              value: word.bookmark,
+              language_name: languageFilter,
+            })));
+          }
+        }
+      } catch {
+        // silently fail - user can still type to search
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [initialSearch, languageFilter]);
 
   // Load options from API
   const loadOptions = async (
@@ -63,31 +97,55 @@ function WordCombobox({
     }
 
     try {
-      const params = new URLSearchParams({ q: inputValue, limit: "20" });
-      if (excludeId) {
-        params.append("exclude_id", excludeId);
-      }
+      if (languageFilter) {
+        // Use single-language search endpoint
+        const params = new URLSearchParams({ q: inputValue, limit: "20" });
+        const response = await fetch(`/api/languages/${languageFilter}/words?${params}`);
 
-      const response = await fetch(`/api/words/search?${params}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch results");
+        }
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch results");
-      }
+        const data: { items: WordSearchResult[] } = await response.json();
 
-      const data: CrossLanguageSearchResponse = await response.json();
-
-      // Convert to grouped options format
-      const groupedOptions = data.languages.map((lang) => ({
-        label: lang.language_name,
-        options: lang.words.map((word) => ({
+        // Map to options format
+        const options = data.items.map((word) => ({
           ...word,
           label: word.word,
           value: word.bookmark,
-          language_name: lang.language_name,
-        })),
-      }));
+          language_name: languageFilter, // language name is not needed when filtering by single language
+        }));
 
-      return groupedOptions;
+        return options;
+      } else {
+        // use cross-language search endpoint
+        const params = new URLSearchParams({ q: inputValue, limit: "20" });
+        if (excludeId) {
+          params.append("exclude_id", excludeId);
+        }
+
+        const response = await fetch(`/api/words/search?${params}`);
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch results");
+        }
+
+        const data: CrossLanguageSearchResponse = await response.json();
+
+        // Convert to grouped options format
+        const groupedOptions = data.languages.map((lang) => ({
+          label: lang.language_name,
+          options: lang.words.map((word) => ({
+            ...word,
+            label: word.word,
+            value: word.bookmark,
+            language_name: lang.language_name,
+          })),
+        }));
+
+        return groupedOptions;
+      }
+
     } catch (error) {
       console.error("Failed to fetch word search results:", error);
       return [];
@@ -98,15 +156,18 @@ function WordCombobox({
   const formatOptionLabel = (option: WordOption) => (
     <div className="word-combobox-option-content">
       <span className="word-combobox-word">
-        {option.word}
+        {option.word}{option.lemma !== 1 && (
+          <span className="word-combobox-lemma">/{option.lemma}</span>
+        )}
         {option.word_class_abbreviation && (
           <span className="word-combobox-class">
             {" "}
-            ({option.word_class_abbreviation})
+            (<span className="word-class-abbreviation">
+              {option.word_class_abbreviation}
+            </span>)
           </span>
         )}
       </span>
-      {option.ipa && <span className="word-combobox-ipa"> /{option.ipa}/</span>}
     </div>
   );
 
@@ -119,131 +180,9 @@ function WordCombobox({
   const handleChange = (newValue: WordOption | null) => {
     setSelectedOption(newValue);
     setSelectedBookmark(newValue?.bookmark || "");
-  };
-
-  // Custom styles matching the existing form select styles
-  const customStyles: StylesConfig<WordOption, false, GroupBase<WordOption>> = {
-    control: (base, state) => ({
-      ...base,
-      fontFamily: "var(--font-normal)",
-      padding: "0",
-      //border: `1px solid var(--input-border)`,
-      borderRadius: "var(--rounding)",
-      backgroundColor: "var(--input-background)",
-      color: "var(--foreground-primary)",
-      fontSize: "1rem",
-      minHeight: "40px",
-      outline: "0",
-      boxShadow: state.isFocused ? "0 0 0 2px var(--focus-ring)" : "none",
-      borderColor: state.isFocused
-        ? "var(--input-border-focus)"
-        : "var(--input-border)",
-      transition:
-        "background-color 250ms ease-in-out, border-color 250ms ease-in-out",
-      "&:hover": {
-        borderColor: state.isFocused
-          ? "var(--input-border-focus)"
-          : "var(--input-border)",
-      },
-    }),
-    valueContainer: (base) => ({
-      ...base,
-      padding: "0 0.5rem",
-    }),
-    input: (base) => ({
-      ...base,
-      color: "var(--foreground-primary)",
-      margin: "0",
-      padding: "0",
-    }),
-    placeholder: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-    singleValue: (base) => ({
-      ...base,
-      color: "var(--foreground-primary)",
-    }),
-    menu: (base) => ({
-      ...base,
-      backgroundColor: "var(--background-panel)",
-      border: `1px solid var(--input-border)`,
-      borderRadius: "var(--rounding)",
-      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-      zIndex: 9999,
-    }),
-    menuList: (base) => ({
-      ...base,
-      padding: "0",
-    }),
-    option: (base, state) => ({
-      ...base,
-      backgroundColor: state.isFocused
-        ? "var(--input-background-focus)"
-        : state.isSelected
-          ? "var(--input-background-focus)"
-          : "transparent",
-      color: "var(--foreground-primary)",
-      cursor: "pointer",
-      padding: "8px 12px",
-      transition: "background-color 150ms ease-in-out",
-      "&:active": {
-        backgroundColor: "var(--input-background-focus)",
-      },
-    }),
-    group: (base) => ({
-      ...base,
-      paddingTop: 0,
-      paddingBottom: 0,
-    }),
-    groupHeading: (base) => ({
-      ...base,
-      fontFamily: "var(--font-heading)",
-      fontSize: "0.75rem",
-      fontWeight: "bold",
-      color: "var(--foreground-secondary)",
-      textTransform: "uppercase",
-      padding: "8px 12px",
-      backgroundColor: "var(--background-panel)",
-      borderTop: `1px solid var(--input-border)`,
-      marginTop: 0,
-      marginBottom: 0,
-      position: "sticky",
-      top: 0,
-      zIndex: 1,
-    }),
-    indicatorSeparator: (base) => ({
-      ...base,
-      backgroundColor: "var(--input-border)",
-    }),
-    dropdownIndicator: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-      transition: "color 150ms ease-in-out",
-      "&:hover": {
-        color: "var(--foreground-primary)",
-      },
-    }),
-    clearIndicator: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-      transition: "color 150ms ease-in-out",
-      "&:hover": {
-        color: "var(--foreground-primary)",
-      },
-    }),
-    loadingIndicator: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-    noOptionsMessage: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-    loadingMessage: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
+    if (onChange) {
+      onChange(newValue);
+    }
   };
 
   return (
@@ -256,15 +195,13 @@ function WordCombobox({
         formatGroupLabel={formatGroupLabel}
         onChange={handleChange}
         value={selectedOption}
-        placeholder={placeholder}
         isClearable
-        styles={customStyles}
-        noOptionsMessage={({ inputValue }) =>
-          inputValue ? "No words found" : "Type to search..."
-        }
+        placeholder="-- select a word --"
         loadingMessage={() => "Searching..."}
         className="word-combobox-select"
         classNamePrefix="word-select"
+        defaultInputValue={initialSearch ?? undefined}
+        defaultOptions={preloadedOptions}
       />
       <input
         type="hidden"
@@ -282,7 +219,6 @@ export function mountWordCombobox(
   options: {
     inputId: string;
     inputName: string;
-    placeholder?: string;
     initialValue?: string;
     required?: boolean;
     excludeId?: string;
@@ -299,7 +235,6 @@ export function mountWordCombobox(
     <WordCombobox
       inputId={options.inputId}
       inputName={options.inputName}
-      placeholder={options.placeholder}
       initialValue={options.initialValue}
       required={options.required}
       excludeId={options.excludeId}

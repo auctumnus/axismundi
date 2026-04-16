@@ -397,7 +397,7 @@ impl TranslationRepository {
         Ok(result)
     }
 
-    async fn create_update_activity(
+    pub(crate) async fn create_update_activity(
         &self,
         requestor: &User,
         translation_id: Uuid,
@@ -525,6 +525,95 @@ impl TranslationRepository {
             .await?;
 
         Ok(updated_translation)
+    }
+
+    /// Update a translation within a caller-managed transaction.
+    /// The caller is responsible for committing (or rolling back) the transaction,
+    /// and for calling `create_update_activity` after committing.
+    pub async fn update_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        requestor: &User,
+        existing: &Translation,
+        updates: UpdateTranslation,
+    ) -> AppResult<Translation> {
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language: existing.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Updated,
+                    resource_type: crate::model::audit_log::AuditableResource::Translation,
+                    resource_id: existing.id,
+                    context: Some(serde_json::json!({
+                        "language_id": existing.language,
+                        "translatable_id": existing.translatable,
+                        "updates": updates
+                    })),
+                },
+                tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request(
+                "you don't have permission to edit translations",
+            ));
+        }
+
+        let result = sqlx::query_as!(
+            Translation,
+            r#"
+                WITH updated AS (
+                    UPDATE translation
+                    SET translated_text = COALESCE($2, translated_text),
+                        translated_title = COALESCE($3, translated_title),
+                        ipa = COALESCE($4, ipa),
+                        gloss = COALESCE($5, gloss),
+                        notes = COALESCE($6, notes),
+                        updated_by = $7,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1
+                    RETURNING id, translatable, language, translated_text, translated_title, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count
+                )
+                SELECT
+                    u.id,
+                    u.translatable,
+                    u.language,
+                    u.ipa,
+                    u.gloss,
+                    u.notes,
+                    u.translated_text,
+                    u.translated_title,
+                    u.created_at,
+                    u.updated_at,
+                    u.like_count,
+                    u.created_by,
+                    u.updated_by,
+                    tr.slug as translatable_slug,
+                    tr.title as translatable_title,
+                    l.code as language_code,
+                    l.name as language_name
+                FROM updated u
+                JOIN translatable tr ON u.translatable = tr.id
+                JOIN languages l ON u.language = l.id
+            "#,
+            existing.id,
+            updates.translated_text,
+            updates.translated_title,
+            updates.ipa,
+            updates.gloss,
+            updates.notes,
+            requestor.id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("translation with id '{}'", existing.id)))
     }
 
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {

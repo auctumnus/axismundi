@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
+use futures::TryFutureExt;
 
 use crate::{
     attempt,
@@ -12,16 +13,9 @@ use crate::{
     embed::{EmbedTarget, render_embed},
     err::not_found,
     model::{
-        definitions::{Definition, DefinitionRepository},
-        language_invites::PermissionLevel,
-        language_permissions::LanguagePermissionRepository,
-        languages::{Language, LanguageRepository},
-        users::User,
-        word_classes::WordClassRepository,
-        word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult},
-        words::{Word, WordRepository, WordSearch},
+        definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository}, quotations::{Quotation, QuotationRepository, QuotationWithSpan, SearchQuotationsByDefinition}, users::User, word_classes::WordClassRepository, word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult}, words::{Word, WordRepository, WordSearch}
     },
-    pagination::PaginatedRequest,
+    pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, BackQuery, extract_session::Session, is_discord},
 };
 
@@ -49,7 +43,8 @@ struct LemmaTemplate {
     current_user: Option<User>,
     language: Language,
     word: Word,
-    definitions: Vec<Definition>,
+    // definition, quotations, has_more
+    definitions: Vec<(Definition, Vec<QuotationWithSpan>, bool)>,
     other_lemmata: bool,
     back: String,
     user_has_permission: bool,
@@ -60,6 +55,7 @@ struct LemmaTemplate {
     recent_relations: Vec<WordRelationSearchResult>,
     total_relations: i64,
 }
+
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn view_lemmata(
@@ -210,6 +206,7 @@ pub(super) async fn view_lemma(
     definitions_repo: DefinitionRepository,
     word_relations: WordRelationRepository,
     permissions: LanguagePermissionRepository,
+    quotations: QuotationRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     Query(params): Query<BackQuery>,
     user_agent: Option<TypedHeader<UserAgent>>,
@@ -251,8 +248,15 @@ pub(super) async fn view_lemma(
                     offset: 0,
                 },
             )
+            .and_then(async |res: PaginatedResponse<Definition>| {
+                res.try_map_async(async |d| {
+                    let quotations = quotations.search_by_definition(Default::default(), PaginatedRequest { limit: 5, offset: 0 }).await?;
+                    let has_more = quotations.total > 5;
+                    Ok((d, quotations.items, has_more))
+                }).await
+            })
             .await
-            .map(|res| (res.items, res.total))
+            .map(|defs| (defs.items, defs.has_more))
     );
 
     let other_lemmata = attempt!(s, words.count_by_slug(language.id, &slug).await) > 1;

@@ -50,3 +50,22 @@
     display: inline-flex !important;
   }
 }
+
+ul.quotations {
+  li {
+    list-style-type: none;
+  }
+}
+
+.quotation-link {
+  text-decoration: none;
+  font-style: italic;
+
+  .highlight {
+    font-weight: bold;
+  }
+
+  &:hover {
+    color: var(--foreground-secondary);
+  }
+}

@@ -100,6 +100,7 @@ fn default_limit() -> i64 {
 pub async fn search_words_across_languages(
     s: Session,
     words: WordRepository,
+    pagination: PaginatedRequest,
     axum::extract::Query(query): axum::extract::Query<CrossLanguageSearchQuery>,
 ) -> ApiResponse<Json<CrossLanguageSearchResponse>> {
     let Some(user) = s.user() else {
@@ -107,11 +108,8 @@ pub async fn search_words_across_languages(
     };
     ensure_verified(user)?;
 
-    // Clamp limit to reasonable range
-    let limit = query.limit.clamp(1, 50);
-
     let results = words
-        .search_across_languages(user, &query.q, query.exclude_id, limit)
+        .search_across_languages(user, &query.q, query.exclude_id, pagination.limit as i64)
         .await?;
 
     Ok(Json(results))

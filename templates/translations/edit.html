@@ -15,6 +15,8 @@
         code: "{{ language.code }}",
     }
 </script>
+<link rel="stylesheet" href="/static/components/async-select.css">
+<link rel="stylesheet" href="/static/word-combobox.css">
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
@@ -63,12 +65,10 @@
         <input type="text" id="translated_title" name="translated_title" value="{{ previous_translated_title }}" placeholder="Title in your language (optional)">
     </section>
 
-    <section>
+    <section id="quotations-editor-root">
         <label for="translated_text">Translated text</label>
         {% call u::field_error(name="translated_text") %}
-        <div id="quotations-editor-root">
-            <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
-        </div>
+        <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
     </section>
 
     <section>
@@ -104,11 +104,11 @@
       descriptionDiv.id = 'notes';
       descriptionTextarea.replaceWith(descriptionDiv);
       const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
-    //   window.mountFormEditor('notes', {
-    //     initialValue: initialValue,
-    //     inputName: 'notes',
-    //     formId: 'edit-translation-form'
-    //   });
+      window.mountFormEditor('notes', {
+        initialValue: initialValue,
+        inputName: 'notes',
+        formId: 'edit-translation-form'
+      });
     }
   });
 </script>
@@ -117,9 +117,16 @@
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountQuotationsEditor) {
       window.mountQuotationsEditor('quotations-editor-root', {
-        translatableSlug: '{{ translatable_with_meta.translatable.slug }}',
-        languageCode: '{{ language.code }}',
-        text: {{ translation.translated_text | json | safe }},
+        quotations: {{ previous_quotations | json | safe }},
+        text: {{ previous_translated_text | json | safe }},
+        languageCode: "{{ language.code }}",
+        {% if let Some(errors) = crate::util::get_error(error.as_ref(), "translated_text") %}
+        error: [
+            {% for error in errors %}
+                {{ error.to_string() | json | safe }},
+            {% endfor %}
+        ],
+        {% endif %}
       });
     }
   });

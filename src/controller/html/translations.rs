@@ -21,7 +21,7 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
-        quotations::{QuotationRepository, QuotationWithWordInfo},
+        quotations::{QuotationPossiblyNew, QuotationRepository, QuotationWithWordInfo},
         translatable::{Translatable, TranslatableRepository},
         translations::{
             CreateTranslation, Translation, TranslationRepository, TranslationSearch,
@@ -41,6 +41,7 @@ pub struct QuotationLink {
     pub word_slug: String,
     pub word_lemma: i32,
     pub definition_text: String,
+    pub word_text: String,
 }
 
 pub struct TextSegment {
@@ -49,38 +50,75 @@ pub struct TextSegment {
 }
 
 fn build_text_segments(text: &str, quotations: &[QuotationWithWordInfo]) -> Vec<TextSegment> {
-    let chars: Vec<char> = text.chars().collect();
+    // Map UTF-16 code unit positions to byte offsets, matching JS string indexing.
+    // Each char contributes 1 or 2 UTF-16 code units (2 for chars outside the BMP).
+    let mut utf16_to_byte: Vec<usize> = Vec::with_capacity(text.len() + 1);
+    for (byte_idx, ch) in text.char_indices() {
+        for _ in 0..ch.len_utf16() {
+            utf16_to_byte.push(byte_idx);
+        }
+    }
+    utf16_to_byte.push(text.len()); // sentinel
+
+    let utf16_len = utf16_to_byte.len() - 1;
     let mut segments = Vec::new();
     let mut pos: usize = 0;
 
     for q in quotations {
-        let start = (q.span_start as usize).min(chars.len());
-        let end = (q.span_end as usize).min(chars.len());
+        let start = (q.span_start as usize).min(utf16_len);
+        let end = (q.span_end as usize).min(utf16_len);
 
         if start > pos {
             segments.push(TextSegment {
-                text: chars[pos..start].iter().collect(),
+                text: text[utf16_to_byte[pos]..utf16_to_byte[start]].to_string(),
                 quotation: None,
             });
         }
 
         if start < end {
-            segments.push(TextSegment {
-                text: chars[start..end].iter().collect(),
-                quotation: Some(QuotationLink {
-                    word_slug: q.word_slug.clone(),
-                    word_lemma: q.word_lemma,
-                    definition_text: q.definition_text.clone(),
-                }),
-            });
+            let link = QuotationLink {
+                word_slug: q.word_slug.clone(),
+                word_lemma: q.word_lemma,
+                definition_text: q.definition_text.clone(),
+                word_text: q.word.clone(),
+            };
+
+            if let (Some(hs), Some(he)) = (q.highlight_start, q.highlight_end) {
+                let hl_start = (hs as usize).min(utf16_len).max(start);
+                let hl_end = (he as usize).min(utf16_len).min(end);
+
+                if hl_start > start {
+                    segments.push(TextSegment {
+                        text: text[utf16_to_byte[start]..utf16_to_byte[hl_start]].to_string(),
+                        quotation: None,
+                    });
+                }
+                if hl_start < hl_end {
+                    segments.push(TextSegment {
+                        text: text[utf16_to_byte[hl_start]..utf16_to_byte[hl_end]].to_string(),
+                        quotation: Some(link),
+                    });
+                }
+                if hl_end < end {
+                    segments.push(TextSegment {
+                        text: text[utf16_to_byte[hl_end]..utf16_to_byte[end]].to_string(),
+                        quotation: None,
+                    });
+                }
+            } else {
+                segments.push(TextSegment {
+                    text: text[utf16_to_byte[start]..utf16_to_byte[end]].to_string(),
+                    quotation: Some(link),
+                });
+            }
         }
 
         pos = end.max(pos);
     }
 
-    if pos < chars.len() {
+    if pos < utf16_len {
         segments.push(TextSegment {
-            text: chars[pos..].iter().collect(),
+            text: text[utf16_to_byte[pos]..].to_string(),
             quotation: None,
         });
     }
@@ -847,6 +885,7 @@ struct EditTranslationTemplate {
     can_edit_translation: bool,
     will_create_audit_log: bool,
     rendered_description: Option<String>,
+    previous_quotations: Vec<QuotationPossiblyNew>,
 }
 
 async fn edit_translation_form(
@@ -856,6 +895,7 @@ async fn edit_translation_form(
     languages: LanguageRepository,
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
+    quotations: QuotationRepository,
     Path((slug, code)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
@@ -918,6 +958,14 @@ async fn edit_translation_form(
         translatables.materialize(translatable, Some(&user)).await
     );
 
+    let quotations = attempt!(
+        s,
+        quotations.list_by_translation_with_word_info(
+            translation.id,
+            PaginatedRequest { limit: 500, offset: 0 },
+        ).await
+    );
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
@@ -935,9 +983,19 @@ async fn edit_translation_form(
         can_edit_translation,
         will_create_audit_log,
         rendered_description,
+        previous_quotations: quotations.items.into_iter().map(QuotationPossiblyNew::from).collect(),
     };
 
     okay(render_template(template))
+}
+
+fn deserialize_json_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let s = String::deserialize(deserializer)?;
+    serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
 #[derive(Deserialize)]
@@ -948,6 +1006,8 @@ struct EditTranslationFormData {
     gloss: Option<String>,
     notes: Option<String>,
     language_id: Uuid,
+    #[serde(deserialize_with = "deserialize_json_str")]
+    quotations: Vec<QuotationPossiblyNew>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -958,13 +1018,13 @@ async fn edit_translation_submit(
     languages: LanguageRepository,
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
+    quotations: QuotationRepository,
     Path(slug): Path<String>,
     Form(form): Form<EditTranslationFormData>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
-
     let language = attempt!(s, languages.find_by_id(form.language_id).await);
 
     let can_edit_translatable = translatable.created_by == user.id;
@@ -996,20 +1056,8 @@ async fn edit_translation_submit(
             .find_by_translatable_and_language(translatable.id, language.id)
             .await
     );
-    let translation = translations
-        .update(
-            &user,
-            existing_translation.id,
-            UpdateTranslation {
-                translated_text: Some(form.translated_text.clone()),
-                translated_title: form.translated_title.clone(),
-                ipa: form.ipa.clone(),
-                gloss: form.gloss.clone(),
-                notes: form.notes.clone(),
-            },
-        )
-        .await;
 
+    // Pre-fetch data needed for re-rendering the form on error
     let top_contributors = attempt!(
         s,
         ContributionStatsRepository::new(state.clone())
@@ -1022,17 +1070,41 @@ async fn edit_translation_submit(
         top_contributors,
         is_liked,
     };
-
     let rendered_description = if !translatable.description.is_empty() {
         crate::md::render_md(&translatable.description).ok()
     } else {
         None
     };
-
     let redirect_slug = translatable.slug.clone();
 
-    match translation {
-        Ok(_) => {
+    // Perform translation update + quotation sync in a single transaction
+    let updates = UpdateTranslation {
+        translated_text: Some(form.translated_text.clone()),
+        translated_title: form.translated_title.clone(),
+        ipa: form.ipa.clone(),
+        gloss: form.gloss.clone(),
+        notes: form.notes.clone(),
+    };
+
+    let result: crate::err::AppResult<Translation> = async {
+        let mut tx = state.pool.begin().await?;
+        let updated = translations
+            .update_in_tx(&mut tx, &user, &existing_translation, updates)
+            .await?;
+        quotations
+            .sync_for_translation_in_tx(&mut tx, &user, existing_translation.id, &form.quotations)
+            .await?;
+        tx.commit().await?;
+        Ok(updated)
+    }
+    .await;
+
+    match result {
+        Ok(updated) => {
+            // Fire activity log outside the transaction (best-effort)
+            let _ = translations
+                .create_update_activity(&user, updated.id, existing_translation.language)
+                .await;
             let redirect_url = format!(
                 "/translatable/{}/translation/{}",
                 redirect_slug, language.code
@@ -1047,7 +1119,6 @@ async fn edit_translation_submit(
                 s,
                 translatables.materialize(translatable, Some(&user)).await
             );
-
             let template = EditTranslationTemplate {
                 current_user: Some(user),
                 error: Some(e),
@@ -1065,9 +1136,9 @@ async fn edit_translation_submit(
                 can_edit_translation,
                 will_create_audit_log,
                 rendered_description,
+                previous_quotations: form.quotations.clone(),
             };
-            let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body)
+            (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
 }

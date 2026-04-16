@@ -60,14 +60,28 @@
 
         {% if !definitions.is_empty() %}
             <ol class="definitions-list">
-                {% for definition in definitions %}
+                {% for (definition, quotations, has_more) in definitions %}
                     <li>
-                        {% if !definition.context.is_empty() %}
-                        <span class="context-container">
-                            (<span class="context">{{ definition.context }}</span>)
-                        </span>
-                        {% endif %}
-                        {{ definition.definition }}
+                        <div class="definition">
+                            {% if !definition.context.is_empty() %}
+                            <span class="context-container">
+                                (<span class="context">{{ definition.context }}</span>)
+                            </span>
+                            {% endif %}
+                            {{ definition.definition }}
+                        </div>
+                        <ul class="quotations">
+                            {% for q in quotations %}
+                                <li>
+                                    <a href="/translatable/{{ q.translatable_code }}/translations/{{ q.language_code }}" class="quotation-link">
+                                        {{ q.render() | safe }}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                            {% if has_more %}
+                                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/quotations">see more</a></li>
+                            {% endif %}
+                        </ul>
                     </li>
                 {% endfor %}
             </ol>

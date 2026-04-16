@@ -15,8 +15,9 @@
 {{ json_ld | safe }}
 </script>
 <script src="/static/like-button.js" type="module" defer></script>
+<script src="/static/tooltip.js" defer></script>
 <link rel="stylesheet" href="/static/translatables/full-card.css">
-<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="/static/translations/view.css">
 {% endblock %}
 
 
@@ -63,7 +64,7 @@
     </div>
 
     {% if translation.ipa.is_empty() && translation.gloss.is_empty() && translation.notes.is_empty() %}
-        <p class="preserve-breaks">{% for seg in quotation_segments %}{% if let Some(q) = &seg.quotation %}<a href="/languages/{{ language.code }}/words/{{ q.word_slug }}/{{ q.word_lemma }}" title="{{ q.definition_text }}" class="quoted-word">{{ seg.text }}</a>{% else %}{{ seg.text }}{% endif %}{% endfor %}</p>
+        <p class="preserve-breaks">{% for seg in quotation_segments %}{% if let Some(q) = &seg.quotation %}<a href="/languages/{{ language.code }}/words/{{ q.word_slug }}/{{ q.word_lemma }}" title="{{ q.definition_text }}" data-tooltip="Quoted by {{ q.word_text }}" class="quoted-word">{{ seg.text }}</a>{% else %}{{ seg.text }}{% endif %}{% endfor %}</p>
     {% else %}
         <div class="tabs">
             <div class="tab-wrap">
