@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}reset password - axismundi{% endblock %}
+
+{% block content %}
+<h1>choose a new password</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/reset-password/confirm">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="uid" value="{{ uid }}">
+
+    <section>
+        <label for="new_password">New password</label>
+        {% call u::field_error(name="new_password") %}
+        <input type="password" id="new_password" name="new_password" required>
+    </section>
+
+    <button type="submit">Reset password</button>
+</form>
+{% endblock %}

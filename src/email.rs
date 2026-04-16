@@ -61,6 +61,32 @@ struct VerifyEmailText<'a> {
     verify_url: &'a str,
 }
 
+#[derive(Template)]
+#[template(path = "email/reset-password.html")]
+struct ResetPasswordHTML<'a> {
+    reset_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "email/reset-password.txt")]
+struct ResetPasswordText<'a> {
+    reset_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "email/change-email.html")]
+struct ChangeEmailHTML<'a> {
+    old_email: &'a str,
+    new_email: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "email/change-email.txt")]
+struct ChangeEmailText<'a> {
+    old_email: &'a str,
+    new_email: &'a str,
+}
+
 #[async_trait]
 impl EmailService for ResendEmailService {
     async fn send_verification_email(
@@ -96,26 +122,22 @@ impl EmailService for ResendEmailService {
 
     async fn send_password_reset_email(
         &self,
-        _user_id: uuid::Uuid,
+        user_id: uuid::Uuid,
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let reset_url = &CONFIG.url(&format!("reset-password?token={}", urlencode(token)));
+        let reset_url = &CONFIG.url(&format!("reset-password?token={}&uid={}", urlencode(token), user_id));
         let subject = "reset your password";
-        let html = format!(
-            r#"<html>
-<body>
-<h1>reset your password</h1>
-<p>click the link below to reset your password:</p>
-<p><a href="{reset_url}">reset password</a></p>
-<p>or copy and paste this link into your browser:</p>
-<p>{reset_url}</p>
-<p>if you didn't request this password reset, you can safely ignore this email.</p>
-</body>
-</html>"#
-        );
+        let html = ResetPasswordHTML { reset_url }.render().map_err(|e| {
+            crate::err::internal_error(format!("failed to render reset password email: {}", e))
+        })?;
+        let text = ResetPasswordText { reset_url }.render().map_err(|e| {
+            crate::err::internal_error(format!("failed to render reset password email: {}", e))
+        })?;
 
-        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject).with_html(&html);
+        let email = CreateEmailBaseOptions::new(&self.from_email, [to], subject)
+            .with_html(&html)
+            .with_text(&text);
 
         self.client
             .emails
@@ -133,15 +155,12 @@ impl EmailService for ResendEmailService {
         new_email: &str,
     ) -> AppResult<()> {
         let subject = "your email address has been changed";
-        let html = format!(
-            r"<html>
-<body>
-<h1>email address changed</h1>
-<p>this is a notification that your email address has been changed from {old_email} to {new_email}.</p>
-<p>if you didn't make this change, please contact support immediately.</p>
-</body>
-</html>"
-        );
+        let html = ChangeEmailHTML { old_email, new_email }.render().map_err(|e| {
+            crate::err::internal_error(format!("failed to render change email email: {}", e))
+        })?;
+        let text = ChangeEmailText { old_email, new_email }.render().map_err(|e| {
+            crate::err::internal_error(format!("failed to render change email email: {}", e))
+        })?;
 
         let email_old =
             CreateEmailBaseOptions::new(&self.from_email, [old_email], subject).with_html(&html);

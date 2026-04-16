@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}reset password - axismundi{% endblock %}
+
+{% block content %}
+<h1>reset password</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/reset-password">
+    <p>Remembered your password? <a href="/login">Log in</a></p>
+
+    <section>
+        <label for="email">Email</label>
+        {% call u::field_error(name="email") %}
+        <input type="email" id="email" name="email" required>
+    </section>
+
+    <button type="submit">Send reset link</button>
+</form>
+{% endblock %}

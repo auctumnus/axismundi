@@ -1,0 +1,13 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+<p>hello,</p>
+
+<p>the email address for your account on axismundi has been changed from {{ old_email }} to {{ new_email }}.</p>
+
+<p>if you didn't make this change, please contact support immediately.</p>
+
+<p>thanks,<br/>
+the axismundi team</p>
+
+{% endblock %}

@@ -22,6 +22,7 @@ use crate::{
     err::{AppError, bad_request},
     model::{
         email_verification_tokens::EmailVerificationTokenRepository,
+        password_reset_tokens::PasswordResetTokenRepository,
         language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
         },
@@ -60,6 +61,11 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
                 .route("/change-profile-images", post(change_profile_images))
                 .layer(DefaultBodyLimit::max(MAX_FILE_SIZE)),
         )
+        .route(
+            "/reset-password",
+            get(reset_password_form).post(reset_password_submit),
+        )
+        .route("/reset-password/confirm", post(reset_password_confirm))
         .route("/logout", get(logout_form).post(logout_submit))
         .route("/users", get(search_users))
         .route("/users/{username}", get(profile));
@@ -772,6 +778,125 @@ async fn clear_banner(s: Session, users: UserRepository) -> (StatusCode, Respons
             Redirect::to("/settings").into_response(),
         ),
         Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+#[derive(Template)]
+#[template(path = "password_reset/form.html")]
+#[allow(dead_code)]
+struct PasswordResetFormTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+}
+
+#[derive(Template)]
+#[template(path = "password_reset/confirm.html")]
+#[allow(dead_code)]
+struct PasswordResetConfirmTemplate {
+    current_user: Option<User>,
+    error: Option<AppError>,
+    token: String,
+    uid: Uuid,
+}
+
+#[derive(Deserialize)]
+struct ResetPasswordQuery {
+    token: Option<String>,
+    uid: Option<Uuid>,
+}
+
+async fn reset_password_form(
+    s: Session,
+    Query(query): Query<ResetPasswordQuery>,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+    match (query.token, query.uid) {
+        (Some(token), Some(uid)) => okay(render_template(PasswordResetConfirmTemplate {
+            current_user,
+            error: None,
+            token,
+            uid,
+        })),
+        _ => okay(render_template(PasswordResetFormTemplate {
+            current_user,
+            error: None,
+        })),
+    }
+}
+
+#[derive(Deserialize)]
+struct ResetPasswordFormData {
+    email: String,
+}
+
+#[derive(Template)]
+#[template(path = "password_reset/success.html")]
+#[allow(dead_code)]
+struct PasswordResetSuccessTemplate {
+    current_user: Option<User>,
+}
+
+async fn reset_password_submit(
+    s: Session,
+    users: UserRepository,
+    tokens: PasswordResetTokenRepository,
+    form: axum::Form<ResetPasswordFormData>,
+) -> (StatusCode, Response) {
+    // Don't reveal whether the email exists — always show success to prevent user enumeration
+    if let Ok(user) = users.find_by_email(&form.email).await {
+        if let Ok(token) = tokens.create(user.id).await {
+            let _ = tokens.send(user.id, &user.email, &token).await;
+        }
+    }
+
+    let current_user = s.user().cloned();
+    okay(render_template(PasswordResetSuccessTemplate { current_user }))
+}
+
+#[derive(Deserialize)]
+struct ConfirmResetFormData {
+    token: String,
+    uid: Uuid,
+    new_password: String,
+}
+
+async fn reset_password_confirm(
+    s: Session,
+    users: UserRepository,
+    tokens: PasswordResetTokenRepository,
+    form: axum::Form<ConfirmResetFormData>,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+
+    let render_error = |error: AppError| {
+        let status = error.status_code;
+        (
+            status,
+            render_template(PasswordResetConfirmTemplate {
+                current_user: current_user.clone(),
+                error: Some(error),
+                token: form.token.clone(),
+                uid: form.uid,
+            }),
+        )
+    };
+
+    let token_record = match tokens.find_by_token(form.uid, &form.token).await {
+        Ok(Some(t)) => t,
+        Ok(None) => {
+            return render_error(crate::err::bad_request(
+                "This reset link is invalid or has expired.",
+            ));
+        }
+        Err(e) => return render_error(e),
+    };
+
+    match users.reset_password(form.uid, token_record, &form.new_password).await {
+        Ok(()) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login").into_response(),
+        ),
+        Err(e) => render_error(e),
     }
 }
 

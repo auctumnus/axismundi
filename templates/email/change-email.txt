@@ -1,0 +1,7 @@
+{% extends "email/base.txt" %}
+
+{% block content %}
+the email address for your account on axismundi has been changed from {{ old_email }} to {{ new_email }}.
+
+if you didn't make this change, please contact support immediately.
+{% endblock %}
