@@ -5,7 +5,8 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use axum_extra::{TypedHeader, headers::UserAgent};
+use axum_extra::{TypedHeader, extract::Multipart, headers::UserAgent};
+use futures::TryFutureExt;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -13,7 +14,7 @@ use crate::{
     attempt,
     controller::html::{okay, render_template},
     embed::{self, GenericEmbed, render_embed, truncate_description},
-    err::AppError,
+    err::{AppError, bad_request},
     get_user,
     model::{
         language_families::{
@@ -26,8 +27,13 @@ use crate::{
         language_invites::PermissionLevel,
         users::{User, UserRepository},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{
+        AppState, BackQuery, ListHeaderKind,
+        extract_session::Session,
+        s3::S3,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -40,6 +46,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/language-families/{code}/delete",
             post(delete_language_family_submit),
+        )
+        .route(
+            "/language-families/{code}/change-banner",
+            post(change_language_family_banner),
+        )
+        .route(
+            "/language-families/{code}/clear-banner",
+            post(clear_language_family_banner),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -59,91 +73,75 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 }
 
 #[derive(Template)]
-#[template(path = "language_families/search.html")]
-struct SearchLanguageFamiliesTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    previous_query: SearchLanguageFamilies,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<FamilyWithContributors>>,
+#[template(path = "language_families/fragments/card.html")]
+pub struct PreviewCard<'a> {
+    pub family_with_contributors: FamilyWithContributors,
+    pub back_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/fragments/list_header.html")]
+#[allow(dead_code)]
+pub struct Header<'a> {
+    pub current_user: Option<&'a User>,
+    pub kind: ListHeaderKind,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/fragments/breadcrumb.html")]
+pub struct Breadcrumb<'a> {
+    pub family: &'a LanguageFamily,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/fragments/footer.html")]
+pub struct Footer<'a> {
+    pub family: &'a LanguageFamily,
+    pub can_edit_family: bool,
 }
 
 async fn search_language_families(
     s: Session,
     language_families: LanguageFamilyRepository,
     Query(query): Query<SearchLanguageFamilies>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
-    let requestor = s.user();
+    let current_user = s.user().cloned();
 
-    let query = SearchLanguageFamilies {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        owner: query.owner.and_then(|o| {
-            let trimmed = o.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        has_language: query.has_language.and_then(|h| {
-            let trimmed = h.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-    };
+    let back_url = crate::util::back_url("/language-families", &pagination, &query);
 
-    let results = match language_families
+    let results = language_families
         .search(query.clone(), pagination.clone())
-        .await
-    {
-        Ok(res) => {
-            let mut materialized_results = vec![];
-            for family in res.items {
-                materialized_results.push(attempt!(
-                    s,
-                    language_families.materialize(family, requestor).await
-                ));
-            }
-            Some(PaginatedResponse {
-                items: materialized_results,
-                total: res.total,
-                offset: res.offset,
-                limit: res.limit,
-                has_more: res.has_more,
-            })
-        }
-        Err(e) => {
-            let template = SearchLanguageFamiliesTemplate {
-                current_user: s.user().cloned(),
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
+        .and_then(|response| {
+            response.try_map_async(|family| language_families.materialize(family, s.user()))
+        })
+        .await;
+
+    let render_item = |family_with_contributors: &FamilyWithContributors| PreviewCard {
+        family_with_contributors: family_with_contributors.clone(),
+        back_url: &back_url,
     };
 
-    let template = SearchLanguageFamiliesTemplate {
-        current_user: s.user().cloned(),
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
+    let header = Header {
+        current_user: current_user.as_ref(),
+        kind: ListHeaderKind::Search,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user: current_user.clone(),
+        header,
+        query_template: query.clone(),
+        query,
         results,
-    };
+        pagination,
+        search_name: "families",
+        search_action: "/language-families",
+        render_item,
+    });
 
-    okay(render_template(template))
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]
@@ -161,6 +159,7 @@ struct ViewLanguageFamilyTemplate {
     pending_invite: Option<(LanguageFamilyInvite, User)>,
     family_tree_svg: String,
     json_ld: String,
+    back: String,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -173,6 +172,7 @@ async fn view_language_family(
     members: LanguageFamilyMemberRepository,
     users: UserRepository,
     Path(code): Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let family = attempt!(s, language_families.find_by_code(&code).await);
     let owner = attempt!(s, users.find_by_id(family.created_by).await);
@@ -190,7 +190,11 @@ async fn view_language_family(
                         family.like_count
                     ),
                     author: Some(owner.clone()),
-                    color: if owner.gender.is_empty() { None } else { Some(owner.gender.clone()) },
+                    color: if owner.gender.is_empty() {
+                        None
+                    } else {
+                        Some(owner.gender.clone())
+                    },
                     url: format!(
                         "{}/language-families/{}",
                         &crate::CONFIG.public_url_base,
@@ -281,6 +285,7 @@ async fn view_language_family(
         family_tree_svg,
         member_count,
         json_ld,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))
@@ -531,6 +536,97 @@ async fn delete_language_family_submit(
         Ok(()) => (
             StatusCode::SEE_OTHER,
             Redirect::to("/language-families").into_response(),
+        ),
+        Err(e) => crate::controller::html::render_generic_error(s, e).await,
+    }
+}
+
+const MAX_BANNER_SIZE: usize = 5 * 1024 * 1024;
+
+async fn change_language_family_banner(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    Path(code): Path<String>,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        if field.name().unwrap_or("") == "banner" {
+            content_type = field.content_type().map(std::string::ToString::to_string);
+            match field.bytes().await {
+                Ok(bytes) => file_data = Some(bytes.to_vec()),
+                Err(e) => {
+                    return crate::controller::html::render_generic_error(
+                        s,
+                        bad_request(format!("Failed to read file: {e}")),
+                    )
+                    .await;
+                }
+            }
+            break;
+        }
+    }
+
+    let Some(file_data) = file_data else {
+        return crate::controller::html::render_generic_error(
+            s,
+            bad_request("No banner file provided"),
+        )
+        .await;
+    };
+    let Some(content_type) = content_type else {
+        return crate::controller::html::render_generic_error(
+            s,
+            bad_request("No content type provided"),
+        )
+        .await;
+    };
+
+    if file_data.len() > MAX_BANNER_SIZE {
+        return crate::controller::html::render_generic_error(
+            s,
+            bad_request("File size exceeds the maximum limit of 5MB"),
+        )
+        .await;
+    }
+
+    let filename = match S3
+        .upload_banner("family", family.id, &file_data, &content_type)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => return crate::controller::html::render_generic_error(s, e).await,
+    };
+
+    match language_families
+        .update_banner(&user, family.id, &filename)
+        .await
+    {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/language-families/{code}/edit")).into_response(),
+        ),
+        Err(e) => crate::controller::html::render_generic_error(s, e).await,
+    }
+}
+
+async fn clear_language_family_banner(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    match language_families.update_banner(&user, family.id, "").await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/language-families/{code}/edit")).into_response(),
         ),
         Err(e) => crate::controller::html::render_generic_error(s, e).await,
     }

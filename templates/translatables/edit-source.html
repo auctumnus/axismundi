@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
 
 {% block title %}edit source for {{ translatable.title }} - axismundi{% endblock %}
 
@@ -48,5 +49,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable, true) %}
+{% call ts_f::translatable_section(&translatable, true) %}
 {% endblock %}

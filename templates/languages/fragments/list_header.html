@@ -1,0 +1,15 @@
+{% if current_user.is_some() %}
+<div class="header-with-actions">
+    <h1>search languages</h1>
+    <ul>
+        <li>
+            <a class="with-icon" href="/new-language">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new language</span>
+            </a>
+        </li>
+    </ul>
+</div>
+{% else %}
+<h1>search languages</h1>
+{% endif %}

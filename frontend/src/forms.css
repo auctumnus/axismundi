@@ -29,6 +29,10 @@
   );
   --warning-foreground: var(--color-yellow-700);
   --warning-border: var(--color-yellow-500);
+
+  --info-background: color-mix(in oklab, var(--color-blue-400) 20%, var(--background-panel));
+  --info-foreground: var(--color-blue-700);
+  --info-border: var(--color-blue-500);
 }
 
 
@@ -42,6 +46,10 @@ form.default, .modal-inner-container {
   section:not(.advanced-search-panel) {
     display: flex;
     flex-direction: column;
+  }
+
+  &.search {
+    margin-bottom: 0;
   }
 
   section {
@@ -245,6 +253,25 @@ div.error {
   }
 }
 
+div.info-banner {
+  background-color: var(--info-background);
+  color: var(--info-foreground);
+  border: 1px solid var(--info-border);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--rounding);
+
+  h2 {
+    margin-top: 0;
+    font-family: var(--font-heading);
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
 div.warning {
   background-color: var(--warning-background);
   color: var(--warning-foreground);
@@ -327,69 +354,6 @@ div.warning {
 
     &:hover svg.icon {
       color: var(--foreground-primary);
-    }
-  }
-}
-
-#definitions-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.first-definition {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-  padding-right: calc(44px + 0.5rem);
-}
-
-.definition-item {
-  position: relative;
-
-  display: flex;
-  flex-direction: row;
-  gap: 0.5rem;
-
-  .definition-input {
-    flex: 1;
-  }
-
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .remove-definition {
-    justify-self: flex-end;
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0.75rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 0px solid transparent;
-    border-radius: 100%;
-    background-color: transparent;
-    color: var(--foreground-secondary);
-    cursor: pointer;
-
-    transition:
-      background-color var(--duration-fast) ease-in-out,
-      color var(--duration-fast) ease-in-out;
-
-    &:hover {
-      background-color: color-mix(
-        in oklab,
-        var(--color-red-500) 15%,
-        transparent
-      );
-      color: var(--color-red-500);
-    }
-
-    svg {
-      width: 1.25rem;
-      height: 1.25rem;
     }
   }
 }
@@ -570,3 +534,87 @@ div.permission-level-helptext-container {
     font-weight: bold;
   }
 }
+
+.empty-search-results {
+  text-align: center;
+  color: var(--foreground-secondary);
+  padding: 2rem;
+  margin-top: 25vh;
+  font-style: italic;
+}
+
+.image-preview-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+
+    z-index: 190;
+
+
+    .upload-icon {
+      width: 100%;
+      height: 100%;
+
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+
+      color: transparent;
+      background-color: transparent;
+      transition: color 150ms ease-in-out, background-color 150ms ease-in-out;
+
+      svg.icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 100%;
+        padding: 1rem;
+        color: transparent;
+        background-color: transparent;
+        transition: color 150ms ease-in-out, background-color 150ms ease-in-out;
+      }
+    }
+    input[type="file"] {
+      position: absolute;
+      min-width: var(--page-width);
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      appearance: none;
+
+      transition: background-color 150ms ease-in-out;
+      
+      &::file-selector-button {
+        appearance: none;
+      }
+
+    }
+
+    input[type="file"]:is(:hover, :focus) + .upload-icon {
+      color: var(--dark-foreground-primary);
+      background-color: color-mix(in oklab, var(--light-foreground-primary) 20%, transparent);
+      svg.icon {
+        color: var(--dark-foreground-primary);
+        background-color: color-mix(in oklab, var(--light-foreground-primary) 50%, transparent);
+      }
+    }
+  }
+
+  .banner-input-container {
+    position: relative;
+    height: 200px;
+    background-color: light-dark(var(--color-sky-100), var(--color-sky-800));
+    border-top-left-radius: var(--rounding);
+    border-top-right-radius: var(--rounding);
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+
+      &.no-img {
+        display: none;
+      }
+    }
+  }

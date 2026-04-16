@@ -1,0 +1,333 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT DISTINCT ON (words.id)\n                    words.id,\n                    words.language,\n                    words.word_class,\n                    words.cognacy,\n                    words.word,\n                    words.slug,\n                    words.lemma,\n                    words.ipa,\n                    words.notes,\n                    words.extra,\n                    words.like_count,\n                    words.created_at,\n                    words.updated_at,\n                    words.created_by as \"_created_by\",\n                    words.updated_by as \"_updated_by\",\n                    bookmarks.slug as \"bookmark: String\",\n                    languages.code as \"word_language_code!: String\",\n                    languages.name as \"word_language_name!: String\",\n                    word_classes.abbreviation as \"word_class_abbreviation: Option<String>\",\n                    word_created.username as \"word_created_by: Option<String>\",\n                    word_updated.username as \"word_updated_by: Option<String>\",\n                    word_relations.kind as \"kind!: WordRelationType\",\n                    word_relations.created_at as \"relation_created_at!\",\n                    word_relations.created_by as \"relation_created_by!\",\n                    relation_creator.id as \"creator_id!\",\n                    relation_creator.username as \"creator_username!\",\n                    relation_creator.display_name as \"creator_display_name\",\n                    relation_creator.email as \"creator_email!\",\n                    relation_creator.password_hash as \"creator_password_hash!\",\n                    relation_creator.verified_at as \"creator_verified_at\",\n                    relation_creator.description as \"creator_description\",\n                    relation_creator.pronouns as \"creator_pronouns\",\n                    relation_creator.gender as \"creator_gender\",\n                    relation_creator.profile_picture_object_id as \"creator_profile_picture_object_id\",\n                    relation_creator.tags as \"creator_tags!\",\n                    creator_bookmarks.slug as \"creator_bookmark!\",\n                    relation_creator.created_at as \"creator_created_at!\",\n                    relation_creator.updated_at as \"creator_updated_at!\",\n                    (CASE\n                        WHEN word_relations.antecedent = $2 THEN 'consequent'\n                        ELSE 'antecedent'\n                    END) as \"direction!: String\",\n                    first_def.id as \"def_id: Option<Uuid>\",\n                    first_def.definition as \"def_definition: Option<String>\",\n                    first_def.context as \"def_context: Option<String>\",\n                    first_def.position as \"def_position: Option<i32>\",\n                    first_def.created_at as \"def_created_at: Option<DateTime<Utc>>\",\n                    first_def.updated_at as \"def_updated_at: Option<DateTime<Utc>>\",\n                    first_def.created_by as \"def_created_by: Option<Uuid>\",\n                    first_def.updated_by as \"def_updated_by: Option<Uuid>\"\n                FROM word_relations\n                JOIN words ON\n                    (CASE\n                        WHEN $1 = 'antecedent' THEN word_relations.consequent = words.id\n                        WHEN $1 = 'consequent' THEN word_relations.antecedent = words.id\n                        ELSE word_relations.consequent = words.id OR word_relations.antecedent = words.id\n                    END)\n                JOIN bookmarks ON bookmarks.item = words.id AND bookmarks.resource = 'lemma'\n                JOIN languages ON languages.id = words.language\n                JOIN users AS relation_creator ON relation_creator.id = word_relations.created_by\n                LEFT JOIN bookmarks AS creator_bookmarks ON creator_bookmarks.item = relation_creator.id AND creator_bookmarks.resource = 'user'\n                LEFT JOIN word_classes ON word_classes.id = words.word_class\n                LEFT JOIN users AS word_created ON word_created.id = words.created_by\n                LEFT JOIN users AS word_updated ON word_updated.id = words.updated_by\n                LEFT JOIN LATERAL (\n                    SELECT id, word, definition, context, position, created_at, updated_at, created_by, updated_by\n                    FROM definitions\n                    WHERE definitions.word = words.id\n                    ORDER BY position ASC\n                    LIMIT 1\n                ) AS first_def ON true\n                WHERE\n                    (CASE\n                        WHEN $1 = 'antecedent' THEN word_relations.antecedent = $2\n                        WHEN $1 = 'consequent' THEN word_relations.consequent = $2\n                        ELSE word_relations.antecedent = $2 OR word_relations.consequent = $2\n                    END)\n                    AND (\n                        CASE\n                            WHEN $3 THEN word_relations.kind IN ('related', 'see_also')\n                            ELSE $4::word_relation_type IS NULL OR word_relations.kind = $4\n                        END\n                    )\n                    AND words.id <> $2\n                ORDER BY words.id\n                LIMIT $5 OFFSET $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "word_class",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "cognacy",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "word",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "lemma",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "ipa",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "extra",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "_created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "_updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "bookmark: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "word_language_code!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "word_language_name!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "word_class_abbreviation: Option<String>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "word_created_by: Option<String>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "word_updated_by: Option<String>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "kind!: WordRelationType",
+        "type_info": {
+          "Custom": {
+            "name": "word_relation_type",
+            "kind": {
+              "Enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed",
+                "related",
+                "see_also"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "relation_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 23,
+        "name": "relation_created_by!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 24,
+        "name": "creator_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 25,
+        "name": "creator_username!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 26,
+        "name": "creator_display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 27,
+        "name": "creator_email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 28,
+        "name": "creator_password_hash!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 29,
+        "name": "creator_verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 30,
+        "name": "creator_description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "creator_pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 32,
+        "name": "creator_gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 33,
+        "name": "creator_profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 34,
+        "name": "creator_tags!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 35,
+        "name": "creator_bookmark!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 36,
+        "name": "creator_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 37,
+        "name": "creator_updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 38,
+        "name": "direction!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 39,
+        "name": "def_id: Option<Uuid>",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 40,
+        "name": "def_definition: Option<String>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 41,
+        "name": "def_context: Option<String>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 42,
+        "name": "def_position: Option<i32>",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 43,
+        "name": "def_created_at: Option<DateTime<Utc>>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 44,
+        "name": "def_updated_at: Option<DateTime<Utc>>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 45,
+        "name": "def_created_by: Option<Uuid>",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 46,
+        "name": "def_updated_by: Option<Uuid>",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Bool",
+        {
+          "Custom": {
+            "name": "word_relation_type",
+            "kind": {
+              "Enum": [
+                "derived",
+                "descendant",
+                "compound",
+                "calque",
+                "borrowed",
+                "related",
+                "see_also"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "906eb74793b91a57ceaecf40dfca08fe1d047f4ca012c587830c603dd66d8a23"
+}

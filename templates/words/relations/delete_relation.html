@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}delete relation? - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete relation</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations/{{ related_word_language_code }}/{{ related_word.slug }}/{{ related_word.lemma }}/delete">
+    <section>
+        <p>Are you sure you want to delete the relation between <strong>{{ word.word }}</strong> and <strong>{{ related_word.word }}</strong>?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete relation</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, user_has_permission) %}
+{% endblock %}

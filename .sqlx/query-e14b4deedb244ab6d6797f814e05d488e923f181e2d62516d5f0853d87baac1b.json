@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists(select 1 from ipa_estimators where sound_change_set_id = $1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e14b4deedb244ab6d6797f814e05d488e923f181e2d62516d5f0853d87baac1b"
+}

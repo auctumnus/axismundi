@@ -15,7 +15,7 @@ pub struct S3Config {
     pub secret_key: String,
     pub endpoint: String,
     pub public_url_base: Option<String>,
-    pub thumbor_security_key: Option<String>,
+    pub imagor_secret: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
@@ -143,7 +143,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 secret_key: "minioadmin123_test".to_string(),
                 endpoint: "http://localhost:7000".to_string(),
                 public_url_base: Some("http://localhost:7888".to_string()),
-                thumbor_security_key: Some("change-me-in-production".to_string()),
+                imagor_secret: Some("change-me-in-production".to_string()),
             },
             maid: MaidConfig {
                 health_check_timeout_ms: default_health_check_timeout_ms(),

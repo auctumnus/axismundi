@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -24,11 +24,13 @@ pub struct ContributionStatsRepository {
     state: AppState,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContributionsSearch {
     pub q: Option<String>,
     pub permission_level: Option<PermissionLevel>,
 }
+
+crate::util::text_query!(ContributionsSearch);
 
 impl ContributionStatsRepository {
     pub fn new(state: AppState) -> Self {
@@ -149,6 +151,7 @@ impl ContributionStatsRepository {
                     u.pronouns,
                     u.gender,
                     u.profile_picture_object_id,
+                    u.banner_object_id,
                     u.verified_at,
                     u.tags,
                     u.created_at,
@@ -282,6 +285,7 @@ impl ContributionStatsRepository {
                 pronouns: record.u_pronouns,
                 gender: record.u_gender,
                 profile_picture_object_id: record.u_profile_picture_object_id,
+                banner_object_id: String::new(),
                 verified_at: record.u_verified_at,
                 tags: record.u_tags,
                 created_at: record.u_created_at,
@@ -421,6 +425,7 @@ impl ContributionStatsRepository {
                 pronouns: record.u_pronouns,
                 gender: record.u_gender,
                 profile_picture_object_id: record.u_profile_picture_object_id,
+                banner_object_id: String::new(),
                 verified_at: record.u_verified_at,
                 tags: record.u_tags,
                 created_at: record.u_created_at,

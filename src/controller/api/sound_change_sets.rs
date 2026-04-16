@@ -1,11 +1,15 @@
 use crate::{
-    err::{AppResult, internal_error, unauthorized_no_session}, lexurgy::{self, send_scv1}, model::{
+    err::{AppResult, unauthorized_no_session},
+    lexurgy::{self, send_scv1},
+    model::{
         languages::LanguageRepository,
         sound_change_sets::{
-            NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet,
-            SoundChangeSetRepository, UpdateSoundChangeSet,
+            NewSoundChangeSet, SearchSoundChangeSets, SoundChangeSet, SoundChangeSetRepository,
+            UpdateSoundChangeSet,
         },
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::extract_session::Session
+    },
+    pagination::{PaginatedRequest, PaginatedResponse},
+    util::extract_session::Session,
 };
 use axum::{Json, extract::Path, http::StatusCode};
 use serde::Deserialize;
@@ -24,7 +28,7 @@ pub fn create_router() -> axum::Router<crate::util::AppState> {
                 .delete(delete_sound_change_set),
         )
         .route(
-            "/languages/{code}/sound-change-sets/{id}/run",
+            "/sound-change-sets/{id}/run",
             axum::routing::post(run_sound_change_set_from_db),
         )
         .route(
@@ -54,7 +58,9 @@ pub async fn create_sound_change_set(
 
     let language = languages.find_by_code(&code).await?;
 
-    sets.create(requestor, &language, req).await.map(Json)
+    sets.create_for_language(requestor, &language, req)
+        .await
+        .map(Json)
 }
 
 pub async fn list_sound_change_sets(
@@ -113,7 +119,7 @@ pub async fn delete_sound_change_set(
 
 pub async fn run_sound_change_set_from_db(
     sets: SoundChangeSetRepository,
-    Path((_code, id)): Path<(String, Uuid)>,
+    Path(id): Path<Uuid>,
     Json(req): Json<RunSoundChangeSetRequest>,
 ) -> ApiResponse<Json<crate::lexurgy::Response>> {
     let response = sets.run_from_db(&id, req.input_words).await?;
@@ -395,13 +401,21 @@ mod tests {
         let input_words = vec!["cat".to_string(), "bat".to_string()];
         let request = post(
             &ctx.owner_token,
-            &format!("languages/{}/sound-change-sets/{id}/run", ctx.language_code),
+            &format!("sound-change-sets/{id}/run"),
             json!({ "input_words": input_words }),
-        ).await;
+        )
+        .await;
         let response = ctx.app.call(request).await.unwrap();
         if response.status() != StatusCode::OK {
             let status = response.status();
-            let error_value: String = str::from_utf8(axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap().as_ref()).unwrap().to_string();
+            let error_value: String = str::from_utf8(
+                axum::body::to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .unwrap()
+                    .as_ref(),
+            )
+            .unwrap()
+            .to_string();
             panic!("Expected 200 OK, got {}: {:#?}", status, error_value);
         }
         assert_eq!(response.status(), StatusCode::OK);

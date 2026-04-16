@@ -5,6 +5,7 @@ create table definitions (
 
     definition text not null,
     context text not null default '',
+    position integer not null default 0,
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,
@@ -73,6 +74,13 @@ create table quotation (
 
     span_start integer not null,
     span_end integer not null,
+
+    highlight_start integer,
+    highlight_end integer,
+
+    notes text not null default '',
+
+    CHECK ((highlight_start IS NULL) = (highlight_end IS NULL)),
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

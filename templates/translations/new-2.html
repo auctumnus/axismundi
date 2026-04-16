@@ -1,21 +1,18 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
+{%- import "translatables/fragments/full_card.html" as translatable_full_card -%}
 
 {% block head %}
-<script type="importmap">
-    {
-        "imports": {
-            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
-        }
-    }
-</script>
-<script src="/static/tooltip.js" type="module" defer></script>
+
 <script src="/static/time.js" type="module" defer></script>
 <script src="/static/language-card.js" defer></script>
 <link rel="stylesheet" href="/static/language-card.css">
-<link rel="stylesheet" href="/static/tooltip.css">
+
 <script src="/static/like-button.js" type="module" defer></script>
-<link rel="stylesheet" href="/static/translatables/card.css">
+<link rel="stylesheet" href="/static/translatables/full-card.css">
 {% endblock %}
 
 {% block title %}new translation - axismundi{% endblock %}
@@ -35,13 +32,13 @@
     </div>
 {% endif %}
 
-{% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
+{% call translatable_full_card::render(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
 
 <div class="context-cards">
     <div class="context-card language-context">
         <span class="context-label">for language</span>
         <ul class="standalone-card">
-            {% call u::render_language_card(&language_with_contributors) %}
+            {% call lang_card::render(&language_with_contributors) %}
         </ul>
     </div>
 </div>
@@ -86,6 +83,6 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
-{% call u::language_section(&language, can_edit_language) %}
+{% call ts_f::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
+{% call lang_f::language_section(&language, can_edit_language) %}
 {% endblock %}

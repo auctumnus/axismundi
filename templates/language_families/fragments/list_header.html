@@ -1,0 +1,15 @@
+{% if current_user.is_some() %}
+<div class="header-with-actions">
+    <h1>search families</h1>
+    <ul>
+        <li>
+            <a class="with-icon" href="/new-language-family">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new family</span>
+            </a>
+        </li>
+    </ul>
+</div>
+{% else %}
+<h1>search families</h1>
+{% endif %}

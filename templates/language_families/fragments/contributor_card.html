@@ -1,0 +1,35 @@
+{%- import "util.html" as u -%}
+{%- import "languages/permissions/fragments/badge.html" as permission_badge -%}
+
+{% macro render(contributor, base_url) %}
+<li class="contributor-card">
+    <div class="left">
+        <div class="contributor-info">
+            {% call u::badge(&contributor.user, size="medium") %}
+        </div>
+        <div class="contribution-stats">
+            {% call permission_badge::render(contributor.permission) %}
+            {% if let Some(created_at) = contributor.created_at %}
+                <span class="separator">·</span>
+                <span class="contributor-since">
+                    since {% call u::relative(&created_at) %}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="permission-actions">
+        {% if contributor.can_edit %}
+            <a href="{{ base_url }}/permissions/{{ contributor.permission_id.unwrap() }}/edit" class="icon button gray" data-tooltip="Edit permission" aria-label="Edit permission">
+                {% call u::icon("edit") %}
+            </a>
+        {% endif %}
+        {% if contributor.can_delete %}
+            <a class="icon button gray" data-tooltip="Delete permission" href="{{ base_url }}/permissions/{{ contributor.permission_id.unwrap() }}/delete">
+                {% call u::icon("delete") %}
+            </a>
+        {% endif %}
+    </div>
+</li>
+{% endmacro %}
+
+{% call render(contributor, base_url) %}

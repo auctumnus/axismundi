@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT scs.*,\n                    exists(select 1 from ipa_estimators where sound_change_set_id = scs.id) as \"is_ipa_estimator!\"\n                FROM sound_change_sets scs\n                JOIN users u ON u.id = scs.created_by\n                WHERE\n                scs.language_id = $1\n                AND ($5::TEXT IS NULL OR u.username = $5)\n                ORDER BY (\n                    CASE\n                        WHEN $2::TEXT IS NOT NULL AND scs.name ILIKE '%' || $2 || '%' THEN 100.0\n                        WHEN $2::TEXT IS NOT NULL AND scs.description ILIKE '%' || $2 || '%' THEN 80.0\n                        ELSE 0.0\n                    END +\n                    CASE WHEN $2::TEXT IS NOT NULL THEN\n                        similarity(scs.name, $2) * 3.0 +\n                        COALESCE(similarity(scs.description, $2), 0.0) * 1.0\n                    ELSE 0.0\n                    END\n                ) DESC, scs.created_at DESC, scs.id DESC\n                LIMIT $3\n                OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "changes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_ipa_estimator!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "4b0566eb99bd5698791cd843bfb1c43aca67317ff4653a73304ee025ab568f64"
+}

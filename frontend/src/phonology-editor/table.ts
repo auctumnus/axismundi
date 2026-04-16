@@ -27,11 +27,18 @@ export interface Body {
   annotations: string[];
 }
 
-export const isRow = (heading: Heading): heading is Row => Object.hasOwn(heading, "cells") || Object.hasOwn(heading, "rows");
+export const isRow = (heading: Heading): heading is Row =>
+  Object.hasOwn(heading, "cells") || Object.hasOwn(heading, "rows");
 
-export type TableElementKind = "TopLeft" | "RowHeading" | "ColumnHeading" | "Cell";
+export type TableElementKind =
+  | "TopLeft"
+  | "RowHeading"
+  | "ColumnHeading"
+  | "Cell";
 
-export const elementKind = (element: TableElement | typeof TOP_LEFT_CELL): TableElementKind => {
+export const elementKind = (
+  element: TableElement | typeof TOP_LEFT_CELL,
+): TableElementKind => {
   if (element === TOP_LEFT_CELL) {
     return "TopLeft";
   }
@@ -39,11 +46,11 @@ export const elementKind = (element: TableElement | typeof TOP_LEFT_CELL): Table
     return isRow(element as Heading) ? "RowHeading" : "ColumnHeading";
   }
   return "Cell";
-}
+};
 
-export function headingChildren(heading: Row): Row[];                                                                            
-export function headingChildren(heading: Column): Column[];                                                                      
-export function headingChildren(heading: Heading): Heading[];                                                                    
+export function headingChildren(heading: Row): Row[];
+export function headingChildren(heading: Column): Column[];
+export function headingChildren(heading: Heading): Heading[];
 export function headingChildren(heading: Heading): Heading[] {
   if (heading.type === "Group") {
     return isRow(heading) ? heading.rows : heading.columns;
@@ -52,10 +59,16 @@ export function headingChildren(heading: Heading): Heading[] {
 }
 
 export const maxHeadingDepth = (headings: Heading[]): number => {
-  const maxHeadingDepthInner = (headings: Heading[], currentDepth: number): number => {
+  const maxHeadingDepthInner = (
+    headings: Heading[],
+    currentDepth: number,
+  ): number => {
     let max = currentDepth;
     for (const heading of headings) {
-      max = Math.max(max, maxHeadingDepthInner(headingChildren(heading), currentDepth + 1));
+      max = Math.max(
+        max,
+        maxHeadingDepthInner(headingChildren(heading), currentDepth + 1),
+      );
     }
     return max;
   };
@@ -77,4 +90,3 @@ export const numLeaves = (headings: Heading[]): number => {
   };
   return numLeavesInner(headings);
 };
-

@@ -1,3 +1,4 @@
+use askama::Template;
 use axum::{
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
@@ -5,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::util::AppState;
+use crate::util::{AppState, serialize_search};
 
 type PaginationSize = i32;
 
@@ -50,6 +51,26 @@ impl<T> PaginatedResponse<T> {
             format!("{} results found", self.total)
         }
     }
+
+    pub async fn try_map_async<U, F, Fut, E>(self, mut f: F) -> Result<PaginatedResponse<U>, E>
+    where
+        F: FnMut(T) -> Fut,
+        Fut: std::future::Future<Output = Result<U, E>>,
+    {
+        let mut items = Vec::with_capacity(self.items.len());
+
+        for item in self.items {
+            items.push(f(item).await?);
+        }
+
+        Ok(PaginatedResponse {
+            items,
+            total: self.total,
+            offset: self.offset,
+            limit: self.limit,
+            has_more: self.has_more,
+        })
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
@@ -73,6 +94,20 @@ impl PaginatedRequest {
         Self {
             limit: self.limit,
             offset: self.offset + self.limit,
+        }
+    }
+
+    pub fn preview() -> Self {
+        Self {
+            limit: 5,
+            offset: 0,
+        }
+    }
+
+    pub fn first(n: PaginationSize) -> Self {
+        Self {
+            limit: n,
+            offset: 0,
         }
     }
 }
@@ -116,5 +151,82 @@ impl FromRequestParts<AppState> for PaginatedRequest {
 impl<T: Serialize> IntoResponse for PaginatedResponse<T> {
     fn into_response(self) -> axum::response::Response {
         Json(self).into_response()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "pagination.html")]
+pub struct PaginationTemplate {
+    pub has_any: bool,
+    pub first_page: String,
+    pub previous_page: String,
+    pub current_page: i32,
+    pub total_pages: i32,
+    pub next_page: String,
+    pub last_page: String,
+    pub results_text: String,
+    pub has_more: bool,
+    pub has_prev: bool,
+}
+
+impl PaginationTemplate {
+    pub fn from_paginated_response<T, Q: Serialize>(
+        base_url: &str,
+        response: &PaginatedResponse<T>,
+        pagination: &PaginatedRequest,
+        query: Q,
+    ) -> Self {
+        let first_search = serde_urlencoded::to_string(&query).unwrap_or_default();
+        let first_page = format!("{base_url}?{first_search}");
+
+        let previous_search = serialize_search(&pagination.with_previous_page(), &query);
+        let previous_page = format!("{base_url}?{previous_search}");
+
+        let next_search = serialize_search(&pagination.with_next_page(), &query);
+        let next_page = format!("{base_url}?{next_search}");
+
+        let last_search = serialize_search(&response.request_last_page(), &query);
+        let last_page = format!("{base_url}?{last_search}");
+
+        Self {
+            has_any: !response.items.is_empty(),
+            first_page,
+            previous_page,
+            current_page: response.current_page(),
+            total_pages: response.total_pages(),
+            next_page,
+            last_page,
+            results_text: response.results_text(),
+            has_more: response.has_more,
+            has_prev: pagination.offset > 0,
+        }
+    }
+
+    pub fn from_error<Q: Serialize>(
+        base_url: &str,
+        pagination: &PaginatedRequest,
+        query: Q,
+    ) -> Self {
+        let first_search = serde_urlencoded::to_string(&query).unwrap_or_default();
+        let first_page = format!("{base_url}?{first_search}");
+
+        let previous_search = serialize_search(&pagination.with_previous_page(), &query);
+        let previous_page = format!("{base_url}?{previous_search}");
+
+        let next_search = serialize_search(&pagination.with_next_page(), &query);
+        let next_page = format!("{base_url}?{next_search}");
+
+        Self {
+            has_any: false,
+            last_page: first_page.clone(),
+            first_page,
+            previous_page,
+            current_page: 0,
+            total_pages: 0,
+            next_page,
+            results_text: "error performing search".to_string(),
+            has_more: false,
+            has_prev: pagination.offset > 0,
+        }
     }
 }

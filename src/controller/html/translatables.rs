@@ -1,12 +1,13 @@
 use askama::Template;
 use axum::{
     Form, Router,
-    extract::Path,
+    extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
+use futures::TryFutureExt;
 use serde::Deserialize;
 
 use crate::{
@@ -24,7 +25,11 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{AppState, extract_session::Session},
+    util::{
+        AppState, BackQuery, ListHeaderKind,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -32,7 +37,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/new-translatable", post(new_translatable_submit))
         .route("/translatable/{slug}/edit", post(edit_translatable_submit))
         .route("/translatable/{slug}/edit-source", post(edit_source_submit))
-        .route("/translatable/{slug}/delete", post(delete_translatable_submit));
+        .route(
+            "/translatable/{slug}/delete",
+            post(delete_translatable_submit),
+        );
 
     let normal_routes = Router::<AppState>::new()
         .route("/new-translatable", get(new_translatable_form))
@@ -43,6 +51,21 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/translatable/{slug}/delete", get(delete_translatable_form));
 
     (secure_routes, normal_routes)
+}
+
+#[derive(Template)]
+#[template(path = "translatables/fragments/card.html")]
+pub struct PreviewCard<'a> {
+    pub translatable_with_meta: TranslatableWithMeta,
+    pub back_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "translatables/fragments/list_header.html")]
+#[allow(dead_code)]
+pub struct Header<'a> {
+    pub current_user: Option<&'a User>,
+    pub kind: ListHeaderKind,
 }
 
 #[derive(Template)]
@@ -125,75 +148,48 @@ async fn new_translatable_submit(
     }
 }
 
-#[derive(Template)]
-#[template(path = "translatables/search.html")]
-#[allow(dead_code)]
-struct SearchTranslatablesTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    previous_query: String,
-    results: Option<Vec<TranslatableWithMeta>>,
-}
-
 async fn search_translatables(
     s: Session,
     translatables: TranslatableRepository,
+    pagination: PaginatedRequest,
     axum::extract::Query(query): axum::extract::Query<TranslatableSearch>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
 
-    // Clean up query: trim and convert empty strings to None
-    let query = TranslatableSearch {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        source_language: query.source_language,
-        created_by: query.created_by,
-        created_before: query.created_before,
-        created_after: query.created_after,
+    let back_url = crate::util::back_url("/translatables", &pagination, &query);
+
+    let results = translatables
+        .search(pagination.clone(), query.clone())
+        .and_then(|response| {
+            response.try_map_async(|translatable| translatables.materialize(translatable, s.user()))
+        })
+        .await;
+
+    let render_item = |translatable_with_meta: &TranslatableWithMeta| PreviewCard {
+        translatable_with_meta: translatable_with_meta.clone(),
+        back_url: &back_url,
     };
 
-    let results = match translatables
-        .search(PaginatedRequest::default(), query.clone())
-        .await
-    {
-        Ok(res) => {
-            let mut translatables_with_liked = Vec::with_capacity(res.items.len());
-            for translatable in res.items {
-                translatables_with_liked.push(attempt!(
-                    s,
-                    translatables.materialize(translatable, current_user.as_ref()).await
-                ));
-            }
-            Some(translatables_with_liked)
-        }
-        Err(e) => {
-            let status_code = e.status_code;
-            let template = SearchTranslatablesTemplate {
-                current_user,
-                error: Some(e),
-                previous_query: query.q.clone().unwrap_or_default(),
-                results: None,
-            };
-            let body = render_template(template);
-            return (status_code, body);
-        }
+    let header = Header {
+        current_user: current_user.as_ref(),
+        kind: ListHeaderKind::Search,
     };
 
-    let template = SearchTranslatablesTemplate {
-        current_user,
-        error: None,
-        previous_query: query.q.unwrap_or_default(),
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user: current_user.clone(),
+        header,
+        query_template: query.clone(),
+        query,
         results,
-    };
+        pagination,
+        search_name: "translatables",
+        search_action: "/translatables",
+        render_item,
+    });
 
-    let body = render_template(template);
-    okay(body)
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]
@@ -205,6 +201,7 @@ struct ViewTranslatableTemplate {
     can_edit_translatable: bool,
     json_ld: String,
     rendered_description: Option<String>,
+    back: String,
 }
 
 async fn view_translatable(
@@ -214,6 +211,7 @@ async fn view_translatable(
     translations: TranslationRepository,
     users: UserRepository,
     Path(slug): Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
@@ -254,19 +252,17 @@ async fn view_translatable(
             .map_err(Into::into)
     );
 
-    let rendered_description = if !translatable.description.is_empty() {
-        crate::md::render_md(&translatable.description).ok()
-    } else {
+    let rendered_description = if translatable.description.is_empty() {
         None
+    } else {
+        crate::md::render_md(&translatable.description).ok()
     };
 
-    let translatable_with_meta = attempt!(
-        s,
-        translatables.materialize(translatable, s.user()).await
-    );
+    let translatable_with_meta =
+        attempt!(s, translatables.materialize(translatable, s.user()).await);
 
     // Fetch the 3 most recent translations for this translatable
-    let translations_list = attempt!(
+    let translations = attempt!(
         s,
         translations
             .list_by_translatable(
@@ -276,22 +272,21 @@ async fn view_translatable(
                     offset: 0
                 }
             )
+            .and_then(|response| {
+                response
+                    .try_map_async(|translation| translations.materialize(translation, s.user()))
+            })
             .await
     );
-
-    let mut translations_with_info = Vec::new();
-    for translation in translations_list.items {
-        let translation = attempt!(s, translations.materialize(translation, s.user()).await);
-        translations_with_info.push(translation);
-    }
 
     let template = ViewTranslatableTemplate {
         current_user: s.user().cloned(),
         translatable_with_meta,
-        translations: translations_with_info,
+        translations: translations.items,
         can_edit_translatable,
         json_ld,
         rendered_description,
+        back: back_query.back.unwrap_or_default(),
     };
     okay(render_template(template))
 }
@@ -338,7 +333,10 @@ async fn edit_translatable_submit(
     let user = get_user!(s);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
-    match translatables.update(&user, translatable.id, updates.clone()).await {
+    match translatables
+        .update(&user, translatable.id, updates.clone())
+        .await
+    {
         Ok(result) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
@@ -385,52 +383,28 @@ async fn edit_source_form(
         current_user: Some(user),
         translatable: translatable.clone(),
         error: None,
-        previous_source_name: translatable.source_name.clone(),
-        previous_source_url: translatable.source_url.clone(),
-        previous_source_language: translatable.source_language.clone(),
-        previous_source_content: translatable.source_content.clone(),
+        previous_source_name: translatable.source_name,
+        previous_source_url: translatable.source_url,
+        previous_source_language: translatable.source_language,
+        previous_source_content: translatable.source_content,
     };
 
     okay(render_template(template))
-}
-
-#[derive(Deserialize)]
-struct EditSourceFormData {
-    source_name: String,
-    source_url: String,
-    source_language: String,
-    source_content: String,
 }
 
 async fn edit_source_submit(
     s: Session,
     translatables: TranslatableRepository,
     Path(slug): Path<String>,
-    Form(form): Form<EditSourceFormData>,
+    Form(form): Form<UpdateTranslatable>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
 
-    let to_opt = |s: &str| {
-        let trimmed = s.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    };
-
-    let updates = UpdateTranslatable {
-        title: None,
-        english: None,
-        source_name: to_opt(&form.source_name),
-        source_url: to_opt(&form.source_url),
-        source_content: to_opt(&form.source_content),
-        source_language: to_opt(&form.source_language),
-        description: None,
-    };
-
-    match translatables.update(&user, translatable.id, updates).await {
+    match translatables
+        .update(&user, translatable.id, form.clone())
+        .await
+    {
         Ok(result) => (
             StatusCode::SEE_OTHER,
             Redirect::to(&format!("/translatable/{}", result.slug)).into_response(),
@@ -440,10 +414,10 @@ async fn edit_source_submit(
                 current_user: Some(user),
                 translatable: translatable.clone(),
                 error: Some(e),
-                previous_source_name: form.source_name.clone(),
-                previous_source_url: form.source_url.clone(),
-                previous_source_language: form.source_language.clone(),
-                previous_source_content: form.source_content.clone(),
+                previous_source_name: form.source_name.unwrap_or_default(),
+                previous_source_url: form.source_url.unwrap_or_default(),
+                previous_source_language: form.source_language.unwrap_or_default(),
+                previous_source_content: form.source_content.unwrap_or_default(),
             };
 
             let body = render_template(template);

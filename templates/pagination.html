@@ -1,0 +1,31 @@
+{%- import "util.html" as u -%}
+{% if has_any %}
+    <nav class="pagination">
+        <div class="pages">
+            <a class="button icon gray" aria-label="First page" data-tooltip="First page" href="{{ first_page }}">
+                {% call u::icon("first-page") %}
+            </a>
+            {% if has_prev %}
+                <a class="button icon gray" aria-label="Previous page" data-tooltip="Previous page" href="{{ previous_page }}">
+                    {% call u::icon("chevron-left") %}
+                </a>
+            {% else %}
+                <span class="empty-pagination-button">·</span>
+            {% endif %}
+            <span class="page-info">Page {{ current_page }} of {{ total_pages }}</span>
+            {% if has_more %}
+                <a class="button icon gray" aria-label="Next page" data-tooltip="Next page" href="{{ next_page }}">
+                    {% call u::icon("chevron-right") %}
+                </a>
+            {% else %}
+                <span class="empty-pagination-button">·</span>
+            {% endif %}
+            <a class="button icon gray" aria-label="Last page" data-tooltip="Last page" href="{{ last_page }}">
+                {% call u::icon("last-page") %}
+            </a>
+        </div>
+        <div class="meta">
+            <span class="total-results">{{ results_text }}</span>
+        </div>
+    </nav>
+{% endif %}

@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, description, created_by, updated_by)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)\n                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description, 0 AS \"translations_count!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "english",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "source_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_language",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "translations_count!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "958a55034e7137bd9f7f492110ed89bc0eea2f398beecbf041e8a76278d8c174"
+}

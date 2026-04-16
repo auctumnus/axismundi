@@ -10,6 +10,7 @@ use validator::{Validate, ValidateArgs, ValidationErrors};
 
 use crate::{
     config::CONFIG,
+    embed::{GenericEmbed, truncate_description},
     err::{AppResult, bad_request, internal_error, not_found},
     model::{
         email_verification_tokens::EmailVerificationToken,
@@ -30,6 +31,17 @@ where
         serializer.serialize_none()
     } else {
         serializer.serialize_str(&S3.get_profile_picture_url(object_id))
+    }
+}
+
+fn serialize_banner_key<S>(object_id: &str, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if object_id.is_empty() {
+        serializer.serialize_none()
+    } else {
+        serializer.serialize_str(&S3.get_banner_url(object_id))
     }
 }
 
@@ -56,6 +68,12 @@ pub struct User {
         serialize_with = "serialize_object_key"
     )]
     pub profile_picture_object_id: String,
+    #[serde(
+        rename(serialize = "banner_url"),
+        serialize_with = "serialize_banner_key"
+    )]
+    #[sqlx(default)]
+    pub banner_object_id: String,
     pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -71,6 +89,14 @@ impl User {
             None
         } else {
             Some(S3.get_profile_picture_url(&self.profile_picture_object_id))
+        }
+    }
+
+    pub fn get_banner_url(&self) -> Option<String> {
+        if self.banner_object_id.is_empty() {
+            None
+        } else {
+            Some(S3.get_banner_url(&self.banner_object_id))
         }
     }
 
@@ -155,13 +181,15 @@ pub struct UpdateUser {
     pub new_password: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct UserSearch {
-    pub text_query: Option<String>,
+    pub q: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
     pub verified: Option<bool>,
 }
+
+crate::util::text_query!(UserSearch);
 
 #[derive(Clone)]
 pub struct UserRepository {
@@ -260,6 +288,7 @@ impl UserRepository {
             pronouns: user_result.pronouns,
             gender: user_result.gender,
             profile_picture_object_id: user_result.profile_picture_object_id,
+            banner_object_id: String::new(),
             verified_at: user_result.verified_at,
             tags: vec![],
             created_at: user_result.created_at,
@@ -306,6 +335,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -342,6 +372,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -377,6 +408,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -411,7 +443,11 @@ impl UserRepository {
             updates
                 .display_name
                 .as_deref()
-                .unwrap_or(if requestor.display_name.is_empty() { "" } else { &requestor.display_name }),
+                .unwrap_or(if requestor.display_name.is_empty() {
+                    ""
+                } else {
+                    &requestor.display_name
+                }),
         ];
 
         updates.validate_with_args(&user_inputs.as_ref())?;
@@ -480,18 +516,18 @@ impl UserRepository {
         };
 
         // None = don't change, Some("") = clear, Some("value") = set
-        let display_name_final = updates.display_name.as_ref().map_or_else(
-            || requestor.display_name.clone(),
-            |s| s.clone(),
-        );
-        let description_final = updates.description.as_ref().map_or_else(
-            || requestor.description.clone(),
-            |s| s.clone(),
-        );
-        let pronouns_final = updates.pronouns.as_ref().map_or_else(
-            || requestor.pronouns.clone(),
-            |s| s.clone(),
-        );
+        let display_name_final = updates
+            .display_name
+            .as_ref()
+            .map_or_else(|| requestor.display_name.clone(), |s| s.clone());
+        let description_final = updates
+            .description
+            .as_ref()
+            .map_or_else(|| requestor.description.clone(), |s| s.clone());
+        let pronouns_final = updates
+            .pronouns
+            .as_ref()
+            .map_or_else(|| requestor.pronouns.clone(), |s| s.clone());
 
         // Handle gender (which includes # prefix stripping)
         let gender_final = if let Some(g) = &updates.gender {
@@ -599,6 +635,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -630,7 +667,7 @@ impl UserRepository {
             search.verified,
             search.created_before,
             search.created_after,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset)
         )
@@ -681,6 +718,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -813,6 +851,36 @@ impl UserRepository {
         Ok(result)
     }
 
+    pub async fn update_banner(
+        &self,
+        requestor: &User,
+        user_id: Uuid,
+        object_key: &str,
+    ) -> AppResult<Option<User>> {
+        if requestor.id != user_id {
+            return Err(crate::err::forbidden("cannot update another user's banner"));
+        }
+
+        ensure_verified(requestor)?;
+
+        let result = sqlx::query_as!(
+            User,
+            r#"
+            UPDATE users
+            SET banner_object_id = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
+            "#,
+            user_id,
+            object_key
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn reset_password(
         &self,
         user_id: Uuid,
@@ -822,11 +890,7 @@ impl UserRepository {
         let user = self.find_by_id(user_id).await?;
         validate_password(
             new_password,
-            &[
-                &user.username,
-                &user.email,
-                &user.display_name,
-            ],
+            &[&user.username, &user.email, &user.display_name],
         )
         .map_err(|e| {
             let mut errors = ValidationErrors::new();
@@ -876,6 +940,7 @@ impl UserRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -914,7 +979,7 @@ impl UserRepository {
             "name": user.name(),
             "alternateName": user.username,
             "url": format!("{}/bookmarks/{}", CONFIG.public_url_base, &user.bookmark),
-            "image": user.get_profile_picture_url().unwrap_or_else(|| format!("{}/static/default-pfp.webp", CONFIG.public_url_base)),
+            "image": user.get_profile_picture_url().unwrap_or_else(|| format!("{}/assets/default-pfp.webp", CONFIG.public_url_base)),
         });
 
         if !user.pronouns.is_empty() {
@@ -928,6 +993,26 @@ impl UserRepository {
         }
 
         base
+    }
+
+    pub fn as_embed(user: &User) -> GenericEmbed {
+        let title = if user.display_name.is_empty() {
+            format!("@{}", user.username)
+        } else {
+            format!("{} (@{})", user.display_name, user.username)
+        };
+        GenericEmbed {
+            url: format!("{}/users/{}", &crate::CONFIG.public_url_base, user.username),
+            title,
+            description: truncate_description(&user.description),
+            author: None,
+            image: user.get_profile_picture_url(),
+            color: if user.gender.is_empty() {
+                None
+            } else {
+                Some(format!("#{}", user.gender))
+            },
+        }
     }
 }
 

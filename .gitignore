@@ -46,3 +46,5 @@ session.json
 lcov.info
 
 .parcel-cache
+
+plans/

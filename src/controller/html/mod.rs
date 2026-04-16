@@ -39,14 +39,15 @@ mod language_family_permissions;
 mod language_invites;
 mod language_permissions;
 mod languages;
+mod phonology_tables;
 mod reports;
+mod sound_change_sets;
 mod translatables;
 mod translations;
 mod user_bans;
 mod users;
-mod phonology_tables;
-mod sound_change_sets;
 mod word_classes;
+mod word_relations;
 mod words;
 
 pub fn create_html_controller() -> Router<AppState> {
@@ -76,6 +77,8 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_family_permission_routes, normal_family_permission_routes) =
         language_family_permissions::create_router();
     let (secure_word_routes, normal_word_routes) = words::create_router();
+    let (secure_word_relation_routes, normal_word_relation_routes) =
+        word_relations::create_router();
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
     let (secure_translation_routes, normal_translation_routes) = translations::create_router();
@@ -98,6 +101,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_family_permission_routes)
         .merge(language_family_members::create_router())
         .merge(secure_word_routes)
+        .merge(secure_word_relation_routes)
         .merge(secure_word_class_routes)
         .merge(secure_translatable_routes)
         .merge(secure_translation_routes)
@@ -122,6 +126,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_family_invite_routes)
         .merge(normal_family_permission_routes)
         .merge(normal_word_routes)
+        .merge(normal_word_relation_routes)
         .merge(normal_word_class_routes)
         .merge(normal_translatable_routes)
         .merge(normal_translation_routes)
@@ -321,6 +326,25 @@ mod macros {
             match $expr {
                 Ok(val) => val,
                 Err(e) => return $crate::controller::html::render_generic_error($session, e).await,
+            }
+        };
+
+        ($render_error:expr, $session:expr, $expr:expr) => {
+            match $expr {
+                Ok(val) => val,
+                Err(e) => {
+                    let status = e.status_code;
+                    match $render_error(e).await {
+                        Ok(template) => {
+                            let body = $crate::controller::html::render_template(template);
+                            return (status, body);
+                        }
+                        Err(e) => {
+                            return $crate::controller::html::render_generic_error($session, e)
+                                .await;
+                        }
+                    }
+                }
             }
         };
     }

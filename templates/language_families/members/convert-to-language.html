@@ -1,7 +1,10 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
-{% block title %}convert {{ member.name() }} to language - axismundi{% endblock %}
+{% block title %}associate language to {{ member.name() }} - axismundi{% endblock %}
 
 {% block content %}
 
@@ -9,7 +12,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>convert to language</h1>
+<h1>associate language to {{ member.name() }}</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -20,20 +23,18 @@
 
 <div class="context-cards">
     <div class="context-card family-member-context">
-        <span class="context-label">converting member</span>
+        <span class="context-label">for member</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_member(&member, false) %}
+            {% call member_card::render(&member) %}
         </ul>
     </div>
     <div class="context-card family-context">
         <span class="context-label">in family</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_card(&family) %}
+            {% call family_card::render(&family) %}
         </ul>
     </div>
 </div>
-
-<p>this will replace the grouping label with a language. the member keeps its position in the tree.</p>
 
 <form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-language">
     <section>
@@ -46,11 +47,11 @@
                     <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
                 {% endfor %}
             </select>
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            {% call u::icon("chevron-down") %}
         </div>
     </section>
 
-    <button type="submit">Convert to Language</button>
+    <button type="submit">Associate</button>
 </form>
 {% endblock %}
 
@@ -62,5 +63,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family.family, true) %}
+{% call family_f::family_section(&family.family, true) %}
 {% endblock %}

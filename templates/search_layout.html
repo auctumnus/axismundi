@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}search {{ search_name }} - axismundi{% endblock %}
+
+{% block head %}
+
+<script src="/static/like-button.js" defer></script>
+
+<link rel="stylesheet" href="/static/relation-card.css">
+{% endblock %}
+
+{% block content %}
+{{ header | safe }}
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default search" method="get" action="{{ search_action }}">
+    <div class="search-bar">
+        <section class="search-controls">
+            <label for="q">Search query</label>
+            {% call u::field_error(name="q") %}
+            <div class="search-bar-container">
+                <input type="search" id="q" name="q" value="{{ query.text_query().unwrap_or("") }}">
+                <button class="search button" type="submit" data-tooltip="Search" aria-label="Search"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9.5 16q-2.725 0-4.612-1.888T3 9.5t1.888-4.612T9.5 3t4.613 1.888T16 9.5q0 1.1-.35 2.075T14.7 13.3l5.6 5.6q.275.275.275.7t-.275.7t-.7.275t-.7-.275l-5.6-5.6q-.75.6-1.725.95T9.5 16m0-2q1.875 0 3.188-1.312T14 9.5t-1.312-3.187T9.5 5T6.313 6.313T5 9.5t1.313 3.188T9.5 14"/></svg></button>
+
+                <input type="checkbox" id="advanced-search-toggle" aria-label="Advanced search" >
+                <label id="advanced-search-toggle-label" for="advanced-search-toggle" data-tooltip="Advanced search"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 18q-.425 0-.712-.288T10 17t.288-.712T11 16h2q.425 0 .713.288T14 17t-.288.713T13 18zm-4-5q-.425 0-.712-.288T6 12t.288-.712T7 11h10q.425 0 .713.288T18 12t-.288.713T17 13zM4 8q-.425 0-.712-.288T3 7t.288-.712T4 6h16q.425 0 .713.288T21 7t-.288.713T20 8z"/></svg></label>
+            </div>
+            <section class="advanced-search-panel">
+                <div class="inner">
+                    <div class="card">
+                        <h2>options</h2>
+                        {{ query_template | safe }}
+                    </div>
+                </div>
+            </section>
+        </section>
+
+    </div>
+</form>
+{% let render_item = &render_item %}
+{% if let Some(results) = results %}
+    {% if results.items.is_empty() %}
+        <div class="empty-search-results">no results</div>
+    {% else %}
+        <ul class="card-list">
+            {% for item in results.items %}
+                {{ render_item(item) | safe }}
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endif %}
+
+{{ pagination | safe }}
+
+{% endblock %}
+
+{% block breadcrumb %}
+{% if let Some(breadcrumbs) = breadcrumbs %}
+    {{ breadcrumbs | safe }}
+{% endif %}
+{% endblock %}
+
+{% block footer %}
+{% if let Some(footer) = footer %}
+    {{ footer | safe }}
+{% endif %}
+{% endblock %}

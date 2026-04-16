@@ -1,0 +1,23 @@
+{% import "languages/fragments/footer.html" as l %}
+
+{% macro word_section(word, language, can_edit, other_lemmata) %}
+    {% call l::language_section(language, can_edit) %}
+    <li>
+        <h2>{{ word.word }}</h2>
+        <ul>
+            <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}">view word</a></li>
+            <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">view relations</a></li>
+            <li><a href="/bookmarks/{{ word.bookmark }}">bookmark link</a></li>
+            {% if other_lemmata %}
+                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}">view all lemmata</a></li>
+            {% endif %}
+            {% if can_edit %}
+                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit">edit word</a></li>
+                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">delete word</a></li>
+            {% endif %}
+            <li><a href="/report/new?resource_type=word&resource_id={{ word.id }}">report</a></li>
+        </ul>
+    </li>
+{% endmacro %}
+
+{% call word_section(word, language, can_edit, other_lemmata) %}

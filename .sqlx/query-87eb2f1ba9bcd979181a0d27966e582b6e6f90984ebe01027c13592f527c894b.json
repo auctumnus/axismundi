@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update phonology_tables set position = position - 1 where language_id = $1 and position > $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "87eb2f1ba9bcd979181a0d27966e582b6e6f90984ebe01027c13592f527c894b"
+}

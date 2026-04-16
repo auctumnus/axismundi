@@ -84,7 +84,7 @@ pub async fn list_languages(
         .map(|s| s.split(',').map(String::from).collect());
 
     let search = LanguageSearch {
-        text_query: query.q,
+        q: query.q,
         owned_by: query.owned_by,
         edited_by,
         created_before: query.created_before,

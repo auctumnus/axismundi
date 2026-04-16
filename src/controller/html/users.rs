@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Router,
-    extract::Query,
+    extract::{DefaultBodyLimit, Query},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -10,20 +10,17 @@ use axum_extra::{
     extract::{CookieJar, Multipart, cookie::Cookie},
     headers::UserAgent,
 };
+use futures::TryFutureExt;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{
-        LanguagesWithContributors, TranslatableWithMeta, okay, render_generic_error,
-        render_template,
-    },
-    embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
+    controller::html::{LanguagesWithContributors, TranslatableWithMeta, okay, render_template},
+    embed::{EmbedTarget, render_embed},
     err::{AppError, bad_request},
     model::{
-        contribution_stats::ContributionStatsRepository,
         email_verification_tokens::EmailVerificationTokenRepository,
         language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
@@ -34,11 +31,13 @@ use crate::{
         user_activities::UserActivityRepository,
         users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
+    pagination::PaginatedRequest,
     util::{
-        AppState,
+        AppState, BackQuery, EmptyTemplate,
         extract_session::{SESSION_COOKIE_NAME, Session},
+        is_discord,
         s3::S3,
+        search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
 
@@ -52,7 +51,15 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             get(resend_verification_form).post(resend_verification_submit),
         )
         .route("/settings", get(settings_form).post(settings_submit))
-        .route("/change-profile-picture", post(change_profile_picture))
+        .route("/clear-profile-picture", post(clear_profile_picture))
+        .route("/clear-banner", post(clear_banner))
+        .merge(
+            Router::<AppState>::new()
+                .route("/change-profile-picture", post(change_profile_picture))
+                .route("/change-banner", post(change_banner))
+                .route("/change-profile-images", post(change_profile_images))
+                .layer(DefaultBodyLimit::max(MAX_FILE_SIZE)),
+        )
         .route("/logout", get(logout_form).post(logout_submit))
         .route("/users", get(search_users))
         .route("/users/{username}", get(profile));
@@ -309,7 +316,11 @@ mod ma {
             $previous_input
                 .as_ref()
                 .and_then(|p| p.$field.clone())
-                .unwrap_or_else(|| $current_user.as_ref().map_or(String::new(), |u| u.$field.clone()))
+                .unwrap_or_else(|| {
+                    $current_user
+                        .as_ref()
+                        .map_or(String::new(), |u| u.$field.clone())
+                })
         };
     }
     pub(crate) use prev;
@@ -554,6 +565,216 @@ async fn change_profile_picture(
     }
 }
 
+async fn change_banner(
+    s: Session,
+    users: UserRepository,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        if field.name().unwrap_or("") == "banner" {
+            content_type = field.content_type().map(std::string::ToString::to_string);
+            match field.bytes().await {
+                Ok(bytes) => file_data = Some(bytes.to_vec()),
+                Err(e) => {
+                    return render_settings_error(
+                        &user,
+                        bad_request(format!("Failed to read file: {e}")),
+                        StatusCode::BAD_REQUEST,
+                    );
+                }
+            }
+            break;
+        }
+    }
+
+    let Some(file_data) = file_data else {
+        return render_settings_error(
+            &user,
+            bad_request("No banner file provided"),
+            StatusCode::BAD_REQUEST,
+        );
+    };
+    let Some(content_type) = content_type else {
+        return render_settings_error(
+            &user,
+            bad_request("No content type provided"),
+            StatusCode::BAD_REQUEST,
+        );
+    };
+
+    if let Err(response) = validate_file_size(&file_data, &user) {
+        return *response;
+    }
+
+    let filename = match S3
+        .upload_banner("user", user.id, &file_data, &content_type)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => {
+            return render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    match users.update_banner(&user, user.id, &filename).await {
+        Ok(Some(_)) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
+        Ok(None) => {
+            render_settings_error(&user, bad_request("User not found"), StatusCode::NOT_FOUND)
+        }
+        Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn change_profile_images(
+    s: Session,
+    users: UserRepository,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    let mut pfp_data: Option<(Vec<u8>, String)> = None;
+    let mut banner_data: Option<(Vec<u8>, String)> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        let field_name = field.name().unwrap_or("").to_string();
+        let content_type = field.content_type().map(std::string::ToString::to_string);
+
+        match field_name.as_str() {
+            "profile_picture" | "banner" => {
+                let bytes = match field.bytes().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        return render_settings_error(
+                            &user,
+                            bad_request(format!("Failed to read {field_name}: {e}")),
+                            StatusCode::BAD_REQUEST,
+                        );
+                    }
+                };
+                if bytes.is_empty() {
+                    continue;
+                }
+                let ct = match content_type {
+                    Some(ct) => ct,
+                    None => {
+                        return render_settings_error(
+                            &user,
+                            bad_request(format!("No content type for {field_name}")),
+                            StatusCode::BAD_REQUEST,
+                        );
+                    }
+                };
+                if field_name == "profile_picture" {
+                    pfp_data = Some((bytes.to_vec(), ct));
+                } else {
+                    banner_data = Some((bytes.to_vec(), ct));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if pfp_data.is_none() && banner_data.is_none() {
+        return render_settings_error(
+            &user,
+            bad_request("No files provided"),
+            StatusCode::BAD_REQUEST,
+        );
+    }
+
+    if let Some((data, _)) = &pfp_data {
+        if let Err(response) = validate_file_size(data, &user) {
+            return *response;
+        }
+    }
+    if let Some((data, _)) = &banner_data {
+        if let Err(response) = validate_file_size(data, &user) {
+            return *response;
+        }
+    }
+
+    if let Some((data, ct)) = pfp_data {
+        if let Err(response) = upload_and_update_profile_picture(&users, &user, &data, &ct).await {
+            return *response;
+        }
+    }
+
+    if let Some((data, ct)) = banner_data {
+        let filename = match S3.upload_banner("user", user.id, &data, &ct).await {
+            Ok(f) => f,
+            Err(e) => return render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+        };
+        match users.update_banner(&user, user.id, &filename).await {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return render_settings_error(
+                    &user,
+                    bad_request("User not found"),
+                    StatusCode::NOT_FOUND,
+                );
+            }
+            Err(e) => return render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to("/settings").into_response(),
+    )
+}
+
+async fn clear_profile_picture(s: Session, users: UserRepository) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    match users.update_profile_picture(&user, user.id, "").await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
+        Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn clear_banner(s: Session, users: UserRepository) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    match users.update_banner(&user, user.id, "").await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
+        Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
 #[derive(Template)]
 #[template(path = "logout/form.html")]
 struct LogoutTemplate {
@@ -587,63 +808,49 @@ async fn logout_submit(
 }
 
 #[derive(Template)]
-#[template(path = "users/search.html")]
-struct SearchUsersTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    previous_query: UserSearch,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<User>>,
-    previous_search: String,
+#[template(path = "users/fragments/card.html")]
+struct UserPreviewCard {
+    user: User,
+    back_url: String,
 }
+
+#[derive(Template)]
+#[template(path = "users/fragments/list_header.html")]
+struct UserSearchHeader;
 
 async fn search_users(
     s: Session,
     users: UserRepository,
     Query(query): Query<UserSearch>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
 
-    let query = UserSearch {
-        text_query: query.text_query.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
+    let back_url = crate::util::back_url("/users", &pagination, &query);
+
+    let results = users.search(pagination.clone(), query.clone()).await;
+
+    let render_item = |user: &User| UserPreviewCard {
+        user: user.clone(),
+        back_url: back_url.clone(),
     };
 
-    let results = match users.search(pagination.clone(), query.clone()).await {
-        Ok(res) => Some(res),
-        Err(e) => {
-            let template = SearchUsersTemplate {
-                current_user,
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                previous_search: String::new(),
-            };
-            let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body);
-        }
-    };
+    let header = UserSearchHeader;
 
-    let template = SearchUsersTemplate {
+    let template = make_search_layout(SearchTemplateArgs {
         current_user,
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
+        header,
+        query_template: EmptyTemplate,
+        query,
         results,
-        previous_search: String::new(),
-    };
+        pagination,
+        search_name: "users",
+        search_action: "/users",
+        render_item,
+    });
 
-    let body = render_template(template);
-    okay(body)
+    let status = template.status();
+    (status, render_template(template))
 }
 
 #[derive(Template)]
@@ -656,6 +863,7 @@ struct ProfileTemplate {
     activities: Vec<crate::model::user_activities::UserActivity>,
     translatables: Vec<TranslatableWithMeta>,
     rendered_description: String,
+    back: String,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -667,153 +875,84 @@ async fn profile(
     language_families: LanguageFamilyRepository,
     translatables: TranslatableRepository,
     activities: UserActivityRepository,
-    contribution_stats: ContributionStatsRepository,
     path: axum::extract::Path<String>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let username = path.0;
     let current_user = s.user().cloned();
 
-    let user_result = users.find_by_username(&username).await;
+    let user = attempt!(s, users.find_by_username(&username).await);
 
-    let user = match user_result {
-        Ok(u) => u,
-        Err(e) => return render_generic_error(s, e).await,
-    };
-
-    if let Some(ua) = user_agent
-        && ua.as_str().to_lowercase().contains("discordbot")
-    {
-        println!("hi discord!");
-        let title = if !user.display_name.is_empty() {
-            format!("{} (@{})", user.display_name, user.username)
-        } else {
-            format!("@{}", user.username)
-        };
-
+    if is_discord(user_agent) {
         return okay(
-            render_embed(
-                EmbedTarget::Discord,
-                GenericEmbed {
-                    url: format!("{}/users/{}", &crate::CONFIG.public_url_base, user.username),
-                    title,
-                    description: truncate_description(
-                        &user.description,
-                    ),
-                    author: None,
-                    image: user.get_profile_picture_url(),
-                    color: if user.gender.is_empty() { None } else { Some(format!("#{}", user.gender)) },
-                },
-            )
-            .await
-            .into_response(),
+            render_embed(EmbedTarget::Discord, UserRepository::as_embed(&user))
+                .await
+                .into_response(),
         );
     }
 
-    let languages_result = languages
-        .search(
-            PaginatedRequest {
-                limit: 5,
-                offset: 0,
-            },
-            LanguageSearch {
-                owned_by: Some(username.clone()),
-                ..Default::default()
-            },
-        )
-        .await;
+    let languages = attempt!(
+        s,
+        languages
+            .search(
+                PaginatedRequest::preview(),
+                LanguageSearch {
+                    owned_by: Some(username.clone()),
+                    ..Default::default()
+                },
+            )
+            .and_then(|paginated| {
+                paginated.try_map_async(|language| languages.materialize(language, s.user()))
+            })
+            .await
+    );
 
-    let mut languages_with_contributors = Vec::new();
-    if let Ok(paginated) = languages_result {
-        for lang in &paginated.items {
-            let top_contributors = contribution_stats
-                .get_top_contributors(&lang.id, 5)
-                .await
-                .unwrap_or_default();
-            let is_liked = if let Some(ref cu) = current_user {
-                languages.is_liked(&cu.id, &lang.id).await.unwrap_or(false)
-            } else {
-                false
-            };
-            languages_with_contributors.push(LanguagesWithContributors {
-                language: lang.clone(),
-                top_contributors,
-                is_liked,
-            });
-        }
-    }
-    let languages_list = languages_with_contributors;
+    let families_result = attempt!(
+        s,
+        language_families
+            .search(
+                SearchLanguageFamilies {
+                    owner: Some(username.clone()),
+                    q: None,
+                    has_language: None,
+                },
+                PaginatedRequest::preview(),
+            )
+            .and_then(|paginated| {
+                paginated.try_map_async(|family| language_families.materialize(family, s.user()))
+            })
+            .await
+    );
 
-    let families_result = language_families
-        .search(
-            SearchLanguageFamilies {
-                owner: Some(username.clone()),
-                q: None,
-                has_language: None,
-            },
-            PaginatedRequest {
-                limit: 5,
-                offset: 0,
-            },
-        )
-        .await;
+    let activities_result = attempt!(
+        s,
+        activities
+            .list_by_user(
+                current_user.as_ref(),
+                user.id,
+                None,
+                PaginatedRequest::preview(),
+            )
+            .await
+    );
 
-    let mut families_with_contributors = Vec::new();
-    if let Ok(paginated) = families_result {
-        for family in &paginated.items {
-            let materialized = language_families
-                .materialize(family.clone(), current_user.as_ref())
-                .await
-                .unwrap_or(FamilyWithContributors {
-                    family: family.clone(),
-                    contributors: Vec::new(),
-                    is_liked: false,
-                });
-            families_with_contributors.push(materialized);
-        }
-    }
-    let families_list = families_with_contributors;
-
-    // Get user activities (limit to 5)
-    let activities_result = activities
-        .list_by_user(
-            current_user.as_ref(),
-            user.id,
-            None,
-            PaginatedRequest {
-                limit: 5,
-                offset: 0,
-            },
-        )
-        .await;
-
-    let activities_list = match activities_result {
-        Ok(paginated) => paginated.items,
-        Err(_) => Vec::new(), // If we can't fetch activities, just show empty list
-    };
-
-    let translatables_result = translatables
-        .search(
-            PaginatedRequest {
-                limit: 5,
-                offset: 0,
-            },
-            TranslatableSearch {
-                created_by: Some(username.clone()),
-                ..Default::default()
-            },
-        )
-        .await;
-
-    let mut translatables_with_liked = Vec::new();
-    if let Ok(paginated) = translatables_result {
-        for translatable in paginated.items {
-            translatables_with_liked.push(attempt!(
-                s,
-                translatables.materialize(translatable, current_user.as_ref()).await
-            ));
-        }
-    }
-    let translatables_list = translatables_with_liked;
+    let translatables_result = attempt!(
+        s,
+        translatables
+            .search(
+                PaginatedRequest::preview(),
+                TranslatableSearch {
+                    created_by: Some(username.clone()),
+                    ..Default::default()
+                },
+            )
+            .and_then(|paginated| {
+                paginated.try_map_async(|translatable| {
+                    translatables.materialize(translatable, current_user.as_ref())
+                })
+            })
+            .await
+    );
 
     let rendered_description = UserRepository::render_description(&user).unwrap_or_default();
 
@@ -822,11 +961,12 @@ async fn profile(
         render_template(ProfileTemplate {
             current_user,
             user,
-            languages: languages_list,
-            families: families_list,
-            activities: activities_list,
-            translatables: translatables_list,
+            languages: languages.items,
+            families: families_result.items,
+            activities: activities_result.items,
+            translatables: translatables_result.items,
             rendered_description,
+            back: back_query.back.unwrap_or_default(),
         })
         .into_response(),
     )

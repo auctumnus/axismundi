@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "sound-change-sets/fragments/footer.html" as scs_f -%}
+
+{% block title %}unset ipa estimator? - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>unset ipa estimator</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}/unset-ipa-estimator">
+    <section>
+        <p>Remove <strong>{{ set.name }}</strong> as the ipa estimator for <strong>{{ language.name }}</strong>?</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Unset ipa estimator</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/sound-change-sets" class="breadcrumb">sound change sets</a>
+{% endblock %}
+
+{% block footer %}
+{% call scs_f::sound_change_set_section(&set, &language, can_edit_language) %}
+{% endblock %}

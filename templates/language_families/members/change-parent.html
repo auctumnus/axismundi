@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
+
+{% block title %}change parent of {{ member.name() }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>change parent</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<div class="context-cards">
+    <div class="context-card family-member-context">
+        <span class="context-label">member</span>
+        <ul class="standalone-card">
+            {% call member_card::render(&member) %}
+        </ul>
+    </div>
+    <div class="context-card family-context">
+        <span class="context-label">in family</span>
+        <ul class="standalone-card">
+            {% call family_card::render(&family) %}
+        </ul>
+    </div>
+</div>
+
+<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/change-parent">
+    <section>
+        <label for="new_parent_id">new parent</label>
+        {% call u::field_error(name="new_parent_id") %}
+        <div class="select-container">
+            <select id="new_parent_id" name="new_parent_id" required>
+                <option value="" disabled selected>-- select a member --</option>
+                {% for m in available_members %}
+                    <option value="{{ m.member.id() }}" {% if previous_parent_id == m.member.id().to_string() %}selected{% endif %}>{{ m.name() }}</option>
+                {% endfor %}
+            </select>
+            {% call u::icon("chevron-down") %}
+        </div>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Change Parent</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ family.family.code }}" class="breadcrumb">{{ family.family.name }}</a>
+<span class="separator">/</span>
+<a href="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}" class="breadcrumb">{{ member.name() }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call family_f::family_section(&family.family, true) %}
+{% endblock %}

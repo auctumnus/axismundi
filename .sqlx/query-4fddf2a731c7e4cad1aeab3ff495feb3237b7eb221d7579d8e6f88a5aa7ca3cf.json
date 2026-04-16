@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT id, family_id, language_id, title, parent_member_id, relation_type as \"relation_type: LanguageFamilyRelationType\", created_at, updated_at, created_by, updated_by, notes\n                FROM language_family_members\n                WHERE family_id = $1 AND parent_member_id IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "language_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "relation_type: LanguageFamilyRelationType",
+        "type_info": {
+          "Custom": {
+            "name": "language_family_relation_type",
+            "kind": {
+              "Enum": [
+                "descendant",
+                "hybrid"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4fddf2a731c7e4cad1aeab3ff495feb3237b7eb221d7579d8e6f88a5aa7ca3cf"
+}

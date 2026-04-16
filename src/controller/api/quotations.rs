@@ -3,7 +3,9 @@ use crate::{
     model::{
         definitions::DefinitionRepository,
         languages::LanguageRepository,
-        quotations::{CreateQuotation, Quotation, QuotationRepository, UpdateQuotation},
+        quotations::{
+            CreateQuotation, Quotation, QuotationRepository, QuotationWithWordInfo, UpdateQuotation,
+        },
         translatable::TranslatableRepository,
         translations::TranslationRepository,
     },
@@ -121,7 +123,7 @@ pub async fn list_quotations_by_translation(
     languages: LanguageRepository,
     quotations: QuotationRepository,
     pagination: PaginatedRequest,
-) -> PaginatedApiResponse<Quotation> {
+) -> PaginatedApiResponse<QuotationWithWordInfo> {
     let language = languages
         .find_by_code(&language_code)
         .await
@@ -134,7 +136,7 @@ pub async fn list_quotations_by_translation(
         .await?;
 
     quotations
-        .list_by_translation(translation.id, pagination)
+        .list_by_translation_with_word_info(translation.id, pagination)
         .await
 }
 

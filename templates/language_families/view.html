@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
 {% block title %}{{ family.name }} - axismundi{% endblock %}
 {% block embed_title %}{{ family.name }}{% endblock %}
@@ -13,9 +14,12 @@
 </script>
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/family-view.css">
+<link rel="stylesheet" href="/static/language-view.css">
 {% endblock %}
 
 {% block content %}
+
+{% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
 
 {% if let Some((invite, sender)) = &pending_invite %}
 <div class="invite-banner card">
@@ -36,6 +40,9 @@
 {% endif %}
 
 <div class="language-card-full full-card card">
+    {% if let Some(banner_url) = family.get_banner_url() %}
+        <div class="banner"><img src="{{ banner_url }}" alt="" aria-hidden="true"></div>
+    {% endif %}
     <div class="header-with-actions">
         <div class="with-subtitle">
             <h1>{{ family.name }}</h1>
@@ -51,19 +58,19 @@
         <ul class="icons">
             {% if can_edit_language_family %}
                 <li><a class="icon button gray" href="/language-families/{{ family.code }}/edit" data-tooltip="Edit language">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
+                    {% call u::icon("edit") %}
                 </a></li>
             {% endif %}
             {% if can_delete_language_family %}
                 <li><a class="icon button gray" href="/language-families/{{ family.code }}/delete" data-tooltip="Delete language family">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
+                    {% call u::icon("delete") %}
                 </a></li>
             {% endif %}
             <li>
                 <span class="likes like-button {% if is_liked %}liked{% endif %}" data-target="/api/language-families/{{ family.code }}" data-tooltip="Like this language family" role="button">
                     <span class="icon-button-container yellow">
-                        <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                        <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+                        <svg class="icon when-unliked"><use href="#icon-star-outline"></use></svg>
+                        <svg class="icon when-liked"><use href="#icon-star-filled"></use></svg>
                     </span>
                     <span class="like-count">{{ family.like_count }}</span>
                 </span>
@@ -75,8 +82,19 @@
     {% if !rendered_description.is_empty() %}
         <p>{{ rendered_description | safe }}</p>
     {% else %}
-        <p class="empty-description">no description provided</p>
+        <p class="empty-description">no description yet</p>
     {% endif %}
+
+    <table>
+        <tr>
+            <th>created</th>
+            <td>{% call u::relative(&family.created_at) %}</td>
+        </tr>
+        <tr>
+            <th>members</th>
+            <td>{{ member_count }}</td>
+        </tr>
+    </table>
 </div>
 
 {% if member_count > 0 %}
@@ -85,8 +103,14 @@
     <div class="header-with-actions">
         <h2 class="with-action">members</h2>
         <ul>
+            {% if can_edit_language_family %}
+            <li><a class="with-icon" href="/language-families/{{ family.code }}/members/new">
+                {% call u::icon("plus") %}
+                <span>add member</span>
+            </a></li>
+            {% endif %}
             <li><a class="with-icon" href="/language-families/{{ family.code }}/members">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+                {% call u::icon("list") %}
                 <span>view all</span>
             </a></li>
         </ul>
@@ -109,5 +133,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family, can_edit_language_family) %}
+{% call family_f::family_section(&family, can_edit_language_family) %}
 {% endblock %}

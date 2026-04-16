@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            with recursive derivation_paths as (\n                select\n                    m.id           as member_id,\n                    m.language_id,\n                    m.family_id,\n                    array[]::uuid[] as scs_ids,\n                    true            as complete\n                from language_family_members m\n                where m.language_id = $1\n                  and m.relation_type = 'descendant'\n\n                union all\n\n                select\n                    child.id,\n                    child.language_id,\n                    child.family_id,\n                    dp.scs_ids || scs.id,\n                    dp.complete and scs.id is not null\n                from language_family_members child\n                join derivation_paths dp on child.parent_member_id = dp.member_id\n                left join sound_change_sets scs on scs.member_id = child.id\n                where dp.complete\n            )\n            select\n                dp.language_id,\n                l.name as language_name,\n                l.code as language_code,\n                dp.family_id,\n                lf.name as family_name,\n                dp.scs_ids as \"scs_ids: Vec<Uuid>\",\n                exists(\n                    select 1 from language_permissions\n                    where \"user\" = $2\n                      and language = dp.language_id\n                      and permission >= 'editor'\n                ) as has_direct_permission\n            from derivation_paths dp\n            join languages l on l.id = dp.language_id\n            join language_families lf on lf.id = dp.family_id\n            where dp.language_id is not null\n              and dp.complete\n              and dp.language_id != $1\n              and (\n                exists(select 1 from user_tags where user_id = $2 and tag in ('admin', 'moderator'))\n                or exists(\n                    select 1 from language_permissions\n                    where \"user\" = $2\n                      and language = dp.language_id\n                      and permission >= 'editor'\n                )\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "language_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "language_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "family_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "family_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "scs_ids: Vec<Uuid>",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 6,
+        "name": "has_direct_permission",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      null,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "07692a46fce8b7b96121675a2351db2b4414b9f82d84546b6b7a5effa08ec11d"
+}

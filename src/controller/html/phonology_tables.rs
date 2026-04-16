@@ -10,16 +10,32 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    attempt, controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template}, err::AppError, get_user, md::render_md, model::{
+    attempt,
+    controller::html::{
+        LanguagesWithContributors,
+        languages::{Breadcrumb, Footer},
+        okay, render_generic_error, render_template,
+    },
+    err::AppError,
+    get_user,
+    md::render_md,
+    model::{
         contribution_stats::ContributionStatsRepository,
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         phonology_tables::{
-            Body, Cell, Column, CreatePhonologyTable, PhonologyTable, PhonologyTableRepository, Row, SearchPhonologyTable, TableRenderOptions, UpdatePhonologyTable
+            Body, Cell, Column, CreatePhonologyTable, PhonologyTable, PhonologyTableRepository,
+            Row, SearchPhonologyTable, TableRenderOptions, UpdatePhonologyTable,
         },
         users::User,
-    }, pagination::{PaginatedRequest, PaginatedResponse}, util::{AppState, extract_session::Session}
+    },
+    pagination::PaginatedRequest,
+    util::{
+        AppState,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -73,18 +89,25 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
 // --- search ---
 
 #[derive(Template)]
-#[template(path = "languages/phonology-tables/search.html")]
-#[allow(dead_code)]
-struct SearchPhonologyTablesTemplate {
-    current_user: Option<User>,
-    language: LanguagesWithContributors,
-    error: Option<AppError>,
-    previous_query: SearchPhonologyTable,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<PhonologyTable>>,
-    rendered_tables: Vec<String>,
+#[template(path = "languages/phonology-tables/fragments/list_header.html")]
+struct PtSearchHeader {
     can_edit_language: bool,
-    can_delete_language: bool,
+    language_code: String,
+    language: LanguagesWithContributors,
+}
+
+#[derive(Template)]
+#[template(path = "languages/phonology-tables/fragments/query.html")]
+struct PtSearchQueryTemplate {
+    created_after: Option<chrono::DateTime<chrono::Utc>>,
+    created_before: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Template)]
+#[template(path = "languages/phonology-tables/fragments/card.html")]
+#[allow(dead_code)]
+struct PtCard {
+    rendered_html: String,
 }
 
 async fn search_phonology_tables(
@@ -95,22 +118,12 @@ async fn search_phonology_tables(
     contribution_stats: ContributionStatsRepository,
     Path(code): Path<String>,
     axum::extract::Query(query): axum::extract::Query<SearchPhonologyTable>,
-    axum::extract::Query(pagination): axum::extract::Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&code).await);
 
-    let query = SearchPhonologyTable {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
-    };
+    let search_action = format!("/languages/{}/phonology-tables", code);
 
     let top_contributors = attempt!(
         s,
@@ -151,58 +164,67 @@ async fn search_phonology_tables(
         is_liked,
     };
 
-    let results = match phonology_tables
+    let lang_code = language_with_contributors.language.code.clone();
+    let results = phonology_tables
         .search(
             &language_with_contributors.language,
             pagination.clone(),
             query.clone(),
         )
-        .await
-    {
-        Ok(res) => res,
-        Err(e) => {
-            let template = SearchPhonologyTablesTemplate {
-                current_user,
-                language: language_with_contributors,
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                rendered_tables: vec![],
-                can_edit_language,
-                can_delete_language,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
+        .await;
 
-    let mut rendered_tables = Vec::with_capacity(results.items.len());
-    for table in &results.items {
-        
+    let render_item = move |table: &PhonologyTable| {
         let options = TableRenderOptions {
-            standalone_link: format!("/languages/{}/phonology-tables/{}", language_with_contributors.language.code, table.id).into(),
+            standalone_link: Some(format!(
+                "/languages/{}/phonology-tables/{}",
+                lang_code, table.id
+            )),
             edit_links: None,
             header_el: "h3".to_string(),
         };
-        match table.to_html(&options) {
-            Ok(html) => rendered_tables.push(html),
-            Err(_) => rendered_tables.push(String::from("<p>Failed to render table.</p>")),
-        }
-    }
-
-    let template = SearchPhonologyTablesTemplate {
-        current_user,
-        language: language_with_contributors,
-        error: None,
-        previous_query: query,
-        previous_pagination: pagination,
-        rendered_tables,
-        results: Some(results),
-        can_edit_language,
-        can_delete_language,
+        let rendered_html = match table.to_html(&options) {
+            Ok(html) => html,
+            Err(_) => String::from("<p>Failed to render table.</p>"),
+        };
+        PtCard { rendered_html }
     };
 
-    okay(render_template(template))
+    let header = PtSearchHeader {
+        can_edit_language,
+        language_code: language_with_contributors.language.code.clone(),
+        language: language_with_contributors.clone(),
+    };
+
+    let query_template = PtSearchQueryTemplate {
+        created_after: query.created_after,
+        created_before: query.created_before,
+    };
+
+    let breadcrumbs = Breadcrumb {
+        language: &language_with_contributors.language,
+    };
+
+    let footer = Footer {
+        language: &language_with_contributors.language,
+        can_edit_language: can_delete_language,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "phonology tables",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
 }
 
 // --- new step 1 ---
@@ -323,26 +345,41 @@ struct EditBodyFormData {
 fn default_empty_body() -> Body {
     Body {
         rows: vec![
-            Row::Individual { heading: "Row 1".to_string(), cells: vec![
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-            ] },
-             Row::Individual { heading: "Row 2".to_string(), cells: vec![
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-            ] },
-             Row::Individual { heading: "Row 3".to_string(), cells: vec![
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-                Cell { phonemes: vec![] },
-            ] },
+            Row::Individual {
+                heading: "Row 1".to_string(),
+                cells: vec![
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                ],
+            },
+            Row::Individual {
+                heading: "Row 2".to_string(),
+                cells: vec![
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                ],
+            },
+            Row::Individual {
+                heading: "Row 3".to_string(),
+                cells: vec![
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                    Cell { phonemes: vec![] },
+                ],
+            },
         ],
         columns: vec![
-            Column::Individual { heading: "Column 1".to_string() },
-            Column::Individual { heading: "Column 2".to_string() },
-            Column::Individual { heading: "Column 3".to_string() },
+            Column::Individual {
+                heading: "Column 1".to_string(),
+            },
+            Column::Individual {
+                heading: "Column 2".to_string(),
+            },
+            Column::Individual {
+                heading: "Column 3".to_string(),
+            },
         ],
         annotations: vec![],
     }
@@ -505,7 +542,9 @@ async fn view_phonology_table(
 
     let top_contributors = attempt!(
         s,
-        contribution_stats.get_top_contributors(&language.id, 5).await
+        contribution_stats
+            .get_top_contributors(&language.id, 5)
+            .await
     );
     let is_liked = if let Some(user) = s.user() {
         attempt!(s, languages.is_liked(&user.id, &language.id).await)
@@ -524,9 +563,18 @@ async fn view_phonology_table(
 
     let edit_links = if can_edit_language {
         Some((
-            format!("/languages/{}/phonology-tables/{}/edit-meta", language.code, table.id),
-            format!("/languages/{}/phonology-tables/{}/edit-body", language.code, table.id),
-            format!("/languages/{}/phonology-tables/{}/delete", language.code, table.id),
+            format!(
+                "/languages/{}/phonology-tables/{}/edit-meta",
+                language.code, table.id
+            ),
+            format!(
+                "/languages/{}/phonology-tables/{}/edit-body",
+                language.code, table.id
+            ),
+            format!(
+                "/languages/{}/phonology-tables/{}/delete",
+                language.code, table.id
+            ),
         ))
     } else {
         None
@@ -693,8 +741,10 @@ async fn edit_body_form(
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
-    let previous_table_body: Body =
-        attempt!(s, serde_json::from_value(table.body.clone()).map_err(Into::into));
+    let previous_table_body: Body = attempt!(
+        s,
+        serde_json::from_value(table.body.clone()).map_err(Into::into)
+    );
 
     let template = EditBodyTemplate {
         current_user: Some(user),
@@ -735,8 +785,8 @@ async fn edit_body_submit(
     let body: Body = match serde_json::from_str(&form.body) {
         Ok(b) => b,
         Err(e) => {
-            let previous_table_body: Body = serde_json::from_value(table.body.clone())
-                .unwrap_or_else(|_| default_empty_body());
+            let previous_table_body: Body =
+                serde_json::from_value(table.body.clone()).unwrap_or_else(|_| default_empty_body());
 
             let template = EditBodyTemplate {
                 current_user: Some(user),

@@ -3,8 +3,7 @@
   padding-left: 1.5rem;
 }
 
-.context,
-.word-class {
+.context {
   font-style: italic;
 }
 
@@ -29,6 +28,140 @@
   }
 }
 
+.word-card-full table {
+  margin-top: 1rem;
+  padding-top: 0;
+  border: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+
+  tbody {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  tr {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  th {
+    color: var(--foreground-secondary);
+    font-weight: normal;
+    text-align: left;
+  }
+}
+
+.word-header {
+  font-family: var(--font-normal);
+}
+
 .rendered-notes {
   margin-top: 0.5rem;
+}
+
+.when-small {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  .when-large {
+    display: none !important;
+  }
+
+  .when-small {
+    display: inline-flex !important;
+  }
+}
+
+ul.quotations {
+  li {
+    list-style-type: none;
+    display: inline-flex;
+    flex-direction: column;
+    gap: .325rem;
+  }
+}
+
+.quotation-link {
+  text-decoration: none;
+  font-style: italic;
+
+
+  .highlight {
+    font-weight: bold;
+  }
+
+  &:hover {
+    color: var(--foreground-secondary);
+  }
+}
+
+.cognacy-card {
+  .cognacy-svg {
+    overflow: auto;
+    margin-top: 0px;
+    padding: 0.5rem;
+    background-color: var(--background-page);
+    border: var(--border);
+    border-radius: var(--rounding);
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+
+    svg {
+      .node {
+        a {
+          text-decoration: none;
+
+          &:hover path {
+            stroke: var(--foreground-secondary);
+          }
+        }
+        text {
+          font-family: inherit;
+          font-size: 12px;
+          fill: var(--foreground-primary);
+        }
+        path {
+          transition: stroke var(--duration-very-fast) ease-in-out;
+          fill: var(--background-panel);
+          stroke: var(--border-color);
+          stroke-width: 1px;
+        }
+      }
+
+      .current-word {
+        path {
+          stroke: var(--foreground-secondary);
+        }
+      }
+
+      .edge {
+        polygon {
+          fill: var(--foreground-secondary);
+          stroke: var(--foreground-secondary);
+        }
+        path {
+          stroke: var(--foreground-secondary);
+          stroke-width: 1px;
+        }
+      }
+    }
+  }
+}
+
+a.word-class {
+  font-size: .9em;
+  color: var(--foreground-secondary);
+  text-decoration: none;
+  .word-class-abbreviation {
+    font-style: italic;
+  }
 }

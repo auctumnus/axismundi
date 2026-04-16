@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "language_families/fragments/footer.html" as family_footer -%}
+
+{% block title %}edit {{ sound_change_set.name }} - {{ member.name() }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>edit {{ sound_change_set.name }}</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/language-families/{{ fam_code }}/members/{{ member.member.id() }}/sound-change-sets/{{ sound_change_set.id }}/edit" id="edit-sound-change-set-form">
+    <section>
+        <label for="name">Name</label>
+        <input type="text" name="name" id="name" value="{{ previous_name }}" required>
+        {% call u::field_error("name") %}
+    </section>
+
+    <section>
+        <label for="description">Description (optional)</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description" rows="4">{{ previous_description }}</textarea>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Save</button>
+    </section>
+</form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'edit-sound-change-set-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ fam_code }}" class="breadcrumb">{{ member.family.name }}</a>
+<span class="separator">/</span>
+<a href="/language-families/{{ fam_code }}/members/{{ member.member.id() }}" class="breadcrumb">{{ member.name() }}</a>
+<span class="separator">/</span>
+<a href="/sound-change-sets/{{ sound_change_set.id }}" class="breadcrumb">{{ sound_change_set.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call family_footer::family_section(&member.family, can_edit) %}
+{% endblock %}

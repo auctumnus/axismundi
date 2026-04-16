@@ -74,6 +74,15 @@ impl AppError {
             Some(_) => None,
         }
     }
+
+    pub fn with_prefix(self, prefix: impl Display) -> Self {
+        Self {
+            message: format!("{}: {}", prefix, self.message),
+            status_code: self.status_code,
+            validation_errors: self.validation_errors,
+            extra: self.extra,
+        }
+    }
 }
 
 pub fn not_found(item: impl Display) -> AppError {
@@ -198,21 +207,51 @@ impl From<reqwest::Error> for AppError {
     }
 }
 
+impl From<serde_html_form::ser::Error> for AppError {
+    fn from(err: serde_html_form::ser::Error) -> Self {
+        internal_error(err)
+    }
+}
+
 impl From<lexurgy::Error> for AppError {
     fn from(err: lexurgy::Error) -> Self {
         let message = match &err {
-            lexurgy::Error::ParseError { message, line_number, column_number } => {
-                format!("Error parsing sound changes: {message} at line {line_number}, column {column_number}")
-            },
-            lexurgy::Error::InvalidExpression { message, rule, expression, expression_number } => {
-                format!("Invalid expression in sound changes: {message} in rule {rule} at expression {expression_number}: {expression}")
-            },
-            lexurgy::Error::AnalysisError { message } => format!("Error analyzing sound changes: {message}"),
-            lexurgy::Error::RuntimeError { message } => format!("Error running sound changes: {message}"),
-            lexurgy::Error::Timeout { message } => format!("Timeout running sound changes: {message}"),
+            lexurgy::Error::ParseError {
+                message,
+                line_number,
+                column_number,
+            } => {
+                format!(
+                    "Error parsing sound changes: {message} at line {line_number}, column {column_number}"
+                )
+            }
+            lexurgy::Error::InvalidExpression {
+                message,
+                rule,
+                expression,
+                expression_number,
+            } => {
+                format!(
+                    "Invalid expression in sound changes: {message} in rule {rule} at expression {expression_number}: {expression}"
+                )
+            }
+            lexurgy::Error::AnalysisError { message } => {
+                format!("Error analyzing sound changes: {message}")
+            }
+            lexurgy::Error::RuntimeError { message } => {
+                format!("Error running sound changes: {message}")
+            }
+            lexurgy::Error::Timeout { message } => {
+                format!("Timeout running sound changes: {message}")
+            }
         };
 
-        AppError { message, status_code: StatusCode::BAD_REQUEST, validation_errors: None, extra: serde_json::to_value(err).ok() }
+        AppError {
+            message,
+            status_code: StatusCode::BAD_REQUEST,
+            validation_errors: None,
+            extra: serde_json::to_value(err).ok(),
+        }
     }
 }
 

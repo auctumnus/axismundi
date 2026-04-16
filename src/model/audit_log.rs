@@ -158,6 +158,7 @@ impl AuditLogRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.tags,
                     users.created_at,
                     users.updated_at,

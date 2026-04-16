@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH updated AS (\n                    UPDATE translation\n                    SET translated_text = COALESCE($2, translated_text),\n                        translated_title = COALESCE($3, translated_title),\n                        ipa = COALESCE($4, ipa),\n                        gloss = COALESCE($5, gloss),\n                        notes = COALESCE($6, notes),\n                        updated_by = $7,\n                        updated_at = CURRENT_TIMESTAMP\n                    WHERE id = $1\n                    RETURNING id, translatable, language, translated_text, translated_title, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count\n                )\n                SELECT\n                    u.id,\n                    u.translatable,\n                    u.language,\n                    u.ipa,\n                    u.gloss,\n                    u.notes,\n                    u.translated_text,\n                    u.translated_title,\n                    u.created_at,\n                    u.updated_at,\n                    u.like_count,\n                    u.created_by,\n                    u.updated_by,\n                    tr.slug as translatable_slug,\n                    tr.title as translatable_title,\n                    l.code as language_code,\n                    l.name as language_name\n                FROM updated u\n                JOIN translatable tr ON u.translatable = tr.id\n                JOIN languages l ON u.language = l.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "translatable",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "ipa",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "gloss",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "translated_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "translated_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "translatable_slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "translatable_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "language_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "language_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "caa07971d3111015fb8e46bb0a3ad02980faf410b01ad8b9e2a9e5de7bd5c7d3"
+}

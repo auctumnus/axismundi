@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "with updated as (\n                update sound_change_sets set\n                    name = coalesce($1, name),\n                    description = coalesce($2, description),\n                    changes = coalesce($3, changes),\n                    updated_by = $4,\n                    updated_at = now()\n                where id = $5 returning *\n            )\n            select u.*, exists(select 1 from ipa_estimators where sound_change_set_id = u.id) as \"is_ipa_estimator!\"\n            from updated u",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "language_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "changes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_ipa_estimator!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "b5fc998065ad15eadded43ce5f6097de2cdbaeddda952fbc411518a5629a4a8f"
+}

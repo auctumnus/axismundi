@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
 
 {% block title %}new translation - axismundi{% endblock %}
 
@@ -29,7 +31,7 @@
                     <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
                 {% endfor %}
             </select>
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            {% call u::icon("chevron-down") %}
         </div>
     </section>
 
@@ -39,8 +41,8 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable, can_edit_translatable) %}
+{% call ts_f::translatable_section(&translatable, can_edit_translatable) %}
 {% if let Some(lang) = language %}
-{% call u::language_section(lang, can_edit_language) %}
+{% call lang_f::language_section(lang, can_edit_language) %}
 {% endif %}
 {% endblock %}

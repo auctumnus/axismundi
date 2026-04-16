@@ -469,6 +469,14 @@ button.normal {
   }
 }
 
+a.card {
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--foreground-secondary);
+  }
+}
+
 h3 {
   font-family: var(--font-heading);
   font-size: 1.2rem;
@@ -916,13 +924,16 @@ main > :is(h1, h2, h3), main .header-with-actions {
     margin: 0;
   }
 
-  &:has(ul.icons) {
-    align-items: flex-start;
+  &:has(ul.icons), &:has(.with-subtitle) {
     h1,
     h2 {
       line-height: initial;
       margin-top: 0.125rem;
     }
+  }
+
+  &:has(ul.icons) {
+    align-items: flex-start;
   }
 
   ul {
@@ -1009,6 +1020,15 @@ button.icon,
     color: var(--color-amber-400);
   }
 
+  &.green:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-green-600) 10%,
+      transparent 90%
+    );
+    color: var(--color-green-600);
+  }
+
   &.gray:hover {
     background-color: color-mix(
       in oklab,
@@ -1016,6 +1036,11 @@ button.icon,
       transparent 90%
     );
     color: var(--foreground-secondary);
+  }
+
+  &.disabled, &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
@@ -1034,6 +1059,7 @@ button.with-icon {
   gap: 0.25rem;
   color: var(--foreground-secondary);
   cursor: pointer;
+  text-decoration: none;
 
   svg.icon {
     position: relative;
@@ -1068,6 +1094,11 @@ button.with-icon {
     gap: 0.5rem;
     justify-content: center;
     align-items: center;
+
+    .button.icon {
+      margin-bottom: 0;
+    }
+
   }
 
   .meta {
@@ -1195,4 +1226,31 @@ code {
 
 .preserve-breaks {
   white-space: pre-wrap;
+}
+
+.back-button + .context-cards {
+  margin-top: 1.5rem;
+}
+
+.skip-to-main-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background-color: var(--background-page);
+  color: var(--foreground-primary);
+  padding: 0.5rem;
+  z-index: 1000;
+  transition: top var(--duration-fast) ease-in-out;
+
+  &:focus {
+    top: 0;
+  }
+}
+
+.card-list + .card {
+  margin-top: 1rem;
+}
+
+.card:has(+ .card) {
+  margin-bottom: .5rem;
 }

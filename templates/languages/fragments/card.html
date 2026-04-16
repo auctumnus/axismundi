@@ -1,0 +1,31 @@
+{%- import "util.html" as u -%}
+
+{% macro language_summary(language) %}
+    {% set description = crate::util::first_sentence(&language.description) %}
+    {% if description == "" %}
+        <span class="ellipse summary language-summary empty-description">no description yet</span>
+    {% else %}
+        <span class="ellipse summary language-summary">{{ description }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro render(language_with_contributors, back="") %}
+    <li class="language-card preview-card">
+        <a href="/languages/{{ language_with_contributors.language.code }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
+            <span class="left">
+                <span class="title">{{ language_with_contributors.language.name }}</span>
+                {% call language_summary(&language_with_contributors.language) %}
+                <ul class="contributor-list">
+                    {% for contributor in language_with_contributors.top_contributors %}
+                    <li class="compressed-pfps">
+                        {% call u::pfp(&contributor, size="small") %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </span>
+            {% call u::like_button("/api/languages/" ~ language_with_contributors.language.code, language_with_contributors.language.like_count, language_with_contributors.is_liked, "Like this language") %}
+        </a>
+    </li>
+{% endmacro %}
+
+{% call render(language_with_contributors, back_url) %}

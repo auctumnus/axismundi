@@ -1,7 +1,10 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
-{% block title %}convert {{ member.name() }} to grouping - axismundi{% endblock %}
+{% block title %}unassociate language from {{ member.name() }} - axismundi{% endblock %}
 
 {% block content %}
 
@@ -9,7 +12,7 @@
     {% call u::audit_log_banner() %}
 {% endif %}
 
-<h1>convert to grouping</h1>
+<h1>unassociate language from {{ member.name() }}</h1>
 
 {% if let Some(error) = error %}
     <div class="error">
@@ -20,35 +23,26 @@
 
 <div class="context-cards">
     <div class="context-card family-member-context">
-        <span class="context-label">converting member</span>
+        <span class="context-label">for member</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_member(&member, false) %}
+            {% call member_card::render(&member) %}
         </ul>
     </div>
     <div class="context-card family-context">
         <span class="context-label">in family</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_card(&family) %}
+            {% call family_card::render(&family) %}
         </ul>
     </div>
 </div>
 
-<p>this will replace the language association with a grouping label. the member keeps its position in the tree.</p>
-
 <form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ member.member.id() }}/convert-to-grouping">
     <section>
-        <label for="title">Title</label>
-        {% call u::field_error(name="title") %}
-        <input type="text" id="title" name="title" required value="{{ previous_title }}">
+        <p>Are you sure you want to unassociate the language from the language family member <strong>{{ member.name() }}</strong>?</p>
+        <p>The language itself will not be deleted.</p>
     </section>
 
-    <section>
-        <label for="notes">Notes</label>
-        {% call u::field_error(name="notes") %}
-        <input type="text" id="notes" name="notes" value="{{ previous_notes }}">
-    </section>
-
-    <button type="submit">Convert to Grouping</button>
+    <button type="submit">Unassociate</button>
 </form>
 {% endblock %}
 
@@ -60,5 +54,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family.family, true) %}
+{% call family_f::family_section(&family.family, true) %}
 {% endblock %}

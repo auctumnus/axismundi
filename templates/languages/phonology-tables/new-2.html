@@ -1,12 +1,13 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block title %}new phonology table - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/components/modal.css">
 <link rel="stylesheet" href="/static/phonology-table.css">
-<link rel="stylesheet" href="/static/tooltip.css">
+
 <script type="module" src="/static/phonology-editor.js"></script>
 {% endblock %}
 
@@ -66,5 +67,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, can_delete_language) %}
+{% call lang_f::language_section(&language, can_delete_language) %}
 {% endblock %}

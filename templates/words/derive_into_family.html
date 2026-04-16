@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "words/fragments/card.html" as word_card -%}
+{%- import "words/fragments/footer.html" as word_f -%}
+
+{% block title %}derive from {{ word.word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>derive word</h1>
+
+<div class="context-cards">
+    <div class="context-card word-context">
+        <span class="context-label">for word</span>
+        <ul class="standalone-card">
+            {% call word_card::render(&word) %}
+        </ul>
+    </div>
+</div>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+{% if goes_from_word %}
+    <div class="info-banner">
+        <h2>raw derivation</h2>
+        <p>this word has no ipa set, so the derivation will be run on the word itself, rather than its ipa</p>
+    </div>
+{% endif %}
+
+{% if families.is_empty() %}
+    <div class="card first-interaction-card">
+        <h2>no derivation paths from this language</h2>
+        <p>
+            in order to automatically derive this word into child languages, there must be sound change
+            sets defined in the language family for derivation.
+        </p>
+        {% if let Some(primary_language_family) = primary_language_family %}
+            <div class="actions">
+                <a class="button primary-button" href="/language-families/{{ primary_language_family.code }}">view language family</a>
+            </div>
+        {% else %}
+            <p>
+                if there is no language family associated to this word's language, you should create one first
+                and then add its children and sound change sets for derivation.
+            </p>
+            <div class="actions">
+                <a class="button primary-button" href="/new-language-family">create language family</a>
+            </div>
+        {% endif %}
+    </div>
+{% else %}
+    <form id="derive-word-form" class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive">
+        <label for="derivation_target">target language</label>
+        <div class="select-container">
+            <select id="derivation_target" name="derivation_target" required>
+                <option value="" disabled selected>-- select a language --</option>
+                {% for (family, paths) in families %}
+                    {% if families.len() > 1 %}
+                        <optgroup label="{{ family }}">
+                    {% endif %}
+                    {% for path in paths %}
+                        <option value="{{ path.language_id }}">
+                            {{ path.language_name }}
+                            ({{ path.language_code }})
+                            {% if !path.has_direct_permission %} - will create audit log {% endif %}
+                        </option>
+                    {% endfor %}
+                    {% if families.len() > 1 %}
+                        </optgroup>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            {% call u::icon("chevron-down") %}
+        </div>
+        <button type="submit" class="button">derive</button>
+    </form>
+{% endif %}
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}" class="breadcrumb">{{ word.word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call word_f::word_section(word.word, language, true, other_lemmata) %}
+{% endblock %}

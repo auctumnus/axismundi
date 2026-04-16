@@ -1,12 +1,17 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/fragments/footer.html" as word_f -%}
 
 {% block title %}edit {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="/static/components/modal.css">
+<link rel="stylesheet" href="/static/words/edit.css">
+<script defer src="/static/words/edit.js"></script>
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
+<script type="module" src="/static/definitions-editor.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -38,59 +43,54 @@
             <select id="word_class" name="word_class" required>
                 <option value="" disabled selected>-- select a word class --</option>
                 {% for wc in word_classes %}
-                    <option value="{{ wc.abbreviation }}" {% if previous_word_class == wc.abbreviation %}selected{% endif %}>{{ wc.name }}</option>
+                    <option value="{{ wc.abbreviation }}" {% if previous_word_class.as_ref() == Some(wc.abbreviation) %}selected{% endif %}>{{ wc.name }}</option>
                 {% endfor %}
             </select>
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            {% call u::icon("chevron-down") %}
         </div>
     </section>
 
     <section>
-        <label>Definitions</label>
         {% call u::field_error(name="definitions") %}
-        <div id="definitions-container">
-            <div class="first-definition">
-                <label class="small" id="definition-label" for="definition-0-def">Definition</label>
-                <label class="small" id="context-label" for="definition-0-ctx">Context (optional)</label>
-                <input type="text" id="definition-0-def" name="definitions[]" required aria-label="Definition" value="{{previous_definitions[0]}}" class="definition-input">
-                <input type="text" id="definition-0-ctx" name="contexts[]" aria-label="Context (optional)" value="{{previous_contexts[0]}}">
+        <div id="definitions-editor-mount">
+            <label>Definitions</label>
+            <div class="definitions-header nojs-only">
+                <label for="definitions[]" class="definitions-col-label" id="definitions-definition-label">definition</label>
+                <label for="contexts[]" class="definitions-col-label" id="definitions-context-label">context (optional)</label>
             </div>
-            {% for i in 1..previous_definitions.len() %}
-                <div class="definition-item">
-                    <input type="hidden" name="definition_ids[]" value="{{ previous_definition_ids[i] }}">
-                    <input type="text" name="definitions[]" required aria-label="Definition" value="{{ previous_definitions[i] }}" class="definition-input">
-                    <input type="text" name="contexts[]" aria-label="Context (optional)" value="{{ previous_contexts[i] }}">
-                    {% if previous_definitions.len() > 1 %}
-                        <button type="button" class="remove-definition">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
-                        </button>
-                    {% endif %}
-                </div>
+            {% for (def, ctx, id) in nojs_slots %}
+            <div class="definition-item">
+                <input type="hidden" name="definition_ids[]" value="{{ id }}">
+                <input type="text" name="definitions[]" value="{{ def }}" aria-labelledby="definitions-definition-label">
+                <input type="text" name="contexts[]" value="{{ ctx }}" aria-labelledby="definitions-context-label">
+            </div>
             {% endfor %}
         </div>
-
-        <button type="button" id="add-definition" class="button-small with-icon">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
-            <span>add definition</span>
-        </button>
     </section>
-
-    <template id="definition-template">
-        <div class="definition-item">
-            <input type="hidden" name="definition_ids[]" value="">
-            <input type="text" name="definitions[]" aria-label="Definition" required class="definition-input">
-            <input type="text" name="contexts[]" aria-label="Context (optional)">
-            <button type="button" class="remove-definition">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>
-            </button>
-        </div>
-    </template>
 
     <section>
         <label for="ipa">IPA transcription (optional)</label>
         {% call u::field_error(name="ipa") %}
-        <input type="text" id="ipa" name="ipa" value="{{previous_ipa}}">
-    </section>
+        <div class="ipa-estimator">
+            <input type="text" id="ipa" name="ipa" value="{{previous_ipa}}">
+            {% if let Some(sound_change_set) = ipa_estimator %}
+                <button
+                    type="submit"
+                    id="estimate-ipa"
+                    class="secondary"
+                    formaction="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/estimate-ipa"
+                    data-sound-change-set="{{ sound_change_set.id }}"
+                >
+                    Estimate IPA
+                </button>
+            {% else %}
+                <span class="hint">to automatically estimate IPA, <a href="/languages/{{ language.code }}/sound-change-sets">create a sound change set</a> and mark it as an ipa estimator</span>
+            {% endif %}
+        </div>
+        {% if let Some(sound_change_set) = ipa_estimator %}
+            <span class="hint">using the sound change set "<a href="/languages/{{ language.code }}/sound-change-sets/{{ sound_change_set.id }}">{{ sound_change_set.name }}</a>" for estimation</span>
+        {% endif %}
+    </section>    
 
     <section>
         <label for="notes">Notes (optional)</label>
@@ -110,53 +110,19 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, true) %}
-{% call u::word_section(&word, &language, true) %}
+{% call word_f::word_section(&word, &language, true, false) %}
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function() {
-    const MAX_DEFINITIONS = 10;
-    const container = document.getElementById('definitions-container');
-    const template = document.getElementById('definition-template');
-    const addButton = document.getElementById('add-definition');
-
-    addButton.addEventListener('click', function() {
-        const currentCount = container.querySelectorAll('.definition-item').length;
-
-        if (currentCount >= MAX_DEFINITIONS) {
-            alert('Maximum ' + MAX_DEFINITIONS + ' definitions allowed');
-            return;
-        }
-
-        const clone = template.content.cloneNode(true);
-        const removeButton = clone.querySelector('.remove-definition');
-
-        removeButton.addEventListener('click', function() {
-            this.parentElement.remove();
-        });
-
-        container.appendChild(clone);
-    });
-
-    document.querySelectorAll('.remove-definition').forEach(function(button) {
-        button.addEventListener('click', function() {
-            const container = document.getElementById('definitions-container');
-            const currentCount = container.querySelectorAll('.definition-item').length;
-
-            if (currentCount <= 1) {
-                alert('At least one definition is required');
-                return;
-            }
-
-            this.parentElement.remove();
-        });
-    });
-})();
-</script>
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountDefinitionsEditor) {
+      const initial = JSON.parse(document.getElementById('definitions-initial').textContent);
+      window.mountDefinitionsEditor('definitions-editor-mount', {
+        initialItems: initial,
+        isEdit: true,
+      });
+    }
     if (window.mountFormEditor) {
       const notesTextarea = document.getElementById('notes');
       const notesDiv = document.createElement('div');
@@ -171,5 +137,6 @@
     }
   });
 </script>
+<script type="application/json" id="definitions-initial">{{ definitions_json | safe }}</script>
 <script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 {% endblock %}

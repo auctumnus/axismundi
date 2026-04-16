@@ -227,7 +227,7 @@
 [data-slate-editor],
 .editor-editable {
   min-height: 300px;
-  padding: 1rem;
+  padding: .5rem;
   outline: none;
   font-family: var(--font-normal);
   color: var(--foreground-primary);
@@ -403,7 +403,7 @@
    ============================================ */
 
 [data-slate-editor] ::selection {
-  background-color: var(--selection-background, #b4d5fe);
+  background-color: color-mix(in oklab, var(--foreground-accent) 20%, transparent);
 }
 
 /* ============================================

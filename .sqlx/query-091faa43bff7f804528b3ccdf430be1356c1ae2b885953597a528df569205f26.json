@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*)\n                FROM sound_change_sets scs\n                JOIN users u ON u.id = scs.created_by\n                WHERE scs.language_id = $1\n                AND ($2::TEXT IS NULL OR u.username = $2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "091faa43bff7f804528b3ccdf430be1356c1ae2b885953597a528df569205f26"
+}

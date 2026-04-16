@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "words/fragments/footer.html" as word_f -%}
+
+{% block title %}edit relation - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>edit relation</h1>
+
+{% if let Some(_) = error %}
+    {% call u::top_level_error() %}
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations/{{ related_word_language_code }}/{{ related_word.slug }}/{{ related_word.lemma }}/edit">
+    <section>
+        <p>Editing relation between <strong>{{ word.word }}</strong> and <strong>{{ related_word.word }}</strong></p>
+
+        <div class="form-group">
+            <label for="kind">Relation Type</label>
+            {% call u::field_error(name="kind") %}
+            <div class="select-container">
+                <select id="kind" name="kind" required>
+                    <option value="borrowed" {% if relation_kind == "borrowed" %}selected{% endif %}>Borrowed - Borrowed from another language</option>
+                    <option value="derived" {% if relation_kind == "derived" %}selected{% endif %}>Derived - Derived from another word</option>
+                    <option value="descendant" {% if relation_kind == "descendant" %}selected{% endif %}>Descendant - Historical descendant</option>
+                    <option value="compound" {% if relation_kind == "compound" %}selected{% endif %}>Compound - Compound word formation</option>
+                    <option value="calque" {% if relation_kind == "calque" %}selected{% endif %}>Calque - Loan translation</option>
+                    <option value="related" {% if relation_kind == "related" %}selected{% endif %}>Related - Related word (no etymological connection)</option>
+                    <option value="see_also" {% if relation_kind == "see_also" %}selected{% endif %}>See Also - See also (reference)</option>
+                </select>
+                {% call u::icon("chevron-down") %}
+            </div>
+        </div>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Save changes</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call word_f::word_section(&word, &language, user_has_permission, false) %}
+{% call word_f::word_section(&related_word, &related_language, user_has_permission_on_related, false) %}
+
+{% endblock %}

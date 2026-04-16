@@ -3,21 +3,50 @@ import { serializePath } from "./path";
 import { isFocused, isSelected, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Column } from "./table";
 
-type ThCell = { heading: string; rowSpan: number; colSpan: number; path: HeadingPath };
+type ThCell = {
+  heading: string;
+  rowSpan: number;
+  colSpan: number;
+  path: HeadingPath;
+};
 
-const collectAtDepth = (columns: Column[], targetDepth: number, currentDepth: number, maxDepth: number, path: HeadingPath = []): ThCell[] => {
+const collectAtDepth = (
+  columns: Column[],
+  targetDepth: number,
+  currentDepth: number,
+  maxDepth: number,
+  path: HeadingPath = [],
+): ThCell[] => {
   const result: ThCell[] = [];
   for (let i = 0; i < columns.length; i++) {
     const col = columns[i]!;
     const colPath = [...path, i];
     if (currentDepth === targetDepth) {
       if (col.type === "Group") {
-        result.push({ heading: col.heading, colSpan: numLeaves(col.columns), rowSpan: 1, path: colPath });
+        result.push({
+          heading: col.heading,
+          colSpan: numLeaves(col.columns),
+          rowSpan: 1,
+          path: colPath,
+        });
       } else {
-        result.push({ heading: col.heading, colSpan: 1, rowSpan: maxDepth - currentDepth + 1, path: colPath });
+        result.push({
+          heading: col.heading,
+          colSpan: 1,
+          rowSpan: maxDepth - currentDepth + 1,
+          path: colPath,
+        });
       }
     } else if (col.type === "Group") {
-      result.push(...collectAtDepth(col.columns, targetDepth, currentDepth + 1, maxDepth, colPath));
+      result.push(
+        ...collectAtDepth(
+          col.columns,
+          targetDepth,
+          currentDepth + 1,
+          maxDepth,
+          colPath,
+        ),
+      );
     }
   }
   return result;
@@ -33,7 +62,13 @@ const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
       dispatch({ type: "SetFocus", path: { type: "ColumnHeading", path } });
       dispatch({ type: "SetSelect", path: { type: "ColumnHeading", path } });
     }
-  }
+  };
+
+  const onDoubleClick = () => {
+    dispatch({ type: "SetFocus", path: { type: "ColumnHeading", path } });
+    dispatch({ type: "SetSelect", path: { type: "ColumnHeading", path } });
+    dispatch({ type: "OpenModal", modal: "EditColumnHeading" });
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === " ") {
@@ -44,7 +79,7 @@ const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
         dispatch({ type: "SetSelect", path: { type: "ColumnHeading", path } });
       }
     }
-  }
+  };
 
   let rs: number | undefined = rowSpan > 1 ? rowSpan : undefined;
   let cs: number | undefined = colSpan > 1 ? colSpan : undefined;
@@ -57,11 +92,20 @@ const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
   const tabIndex = focused ? 0 : -1;
 
   return (
-    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "ColumnHeading", path })}>
+    <th
+      rowSpan={rs}
+      colSpan={cs}
+      className={className}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onKeyDown={onKeyDown}
+      tabIndex={tabIndex}
+      data-path={serializePath(state.body, { type: "ColumnHeading", path })}
+    >
       {heading}
     </th>
   );
-}
+};
 
 export const ColumnHeaders = () => {
   const [state] = useEditor();
@@ -99,8 +143,12 @@ export const TopLeftCell = () => {
   const tabIndex = focused ? 0 : -1;
 
   return (
-    <th className={className} rowSpan={rowSpan} colSpan={colSpan} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "TopLeft" })}>
-    </th>
+    <th
+      className={className}
+      rowSpan={rowSpan}
+      colSpan={colSpan}
+      tabIndex={tabIndex}
+      data-path={serializePath(state.body, { type: "TopLeft" })}
+    ></th>
   );
-}
-
+};

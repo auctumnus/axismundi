@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
 {% block title %}edit {{ family.name }} - axismundi{% endblock %}
 
@@ -7,6 +8,7 @@
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
+<script src="/static/languages/edit.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -48,6 +50,25 @@
     <button type="submit">Save changes</button>
 </form>
 
+<h2>change banner</h2>
+<form class="default" method="post" action="/language-families/{{ family.code }}/change-banner" enctype="multipart/form-data">
+    <div class="banner-input-container" data-tooltip="Upload new banner image">
+        <div class="image-preview-container">
+            <input type="file" id="banner" name="banner" accept="image/*" aria-label="Upload banner image">
+            <span class="upload-icon">
+                {% call u::icon("upload") %}
+            </span>
+        </div>
+        {% if let Some(banner_url) = family.get_banner_url() %}
+            <img id="banner-img-input" src="{{ banner_url }}" alt="Current banner image" aria-label="Current banner image">
+        {% else %}
+            <img id="banner-img-input" src="" alt="No banner image" aria-label="No banner image" class="no-img">
+        {% endif %}
+    </div>
+    <button class="secondary" type="submit" formaction="/language-families/{{ family.code }}/clear-banner">Clear banner</button>
+    <button type="submit">Save changes</button>
+</form>
+
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountFormEditor) {
@@ -73,5 +94,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family, can_edit_family) %}
+{% call family_f::family_section(&family, can_edit_family) %}
 {% endblock %}

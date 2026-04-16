@@ -13,6 +13,8 @@ pub mod extract_session;
 pub mod graph_svg;
 mod images;
 pub mod s3;
+pub mod search_template;
+use askama::Template;
 use base64::Engine;
 
 mod re {
@@ -48,7 +50,7 @@ mod repo {
 }
 
 pub(crate) use repo::repo_from_parts;
-use serde::{Deserialize as _, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use uri_encode::encode_uri;
 use uuid::Uuid;
 use validator::ValidationError;
@@ -185,7 +187,8 @@ pub fn sanitize_external_url(url: &str) -> Result<String, ValidationError> {
     let scheme = parsed.scheme();
 
     if scheme != "http" && scheme != "https" {
-        return Err(ValidationError::new("invalid_url").with_message("URL must start with http:// or https://".into()));
+        return Err(ValidationError::new("invalid_url")
+            .with_message("URL must start with http:// or https://".into()));
     }
 
     Ok(parsed.to_string())
@@ -241,6 +244,15 @@ pub fn serialize_search<T: Serialize>(pagination: &PaginatedRequest, query: T) -
     }
 }
 
+pub fn back_url<T: Serialize>(base: &str, pagination: &PaginatedRequest, query: T) -> String {
+    let qs = serialize_search(pagination, query);
+    if qs.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}?{}", base, qs)
+    }
+}
+
 pub fn urlencode(input: &str) -> String {
     encode_uri(input)
 }
@@ -271,10 +283,47 @@ pub fn dfs(
     false
 }
 
-pub fn empty_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    Ok(s.filter(|s| !s.trim().is_empty()))
+pub trait HasTextQuery {
+    fn text_query(&self) -> Option<&str>;
+}
+
+mod tq {
+    macro_rules! text_query {
+        ($struct:ident) => {
+            impl crate::util::HasTextQuery for $struct {
+                fn text_query(&self) -> Option<&str> {
+                    self.q.as_deref()
+                }
+            }
+        };
+    }
+
+    pub(crate) use text_query;
+}
+
+pub(crate) use tq::text_query;
+
+#[derive(Template)]
+#[template(source = "", ext = "html")]
+pub struct EmptyTemplate;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListHeaderKind {
+    Preview,
+    Search,
+}
+
+#[derive(Deserialize)]
+pub struct BackQuery {
+    pub back: Option<String>,
+}
+
+pub fn is_discord(
+    user_agent: Option<axum_extra::TypedHeader<axum_extra::headers::UserAgent>>,
+) -> bool {
+    if let Some(ua) = user_agent {
+        ua.as_str().to_lowercase().contains("discordbot")
+    } else {
+        false
+    }
 }

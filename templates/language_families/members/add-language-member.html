@@ -1,7 +1,16 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
 {% block title %}add child in {{ family.family.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
 
 {% block content %}
 
@@ -22,18 +31,18 @@
     <div class="context-card family-member-context">
         <span class="context-label">for parent member</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_member(&parent_member, can_edit_family) %}
+            {% call member_card::render(&parent_member) %}
         </ul>
     </div>
     <div class="context-card family-context">
         <span class="context-label">in family</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_card(&family) %}
+            {% call family_card::render(&family) %}
         </ul>
     </div>
 </div>
 
-<form class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-language-member">
+<form id="add-language-member-form" class="default" method="post" action="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-language-member">
     <section>
         <label for="language_code">Child language</label>
         {% call u::field_error(name="language_code") %}
@@ -44,7 +53,7 @@
                     <option value="{{ language.code }}" {% if previous_language_code == language.code %}selected{% endif %}>{{ language.name }} ({{ language.code }})</option>
                 {% endfor %}
             </select>
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            {% call u::icon("chevron-down") %}
         </div>
     </section>
 
@@ -59,11 +68,29 @@
     <section>
         <label for="notes">Notes</label>
         {% call u::field_error(name="notes") %}
-        <input type="text" id="notes" name="notes" value="{{previous_notes}}">
+        <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
     <button type="submit">Add child</button>
 </form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const notesTextarea = document.getElementById('notes');
+      const notesDiv = document.createElement('div');
+      notesDiv.id = 'notes';
+      notesTextarea.replaceWith(notesDiv);
+      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
+      window.mountFormEditor('notes', {
+        initialValue: initialValue,
+        inputName: 'notes',
+        formId: 'add-language-member-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 {% endblock %}
 
 {% block breadcrumb %}
@@ -72,5 +99,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family.family, true) %}
+{% call family_f::family_section(&family.family, true) %}
 {% endblock %}

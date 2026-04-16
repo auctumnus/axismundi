@@ -14,6 +14,6 @@ longer-term
 - reduce panic surface or figure out if we can horizontally scale
 - frontend
   - @mention support is really really janky rn
-- really need to standardize how to handle the way form fields are submitted from html;
-  atm i think its basically confusing Option<String> for Option<Option<String>>
 - rss for recent activity  
+- significantly reduce how many duplicated queries there are (its so bad)
+- try to reduce sizes of common structs (Box<> save me)

@@ -1,0 +1,34 @@
+{%- import "util.html" as u -%}
+{% macro render(contributor, base_url) %}
+<li class="contributor-card">
+    <div class="left">
+        <div class="contributor-info">
+            {% call badge(&contributor.user, size="medium") %}
+        </div>
+        <div class="contribution-stats">
+            {% call permission_badge(contributor.permission) %}
+            <span class="text-badge gray">{{ contributor.word_count }} word{% if contributor.word_count != 1 %}s{% endif %}</span>
+            <span class="text-badge gray">{{ contributor.translation_count }} translation{% if contributor.translation_count != 1 %}s{% endif %}</span>
+            {% if let Some(created_at) = contributor.created_at %}
+            <span class="contributor-since">
+                since {% call relative(&created_at) %}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="permission-actions">
+        {% if contributor.can_edit %}
+            <a href="{{ base_url }}/permissions/{{ contributor.permission_id.unwrap() }}/edit" class="icon button gray" data-tooltip="Edit permission" aria-label="Edit permission">
+                {% call u::icon("edit") %}
+            </a>
+        {% endif %}
+        {% if contributor.can_delete %}
+            <a class="icon button gray" data-tooltip="Delete permission" href="{{ base_url }}/permissions/{{ contributor.permission_id.unwrap() }}/delete">
+                {% call u::icon("delete") %}
+            </a>
+        {% endif %}
+    </div>
+</li>
+{% endmacro %}
+
+{% call render(contributor, base_url) %}

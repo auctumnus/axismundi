@@ -52,6 +52,7 @@
             openssl
             postgresql
             graphviz
+            libwebp
           ]
           ++ lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Security
@@ -62,6 +63,7 @@
       {
         devShells.default = pkgs.mkShell {
           inherit nativeBuildInputs buildInputs;
+          stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
       }

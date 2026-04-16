@@ -1,0 +1,19 @@
+{%- import "languages/fragments/footer.html" as l -%}
+{%- import "translatables/fragments/footer.html" as t -%}
+
+{% macro translation_section(translatable, language, translation, can_edit_language, can_edit_translatable) %}
+    {% call l::language_section(language, can_edit_language) %}
+    {% call t::translatable_section(translatable, can_edit_translatable) %}
+    <li>
+        <h2>translation</h2>
+        <ul>
+            <li><a href="/translatable/{{ translatable.slug }}/translation/{{ language.code }}">view translation</a></li>
+            {% if can_edit_language %}
+                <li><a href="/translatable/{{ translatable.slug }}/edit-translation/{{ language.code }}">edit translation</a></li>
+            {% endif %}
+            <li><a href="/report/new?resource_type=translation&resource_id={{ translation.id }}">report</a></li>
+        </ul>
+    </li>
+{% endmacro %}
+
+{% call translation_section(translatable, language, translation, can_edit_language, can_edit_translatable) %}

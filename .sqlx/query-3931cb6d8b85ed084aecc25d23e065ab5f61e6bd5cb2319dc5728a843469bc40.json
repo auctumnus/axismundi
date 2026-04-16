@@ -30,26 +30,31 @@
       },
       {
         "ordinal": 5,
+        "name": "banner_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_by",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_by",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "like_count",
         "type_info": "Int8"
       }
@@ -60,6 +65,7 @@
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,

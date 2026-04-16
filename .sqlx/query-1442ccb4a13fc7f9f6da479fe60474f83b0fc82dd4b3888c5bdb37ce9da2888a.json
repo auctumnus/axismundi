@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*)\n                FROM quotation q\n                JOIN definitions d ON d.id = q.definition\n                WHERE q.definition = $2\n                  AND ($1::TEXT IS NULL OR d.definition ILIKE '%' || $1 || '%')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1442ccb4a13fc7f9f6da479fe60474f83b0fc82dd4b3888c5bdb37ce9da2888a"
+}

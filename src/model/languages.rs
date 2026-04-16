@@ -12,6 +12,8 @@ use crate::{
     model::{
         contribution_stats::ContributionStatsRepository,
         language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository,
+        sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
         user_bans::UserBanRepository,
         users::{USERNAME_REGEX, User, UserSearch},
     },
@@ -34,6 +36,19 @@ pub struct Language {
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub bookmark: String,
+    #[serde(skip)]
+    #[sqlx(default)]
+    pub banner_object_id: String,
+}
+
+impl Language {
+    pub fn get_banner_url(&self) -> Option<String> {
+        if self.banner_object_id.is_empty() {
+            None
+        } else {
+            Some(crate::util::s3::S3.get_banner_url(&self.banner_object_id))
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -114,6 +129,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -182,6 +198,7 @@ impl LanguageRepository {
             code: lang_result.code,
             name: lang_result.name,
             like_count: 0,
+            banner_object_id: String::new(),
             description: lang_result.description,
             private: lang_result.private,
             created_at: lang_result.created_at,
@@ -273,6 +290,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -290,6 +308,48 @@ impl LanguageRepository {
         result.ok_or_else(|| not_found(format!("language with code '{code}'")))
     }
 
+    /// List all languages the user has at least Editor permission on, excluding those already
+    /// associated as a descendant in any language family.
+    pub async fn list_editable_by_user_without_family(
+        &self,
+        user_id: Uuid,
+    ) -> AppResult<Vec<Language>> {
+        let results = sqlx::query_as!(
+            Language,
+            r#"
+                SELECT
+                    languages.id,
+                    languages.code,
+                    languages.name,
+                    languages.description,
+                    languages.private,
+                    languages.like_count,
+                    languages.banner_object_id,
+                    languages.created_at,
+                    languages.updated_at,
+                    languages.created_by,
+                    languages.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM languages
+                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'
+                JOIN language_permissions ON language_permissions.language = languages.id
+                WHERE language_permissions."user" = $1
+                AND language_permissions.permission IN ('editor', 'admin', 'owner')
+                AND NOT EXISTS (
+                    SELECT 1 FROM language_family_members
+                    WHERE language_family_members.language_id = languages.id
+                    AND language_family_members.relation_type = 'descendant'
+                )
+                ORDER BY languages.name
+            "#,
+            user_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(results)
+    }
+
     /// List all languages the user has at least Editor permission on.
     pub async fn list_editable_by_user(&self, user_id: Uuid) -> AppResult<Vec<Language>> {
         let results = sqlx::query_as!(
@@ -302,6 +362,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -430,6 +491,43 @@ impl LanguageRepository {
         Ok(updated_lang)
     }
 
+    pub async fn update_banner(
+        &self,
+        requestor: &User,
+        id: Uuid,
+        object_key: &str,
+    ) -> AppResult<Language> {
+        ensure_verified(requestor)?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let has_perm = permissions
+            .has_permission(requestor.id, id, PermissionLevel::Editor)
+            .await?;
+
+        if !has_perm {
+            return Err(forbidden("you don't have permission to edit this language"));
+        }
+
+        let result = sqlx::query_as!(
+            Language,
+            r#"
+                UPDATE languages
+                SET banner_object_id = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                RETURNING languages.*, (SELECT slug FROM bookmarks WHERE item = languages.id AND resource = 'language') as "bookmark!"
+            "#,
+            id,
+            object_key
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("language with id '{id}'")))
+    }
+
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         tracing::debug!("Deleting language {id}");
         ensure_verified(requestor)?;
@@ -498,6 +596,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -536,6 +635,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -575,7 +675,7 @@ impl LanguageRepository {
             search.owned_by,
             search.created_before,
             search.created_after,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset),
             search.in_family,
@@ -645,6 +745,7 @@ impl LanguageRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -680,7 +781,7 @@ impl LanguageRepository {
             search.verified,
             search.created_before,
             search.created_after,
-            search.text_query,
+            search.q,
             i64::from(pagination.limit),
             i64::from(pagination.offset)
         )
@@ -734,6 +835,7 @@ impl LanguageRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -879,11 +981,100 @@ impl LanguageRepository {
 
         Ok(json_ld)
     }
+
+    pub async fn set_ipa_estimator(
+        &self,
+        requestor: &User,
+        language_id: Uuid,
+        sound_change_set: Option<Uuid>,
+    ) -> AppResult<()> {
+        ensure_verified(requestor)?;
+
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        if !permissions
+            .has_permission(requestor.id, language_id, PermissionLevel::Editor)
+            .await?
+        {
+            return Err(forbidden("you don't have permission to edit this language"));
+        }
+
+        // does there currently exist an IPA estimator for this language?
+        let current_estimator = sqlx::query_scalar!(
+            "SELECT sound_change_set_id FROM ipa_estimators WHERE language_id = $1",
+            language_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        if let Some(scs_id) = sound_change_set {
+            // Validate the sound change set exists
+            let scs_repo = SoundChangeSetRepository::new(self.state.clone());
+            let Some(scs) = scs_repo.get(scs_id).await? else {
+                return Err(not_found("sound change set not found"));
+            };
+
+            if scs.language_id != Some(language_id) {
+                return Err(bad_request(
+                    "sound change set does not belong to this language",
+                ));
+            }
+
+            if current_estimator.is_some() {
+                // update existing estimator
+                sqlx::query!(
+                    "UPDATE ipa_estimators SET sound_change_set_id = $1 WHERE language_id = $2",
+                    scs_id,
+                    language_id
+                )
+                .execute(&self.state.pool)
+                .await?;
+            } else {
+                // create new estimator
+                sqlx::query!(
+                    "INSERT INTO ipa_estimators (language_id, sound_change_set_id) VALUES ($1, $2)",
+                    language_id,
+                    scs_id
+                )
+                .execute(&self.state.pool)
+                .await?;
+            }
+        } else {
+            // delete the IPA estimator if it exists
+            if current_estimator.is_some() {
+                sqlx::query!(
+                    "DELETE FROM ipa_estimators WHERE language_id = $1",
+                    language_id
+                )
+                .execute(&self.state.pool)
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_ipa_estimator(&self, language_id: Uuid) -> AppResult<Option<SoundChangeSet>> {
+        let scs_id = sqlx::query_scalar!(
+            "SELECT sound_change_set_id FROM ipa_estimators WHERE language_id = $1",
+            language_id
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        if let Some(scs_id) = scs_id {
+            let scs_repo = SoundChangeSetRepository::new(self.state.clone());
+            let scs = scs_repo.get(scs_id).await?;
+            Ok(scs)
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LanguageSearch {
-    pub text_query: Option<String>,
+    pub q: Option<String>,
     pub owned_by: Option<String>,
     #[allow(dead_code)]
     pub edited_by: Option<Vec<String>>,
@@ -891,6 +1082,8 @@ pub struct LanguageSearch {
     pub created_after: Option<DateTime<Utc>>,
     pub in_family: Option<String>,
 }
+
+crate::util::text_query!(LanguageSearch);
 
 crate::util::repo_from_parts!(LanguageRepository);
 

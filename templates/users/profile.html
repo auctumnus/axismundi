@@ -1,5 +1,9 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "translatables/fragments/card.html" as tc -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "activity.html" as activity -%}
 
 {% block title %}{% call u::name(user) %} - axismundi{% endblock %}
 
@@ -11,20 +15,13 @@
 <link rel="stylesheet" href="/static/language-family-card.css">
 <link rel="stylesheet" href="/static/word-card.css">
 <link rel="stylesheet" href="/static/translatable-card.css">
-<script type="importmap">
-    {
-        "imports": {
-            "@floating-ui/dom": "https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm"
-        }
-    }
-</script>
-<script src="/static/tooltip.js" type="module" defer></script>
+
 <script src="/static/time.js" type="module" defer></script>
-<link rel="stylesheet" href="/static/tooltip.css">
+
 {% if let Some(pfp_url) = user.get_profile_picture_url() %}
     <meta property=og:image content="{{ pfp_url }}">
 {% else %}
-    <meta property=og:image content="/static/default-pfp.webp">
+    <meta property=og:image content="/assets/default-pfp.webp">
 {% endif %}
 {% endblock %}
 
@@ -32,17 +29,24 @@
 {% block embed_description %}{% if !user.description.is_empty() %}{{ user.description }}{% endif %}{% endblock %}
 
 {% block content %}
+
+{% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
+
 <div class="card profile-card">
-    <div class="banner"></div>
+    <div class="banner">
+        {% if let Some(banner_url) = user.get_banner_url() %}
+            <img src="{{ banner_url }}" alt="" aria-hidden="true">
+        {% endif %}
+    </div>
     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
         <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="{{ pfp_url }}">
     {% else %}
-        <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="/static/default-pfp.webp">
+        <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="/assets/default-pfp.webp">
     {% endif %}
     <div class="riding">
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
-        <a class="icon button gray" href="/settings" aria-label="Edit profile"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg></a>
+        <a class="icon button gray" href="/settings" aria-label="Edit profile">{% call u::icon("edit") %}</a>
 
             {% endif %}
         {% endif %}
@@ -108,20 +112,20 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <li><a class="with-icon" href="/new-language">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>new language</span>
             </a></li>
             {% endif %}
         {% endif %}
         <li><a class="with-icon" href="/languages?owned_by={{ user.username }}">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            {% call u::icon("list") %}
             <span>view all</span>
         </a></li>
     </ul>
 </div>
 <ul class="card-list">
     {% for language_with_contributors in languages %}
-        {% call u::render_language_card(&language_with_contributors) %}
+        {% call lang_card::render(&language_with_contributors) %}
     {% endfor %}
 </ul>
 {% endif %}
@@ -133,20 +137,20 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <li><a class="with-icon" href="/new-language-family">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>new language family</span>
             </a></li>
             {% endif %}
         {% endif %}
         <li><a class="with-icon" href="/language-families?owner={{ user.username }}">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            {% call u::icon("list") %}
             <span>view all</span>
         </a></li>
     </ul>
 </div>
 <ul class="card-list">
     {% for family_with_contributors in families %}
-        {% call u::render_language_family_card(&family_with_contributors) %}
+        {% call family_card::render(&family_with_contributors) %}
     {% endfor %}
 </ul>
 {% endif %}
@@ -176,20 +180,20 @@
         {% if let Some(current_user) = current_user %}
             {% if current_user.id == user.id %}
         <li><a class="with-icon" href="/new-translatable">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>new translatable</span>
             </a></li>
             {% endif %}
         {% endif %}
         <li><a class="with-icon" href="/translatables?created_by={{ user.username }}">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            {% call u::icon("list") %}
             <span>view all</span>
         </a></li>
     </ul>
 </div>
     <ul class="card-list">
         {% for translatable_with_meta in translatables %}
-            {% call u::translatable_card(translatable_with_meta) %}
+            {% call tc::render(translatable_with_meta) %}
         {% endfor %}
     </ul>
 {% endif %}
@@ -201,7 +205,7 @@
 {% else %}
     <ul class="card-list activities">
         {% for activity in activities %}
-            {% call u::render_activity(&activity, false) %}
+            {% call activity::render(&activity, false) %}
         {% endfor %}
     </ul>
 {% endif %}

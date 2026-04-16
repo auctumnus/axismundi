@@ -1,7 +1,14 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "language_families/fragments/card.html" as family_card -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+{%- import "language_families/fragments/footer.html" as family_f -%}
 
 {% block title %}add child in {{ family.family.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/language-family-members/create.css">
+{% endblock %}
 
 {% block content %}
 
@@ -22,25 +29,43 @@
     <div class="context-card family-member-context">
         <span class="context-label">for parent member</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_member(&parent_member, can_edit_family) %}
+            {% call member_card::render(&parent_member) %}
         </ul>
     </div>
     <div class="context-card family-context">
         <span class="context-label">in family</span>
         <ul class="standalone-card">
-            {% call u::render_language_family_card(&family) %}
+            {% call family_card::render(&family) %}
         </ul>
     </div>
 </div>
 
-<p>do you want to add a language or a grouping?</p>
-
-<ul>
-    <li><a href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-language-member">Add language</a></li>
-    <li><a href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-grouping">Add grouping</a></li>
+<ul class="language-family-member-options">
+    <li>
+        <a class="card language-family-member-option" href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-language-member">
+            <div class="left" aria-hidden>
+                {% call u::icon("translate") %}
+            </div>
+            <div class="spacer"></div>
+            <div class="right">
+                <h2>create member with language</h2>
+                <span>add a language into the family</span>
+            </div>
+        </a>
+    </li>
+    <li>
+        <a class="card language-family-member-option" href="/language-families/{{ family.family.code }}/members/{{ parent_member.member.id() }}/add-grouping">
+            <div class="left" aria-hidden>
+                <svg class="icon" aria-hidden xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5.5 22q-1.45 0-2.475-1.025T2 18.5t1.025-2.475T5.5 15q.45 0 .875.112t.8.313L11 11.6V8.85q-1.1-.325-1.8-1.237T8.5 5.5q0-1.45 1.025-2.475T12 2t2.475 1.025T15.5 5.5q0 1.2-.7 2.113T13 8.85v2.75l3.85 3.825q.375-.2.788-.312T18.5 15q1.45 0 2.475 1.025T22 18.5t-1.025 2.475T18.5 22t-2.475-1.025T15 18.5q0-.45.112-.875t.313-.8L12 13.4l-3.425 3.425q.2.375.313.8T9 18.5q0 1.45-1.025 2.475T5.5 22m13-2q.625 0 1.063-.437T20 18.5t-.437-1.062T18.5 17t-1.062.438T17 18.5t.438 1.063T18.5 20M12 7q.625 0 1.063-.437T13.5 5.5t-.437-1.062T12 4t-1.062.438T10.5 5.5t.438 1.063T12 7M5.5 20q.625 0 1.063-.437T7 18.5t-.437-1.062T5.5 17t-1.062.438T4 18.5t.438 1.063T5.5 20"/></svg>
+            </div>
+            <div class="spacer"></div>
+            <div class="right">
+                <h2>create member without a language</h2>
+                <span>add a node for structural purposes, or to use as a placeholder</span>
+            </div>
+        </a>
+    </li>
 </ul>
-
-<p>a grouping is a node in the language family with no language attached. after adding it, you may add children to it.</p>
 {% endblock %}
 
 {% block breadcrumb %}
@@ -49,5 +74,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::family_section(&family.family, true) %}
+{% call family_f::family_section(&family.family, true) %}
 {% endblock %}

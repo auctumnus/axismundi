@@ -28,7 +28,9 @@
                 "create_translation",
                 "update_translation",
                 "create_language",
-                "update_language"
+                "update_language",
+                "create_language_family",
+                "update_language_family"
               ]
             }
           }
@@ -150,11 +152,11 @@
       false,
       false,
       false,
-      true,
-      true,
-      true,
-      true,
-      true,
+      false,
+      false,
+      false,
+      false,
+      false,
       false,
       false,
       false,

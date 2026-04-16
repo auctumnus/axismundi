@@ -1,0 +1,125 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH inserted AS (\n                    INSERT INTO translation (translatable, language, translated_text, translated_title, created_by, updated_by, ipa, gloss, notes)\n                    VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8)\n                    RETURNING id, translatable, language, translated_text, translated_title, created_at, updated_at, created_by, updated_by, ipa, gloss, notes, like_count\n                )\n                SELECT\n                    i.id,\n                    i.translatable,\n                    i.language,\n                    i.ipa,\n                    i.gloss,\n                    i.notes,\n                    i.translated_text,\n                    i.translated_title,\n                    i.created_at,\n                    i.updated_at,\n                    i.like_count,\n                    i.created_by,\n                    i.updated_by,\n                    tr.slug as translatable_slug,\n                    tr.title as translatable_title,\n                    l.code as language_code,\n                    l.name as language_name\n                FROM inserted i\n                JOIN translatable tr ON i.translatable = tr.id\n                JOIN languages l ON i.language = l.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "translatable",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "language",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "ipa",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "gloss",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "translated_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "translated_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "translatable_slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "translatable_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "language_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "language_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "880c3e859da2f89cd777417d2f5d8a0fd389690ffe73850497b32d986c0e9072"
+}

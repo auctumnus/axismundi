@@ -1,8 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import AsyncSelect from "react-select/async";
 import type { GroupBase, OptionsOrGroups, StylesConfig } from "react-select";
-import "./word-combobox.css"; // Reuse the same styles
+import { AsyncSelect } from "./components/async-select";
 
 interface UserSearchResult {
   id: string;
@@ -89,109 +88,6 @@ function UserCombobox({
     setSelectedUsername(newValue?.username || "");
   };
 
-  // Custom styles matching the existing form select styles
-  const customStyles: StylesConfig<UserOption, false, GroupBase<UserOption>> = {
-    control: (base, state) => ({
-      ...base,
-      fontFamily: "var(--font-normal)",
-      padding: "0",
-      borderRadius: "var(--rounding)",
-      backgroundColor: "var(--input-background)",
-      color: "var(--foreground-primary)",
-      fontSize: "1rem",
-      minHeight: "40px",
-      outline: "0",
-      boxShadow: state.isFocused ? "0 0 0 2px var(--focus-ring)" : "none",
-      borderColor: state.isFocused
-        ? "var(--input-border-focus)"
-        : "var(--input-border)",
-      transition:
-        "background-color 250ms ease-in-out, border-color 250ms ease-in-out",
-      "&:hover": {
-        borderColor: state.isFocused
-          ? "var(--input-border-focus)"
-          : "var(--input-border)",
-      },
-    }),
-    valueContainer: (base) => ({
-      ...base,
-      padding: "0 0.5rem",
-    }),
-    input: (base) => ({
-      ...base,
-      color: "var(--foreground-primary)",
-      margin: "0",
-      padding: "0",
-    }),
-    placeholder: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-    singleValue: (base) => ({
-      ...base,
-      color: "var(--foreground-primary)",
-    }),
-    menu: (base) => ({
-      ...base,
-      backgroundColor: "var(--background-panel)",
-      border: `1px solid var(--input-border)`,
-      borderRadius: "var(--rounding)",
-      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-      zIndex: 9999,
-    }),
-    menuList: (base) => ({
-      ...base,
-      padding: "0",
-    }),
-    option: (base, state) => ({
-      ...base,
-      backgroundColor: state.isFocused
-        ? "var(--input-background-focus)"
-        : state.isSelected
-          ? "var(--input-background-focus)"
-          : "transparent",
-      color: "var(--foreground-primary)",
-      cursor: "pointer",
-      padding: "8px 12px",
-      transition: "background-color 150ms ease-in-out",
-      "&:active": {
-        backgroundColor: "var(--input-background-focus)",
-      },
-    }),
-    indicatorSeparator: (base) => ({
-      ...base,
-      backgroundColor: "var(--input-border)",
-    }),
-    dropdownIndicator: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-      transition: "color 150ms ease-in-out",
-      "&:hover": {
-        color: "var(--foreground-primary)",
-      },
-    }),
-    clearIndicator: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-      transition: "color 150ms ease-in-out",
-      "&:hover": {
-        color: "var(--foreground-primary)",
-      },
-    }),
-    loadingIndicator: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-    noOptionsMessage: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-    loadingMessage: (base) => ({
-      ...base,
-      color: "var(--foreground-secondary)",
-    }),
-  };
-
   return (
     <div className="word-combobox">
       <AsyncSelect<UserOption, false, GroupBase<UserOption>>
@@ -203,7 +99,6 @@ function UserCombobox({
         value={selectedOption}
         placeholder={placeholder}
         isClearable
-        styles={customStyles}
         noOptionsMessage={({ inputValue }) =>
           inputValue ? "No users found" : "Type to search..."
         }

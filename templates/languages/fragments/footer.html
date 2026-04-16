@@ -1,0 +1,21 @@
+{% macro language_section(language, can_edit_language) %}
+<li>
+    <h2>{{ language.name }}</h2>
+    <ul>
+        <li><a href="/languages/{{ language.code }}">main page</a></li>
+        <li><a href="/languages/{{ language.code }}/words">dictionary</a></li>
+        <li><a href="/languages/{{ language.code }}/translations">translations</a></li>
+        <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
+        <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
+        <li><a href="/languages/{{ language.code }}/phonology-tables">phonology tables</a></li>
+        <li><a href="/languages/{{ language.code }}/sound-change-sets">sound change sets</a></li>
+        {% if can_edit_language %}
+            <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
+            <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
+        {% endif %}
+        <li><a href="/report/new?resource_type=language&resource_id={{ language.id }}">report</a></li>
+    </ul>
+</li>
+{% endmacro %}
+
+{% call language_section(language, can_edit_language) %}

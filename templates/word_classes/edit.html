@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block title %}edit {{ word_class.name }} - {{ language.name }} - axismundi{% endblock %}
 
@@ -50,5 +51,5 @@
 
 
 {% block footer %}
-{% call u::language_section(&language, can_edit_language) %}
+{% call lang_f::language_section(&language, can_edit_language) %}
 {% endblock %}

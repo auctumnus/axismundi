@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM quotation WHERE id = ANY($1) AND translation = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2c3fc8336a093484907894c84679c7e04af989709451de6a81284a1408e6886"
+}

@@ -1,5 +1,10 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
+{%- import "translations/fragments/footer.html" as translation_footer -%}
+{%- import "translatables/fragments/full_card.html" as translatable_full_card -%}
 
 {% block title %}edit translation - axismundi{% endblock %}
 
@@ -10,11 +15,16 @@
         code: "{{ language.code }}",
     }
 </script>
+<link rel="stylesheet" href="/static/components/async-select.css">
+<link rel="stylesheet" href="/static/word-combobox.css">
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
+<script type="module" src="/static/translations/quotations-editor.js"></script>
+<link rel="stylesheet" href="/static/translations/quotations-editor.css">
 <script src="/static/like-button.js" type="module" defer></script>
-<link rel="stylesheet" href="/static/translatables/card.css">
+<link rel="stylesheet" href="/static/translatables/full-card.css">
+<link rel="stylesheet" href="/static/components/modal.css">
 {% endblock %}
 {% block content %}
 
@@ -35,14 +45,14 @@
     <div class="context-card language-context">
         <span class="context-label">for language</span>
         <ul class="standalone-card">
-            {% call u::render_language_card(&language_with_contributors) %}
+            {% call lang_card::render(&language_with_contributors) %}
         </ul>
     </div>
     <div class="context-card translatable-context">
         <span class="context-label">for translatable</span>
         <ul class="standalone-card">
             <li>
-                {% call u::translatable_full_card(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
+                {% call translatable_full_card::render(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
             </li>
         </ul>
     </div>
@@ -55,10 +65,10 @@
         <input type="text" id="translated_title" name="translated_title" value="{{ previous_translated_title }}" placeholder="Title in your language (optional)">
     </section>
 
-    <section>
+    <section id="quotations-editor-root">
         <label for="translated_text">Translated text</label>
         {% call u::field_error(name="translated_text") %}
-            <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
+        <textarea id="translated_text" name="translated_text" required>{{ previous_translated_text }}</textarea>
     </section>
 
     <section>
@@ -103,11 +113,27 @@
   });
 </script>
 <script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountQuotationsEditor) {
+      window.mountQuotationsEditor('quotations-editor-root', {
+        quotations: {{ previous_quotations | json | safe }},
+        text: {{ previous_translated_text | json | safe }},
+        languageCode: "{{ language.code }}",
+        {% if let Some(errors) = crate::util::get_error(error.as_ref(), "translated_text") %}
+        error: [
+            {% for error in errors %}
+                {{ error.to_string() | json | safe }},
+            {% endfor %}
+        ],
+        {% endif %}
+      });
+    }
+  });
+</script>
 
 {% endblock %}
 
 {% block footer %}
-{% call u::translatable_section(&translatable_with_meta.translatable, can_edit_translatable) %}
-{% call u::language_section(&language, can_edit_language) %}
-{% call u::translation_section(&translatable_with_meta.translatable, &language, &translation, can_edit_translation) %}
+{% call translation_footer::translation_section(&translatable_with_meta.translatable, &language, &translation, can_edit_language, can_edit_translatable) %}
 {% endblock %}

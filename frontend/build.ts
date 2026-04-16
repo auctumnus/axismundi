@@ -74,7 +74,11 @@ const BUNDLE_ENTRY_POINTS = [
   'src/word-combobox.tsx',
   'src/user-combobox.tsx',
   'src/phonology-editor.tsx',
+  'src/definitions-editor.tsx',
   'src/sound-change-runner.ts',
+  'src/sound-change-sets/view.ts',
+  'src/tooltip.ts',
+  'src/translations/quotations-editor.tsx',
 ];
 
 async function bundleReactFiles() {
@@ -90,6 +94,7 @@ async function bundleReactFiles() {
   const result = await Bun.build({
     entrypoints: existingEntrypoints,
     outdir: distDir,
+    root: srcDir,
     minify: true,
     sourcemap: 'linked',
     target: 'browser',

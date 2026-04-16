@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE quotation\n                SET span_start = $2,\n                    span_end = $3,\n                    highlight_start = $4,\n                    highlight_end = $5,\n                    notes = $6,\n                    updated_by = $7,\n                    updated_at = CURRENT_TIMESTAMP\n                WHERE id = $1\n                RETURNING id, translation, definition, span_start, span_end, highlight_start, highlight_end, notes, created_at, updated_at, created_by, updated_by\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "translation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "definition",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "span_start",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "span_end",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "highlight_start",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "highlight_end",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "413a12025784ad4cde5ba56f6822f0aebc76b360fc15044058a4ed1c54d580db"
+}

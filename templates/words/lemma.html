@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/relations/fragments/card.html" as relation_card -%}
+{%- import "words/fragments/footer.html" as word_f -%}
 
 {% block title %}{{ word.word }}{% if other_lemmata %} ({{ word.lemma }}){% endif %} - {{ language.name }} - axismundi{% endblock %}
 
@@ -11,93 +13,197 @@
 
 {% block content %}
 
-<div class="card">
+{% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
+
+<div class="card word-card-full">
     <div class="header-with-actions">
-        <h1>
-            <span>{{ word.word }}</span>
-            {% if let Some(abbreviation) = word.word_class_abbreviation %}
-            <span class="word-class-container">
-                (<a href="/languages/{{ language.code }}/word-classes/{{ abbreviation }}" class="word-class">{{ abbreviation }}</a>.)
-            </span>
-            {% endif %}
-        </h1>
-        <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
-            {% if user_has_permission %}
-                <a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit" data-tooltip="Edit word">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-1 2q-.425 0-.712-.288T3 20v-2.425q0-.4.15-.763t.425-.637L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.437.65T21 6.4q0 .4-.138.763t-.437.662l-12.6 12.6q-.275.275-.638.425t-.762.15zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"/></svg>
-                </a>
-                <a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete" data-tooltip="Delete word">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"/></svg>
-                </a>
-            {% endif %}
-            <span class="likes like-button {% if is_liked %}liked{% endif %}" data-target="/api/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" data-tooltip="Like this word" role="button">
-                <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763zM8.85 8.125L4 9.725L7.1 14.2L7 18.975l5-1.375l5 1.4l-.1-4.8L20 9.775l-4.85-1.65L12 4zM12 11.5"/></svg>
-                    <svg class="icon when-liked" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m7.625 6.4l2.8-3.625q.3-.4.713-.587T12 2t.863.188t.712.587l2.8 3.625l4.25 1.425q.65.2 1.025.738t.375 1.187q0 .3-.088.6t-.287.575l-2.75 3.9l.1 4.1q.025.875-.575 1.475t-1.4.6q-.05 0-.55-.075L12 19.675l-4.475 1.25q-.125.05-.275.063T6.975 21q-.8 0-1.4-.6T5 18.925l.1-4.125l-2.725-3.875q-.2-.275-.288-.575T2 9.75q0-.625.363-1.162t1.012-.763z"/></svg>
+        <div class="with-subtitle">
+            <h1 class="word-header">
+                <span>{{ word.word }}</span>
+                {% if let Some(word_class) = word_class %}
+                <span class="word-class-container" data-tooltip="{{ word_class.name }}">
+                    <a
+                        href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}"
+                        class="word-class"
+                    >
+                        <span class="word-class-outer">
+                            (<span class="word-class-inner"><span class="word-class-abbreviation">{{ word_class.abbreviation }}</span>.</span>)
+                        </span>
+                    </a>
                 </span>
-                <span class="like-count">{{ word.like_count }}</span>
-            </span>
+                {% endif %}
+            </h1>
+            <div class="contributors">
+                <span>by</span>
+                {% call u::badge(&creator, size="small") %}
+                {% if contributor_count > 0 %}
+                    <span>and {{ contributor_count }} other contributor{% if contributor_count != 1 %}s{% endif %}</span>
+                {% endif %}
+            </div>
+        </div>
+        <ul class="icons">
+            {% if user_has_permission %}
+                <li><a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit" data-tooltip="Edit word">
+                    {% call u::icon("edit") %}
+                </a></li>
+                <li><a class="icon button red" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete" data-tooltip="Delete word">
+                    {% call u::icon("delete") %}
+                </a></li>
+            {% endif %}
+            <li>
+                <span class="likes like-button {% if is_liked %}liked{% endif %}" data-target="/api/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" data-tooltip="Like this word" role="button">
+                    <span class="icon-button-container yellow">
+                        <svg class="icon when-unliked"><use href="#icon-star-outline"></use></svg>
+                        <svg class="icon when-liked"><use href="#icon-star-filled"></use></svg>
+                    </span>
+                    <span class="like-count">{{ word.like_count }}</span>
+                </span>
+            </li>
+        </div>
+
+        <div class="word-meta">
+            {% if !word.ipa.is_empty() %}<span class="ipa">/{{ word.ipa }}/</span>{% endif %}
+        </div>
+
+
+        {% if !definitions.is_empty() %}
+            <ol class="definitions-list">
+                {% for (definition, quotations, has_more) in definitions %}
+                    <li>
+                        <div class="definition">
+                            {% if !definition.context.is_empty() %}
+                            <span class="context-container">
+                                (<span class="context">{{ definition.context }}</span>)
+                            </span>
+                            {% endif %}
+                            {{ definition.definition }}
+                        </div>
+                        <ul class="quotations">
+                            {% for q in quotations %}
+                                <li>
+                                    <a href="/translatable/{{ q.translatable_code }}/translation/{{ q.language_code }}" class="quotation-link">
+                                        {{ q.render() | safe }}
+                                    </a>
+                                    {% if !q.notes.is_empty() %}
+                                        <span class="quotation-notes">{{ q.notes | safe }}</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                            {% if has_more %}
+                                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/quotations">see more</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+            </ol>
+        {% else %}
+            <p class="empty-description">no definitions yet</p>
+        {% endif %}
+
+        {% if !rendered_notes.is_empty() %}
+            <div class="rendered-notes markdown-content">{{ rendered_notes|safe }}</div>
+        {% endif %}
+        
+        <table>
+            <tr>
+                <th>created</th>
+                <td>{% call u::relative(&word.created_at) %}</td>
+            </tr>
+            <tr>
+                <th>updated</th>
+                <td>{% call u::relative(&word.updated_at) %}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+{% if user_has_permission && recent_relations.is_empty() %}
+<div class="card first-interaction-card">
+    <h2>no word relations yet</h2>
+    <p>create the first relation to another word to get started</p>
+    <div class="actions">
+        <a class="button" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">add relation</a>
+        <a class="button" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive">derive</a>
+        <a class="button" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">loan</a>
+    </div>
+</div>
+{% else %}
+{% if let Some(cognacy) = cognacy %}
+    <div class="card cognacy-card">
+        <div class="header-with-actions">
+            <h2>related words</h2>
+            <ul>
+                {% if user_has_permission %}
+                    <li><a id="add-relation-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
+                        <svg class="icon"><use href="#icon-plus"></use></svg>
+                        <span>add relation</span>
+                    </a></li>
+                    <li class="when-large"><a id="derive-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive">
+                        {% call u::icon("arrow-split") %}
+                        <span>derive</span>
+                    </a></li>
+                    <li class="when-large"><a id="loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">
+                        {% call u::icon("forward") %}
+                        <span>loan</span>
+                    </a></li>
+                    <li class="when-small"><a id="derive-or-loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-or-loan">
+                        {% call u::icon("arrow-split") %}
+                        <span>derive or loan</span>
+                    </a></li>
+                {% endif %}
+                <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">
+                    {% call u::icon("list") %}
+                    <span>view all</span>
+                </a></li>
+            </ul>
+        </div>
+        <div class="cognacy-svg">
+            {{ cognacy | safe }}
         </div>
     </div>
 
-    <div class="contributors">
-        <span>by</span>
-        {% call u::badge(&creator, size="small") %}
-        {% if contributor_count > 0 %}
-            <span>and {{ contributor_count }} other contributor{% if contributor_count != 1 %}s{% endif %}</span>
-        {% endif %}
-    </div>
+    <h2>see also</h2>
 
-    <div class="word-meta">
-        {% if !word.ipa.is_empty() %}<span class="ipa">/{{ word.ipa }}/</span>{% endif %}
-    </div>
-
-    {% if !definitions.is_empty() %}
-        <ol class="definitions-list">
-            {% for definition in definitions %}
-                <li>
-                    {% if !definition.context.is_empty() %}
-                    <span class="context-container">
-                        (<span class="context">{{ definition.context }}</span>)
-                    </span>
-                    {% endif %}
-                    {{ definition.definition }}
-                </li>
-            {% endfor %}
-        </ol>
-    {% else %}
-        <p class="empty-description">no definitions yet</p>
-    {% endif %}
-
-    {% if !rendered_notes.is_empty() %}
-        <div class="rendered-notes markdown-content">{{ rendered_notes|safe }}</div>
-    {% endif %}
-</div>
-
+    <ul class="card-list">
+        {% for relation in non_cognacy_relations %}
+            {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
+        {% endfor %}
+    </ul>
+{% else %}
 <div class="header-with-actions">
-    <h2>word relations</h2>
+    <h2>related words</h2>
     <ul>
         {% if user_has_permission %}
-            <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11 13H6q-.425 0-.712-.288T5 12t.288-.712T6 11h5V6q0-.425.288-.712T12 5t.713.288T13 6v5h5q.425 0 .713.288T19 12t-.288.713T18 13h-5v5q0 .425-.288.713T12 19t-.712-.288T11 18z"/></svg>
+            <li><a id="add-relation-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
                 <span>add relation</span>
+            </a></li>
+            <li class="when-large"><a id="derive-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive">
+                {% call u::icon("arrow-split") %}
+                <span>derive</span>
+            </a></li>
+            <li class="when-large"><a id="loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">
+                {% call u::icon("forward") %}
+                <span>loan</span>
+            </a></li>
+            <li class="when-small"><a id="derive-or-loan-link" class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/derive-or-loan">
+                {% call u::icon("arrow-split") %}
+                <span>derive or loan</span>
             </a></li>
         {% endif %}
         <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M9 18h11v-2.675H9zM4 8.675h3V6H4zm0 4.675h3v-2.675H4zM4 18h3v-2.675H4zm5-4.65h11v-2.675H9zm0-4.675h11V6H9zM4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"/></svg>
+            {% call u::icon("list") %}
             <span>view all</span>
         </a></li>
     </ul>
 </div>
-
 <ul class="card-list">
     {% for relation in recent_relations %}
-        {% call u::render_relation_card(&relation, "", &language.code, &word.slug, word.lemma, user_has_permission) %}
+        {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
     {% endfor %}
 </ul>
+{% endif %}
 
-{% if total_relations <= 0 %}
-    <p class="empty-description">no word relations yet</p>
 {% endif %}
 
 {% endblock %}
@@ -108,6 +214,5 @@
 {% endblock %}
 
 {% block footer %}
-{% call u::language_section(&language, user_has_permission) %}
-{% call u::word_section(&word, &language, user_has_permission, other_lemmata) %}
+{% call word_f::word_section(&word, &language, user_has_permission, other_lemmata) %}
 {% endblock %}

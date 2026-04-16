@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "language_families/fragments/footer.html" as family_footer -%}
+{%- import "language_families/members/fragments/card.html" as member_card -%}
+
+{% block title %}new sound change set - {{ member.name() }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/slate-editor.css">
+<script type="module" src="/static/form-editor.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<div class="context-cards">
+    <div class="context-card family-member-context">
+        <span class="context-label">for family member</span>
+        <ul class="standalone-card">
+            {% call member_card::render(&member) %}
+        </ul>
+    </div>
+</div>
+
+<h1>new sound change set</h1>
+
+{% call u::top_level_error() %}
+
+<form class="default" method="post" action="/language-families/{{ fam_code }}/members/{{ member.member.id() }}/sound-change-sets/new" id="new-sound-change-set-form">
+    <section>
+        <label for="name">Name</label>
+        <input type="text" name="name" id="name" value="{{ previous_name }}" required>
+        {% call u::field_error("name") %}
+    </section>
+
+    <section>
+        <label for="description">Description (optional)</label>
+        {% call u::field_error(name="description") %}
+        <textarea id="description" name="description" rows="4">{{ previous_description }}</textarea>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Next</button>
+    </section>
+</form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountFormEditor) {
+      const descriptionTextarea = document.getElementById('description');
+      const descriptionDiv = document.createElement('div');
+      descriptionDiv.id = 'description';
+      descriptionTextarea.replaceWith(descriptionDiv);
+      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
+      window.mountFormEditor('description', {
+        initialValue: initialValue,
+        inputName: 'description',
+        formId: 'new-sound-change-set-form'
+      });
+    }
+  });
+</script>
+<script type="application/json" id="description-initial-value">{{ previous_description | json | safe }}</script>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/language-families/{{ fam_code }}" class="breadcrumb">{{ member.family.name }}</a>
+<span class="separator">/</span>
+<a href="/language-families/{{ fam_code }}/members/{{ member.member.id() }}" class="breadcrumb">{{ member.name() }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call family_footer::family_section(&member.family, false) %}
+{% endblock %}

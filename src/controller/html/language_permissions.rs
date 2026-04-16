@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{okay, render_template},
+    controller::html::{self, okay, render_template},
     err::AppError,
     get_user,
     model::{
@@ -22,7 +22,11 @@ use crate::{
         users::{User, UserRepository},
     },
     pagination::PaginatedRequest,
-    util::{AppState, extract_session::Session},
+    util::{
+        AppState,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -49,27 +53,32 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     (secure_routes, normal_routes)
 }
 
-struct ContributorWithStats {
-    user: User,
-    permission: PermissionLevel,
-    permission_id: Option<Uuid>,
-    word_count: i64,
-    translation_count: i64,
-    can_edit: bool,
-    can_delete: bool,
-    created_at: Option<chrono::DateTime<chrono::Utc>>,
+pub struct ContributorWithStats {
+    pub user: User,
+    pub permission: PermissionLevel,
+    pub permission_id: Option<Uuid>,
+    pub word_count: i64,
+    pub translation_count: i64,
+    pub can_edit: bool,
+    pub can_delete: bool,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Template)]
-#[template(path = "languages/permissions/contributors.html")]
-struct SearchContributorsTemplate {
-    current_user: Option<User>,
-    language: Language,
-    contributors: Vec<ContributorWithStats>,
-    user_has_permission: bool,
-    previous_query: ContributionsSearch,
-    #[allow(dead_code)]
-    previous_pagination: PaginatedRequest,
+#[template(path = "languages/permissions/fragments/list_header.html")]
+struct Header;
+
+#[derive(Template)]
+#[template(path = "languages/permissions/fragments/query.html")]
+struct QueryTemplate {
+    query: ContributionsSearch,
+}
+
+#[derive(Template)]
+#[template(path = "languages/permissions/fragments/card.html")]
+pub struct ContributorCard {
+    pub contributor: ContributorWithStats,
+    pub base_url: String,
 }
 
 #[allow(clippy::match_same_arms)] // easier to read like this
@@ -83,6 +92,8 @@ async fn search_contributors(
     axum::extract::Query(pagination): axum::extract::Query<PaginatedRequest>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
+    let search_action = format!("/languages/{}/contributors", language.code);
+    let base_url = format!("/languages/{}", language.code);
 
     // Get current user's permission level
     let current_user_permission = if let Some(user) = s.user() {
@@ -96,7 +107,7 @@ async fn search_contributors(
         None
     };
 
-    let user_has_permission = if let Some(user) = s.user() {
+    let can_edit_language = if let Some(user) = s.user() {
         permissions
             .has_permission(user.id, language.id, PermissionLevel::Editor)
             .await
@@ -105,68 +116,102 @@ async fn search_contributors(
         false
     };
 
-    let contributor_records = attempt!(
-        s,
-        contribution_stats
-            .search_top_contributors(&language.id, &search, &pagination,)
-            .await
-    );
-
     let current_user_id = s.user().map(|u| u.id);
-    let mut contributors = Vec::new();
-    for record in contributor_records.items {
-        let user = record.0;
-        let target_permission = record.2;
-        let permission_id = record.3;
 
-        // Determine if current user can edit/delete this contributor's permission
-        let (can_edit, can_delete) = if let Some(current_perm) = current_user_permission {
-            // Check if trying to modify own permission
-            let is_self = current_user_id == Some(user.id);
+    let results = contribution_stats
+        .search_top_contributors(&language.id, &search, &pagination)
+        .await
+        .map(|response| {
+            let items = response
+                .items
+                .into_iter()
+                .map(|record| {
+                    let user = record.0;
+                    let target_permission = record.2;
+                    let permission_id = record.3;
 
-            // Owner cannot delete/edit their own permission
-            // Users can delete their own permission (except Owner)
-            if is_self {
-                let can_delete_self = current_perm != PermissionLevel::Owner;
-                (false, can_delete_self)
-            } else {
-                // Check permission table from language_permissions.rs
-                let can_modify = match (current_perm, target_permission) {
-                    (PermissionLevel::Owner, PermissionLevel::Owner) => false,
-                    (PermissionLevel::Owner, _) => true,
-                    (PermissionLevel::Admin, PermissionLevel::Editor) => true,
-                    (PermissionLevel::Admin, PermissionLevel::Viewer) => true,
-                    _ => false,
-                };
-                (can_modify, can_modify)
+                    let (can_edit, can_delete) = if let Some(current_perm) = current_user_permission
+                    {
+                        let is_self = current_user_id == Some(user.id);
+
+                        if is_self {
+                            let can_delete_self = current_perm != PermissionLevel::Owner;
+                            (false, can_delete_self)
+                        } else {
+                            let can_modify = match (current_perm, target_permission) {
+                                (PermissionLevel::Owner, PermissionLevel::Owner) => false,
+                                (PermissionLevel::Owner, _) => true,
+                                (PermissionLevel::Admin, PermissionLevel::Editor) => true,
+                                (PermissionLevel::Admin, PermissionLevel::Viewer) => true,
+                                _ => false,
+                            };
+                            (can_modify, can_modify)
+                        }
+                    } else {
+                        (false, false)
+                    };
+
+                    ContributorWithStats {
+                        user,
+                        permission: target_permission,
+                        permission_id,
+                        word_count: record.1.word_count,
+                        translation_count: record.1.translation_count,
+                        can_edit: can_edit && permission_id.is_some(),
+                        can_delete: can_delete && permission_id.is_some(),
+                        created_at: record.4,
+                    }
+                })
+                .collect();
+            crate::pagination::PaginatedResponse {
+                items,
+                total: response.total,
+                offset: response.offset,
+                limit: response.limit,
+                has_more: response.has_more,
             }
-        } else {
-            (false, false)
-        };
-
-        contributors.push(ContributorWithStats {
-            user,
-            permission: target_permission,
-            permission_id,
-            word_count: record.1.word_count,
-            translation_count: record.1.translation_count,
-            can_edit: can_edit && permission_id.is_some(),
-            can_delete: can_delete && permission_id.is_some(),
-            created_at: record.4,
         });
-    }
 
-    let template = SearchContributorsTemplate {
-        current_user: s.user().cloned(),
-        language,
-        contributors,
-        user_has_permission,
-        previous_query: search,
-        previous_pagination: pagination,
+    let render_item = |contributor: &ContributorWithStats| ContributorCard {
+        contributor: ContributorWithStats {
+            user: contributor.user.clone(),
+            permission: contributor.permission,
+            permission_id: contributor.permission_id,
+            word_count: contributor.word_count,
+            translation_count: contributor.translation_count,
+            can_edit: contributor.can_edit,
+            can_delete: contributor.can_delete,
+            created_at: contributor.created_at,
+        },
+        base_url: base_url.clone(),
     };
 
-    let body = render_template(template);
-    okay(body)
+    let breadcrumbs = html::languages::Breadcrumb {
+        language: &language,
+    };
+    let footer = html::languages::Footer {
+        can_edit_language,
+        language: &language,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user: s.user().cloned(),
+        header: Header,
+        query_template: QueryTemplate {
+            query: search.clone(),
+        },
+        query: search,
+        results,
+        pagination,
+        search_name: "contributors",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
 }
 
 // Delete permission handlers

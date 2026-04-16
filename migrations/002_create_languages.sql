@@ -8,6 +8,7 @@ create table languages (
     private boolean not null default false,
 
     like_count bigint not null default 0,
+    banner_object_id text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

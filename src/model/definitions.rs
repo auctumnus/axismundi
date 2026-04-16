@@ -19,6 +19,7 @@ pub struct Definition {
     pub word: Uuid,
     pub definition: String,
     pub context: String,
+    pub position: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
@@ -65,6 +66,7 @@ impl DefinitionRepository {
                     word,
                     definition,
                     context,
+                    position,
                     created_at,
                     updated_at,
                     created_by,
@@ -101,19 +103,40 @@ impl DefinitionRepository {
 
         let mut tx = self.state.pool.begin().await?;
 
+        let result = self
+            .create_with_tx(requestor, word_id, word.language, definition, &mut tx)
+            .await?;
+
+        tx.commit().await?;
+
+        Ok(result)
+    }
+
+    pub async fn create_with_tx(
+        &self,
+        requestor: &User,
+        word_id: Uuid,
+        language_id: Uuid,
+        definition: CreateDefinition,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<Definition> {
+        definition.validate()?;
+
         let result = sqlx::query_as!(
             Definition,
             r#"
-                INSERT INTO definitions (word, definition, context, created_by, updated_by)
-                VALUES ($1, $2, $3, $4, $4)
-                RETURNING id, word, definition, context, created_at, updated_at, created_by, updated_by
+                INSERT INTO definitions (word, definition, context, created_by, updated_by, position)
+                VALUES ($1, $2, $3, $4, $4,
+                    COALESCE((SELECT MAX(position) FROM definitions WHERE word = $1), -1) + 1
+                )
+                RETURNING id, word, definition, context, position, created_at, updated_at, created_by, updated_by
             "#,
             word_id,
             definition.definition,
             definition.context.unwrap_or_default(),
             requestor.id
         )
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
@@ -123,18 +146,18 @@ impl DefinitionRepository {
             .check_permission_with_audit(
                 crate::model::language_permissions::CheckPermissionReq {
                     user: requestor.id,
-                    language: word.language,
+                    language: language_id,
                     required_level: PermissionLevel::Editor,
                     action_type: crate::model::audit_log::AuditActionType::Created,
                     resource_type: crate::model::audit_log::AuditableResource::Definition,
                     resource_id: result.id,
                     context: Some(serde_json::json!({
                         "word_id": word_id,
-                        "language_id": word.language,
+                        "language_id": language_id,
                         "definition": definition.definition
                     })),
                 },
-                &mut tx,
+                tx,
             )
             .await?;
 
@@ -144,8 +167,6 @@ impl DefinitionRepository {
             ));
         }
 
-        tx.commit().await?;
-
         Ok(result)
     }
 
@@ -154,6 +175,7 @@ impl DefinitionRepository {
         requestor: &User,
         id: Uuid,
         updates: UpdateDefinition,
+        position: Option<i32>,
     ) -> AppResult<Definition> {
         updates.validate()?;
 
@@ -203,15 +225,17 @@ impl DefinitionRepository {
                 UPDATE definitions
                 SET definition = COALESCE($2, definition),
                     context = COALESCE($3, context),
+                    position = COALESCE($5, position),
                     updated_by = $4,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                RETURNING id, word, definition, context, created_at, updated_at, created_by, updated_by
+                RETURNING id, word, definition, context, position, created_at, updated_at, created_by, updated_by
             "#,
             id,
             updates.definition,
             updates.context,
-            requestor.id
+            requestor.id,
+            position
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -271,6 +295,14 @@ impl DefinitionRepository {
             .execute(&mut *tx)
             .await?;
 
+        sqlx::query!(
+            "UPDATE definitions SET position = position - 1 WHERE word = $1 AND position > $2",
+            existing.word,
+            existing.position
+        )
+        .execute(&mut *tx)
+        .await?;
+
         tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
@@ -289,13 +321,14 @@ impl DefinitionRepository {
                     word,
                     definition,
                     context,
+                    position,
                     created_at,
                     updated_at,
                     created_by,
                     updated_by
                 FROM definitions
                 WHERE word = $1
-                ORDER BY created_at DESC
+                ORDER BY position ASC
                 LIMIT $2
                 OFFSET $3
             "#,
@@ -321,8 +354,6 @@ impl DefinitionRepository {
         let has_more =
             (i64::from(pagination.offset) + i64::try_from(items.len()).unwrap_or(i64::MAX)) < total;
 
-        println!("items: {:?}", items);
-
         Ok(PaginatedResponse {
             items,
             total,
@@ -341,13 +372,14 @@ impl DefinitionRepository {
                     word,
                     definition,
                     context,
+                    position,
                     created_at,
                     updated_at,
                     created_by,
                     updated_by
                 FROM definitions
                 WHERE word = $1
-                ORDER BY created_at ASC
+                ORDER BY position ASC
                 LIMIT 1
             "#,
             word_id
@@ -356,6 +388,82 @@ impl DefinitionRepository {
         .await?;
 
         Ok(result)
+    }
+
+    pub async fn swap(
+        &self,
+        requestor: &User,
+        word_id: Uuid,
+        id1: Uuid,
+        id2: Uuid,
+    ) -> AppResult<()> {
+        ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let word = crate::model::words::WordRepository::new(self.state.clone())
+            .find_by_id(word_id)
+            .await?;
+
+        let can_edit = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        )
+        .has_permission(requestor.id, word.language, PermissionLevel::Editor)
+        .await?;
+
+        if !can_edit {
+            return Err(bad_request(
+                "you don't have permission to reorder definitions",
+            ));
+        }
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let def1 = sqlx::query_as!(
+            Definition,
+            r#"
+                SELECT id, word, definition, context, position, created_at, updated_at, created_by, updated_by
+                FROM definitions WHERE id = $1 AND word = $2
+            "#,
+            id1,
+            word_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let def2 = sqlx::query_as!(
+            Definition,
+            r#"
+                SELECT id, word, definition, context, position, created_at, updated_at, created_by, updated_by
+                FROM definitions WHERE id = $1 AND word = $2
+            "#,
+            id2,
+            word_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        sqlx::query!(
+            "UPDATE definitions SET position = $1 WHERE id = $2",
+            def2.position,
+            def1.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query!(
+            "UPDATE definitions SET position = $1 WHERE id = $2",
+            def1.position,
+            def2.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(())
     }
 }
 
@@ -581,6 +689,7 @@ mod tests {
                     definition: Some("updated definition".to_string()),
                     context: None,
                 },
+                None,
             )
             .await
             .unwrap();

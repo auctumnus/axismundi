@@ -944,7 +944,12 @@ mod tests {
             "in_progress"
         );
         println!("Fetched report: {}", fetched_report);
-        assert!(fetched_report["resolution_note"].as_str().unwrap().is_empty()); // Hidden
+        assert!(
+            fetched_report["resolution_note"]
+                .as_str()
+                .unwrap()
+                .is_empty()
+        ); // Hidden
         assert!(fetched_report["priority"].is_null()); // Always hidden for regular users
     }
 

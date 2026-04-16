@@ -1,0 +1,26 @@
+{%- import "util.html" as u -%}
+
+{% macro render(family_with_contributors, back="") %}
+<li class="language-family-card preview-card">
+    <a href="/language-families/{{ family_with_contributors.family.code }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
+        <span class="left">
+            <span class="title">{{ family_with_contributors.family.name }}</span>
+            {% if !family_with_contributors.family.description.is_empty() %}
+                <span class="summary ellipse">{{ crate::util::first_sentence(&family_with_contributors.family.description) }}</span>
+            {% else %}
+                <span class="summary ellipse empty-description">no description yet</span>
+            {% endif %}
+            <ul class="contributor-list">
+                {% for contributor in family_with_contributors.contributors %}
+                <li class="compressed-pfps">
+                    {% call u::pfp(&contributor, size="small") %}
+                </li>
+                {% endfor %}
+            </ul>
+        </span>
+        {% call u::like_button("/api/language-families/" ~ family_with_contributors.family.code, family_with_contributors.family.like_count, family_with_contributors.is_liked, "Like this language family") %}
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(family_with_contributors, back_url) %}

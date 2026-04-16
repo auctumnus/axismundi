@@ -1,3 +1,4 @@
+use askama::Template;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -11,9 +12,12 @@ use crate::model::users::User;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
 use crate::util::AppState;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Template, Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,
+)]
 #[sqlx(type_name = "permission_level", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
+#[template(path = "languages/permissions/fragments/badge.html")]
 pub enum PermissionLevel {
     Viewer,
     Editor,

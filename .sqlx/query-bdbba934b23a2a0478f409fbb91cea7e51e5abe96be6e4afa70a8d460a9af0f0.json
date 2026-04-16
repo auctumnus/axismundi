@@ -20,6 +20,7 @@
               "Enum": [
                 "user",
                 "language",
+                "language_family_res",
                 "word",
                 "translation",
                 "translatable",

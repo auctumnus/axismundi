@@ -1,0 +1,13 @@
+{%- import "util.html" as u -%}
+<section>
+    <label for="word_class">Word class</label>
+    <div class="select-container">
+        <select id="word_class" name="word_class">
+            <option value="">any</option>
+            {% for wc in word_classes %}
+                <option value="{{ wc.abbreviation }}" {% if query.word_class.as_ref() == Some(wc.abbreviation) %}selected{% endif %}>{{ wc.name }}</option>
+            {% endfor %}
+        </select>
+        {% call u::icon("chevron-down") %}
+    </div>
+</section>

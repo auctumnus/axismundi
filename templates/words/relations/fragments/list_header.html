@@ -1,0 +1,15 @@
+{%- import "util.html" as u -%}
+
+{% if user_has_permission %}
+<div class="header-with-actions">
+    <h1>search relations</h1>
+    <ul>
+        <li><a class="with-icon" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
+                {% call u::icon("plus") %}
+                <span>add relation</span>
+            </a></li>
+    </ul>
+</div>
+{% else %}
+<h1>search relations</h1>
+{% endif %}

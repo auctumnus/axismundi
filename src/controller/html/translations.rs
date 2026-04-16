@@ -7,7 +7,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -21,6 +21,7 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
+        quotations::{QuotationPossiblyNew, QuotationRepository, QuotationWithWordInfo},
         translatable::{Translatable, TranslatableRepository},
         translations::{
             CreateTranslation, Translation, TranslationRepository, TranslationSearch,
@@ -28,9 +29,102 @@ use crate::{
         },
         users::{User, UserRepository},
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{
+        AppState, BackQuery,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
+
+pub struct QuotationLink {
+    pub word_slug: String,
+    pub word_lemma: i32,
+    pub definition_text: String,
+    pub word_text: String,
+}
+
+pub struct TextSegment {
+    pub text: String,
+    pub quotation: Option<QuotationLink>,
+}
+
+fn build_text_segments(text: &str, quotations: &[QuotationWithWordInfo]) -> Vec<TextSegment> {
+    // Map UTF-16 code unit positions to byte offsets, matching JS string indexing.
+    // Each char contributes 1 or 2 UTF-16 code units (2 for chars outside the BMP).
+    let mut utf16_to_byte: Vec<usize> = Vec::with_capacity(text.len() + 1);
+    for (byte_idx, ch) in text.char_indices() {
+        for _ in 0..ch.len_utf16() {
+            utf16_to_byte.push(byte_idx);
+        }
+    }
+    utf16_to_byte.push(text.len()); // sentinel
+
+    let utf16_len = utf16_to_byte.len() - 1;
+    let mut segments = Vec::new();
+    let mut pos: usize = 0;
+
+    for q in quotations {
+        let start = (q.span_start as usize).min(utf16_len);
+        let end = (q.span_end as usize).min(utf16_len);
+
+        if start > pos {
+            segments.push(TextSegment {
+                text: text[utf16_to_byte[pos]..utf16_to_byte[start]].to_string(),
+                quotation: None,
+            });
+        }
+
+        if start < end {
+            let link = QuotationLink {
+                word_slug: q.word_slug.clone(),
+                word_lemma: q.word_lemma,
+                definition_text: q.definition_text.clone(),
+                word_text: q.word.clone(),
+            };
+
+            if let (Some(hs), Some(he)) = (q.highlight_start, q.highlight_end) {
+                let hl_start = (hs as usize).min(utf16_len).max(start);
+                let hl_end = (he as usize).min(utf16_len).min(end);
+
+                if hl_start > start {
+                    segments.push(TextSegment {
+                        text: text[utf16_to_byte[start]..utf16_to_byte[hl_start]].to_string(),
+                        quotation: None,
+                    });
+                }
+                if hl_start < hl_end {
+                    segments.push(TextSegment {
+                        text: text[utf16_to_byte[hl_start]..utf16_to_byte[hl_end]].to_string(),
+                        quotation: Some(link),
+                    });
+                }
+                if hl_end < end {
+                    segments.push(TextSegment {
+                        text: text[utf16_to_byte[hl_end]..utf16_to_byte[end]].to_string(),
+                        quotation: None,
+                    });
+                }
+            } else {
+                segments.push(TextSegment {
+                    text: text[utf16_to_byte[start]..utf16_to_byte[end]].to_string(),
+                    quotation: Some(link),
+                });
+            }
+        }
+
+        pos = end.max(pos);
+    }
+
+    if pos < utf16_len {
+        segments.push(TextSegment {
+            text: text[utf16_to_byte[pos]..].to_string(),
+            quotation: None,
+        });
+    }
+
+    segments
+}
 use axum::extract::State;
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -51,6 +145,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let normal_routes = Router::<AppState>::new()
         .route("/languages/{code}/translations", get(translation_search))
         .route(
+            "/translatable/{slug}/translations",
+            get(translation_search_by_translatable),
+        )
+        .route(
             "/translatable/{slug}/new-translation",
             get(new_translation_step_1_form),
         )
@@ -66,22 +164,39 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     (secure_routes, normal_routes)
 }
 
-struct TranslationWithMeta {
-    translation: Translation,
-    creator: User,
+#[derive(Debug, Serialize)]
+pub struct TranslationWithMeta {
+    pub translation: Translation,
+    pub author: User,
+    pub is_liked: bool,
 }
 
 #[derive(Template)]
-#[template(path = "translations/search.html")]
+#[template(path = "translations/fragments/card.html")]
+struct TranslationPreviewCard {
+    translation_with_meta: TranslationWithMeta,
+    back_url: String,
+    kind: String,
+}
+
+#[derive(Template)]
+#[template(path = "translations/fragments/list_header.html")]
 #[allow(dead_code)]
-struct TranslationSearchTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    language: Language,
-    previous_query: TranslationSearch,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<TranslationWithMeta>>,
+struct TranslationSearchHeader {
     user_has_permission: bool,
+}
+
+#[derive(Template)]
+#[template(path = "translatables/fragments/breadcrumb.html")]
+struct TranslatableBreadcrumb<'a> {
+    translatable: &'a Translatable,
+}
+
+#[derive(Template)]
+#[template(path = "translatables/fragments/footer.html")]
+struct TranslatableFooter<'a> {
+    translatable: &'a Translatable,
+    can_edit_translatable: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -93,10 +208,13 @@ async fn translation_search(
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
     Query(query): Query<TranslationSearch>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
+
+    let search_action = format!("/languages/{}/translations", language.code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
 
     let user_has_permission = if let Some(user) = &current_user {
         permissions
@@ -107,67 +225,174 @@ async fn translation_search(
         false
     };
 
-    let query = TranslationSearch {
-        q: query.q.and_then(|q| {
-            let trimmed = q.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        ..query
-    };
-
     let results = match translations
         .search(&language.id, pagination.clone(), query.clone())
         .await
     {
-        Ok(res) => res,
-        Err(e) => {
-            let template = TranslationSearchTemplate {
-                current_user,
-                error: Some(e),
-                language,
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                user_has_permission,
-            };
-            let body = render_template(template);
-            return (StatusCode::BAD_REQUEST, body);
+        Ok(response) => {
+            let mut items = Vec::with_capacity(response.items.len());
+            for translation in response.items {
+                let author = attempt!(s, users.find_by_id(translation.created_by).await);
+                let is_liked = if let Some(user) = &current_user {
+                    translations
+                        .is_liked(&translation.id, &user.id)
+                        .await
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+                items.push(TranslationWithMeta {
+                    translation,
+                    author,
+                    is_liked,
+                });
+            }
+            Ok(crate::pagination::PaginatedResponse {
+                items,
+                total: response.total,
+                limit: response.limit,
+                offset: response.offset,
+                has_more: response.has_more,
+            })
         }
+        Err(e) => Err(e),
     };
 
-    let mut results_with_meta = vec![];
-    for translation in results.items {
-        let creator = attempt!(s, users.find_by_id(translation.created_by).await);
-        results_with_meta.push(TranslationWithMeta {
-            translation,
-            creator,
-        });
-    }
+    let render_item = move |item: &TranslationWithMeta| TranslationPreviewCard {
+        translation_with_meta: TranslationWithMeta {
+            translation: item.translation.clone(),
+            author: item.author.clone(),
+            is_liked: item.is_liked,
+        },
+        back_url: back_url.clone(),
+        kind: "translatable".to_string(),
+    };
 
-    let results_with_meta = Some(PaginatedResponse {
-        items: results_with_meta,
-        total: results.total,
-        limit: results.limit,
-        offset: results.offset,
-        has_more: results.has_more,
-    });
-
-    let template = TranslationSearchTemplate {
-        current_user,
-        error: None,
-        language,
-        previous_query: query,
-        previous_pagination: pagination,
-        results: results_with_meta,
+    let header = TranslationSearchHeader {
         user_has_permission,
     };
 
-    let body = render_template(template);
-    okay(body)
+    let breadcrumbs = crate::controller::html::languages::Breadcrumb {
+        language: &language,
+    };
+
+    let footer = crate::controller::html::languages::Footer {
+        language: &language,
+        can_edit_language: user_has_permission,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template: crate::util::EmptyTemplate,
+        query,
+        results,
+        pagination,
+        search_name: "translations",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn translation_search_by_translatable(
+    s: Session,
+    translatables: TranslatableRepository,
+    translations: TranslationRepository,
+    users: UserRepository,
+    Path(slug): Path<String>,
+    Query(query): Query<TranslationSearch>,
+    pagination: PaginatedRequest,
+) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+
+    let can_edit_translatable = if let Some(user) = &current_user {
+        translatable.created_by == user.id
+    } else {
+        false
+    };
+
+    let search_action = format!("/translatable/{}/translations", translatable.slug);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
+
+    let results = match translations
+        .search_by_translatable(&translatable.id, pagination.clone(), query.clone())
+        .await
+    {
+        Ok(response) => {
+            let mut items = Vec::with_capacity(response.items.len());
+            for translation in response.items {
+                let author = attempt!(s, users.find_by_id(translation.created_by).await);
+                let is_liked = if let Some(user) = &current_user {
+                    translations
+                        .is_liked(&translation.id, &user.id)
+                        .await
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+                items.push(TranslationWithMeta {
+                    translation,
+                    author,
+                    is_liked,
+                });
+            }
+            Ok(crate::pagination::PaginatedResponse {
+                items,
+                total: response.total,
+                limit: response.limit,
+                offset: response.offset,
+                has_more: response.has_more,
+            })
+        }
+        Err(e) => Err(e),
+    };
+
+    let render_item = move |item: &TranslationWithMeta| TranslationPreviewCard {
+        translation_with_meta: TranslationWithMeta {
+            translation: item.translation.clone(),
+            author: item.author.clone(),
+            is_liked: item.is_liked,
+        },
+        back_url: back_url.clone(),
+        kind: "language".to_string(),
+    };
+
+    let header = TranslationSearchHeader {
+        user_has_permission: false,
+    };
+
+    let breadcrumbs = TranslatableBreadcrumb {
+        translatable: &translatable,
+    };
+
+    let footer = TranslatableFooter {
+        translatable: &translatable,
+        can_edit_translatable,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template: crate::util::EmptyTemplate,
+        query,
+        results,
+        pagination,
+        search_name: "translations",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+    (status, render_template(template))
 }
 
 // Step 1: Select language
@@ -452,7 +677,7 @@ async fn new_translation_step_2_submit(
 // View translation
 #[derive(Template)]
 #[template(path = "translations/view.html")]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(clippy::struct_excessive_bools, dead_code)]
 struct ViewTranslationTemplate {
     current_user: Option<User>,
     translatable_with_meta: TranslatableWithMeta,
@@ -467,6 +692,9 @@ struct ViewTranslationTemplate {
     translation_is_liked: bool,
     json_ld: String,
     rendered_description: Option<String>,
+    back: String,
+    back_text: String,
+    quotation_segments: Vec<TextSegment>,
 }
 
 async fn view_translation(
@@ -477,7 +705,9 @@ async fn view_translation(
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
     users: UserRepository,
+    quotations: QuotationRepository,
     Path((slug, code)): Path<(String, String)>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -576,10 +806,44 @@ async fn view_translation(
         None
     };
 
-    let translatable_with_meta = attempt!(
+    let translatable_with_meta =
+        attempt!(s, translatables.materialize(translatable, s.user()).await);
+
+    let quotation_list = attempt!(
         s,
-        translatables.materialize(translatable, s.user()).await
+        quotations
+            .list_by_translation_with_word_info(
+                translation.id,
+                PaginatedRequest {
+                    limit: 500,
+                    offset: 0
+                },
+            )
+            .await
     );
+    let quotation_segments =
+        build_text_segments(&translation.translated_text, &quotation_list.items);
+
+    let back_text = back_query
+        .back
+        .as_ref()
+        .and_then(|url| {
+            if url.contains("/languages/") {
+                Some("to language")
+            } else if url.contains("/translatable/") {
+                Some("to translatable")
+            } else {
+                None
+            }
+        })
+        .unwrap_or("");
+
+    let back_url = back_query.back.clone().unwrap_or_else(|| {
+        format!(
+            "/translatable/{}",
+            &translatable_with_meta.translatable.slug
+        )
+    });
 
     let template = ViewTranslationTemplate {
         current_user: s.user().cloned(),
@@ -594,6 +858,9 @@ async fn view_translation(
         translation_is_liked,
         json_ld,
         rendered_description,
+        back: back_url,
+        back_text: back_text.to_string(),
+        quotation_segments,
     };
 
     let body = render_template(template);
@@ -622,6 +889,7 @@ struct EditTranslationTemplate {
     can_edit_translation: bool,
     will_create_audit_log: bool,
     rendered_description: Option<String>,
+    previous_quotations: Vec<QuotationPossiblyNew>,
 }
 
 async fn edit_translation_form(
@@ -631,6 +899,7 @@ async fn edit_translation_form(
     languages: LanguageRepository,
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
+    quotations: QuotationRepository,
     Path((slug, code)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
@@ -693,6 +962,19 @@ async fn edit_translation_form(
         translatables.materialize(translatable, Some(&user)).await
     );
 
+    let quotations = attempt!(
+        s,
+        quotations
+            .list_by_translation_with_word_info(
+                translation.id,
+                PaginatedRequest {
+                    limit: 500,
+                    offset: 0
+                },
+            )
+            .await
+    );
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
@@ -710,9 +992,23 @@ async fn edit_translation_form(
         can_edit_translation,
         will_create_audit_log,
         rendered_description,
+        previous_quotations: quotations
+            .items
+            .into_iter()
+            .map(QuotationPossiblyNew::from)
+            .collect(),
     };
 
     okay(render_template(template))
+}
+
+fn deserialize_json_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let s = String::deserialize(deserializer)?;
+    serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
 #[derive(Deserialize)]
@@ -723,6 +1019,8 @@ struct EditTranslationFormData {
     gloss: Option<String>,
     notes: Option<String>,
     language_id: Uuid,
+    #[serde(deserialize_with = "deserialize_json_str")]
+    quotations: Vec<QuotationPossiblyNew>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -733,13 +1031,13 @@ async fn edit_translation_submit(
     languages: LanguageRepository,
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
+    quotations: QuotationRepository,
     Path(slug): Path<String>,
     Form(form): Form<EditTranslationFormData>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
     let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
-
     let language = attempt!(s, languages.find_by_id(form.language_id).await);
 
     let can_edit_translatable = translatable.created_by == user.id;
@@ -771,20 +1069,8 @@ async fn edit_translation_submit(
             .find_by_translatable_and_language(translatable.id, language.id)
             .await
     );
-    let translation = translations
-        .update(
-            &user,
-            existing_translation.id,
-            UpdateTranslation {
-                translated_text: Some(form.translated_text.clone()),
-                translated_title: form.translated_title.clone(),
-                ipa: form.ipa.clone(),
-                gloss: form.gloss.clone(),
-                notes: form.notes.clone(),
-            },
-        )
-        .await;
 
+    // Pre-fetch data needed for re-rendering the form on error
     let top_contributors = attempt!(
         s,
         ContributionStatsRepository::new(state.clone())
@@ -797,17 +1083,41 @@ async fn edit_translation_submit(
         top_contributors,
         is_liked,
     };
-
     let rendered_description = if !translatable.description.is_empty() {
         crate::md::render_md(&translatable.description).ok()
     } else {
         None
     };
-
     let redirect_slug = translatable.slug.clone();
 
-    match translation {
-        Ok(_) => {
+    // Perform translation update + quotation sync in a single transaction
+    let updates = UpdateTranslation {
+        translated_text: Some(form.translated_text.clone()),
+        translated_title: form.translated_title.clone(),
+        ipa: form.ipa.clone(),
+        gloss: form.gloss.clone(),
+        notes: form.notes.clone(),
+    };
+
+    let result: crate::err::AppResult<Translation> = async {
+        let mut tx = state.pool.begin().await?;
+        let updated = translations
+            .update_in_tx(&mut tx, &user, &existing_translation, updates)
+            .await?;
+        quotations
+            .sync_for_translation_in_tx(&mut tx, &user, existing_translation.id, &form.quotations)
+            .await?;
+        tx.commit().await?;
+        Ok(updated)
+    }
+    .await;
+
+    match result {
+        Ok(updated) => {
+            // Fire activity log outside the transaction (best-effort)
+            let _ = translations
+                .create_update_activity(&user, updated.id, existing_translation.language)
+                .await;
             let redirect_url = format!(
                 "/translatable/{}/translation/{}",
                 redirect_slug, language.code
@@ -822,7 +1132,6 @@ async fn edit_translation_submit(
                 s,
                 translatables.materialize(translatable, Some(&user)).await
             );
-
             let template = EditTranslationTemplate {
                 current_user: Some(user),
                 error: Some(e),
@@ -840,9 +1149,9 @@ async fn edit_translation_submit(
                 can_edit_translation,
                 will_create_audit_log,
                 rendered_description,
+                previous_quotations: form.quotations.clone(),
             };
-            let body = render_template(template);
-            (StatusCode::BAD_REQUEST, body)
+            (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
 }

@@ -1,0 +1,15 @@
+{% if can_edit_language %}
+<div class="header-with-actions">
+    <h1>search sound change sets</h1>
+    <ul>
+        <li>
+            <a class="with-icon" href="/languages/{{ language_code }}/sound-change-sets/new">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new sound change set</span>
+            </a>
+        </li>
+    </ul>
+</div>
+{% else %}
+<h1>search sound change sets</h1>
+{% endif %}

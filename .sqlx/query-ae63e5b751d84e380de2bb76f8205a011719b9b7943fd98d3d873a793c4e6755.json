@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    lf.id,\n                    lf.code,\n                    lf.name,\n                    lf.description,\n                    lf.tree,\n                    lf.like_count,\n                    lf.banner_object_id,\n                    lf.created_at,\n                    lf.updated_at,\n                    lf.created_by,\n                    lf.updated_by\n                FROM language_families lf\n                JOIN language_family_permissions lfp ON lfp.family = lf.id AND lfp.\"user\" = $1\n                LEFT JOIN (\n                    SELECT lfm.family_id, MAX(ua.timestamp) as last_activity\n                    FROM language_family_members lfm\n                    JOIN user_activities ua ON (\n                        (ua.entity_id = lfm.language_id AND ua.entity_type = 'language')\n                        OR (ua.related_entity_id = lfm.language_id AND ua.related_entity_type = 'language')\n                    )\n                    WHERE ua.user_id = $1 AND lfm.language_id IS NOT NULL\n                    GROUP BY lfm.family_id\n                ) as la ON la.family_id = lf.id\n                ORDER BY COALESCE(la.last_activity, lf.created_at) DESC\n                LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "tree",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "banner_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ae63e5b751d84e380de2bb76f8205a011719b9b7943fd98d3d873a793c4e6755"
+}

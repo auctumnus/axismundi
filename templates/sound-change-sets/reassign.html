@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}reassign {{ set.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>reassign sound change set</h1>
+
+{% call u::top_level_error() %}
+
+{% if !member_targets.is_empty() %}
+    {% if let Some(language) = language %}
+        {% if is_ipa_estimator %}
+        <div class="warning">
+            <strong>{{ set.name }}</strong> is currently set as an IPA estimator for its language. You must <a href="/languages/{{ language.code }}/sound-change-sets/{{ set.id }}/unset-ipa-estimator">unset it as an IPA estimator</a> before reassigning it to a family member.
+        </div>
+        {% endif %}
+    {% endif %}
+    <p>
+        Move <strong>{{ set.name }}</strong> from its current language to a family member node.
+    </p>
+    <form class="default" method="post" action="/sound-change-sets/{{ set.id }}/reassign">
+        <section>
+            <label for="target_member_id">Family member</label>
+            <div class="select-container">
+                <select id="target_member_id" name="target_member_id" required>
+                    <option value="" disabled selected>-- select a member --</option>
+                    {% for m in member_targets %}
+                        <option value="{{ m.id }}">{{ m.family_name }} / {{ m.display_name }}</option>
+                    {% endfor %}
+                </select>
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            </div>
+        </section>
+        <section class="button-row">
+            <button type="submit">Reassign to member</button>
+        </section>
+    </form>
+{% else if !language_targets.is_empty() %}
+    <p>
+        Move <strong>{{ set.name }}</strong> from its current family member to a language.
+    </p>
+    <form class="default" method="post" action="/sound-change-sets/{{ set.id }}/reassign">
+        <section>
+            <label for="target_language_id">Language</label>
+            <div class="select-container">
+                <select id="target_language_id" name="target_language_id" required>
+                    <option value="" disabled selected>-- select a language --</option>
+                    {% for lang in language_targets %}
+                        <option value="{{ lang.id }}">{{ lang.name }} ({{ lang.code }})</option>
+                    {% endfor %}
+                </select>
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14.975q-.2 0-.375-.062T11.3 14.7l-4.6-4.6q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l3.9 3.9l3.9-3.9q.275-.275.7-.275t.7.275t.275.7t-.275.7l-4.6 4.6q-.15.15-.325.213t-.375.062"/></svg>
+            </div>
+        </section>
+        <section class="button-row">
+            <button type="submit">Reassign to language</button>
+        </section>
+    </form>
+{% else %}
+    <p>There are no available targets to reassign this sound change set to.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/sound-change-sets/{{ set.id }}" class="breadcrumb">{{ set.name }}</a>
+{% endblock %}

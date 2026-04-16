@@ -1,0 +1,14 @@
+<section>
+    <label for="owned_by">Owner username</label>
+    <input type="text" id="owned_by" name="owned_by" value="{{ owned_by.as_ref().unwrap_or(&"".to_string()) }}">
+</section>
+
+<section>
+    <label for="created_after">Created after</label>
+    <input type="date" id="created_after" name="created_after" value="{% if let Some(date) = created_after %}{{ date.format("%Y-%m-%d").to_string() }}{% endif %}">
+</section>
+
+<section>
+    <label for="created_before">Created before</label>
+    <input type="date" id="created_before" name="created_before" value="{% if let Some(date) = created_before %}{{ date.format("%Y-%m-%d").to_string() }}{% endif %}">
+</section>

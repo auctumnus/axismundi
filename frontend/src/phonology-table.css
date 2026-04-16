@@ -79,6 +79,11 @@ table.phonology-table {
     .select-edge-bottom { border-bottom: 2px solid var(--color-sky-500); }
     .select-edge-left { border-left: 2px solid var(--color-sky-500); }
     .select-edge-right { border-right: 2px solid var(--color-sky-500); }
+
+    .annotation {
+        text-decoration: none;
+        color: var(--foreground-secondary);
+    }
 }
 
 h3.annotations-header {
@@ -125,6 +130,8 @@ ol.annotations {
 }
 
 .phonology-editor {
+    user-select: none;
+
     .controls, .controls-container {
         display: flex;
         flex-direction: row;

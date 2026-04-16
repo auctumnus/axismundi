@@ -9,14 +9,16 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use futures::TryFutureExt;
+
 use crate::{
     attempt,
-    controller::html::{LanguagesWithContributors, okay, render_template},
+    controller::html::{self, LanguagesWithContributors, okay, render_template},
     err::AppError,
     get_user,
     model::{
         contribution_stats::ContributionStatsRepository,
-        language_families::{FamilyWithContributors, LanguageFamilyRepository},
+        language_families::{FamilyWithContributors, LanguageFamily, LanguageFamilyRepository},
         language_family_members::{
             LanguageFamilyMemberRepository, LanguageFamilyRelationType, MemberWithLanguages,
             SearchLanguageFamilyMembers,
@@ -27,8 +29,12 @@ use crate::{
         languages::{Language, LanguageRepository},
         users::User,
     },
-    pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session},
+    pagination::PaginatedRequest,
+    util::{
+        AppState, ListHeaderKind,
+        extract_session::Session,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
 
 pub fn create_router() -> Router<AppState> {
@@ -64,6 +70,14 @@ pub fn create_router() -> Router<AppState> {
             post(delete_member_submit),
         )
         .route("/language-families/{code}/members", get(search_members))
+        .route(
+            "/language-families/{code}/members/new",
+            get(new_member_form),
+        )
+        .route(
+            "/language-families/{code}/members/new",
+            post(new_member_submit),
+        )
         .route("/language-families/{code}/add-root", get(add_root_form))
         .route(
             "/language-families/{code}/members/{id}/add-child",
@@ -97,6 +111,30 @@ pub fn create_router() -> Router<AppState> {
             "/language-families/{code}/members/{id}/convert-to-language",
             post(convert_to_language_submit),
         )
+        .route(
+            "/language-families/{code}/members/{id}/swap-with-parent",
+            get(swap_with_parent_form),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/swap-with-parent",
+            post(swap_with_parent_submit),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/change-parent",
+            get(change_parent_form),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/change-parent",
+            post(change_parent_submit),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/edit",
+            get(edit_member_form),
+        )
+        .route(
+            "/language-families/{code}/members/{id}/edit",
+            post(edit_member_submit),
+        )
 }
 
 #[derive(Template)]
@@ -111,6 +149,7 @@ struct ViewMemberTemplate {
     language: Option<LanguagesWithContributors>,
     parent_member: Option<MemberWithLanguages>,
     children: Vec<MemberWithLanguages>,
+    member_scs: Option<crate::model::sound_change_sets::SoundChangeSet>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -122,6 +161,7 @@ async fn view_member(
     contribution_stats: ContributionStatsRepository,
     languages: LanguageRepository,
     permissions: LanguageFamilyPermissionRepository,
+    sets: crate::model::sound_change_sets::SoundChangeSetRepository,
     Path((code, id)): Path<(String, Uuid)>,
 ) -> (StatusCode, Response) {
     let family = attempt!(s, language_families.find_by_code(&code).await);
@@ -209,6 +249,8 @@ async fn view_member(
 
     let family = attempt!(s, language_families.materialize(family, s.user()).await);
 
+    let member_scs = sets.get_for_member(id).await.ok().flatten();
+
     let template = ViewMemberTemplate {
         name,
         current_user: s.user().cloned(),
@@ -219,23 +261,34 @@ async fn view_member(
         can_edit_language,
         parent_member,
         children: materialized_children,
+        member_scs,
     };
 
     okay(render_template(template))
 }
 
 #[derive(Template)]
-#[template(path = "language_families/members/search.html")]
-#[allow(dead_code)]
-struct SearchMembersTemplate {
-    current_user: Option<User>,
-    family: FamilyWithContributors,
-    error: Option<AppError>,
-    previous_query: SearchLanguageFamilyMembers,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<MemberWithLanguages>>,
-    previous_search: String,
+#[template(path = "language_families/members/fragments/card.html")]
+struct MemberPreviewCard<'a> {
+    member_with_languages: MemberWithLanguages,
+    back_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/fragments/list_header.html")]
+struct MemberHeader<'a> {
     can_edit_family: bool,
+    family: &'a LanguageFamily,
+    kind: ListHeaderKind,
+}
+
+impl MemberHeader<'_> {
+    fn title(&self) -> &'static str {
+        match self.kind {
+            ListHeaderKind::Preview => "members",
+            ListHeaderKind::Search => "search members",
+        }
+    }
 }
 
 async fn search_members(
@@ -245,11 +298,12 @@ async fn search_members(
     permissions: LanguageFamilyPermissionRepository,
     Path(code): Path<String>,
     Query(query): Query<SearchLanguageFamilyMembers>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
     let family = attempt!(s, language_families.find_by_code(&code).await);
 
-    let can_edit_family = if let Some(user) = s.user() {
+    let can_edit_family = if let Some(user) = &current_user {
         permissions
             .has_permission(user.id, family.id, PermissionLevel::Editor)
             .await
@@ -258,70 +312,59 @@ async fn search_members(
         false
     };
 
+    let search_action = format!("/language-families/{}/members", code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
+
     let search_query = SearchLanguageFamilyMembers {
         family_code: Some(code.clone()),
         ..query.clone()
     };
 
-    let results = match members.search(search_query, pagination.clone()).await {
-        Ok(res) => {
-            // Materialize all members
-            let mut materialized = Vec::new();
-            for member in res.items {
-                if let Ok(m) = members.materialize(member).await {
-                    materialized.push(m);
-                }
-            }
-            Some(PaginatedResponse {
-                items: materialized,
-                total: res.total,
-                limit: res.limit,
-                offset: res.offset,
-                has_more: res.has_more,
-            })
-        }
-        Err(e) => {
-            let family = attempt!(s, language_families.materialize(family, s.user()).await);
-            let template = SearchMembersTemplate {
-                current_user: s.user().cloned(),
-                family,
-                error: Some(e),
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                previous_search: String::new(),
-                can_edit_family,
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
-    let family = attempt!(s, language_families.materialize(family, s.user()).await);
+    let results = members
+        .search(search_query, pagination.clone())
+        .and_then(|response| response.try_map_async(|member| members.materialize(member)))
+        .await;
 
-    let template = SearchMembersTemplate {
-        current_user: s.user().cloned(),
-        family,
-        error: None,
-        previous_query: query.clone(),
-        previous_pagination: pagination,
-        results,
-        previous_search: query.q.unwrap_or_default(),
+    let render_item = |member_with_languages: &MemberWithLanguages| MemberPreviewCard {
+        member_with_languages: member_with_languages.clone(),
+        back_url: &back_url,
+    };
+
+    let header = MemberHeader {
+        can_edit_family,
+        family: &family,
+        kind: ListHeaderKind::Search,
+    };
+
+    let breadcrumbs = html::language_families::Breadcrumb { family: &family };
+    let footer = html::language_families::Footer {
+        family: &family,
         can_edit_family,
     };
 
-    okay(render_template(template))
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template: query.clone(),
+        query,
+        results,
+        pagination,
+        search_name: "members",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]
-#[template(path = "languages/relatives.html")]
-#[allow(dead_code)]
-struct SearchRelativesTemplate {
-    current_user: Option<User>,
-    error: Option<AppError>,
-    language: LanguagesWithContributors,
-    previous_query: SearchLanguageFamilyMembers,
-    previous_pagination: PaginatedRequest,
-    results: Option<PaginatedResponse<MemberWithLanguages>>,
-    previous_search: String,
+#[template(path = "languages/fragments/relatives_header.html")]
+struct RelativesHeader<'a> {
+    language: &'a LanguagesWithContributors,
 }
 
 async fn search_relatives(
@@ -330,57 +373,59 @@ async fn search_relatives(
     members: LanguageFamilyMemberRepository,
     Path(code): Path<String>,
     Query(query): Query<SearchLanguageFamilyMembers>,
-    Query(pagination): Query<PaginatedRequest>,
+    pagination: PaginatedRequest,
 ) -> (StatusCode, Response) {
+    let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&code).await);
     let language = attempt!(s, languages.materialize(language, s.user()).await);
+
+    let search_action = format!("/languages/{}/relatives", code);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
 
     let search_query = SearchLanguageFamilyMembers {
         language_code: Some(code.clone()),
         ..query.clone()
     };
 
-    let results = match members.search(search_query, pagination.clone()).await {
-        Ok(res) => {
-            // Materialize all members
-            let mut materialized = Vec::new();
-            for member in res.items {
-                if let Ok(m) = members.materialize(member).await {
-                    materialized.push(m);
-                }
-            }
-            Some(PaginatedResponse {
-                items: materialized,
-                total: res.total,
-                limit: res.limit,
-                offset: res.offset,
-                has_more: res.has_more,
-            })
-        }
-        Err(e) => {
-            let template = SearchRelativesTemplate {
-                current_user: s.user().cloned(),
-                error: Some(e),
-                language,
-                previous_query: query,
-                previous_pagination: pagination,
-                results: None,
-                previous_search: String::new(),
-            };
-            return (StatusCode::BAD_REQUEST, render_template(template));
-        }
-    };
-    let template = SearchRelativesTemplate {
-        current_user: s.user().cloned(),
-        error: None,
-        language,
-        previous_query: query.clone(),
-        previous_pagination: pagination,
-        results,
-        previous_search: query.q.unwrap_or_default(),
+    let results = members
+        .search(search_query, pagination.clone())
+        .and_then(|response| response.try_map_async(|member| members.materialize(member)))
+        .await;
+
+    let render_item = |member_with_languages: &MemberWithLanguages| MemberPreviewCard {
+        member_with_languages: member_with_languages.clone(),
+        back_url: &back_url,
     };
 
-    okay(render_template(template))
+    let header = RelativesHeader {
+        language: &language,
+    };
+
+    let breadcrumbs = html::languages::Breadcrumb {
+        language: &language.language,
+    };
+    let footer = html::languages::Footer {
+        language: &language.language,
+        can_edit_language: false,
+    };
+
+    let template = make_search_layout(SearchTemplateArgs {
+        current_user,
+        header,
+        query_template: query.clone(),
+        query,
+        results,
+        pagination,
+        search_name: "relatives",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
+
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[derive(Template)]
@@ -436,6 +481,7 @@ struct AddRootLanguageTemplate {
     will_create_audit_log: bool,
     available_languages: Vec<Language>,
     previous_language_code: String,
+    previous_notes: String,
 }
 
 async fn add_root_language_form(
@@ -474,6 +520,7 @@ async fn add_root_language_form(
         will_create_audit_log,
         available_languages,
         previous_language_code: String::new(),
+        previous_notes: String::new(),
     };
 
     okay(render_template(template))
@@ -482,6 +529,7 @@ async fn add_root_language_form(
 #[derive(Deserialize)]
 struct AddRootLanguageFormData {
     language_code: String,
+    notes: Option<String>,
 }
 
 async fn add_root_language_submit(
@@ -505,7 +553,7 @@ async fn add_root_language_submit(
                 language_code: Some(form.language_code.clone()),
                 title: None,
                 relation_type: LanguageFamilyRelationType::Descendant,
-                notes: None,
+                notes: form.notes.clone().filter(|s| !s.is_empty()),
             },
         )
         .await
@@ -530,6 +578,7 @@ async fn add_root_language_submit(
                 will_create_audit_log,
                 available_languages,
                 previous_language_code: form.language_code,
+                previous_notes: form.notes.unwrap_or_default(),
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
@@ -1035,8 +1084,6 @@ struct ConvertToGroupingTemplate {
     member: MemberWithLanguages,
     error: Option<AppError>,
     will_create_audit_log: bool,
-    previous_title: String,
-    previous_notes: String,
 }
 
 async fn convert_to_grouping_form(
@@ -1060,13 +1107,13 @@ async fn convert_to_grouping_form(
         .await;
     }
 
-    let Some(language) = member.clone().language else {
+    if member.language.is_none() {
         return crate::controller::html::render_generic_error(
             s,
             crate::err::internal_error("language node is missing its language"),
         )
         .await;
-    };
+    }
 
     let can_edit = permissions
         .has_permission(user.id, family.id, PermissionLevel::Editor)
@@ -1083,7 +1130,6 @@ async fn convert_to_grouping_form(
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
-    let existing_notes = member.member.notes().to_string();
     let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
 
     let template = ConvertToGroupingTemplate {
@@ -1092,17 +1138,9 @@ async fn convert_to_grouping_form(
         member,
         error: None,
         will_create_audit_log,
-        previous_title: language.name,
-        previous_notes: existing_notes,
     };
 
     okay(render_template(template))
-}
-
-#[derive(Deserialize)]
-struct ConvertToGroupingFormData {
-    title: String,
-    notes: Option<String>,
 }
 
 async fn convert_to_grouping_submit(
@@ -1111,17 +1149,14 @@ async fn convert_to_grouping_submit(
     language_families: LanguageFamilyRepository,
     members: LanguageFamilyMemberRepository,
     Path((code, member_id)): Path<(String, Uuid)>,
-    Form(form): Form<ConvertToGroupingFormData>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let family = attempt!(s, language_families.find_by_code(&code).await);
     let member_raw = attempt!(s, members.find_by_id(member_id).await);
     let member = attempt!(s, members.materialize(member_raw).await);
 
-    let notes = form.notes.clone().unwrap_or_default();
-
     match members
-        .convert_to_grouping(&user, member_id, form.title.clone(), notes.clone())
+        .convert_to_grouping(&user, member_id, member.name(), member.notes.clone())
         .await
     {
         Ok(_) => (
@@ -1143,8 +1178,6 @@ async fn convert_to_grouping_submit(
                 member,
                 error: Some(e),
                 will_create_audit_log,
-                previous_title: form.title,
-                previous_notes: notes,
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
@@ -1201,7 +1234,12 @@ async fn convert_to_language_form(
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
-    let available_languages = attempt!(s, languages.list_editable_by_user(user.id).await);
+    let available_languages = attempt!(
+        s,
+        languages
+            .list_editable_by_user_without_family(user.id)
+            .await
+    );
     let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
 
     let template = ConvertToLanguageTemplate {
@@ -1252,7 +1290,7 @@ async fn convert_to_language_submit(
             let will_create_audit_log =
                 crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
             let available_languages = languages
-                .list_editable_by_user(user.id)
+                .list_editable_by_user_without_family(user.id)
                 .await
                 .unwrap_or_default();
             let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
@@ -1269,4 +1307,483 @@ async fn convert_to_language_submit(
             (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/swap-with-parent.html")]
+#[allow(dead_code)]
+struct SwapWithParentTemplate {
+    current_user: Option<User>,
+    family: FamilyWithContributors,
+    member: MemberWithLanguages,
+    parent_member: MemberWithLanguages,
+    error: Option<AppError>,
+    will_create_audit_log: bool,
+}
+
+async fn swap_with_parent_form(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    permissions: LanguageFamilyPermissionRepository,
+    Path((code, member_id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+    let member_raw = attempt!(s, members.find_by_id(member_id).await);
+
+    let parent_id = match member_raw.parent_member_id() {
+        Some(id) => id,
+        None => {
+            return crate::controller::html::render_generic_error(
+                s,
+                crate::err::bad_request("this member has no parent to swap with"),
+            )
+            .await;
+        }
+    };
+
+    let can_edit = permissions
+        .has_permission(user.id, family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    if !can_edit {
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to edit members in this family"),
+        )
+        .await;
+    }
+
+    let member = attempt!(s, members.materialize(member_raw).await);
+    let parent_raw = attempt!(s, members.find_by_id(parent_id).await);
+    let parent_member = attempt!(s, members.materialize(parent_raw).await);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+    let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+
+    okay(render_template(SwapWithParentTemplate {
+        current_user: Some(user),
+        family,
+        member,
+        parent_member,
+        error: None,
+        will_create_audit_log,
+    }))
+}
+
+async fn swap_with_parent_submit(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    Path((code, member_id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    match members.swap_with_parent(&user, member_id).await {
+        Ok(()) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/language-families/{}/members/{}",
+                family.code, member_id
+            ))
+            .into_response(),
+        ),
+        Err(e) => crate::controller::html::render_generic_error(s, e).await,
+    }
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/change-parent.html")]
+#[allow(dead_code)]
+struct ChangeParentTemplate {
+    current_user: Option<User>,
+    family: FamilyWithContributors,
+    member: MemberWithLanguages,
+    available_members: Vec<MemberWithLanguages>,
+    error: Option<AppError>,
+    previous_parent_id: String,
+    will_create_audit_log: bool,
+}
+
+#[allow(irrefutable_let_patterns)]
+async fn change_parent_form(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    permissions: LanguageFamilyPermissionRepository,
+    Path((code, member_id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    use std::collections::{HashMap, HashSet};
+
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+    let member_raw = attempt!(s, members.find_by_id(member_id).await);
+
+    let can_edit = permissions
+        .has_permission(user.id, family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    if !can_edit {
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to edit members in this family"),
+        )
+        .await;
+    }
+
+    // compute descendants of member_id so we can exclude them from the picker
+    let tree_schema = attempt!(s, family.tree_schema());
+    let adjacency_list: HashMap<Uuid, Vec<Uuid>> = {
+        use crate::model::language_families::LanguageFamilyInner;
+        if let LanguageFamilyInner::V1(ref v1) = tree_schema {
+            let mut map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+            for e in &v1.edges {
+                if let Some(pid) = e.parent_member_id {
+                    map.entry(pid).or_default().push(e.child_member_id);
+                }
+            }
+            map
+        } else {
+            HashMap::new()
+        }
+    };
+
+    let all_raw = attempt!(s, members.all_for_family(family.id).await);
+
+    // collect all descendants (including the member itself) to exclude
+    let mut excluded: HashSet<Uuid> = HashSet::new();
+    excluded.insert(member_id);
+    for candidate in &all_raw {
+        let cid = candidate.id();
+        if cid != member_id
+            && crate::util::dfs(&adjacency_list, member_id, cid, &mut HashMap::new())
+        {
+            excluded.insert(cid);
+        }
+    }
+
+    let mut available_members = Vec::new();
+    for raw in all_raw {
+        if excluded.contains(&raw.id()) {
+            continue;
+        }
+        if let Ok(m) = members.materialize(raw).await {
+            available_members.push(m);
+        }
+    }
+
+    let previous_parent_id = member_raw
+        .parent_member_id()
+        .map(|id| id.to_string())
+        .unwrap_or_default();
+
+    let member = attempt!(s, members.materialize(member_raw).await);
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+    let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+
+    okay(render_template(ChangeParentTemplate {
+        current_user: Some(user),
+        family,
+        member,
+        available_members,
+        error: None,
+        previous_parent_id,
+        will_create_audit_log,
+    }))
+}
+
+#[derive(Deserialize)]
+struct ChangeParentFormData {
+    new_parent_id: Uuid,
+}
+
+#[allow(irrefutable_let_patterns)]
+async fn change_parent_submit(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    Path((code, member_id)): Path<(String, Uuid)>,
+    Form(form): Form<ChangeParentFormData>,
+) -> (StatusCode, Response) {
+    use std::collections::{HashMap, HashSet};
+
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    match members
+        .change_parent(&user, member_id, form.new_parent_id)
+        .await
+    {
+        Ok(()) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/language-families/{}/members/{}",
+                family.code, member_id
+            ))
+            .into_response(),
+        ),
+        Err(e) => {
+            let member_raw = attempt!(s, members.find_by_id(member_id).await);
+            let tree_schema = attempt!(s, family.tree_schema());
+            let adjacency_list: HashMap<Uuid, Vec<Uuid>> = {
+                use crate::model::language_families::LanguageFamilyInner;
+                if let LanguageFamilyInner::V1(ref v1) = tree_schema {
+                    let mut map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+                    for edge in &v1.edges {
+                        if let Some(pid) = edge.parent_member_id {
+                            map.entry(pid).or_default().push(edge.child_member_id);
+                        }
+                    }
+                    map
+                } else {
+                    HashMap::new()
+                }
+            };
+            let all_raw = attempt!(s, members.all_for_family(family.id).await);
+            let mut excluded: HashSet<Uuid> = HashSet::new();
+            excluded.insert(member_id);
+            for candidate in &all_raw {
+                let cid = candidate.id();
+                if cid != member_id
+                    && crate::util::dfs(&adjacency_list, member_id, cid, &mut HashMap::new())
+                {
+                    excluded.insert(cid);
+                }
+            }
+            let mut available_members = Vec::new();
+            for raw in all_raw {
+                if excluded.contains(&raw.id()) {
+                    continue;
+                }
+                if let Ok(m) = members.materialize(raw).await {
+                    available_members.push(m);
+                }
+            }
+            let previous_parent_id = form.new_parent_id.to_string();
+            let member = attempt!(s, members.materialize(member_raw).await);
+            let will_create_audit_log =
+                crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+            let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+            let template = ChangeParentTemplate {
+                current_user: Some(user),
+                family,
+                member,
+                available_members,
+                error: Some(e),
+                previous_parent_id,
+                will_create_audit_log,
+            };
+            (StatusCode::BAD_REQUEST, render_template(template))
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/edit.html")]
+#[allow(dead_code)]
+struct EditMemberTemplate {
+    current_user: Option<User>,
+    family: FamilyWithContributors,
+    member: MemberWithLanguages,
+    error: Option<AppError>,
+    will_create_audit_log: bool,
+    previous_title: String,
+    previous_notes: String,
+}
+
+async fn edit_member_form(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    permissions: LanguageFamilyPermissionRepository,
+    Path((code, member_id)): Path<(String, Uuid)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+    let member_raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(member_raw).await);
+
+    let can_edit = permissions
+        .has_permission(user.id, family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    if !can_edit {
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to edit members in this family"),
+        )
+        .await;
+    }
+
+    let previous_title = match &member.member {
+        crate::model::language_family_members::LanguageFamilyMember::Grouping(g) => g.title.clone(),
+        crate::model::language_family_members::LanguageFamilyMember::Language(_) => String::new(),
+    };
+    let previous_notes = member.member.notes().to_string();
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+    let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+
+    okay(render_template(EditMemberTemplate {
+        current_user: Some(user),
+        family,
+        member,
+        error: None,
+        will_create_audit_log,
+        previous_title,
+        previous_notes,
+    }))
+}
+
+#[derive(Deserialize)]
+struct EditMemberFormData {
+    title: Option<String>,
+    notes: Option<String>,
+}
+
+async fn edit_member_submit(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    Path((code, member_id)): Path<(String, Uuid)>,
+    Form(form): Form<EditMemberFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+    let member_raw = attempt!(s, members.find_by_id(member_id).await);
+    let member = attempt!(s, members.materialize(member_raw).await);
+
+    let notes = form.notes.clone().unwrap_or_default();
+
+    match members
+        .update(&user, member_id, form.title.clone(), notes.clone())
+        .await
+    {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!(
+                "/language-families/{}/members/{}",
+                family.code, member_id
+            ))
+            .into_response(),
+        ),
+        Err(e) => {
+            let previous_title = form.title.clone().unwrap_or_else(|| match &member.member {
+                crate::model::language_family_members::LanguageFamilyMember::Grouping(g) => {
+                    g.title.clone()
+                }
+                crate::model::language_family_members::LanguageFamilyMember::Language(_) => {
+                    String::new()
+                }
+            });
+            let will_create_audit_log =
+                crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+            let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+            let template = EditMemberTemplate {
+                current_user: Some(user),
+                family,
+                member,
+                error: Some(e),
+                will_create_audit_log,
+                previous_title,
+                previous_notes: notes,
+            };
+            (StatusCode::BAD_REQUEST, render_template(template))
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/new.html")]
+#[allow(dead_code)]
+struct NewMemberTemplate {
+    current_user: Option<User>,
+    family: FamilyWithContributors,
+    available_members: Vec<MemberWithLanguages>,
+    error: Option<AppError>,
+    will_create_audit_log: bool,
+    previous_parent_id: String,
+}
+
+async fn new_member_form(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    permissions: LanguageFamilyPermissionRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    let can_edit = permissions
+        .has_permission(user.id, family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    if !can_edit {
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to add members to this family"),
+        )
+        .await;
+    }
+
+    let all_raw = attempt!(s, members.all_for_family(family.id).await);
+    let mut available_members = Vec::new();
+    for raw in all_raw {
+        if let Ok(m) = members.materialize(raw).await {
+            available_members.push(m);
+        }
+    }
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+    let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+
+    okay(render_template(NewMemberTemplate {
+        current_user: Some(user),
+        family,
+        available_members,
+        error: None,
+        will_create_audit_log,
+        previous_parent_id: String::new(),
+    }))
+}
+
+#[derive(Deserialize)]
+struct NewMemberFormData {
+    parent_id: Uuid,
+}
+
+async fn new_member_submit(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    Path(code): Path<String>,
+    Form(form): Form<NewMemberFormData>,
+) -> (StatusCode, Response) {
+    get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&format!(
+            "/language-families/{}/members/{}/add-child",
+            family.code, form.parent_id
+        ))
+        .into_response(),
+    )
 }

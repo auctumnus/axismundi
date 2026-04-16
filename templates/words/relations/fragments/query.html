@@ -1,0 +1,29 @@
+{%- import "util.html" as u -%}
+<section>
+    <label for="kind">Relation type</label>
+    <div class="select-container">
+        <select id="kind" name="kind">
+            <option value="">any</option>
+            <option value="derived" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Derived) %}selected{% endif %}>derived</option>
+            <option value="descendant" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Descendant) %}selected{% endif %}>descendant</option>
+            <option value="compound" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Compound) %}selected{% endif %}>compound</option>
+            <option value="calque" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Calque) %}selected{% endif %}>calque</option>
+            <option value="borrowed" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Borrowed) %}selected{% endif %}>borrowed</option>
+            <option value="related" {% if query.kind == Some(crate::model::word_relations::WordRelationType::Related) %}selected{% endif %}>related</option>
+            <option value="see_also" {% if query.kind == Some(crate::model::word_relations::WordRelationType::SeeAlso) %}selected{% endif %}>see also</option>
+        </select>
+        {% call u::icon("chevron-down") %}
+    </div>
+</section>
+
+<section>
+    <label for="direction">Direction</label>
+    <div class="select-container">
+        <select id="direction" name="direction">
+            <option value="">any</option>
+            <option value="antecedent" {% if query.direction == Some(crate::model::word_relations::RelationDirection::Antecedent) %}selected{% endif %}>from (antecedent)</option>
+            <option value="consequent" {% if query.direction == Some(crate::model::word_relations::RelationDirection::Consequent) %}selected{% endif %}>into (consequent)</option>
+        </select>
+        {% call u::icon("chevron-down") %}
+    </div>
+</section>

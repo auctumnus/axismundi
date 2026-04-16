@@ -9,16 +9,27 @@ use uuid::Uuid;
 use crate::{
     err::{AppError, AppResult, bad_request},
     model::{
-        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository,
-        users::User, words::Word,
+        definitions::Definition, language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository, users::User, words::Word,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified, repo_from_parts},
 };
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    sqlx::Type,
+    strum::EnumString,
+    strum::Display,
+)]
 #[sqlx(type_name = "word_relation_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum WordRelationType {
     Derived,
     Descendant,
@@ -27,20 +38,6 @@ pub enum WordRelationType {
     Borrowed,
     Related,
     SeeAlso,
-}
-
-impl std::fmt::Display for WordRelationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WordRelationType::Derived => write!(f, "derived"),
-            WordRelationType::Descendant => write!(f, "descendant"),
-            WordRelationType::Compound => write!(f, "compound"),
-            WordRelationType::Calque => write!(f, "calque"),
-            WordRelationType::Borrowed => write!(f, "borrowed"),
-            WordRelationType::Related => write!(f, "related"),
-            WordRelationType::SeeAlso => write!(f, "see_also"),
-        }
-    }
 }
 
 impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
@@ -56,6 +53,25 @@ impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
             _ => Err(bad_request(
                 "word relation type cannot be converted to cognacy relation kind",
             )),
+        }
+    }
+}
+
+impl WordRelationType {
+    pub fn text(&self, direction: &RelationDirection) -> &'static str {
+        match (self, direction) {
+            (WordRelationType::Derived, RelationDirection::Antecedent) => "derived into",
+            (WordRelationType::Derived, RelationDirection::Consequent) => "derived from",
+            (WordRelationType::Descendant, RelationDirection::Antecedent) => "descended into",
+            (WordRelationType::Descendant, RelationDirection::Consequent) => "descended from",
+            (WordRelationType::Compound, RelationDirection::Antecedent) => "compounded into",
+            (WordRelationType::Compound, RelationDirection::Consequent) => "compounded from",
+            (WordRelationType::Calque, RelationDirection::Antecedent) => "calqued into",
+            (WordRelationType::Calque, RelationDirection::Consequent) => "calqued from",
+            (WordRelationType::Borrowed, RelationDirection::Antecedent) => "borrowed into",
+            (WordRelationType::Borrowed, RelationDirection::Consequent) => "borrowed from",
+            (WordRelationType::Related, _) => "related to",
+            (WordRelationType::SeeAlso, _) => "see also",
         }
     }
 }
@@ -180,18 +196,32 @@ impl std::fmt::Display for CognacyRelationKindV1 {
     }
 }
 
+impl From<CognacyRelationKindV1> for WordRelationType {
+    fn from(value: CognacyRelationKindV1) -> Self {
+        match value {
+            CognacyRelationKindV1::Derived => WordRelationType::Derived,
+            CognacyRelationKindV1::Descendant => WordRelationType::Descendant,
+            CognacyRelationKindV1::Compound => WordRelationType::Compound,
+            CognacyRelationKindV1::Calque => WordRelationType::Calque,
+            CognacyRelationKindV1::Borrowed => WordRelationType::Borrowed,
+        }
+    }
+}
+
 pub struct WordRelationRepository {
     state: AppState,
 }
 
 #[derive(Debug, Clone)]
 pub struct CreateWordRelation {
-    pub antecedent: Word,
-    pub consequent: Word,
+    pub antecedent: Uuid,
+    pub consequent: Uuid,
     pub kind: WordRelationType,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, strum::Display, strum::EnumString)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[strum(serialize_all = "snake_case")]
 pub enum RelationDirection {
     Antecedent,
@@ -207,12 +237,15 @@ impl RelationDirection {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SearchWordRelations {
     pub q: Option<String>,
     pub kind: Option<WordRelationType>,
     pub direction: Option<RelationDirection>,
+    pub non_cognacy_relations_only: Option<bool>,
 }
+
+crate::util::text_query!(SearchWordRelations);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WordRelationSearchResult {
@@ -224,6 +257,7 @@ pub struct WordRelationSearchResult {
     pub direction: RelationDirection,
     pub creator: User,
     pub created_at: DateTime<Utc>,
+    pub first_definition: Option<Definition>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,25 +283,49 @@ impl WordRelationRepository {
         Self { state }
     }
 
-    // TODO: might need a `create_with_tx`
     pub async fn create(
         &self,
         requestor: &User,
         relation: CreateWordRelation,
     ) -> AppResult<WordRelation> {
-        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
-        use crate::model::language_permissions::CheckPermissionReq;
-
         ensure_verified(requestor)?;
 
         crate::model::user_bans::UserBanRepository::new(self.state.clone())
             .ensure_not_banned(requestor.id)
             .await?;
 
+        let mut tx = self.state.pool.begin().await?;
+        let word_relation = self.create_with_tx(requestor, relation, &mut tx).await?;
+        tx.commit().await?;
+
+        Ok(word_relation)
+    }
+
+    pub async fn create_with_tx(
+        &self,
+        requestor: &User,
+        relation: CreateWordRelation,
+        tx: &mut Transaction<'_, Postgres>,
+    ) -> AppResult<WordRelation> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::CheckPermissionReq;
+
         let antecedent = relation.antecedent;
         let consequent = relation.consequent;
 
-        let mut tx = self.state.pool.begin().await?;
+        let ante_word = sqlx::query!(
+            "SELECT language, cognacy FROM words WHERE id = $1",
+            antecedent,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
+        let cons_word = sqlx::query!(
+            "SELECT language, cognacy FROM words WHERE id = $1",
+            consequent,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
 
         let word_relation = sqlx::query_as!(WordRelation,
                 r#"
@@ -275,11 +333,11 @@ impl WordRelationRepository {
                     VALUES ($1, $2, $3 :: word_relation_type, $4, $4)
                     RETURNING id, antecedent, consequent, kind as "kind: WordRelationType", created_at, updated_at, created_by, updated_by
                 "#,
-                antecedent.id,
-                consequent.id,
+                antecedent,
+                consequent,
                 relation.kind as WordRelationType,
                 requestor.id,
-            ).fetch_one(&mut *tx).await?;
+            ).fetch_one(&mut **tx).await?;
 
         // Check permissions on both languages with audit
         let permissions = LanguagePermissionRepository::new(self.state.clone());
@@ -288,18 +346,18 @@ impl WordRelationRepository {
             .check_permission_with_audit(
                 CheckPermissionReq {
                     user: requestor.id,
-                    language: antecedent.language,
+                    language: ante_word.language,
                     required_level: PermissionLevel::Editor,
                     action_type: AuditActionType::Created,
                     resource_type: AuditableResource::WordRelation,
                     resource_id: word_relation.id,
                     context: Some(serde_json::json!({
                         "role": "antecedent",
-                        "word_id": antecedent.id,
-                        "language_id": antecedent.language,
+                        "word_id": antecedent,
+                        "language_id": ante_word.language,
                     })),
                 },
-                &mut tx,
+                tx,
             )
             .await?;
 
@@ -307,18 +365,18 @@ impl WordRelationRepository {
             .check_permission_with_audit(
                 CheckPermissionReq {
                     user: requestor.id,
-                    language: consequent.language,
+                    language: cons_word.language,
                     required_level: PermissionLevel::Editor,
                     action_type: AuditActionType::Created,
                     resource_type: AuditableResource::WordRelation,
                     resource_id: word_relation.id,
                     context: Some(serde_json::json!({
                         "role": "consequent",
-                        "word_id": consequent.id,
-                        "language_id": consequent.language,
+                        "word_id": consequent,
+                        "language_id": cons_word.language,
                     })),
                 },
-                &mut tx,
+                tx,
             )
             .await?;
 
@@ -334,14 +392,14 @@ impl WordRelationRepository {
         if let Ok(cognacy_relation_kind) = CognacyRelationKindV1::try_from(relation.kind) {
             let edge = CognacyEdgeV1 {
                 id: word_relation.id,
-                antecedent: antecedent.id,
-                consequent: consequent.id,
+                antecedent,
+                consequent,
                 kind: cognacy_relation_kind,
             };
 
             let (antecedent_cognacy, consequent_cognacy) = tokio::try_join!(
-                self.find_cognacy(&antecedent),
-                self.find_cognacy(&consequent),
+                self.find_cognacy(ante_word.cognacy),
+                self.find_cognacy(cons_word.cognacy),
             )?;
 
             match (antecedent_cognacy, consequent_cognacy) {
@@ -351,7 +409,7 @@ impl WordRelationRepository {
                     let CognacyInner::V1(antecedent_schema) = antecedent_cognacy.inner;
                     let CognacyInner::V1(consequent_schema) = consequent_cognacy.inner;
                     self.merge_v1(
-                        &mut tx,
+                        tx,
                         (antecedent_id, antecedent_schema),
                         Some((consequent_id, consequent_schema)),
                         edge,
@@ -361,7 +419,7 @@ impl WordRelationRepository {
                 (Some(cognacy), None) | (None, Some(cognacy)) => {
                     let id = cognacy.id;
                     let CognacyInner::V1(schema) = cognacy.inner;
-                    self.merge_v1(&mut tx, (id, schema), None, edge).await?;
+                    self.merge_v1(tx, (id, schema), None, edge).await?;
 
                     // update both words to point to the cognacy
                     sqlx::query!(
@@ -371,10 +429,10 @@ impl WordRelationRepository {
                             WHERE id = $2 OR id = $3
                         "#,
                         id,
-                        antecedent.id,
-                        consequent.id,
+                        antecedent,
+                        consequent,
                     )
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
                 }
                 (None, None) => {
@@ -397,7 +455,7 @@ impl WordRelationRepository {
                         )))?,
                         new_cognacy.schema_version,
                     )
-                    .fetch_one(&mut *tx)
+                    .fetch_one(&mut **tx)
                     .await?;
 
                     // update both words to point to the new cognacy
@@ -408,22 +466,20 @@ impl WordRelationRepository {
                             WHERE id = $2 OR id = $3
                         "#,
                         cognacy_id,
-                        antecedent.id,
-                        consequent.id,
+                        antecedent,
+                        consequent,
                     )
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
                 }
             }
         }
 
-        tx.commit().await?;
-
         Ok(word_relation)
     }
 
-    async fn find_cognacy(&self, word: &Word) -> AppResult<Option<Cognacy>> {
-        if let Some(cognacy_id) = word.cognacy {
+    async fn find_cognacy(&self, cognacy_id: Option<Uuid>) -> AppResult<Option<Cognacy>> {
+        if let Some(cognacy_id) = cognacy_id {
             let cognacy = sqlx::query_as::<_, DBCognacy>("SELECT * FROM cognacies WHERE id = $1")
                 .bind(cognacy_id)
                 .fetch_optional(&self.state.pool)
@@ -601,7 +657,7 @@ impl WordRelationRepository {
         // if this was an etymological relation, we need to update the cognacy graph
         if CognacyRelationKindV1::try_from(relation.kind).is_ok() {
             // get the cognacy for the antecedent
-            if let Some(cognacy) = self.find_cognacy(antecedent).await? {
+            if let Some(cognacy) = self.find_cognacy(antecedent.cognacy).await? {
                 let CognacyInner::V1(mut schema) = cognacy.inner;
 
                 // remove the edge from the schema
@@ -914,7 +970,7 @@ impl WordRelationRepository {
 
         // If both types affect cognacy, we need to update the cognacy graph edge
         if old_affects_cognacy && new_affects_cognacy {
-            if let Some(cognacy) = self.find_cognacy(antecedent).await? {
+            if let Some(cognacy) = self.find_cognacy(antecedent.cognacy).await? {
                 let new_cognacy_kind = CognacyRelationKindV1::try_from(new_kind)?;
                 let CognacyInner::V1(mut schema) = cognacy.inner;
 
@@ -1000,7 +1056,15 @@ impl WordRelationRepository {
                     (CASE
                         WHEN word_relations.antecedent = $2 THEN 'consequent'
                         ELSE 'antecedent'
-                    END) as "direction!: String"
+                    END) as "direction!: String",
+                    first_def.id as "def_id: Option<Uuid>",
+                    first_def.definition as "def_definition: Option<String>",
+                    first_def.context as "def_context: Option<String>",
+                    first_def.position as "def_position: Option<i32>",
+                    first_def.created_at as "def_created_at: Option<DateTime<Utc>>",
+                    first_def.updated_at as "def_updated_at: Option<DateTime<Utc>>",
+                    first_def.created_by as "def_created_by: Option<Uuid>",
+                    first_def.updated_by as "def_updated_by: Option<Uuid>"
                 FROM word_relations
                 JOIN words ON
                     (CASE
@@ -1015,19 +1079,32 @@ impl WordRelationRepository {
                 LEFT JOIN word_classes ON word_classes.id = words.word_class
                 LEFT JOIN users AS word_created ON word_created.id = words.created_by
                 LEFT JOIN users AS word_updated ON word_updated.id = words.updated_by
+                LEFT JOIN LATERAL (
+                    SELECT id, word, definition, context, position, created_at, updated_at, created_by, updated_by
+                    FROM definitions
+                    WHERE definitions.word = words.id
+                    ORDER BY position ASC
+                    LIMIT 1
+                ) AS first_def ON true
                 WHERE
                     (CASE
                         WHEN $1 = 'antecedent' THEN word_relations.antecedent = $2
                         WHEN $1 = 'consequent' THEN word_relations.consequent = $2
                         ELSE word_relations.antecedent = $2 OR word_relations.consequent = $2
                     END)
-                    AND ($3::word_relation_type IS NULL OR word_relations.kind = $3)
+                    AND (
+                        CASE
+                            WHEN $3 THEN word_relations.kind IN ('related', 'see_also')
+                            ELSE $4::word_relation_type IS NULL OR word_relations.kind = $4
+                        END
+                    )
                     AND words.id <> $2
                 ORDER BY words.id
-                LIMIT $4 OFFSET $5
+                LIMIT $5 OFFSET $6
             "#,
             search.direction.map(|d| d.to_string()),
             word.id,
+            search.non_cognacy_relations_only.unwrap_or(false),
             search.kind as _,
             i64::from(pagination.limit),
             i64::from(pagination.offset),
@@ -1049,11 +1126,17 @@ impl WordRelationRepository {
                         WHEN $1 = 'consequent' THEN word_relations.consequent = $2
                         ELSE word_relations.antecedent = $2 OR word_relations.consequent = $2
                     END)
-                    AND ($3::word_relation_type IS NULL OR word_relations.kind = $3)
+                    AND (
+                        CASE
+                            WHEN $3 THEN word_relations.kind IN ('related', 'see_also')
+                            ELSE $4::word_relation_type IS NULL OR word_relations.kind = $4
+                        END
+                    )
                     AND words.id <> $2
             "#,
             search.direction.map(|d| d.to_string()),
             word.id,
+            search.non_cognacy_relations_only.unwrap_or(false),
             search.kind as _,
         )
         .fetch_one(&self.state.pool);
@@ -1097,6 +1180,7 @@ impl WordRelationRepository {
                     pronouns: record.creator_pronouns,
                     gender: record.creator_gender,
                     profile_picture_object_id: record.creator_profile_picture_object_id,
+                    banner_object_id: String::new(),
                     tags: record.creator_tags,
                     bookmark: record.creator_bookmark,
                     created_at: record.creator_created_at,
@@ -1105,6 +1189,18 @@ impl WordRelationRepository {
 
                 let direction = RelationDirection::from_str(&record.direction).unwrap();
                 let into_other_language = related_word.language != word.language;
+
+                let first_definition = record.def_id.map(|id| Definition {
+                    id,
+                    word: related_word.id,
+                    definition: record.def_definition.unwrap_or_default(),
+                    context: record.def_context.unwrap_or_default(),
+                    position: record.def_position.unwrap_or(0),
+                    created_at: record.def_created_at.unwrap_or_else(Utc::now),
+                    updated_at: record.def_updated_at.unwrap_or_else(Utc::now),
+                    created_by: record.def_created_by.unwrap_or_default(),
+                    updated_by: record.def_updated_by.unwrap_or_default(),
+                });
 
                 WordRelationSearchResult {
                     word: related_word,
@@ -1115,6 +1211,7 @@ impl WordRelationRepository {
                     direction,
                     creator,
                     created_at: record.relation_created_at,
+                    first_definition,
                 }
             })
             .collect();
@@ -1133,7 +1230,7 @@ impl WordRelationRepository {
     }
 
     pub async fn get_cognacy(&self, word: &Word) -> AppResult<Option<CognacyFull>> {
-        let cognacy = self.find_cognacy(word).await?;
+        let cognacy = self.find_cognacy(word.cognacy).await?;
 
         if let Some(cognacy) = cognacy {
             // get all word IDs from the cognacy graph

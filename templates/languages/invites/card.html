@@ -1,0 +1,40 @@
+{%- import "util.html" as u -%}
+
+{% macro render_invite_card(invite, inviting_user, invited_user, permission_level, revoke_link, can_revoke) %}
+<span class="invite-card">
+    <span class="left">
+        <span class="invite-info">
+            {% call u::badge(&inviting_user, "small") %}
+            <span>invited</span>
+            {% call u::badge(&invited_user, "small") %}
+        </span>
+        <span class="invite-permissions">
+            as {{ permission_level.display_name() }}
+        </span>
+        <span class="invite-meta">
+            <span class="invite-timestamp">
+                {% call u::relative(&invite.sent_at) %}
+            </span>
+            {% if let Some(accepted_at) = &invite.accepted_at %}
+                <span class="invite-accepted">
+                    Accepted {% call u::relative(accepted_at) %}
+                </span>
+            {% else %}
+                <span class="invite-pending">Pending
+                </span>
+            {% endif %}
+
+        </span>
+    </span>
+
+    {% if can_revoke %}
+        <span class="right invite-actions">
+            <a class="icon button gray" href="{{ revoke_link }}" data-tooltip="Revoke invite">
+                {% call u::icon("delete") %}
+            </a>
+        </span>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% call render_invite_card(invite, inviting_user, invited_user, permission_level, revoke_link, can_revoke) %}
