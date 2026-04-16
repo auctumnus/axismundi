@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ipa_estimators (language_id, sound_change_set_id) VALUES ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5696c54e477cc09eb3c4fdd09b2df0456f3d2e21f05b7001c2fe1346b5b7eb2e"
+}

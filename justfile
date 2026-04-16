@@ -170,10 +170,10 @@ run:
 watch-frontend:
     cd frontend && bun run dev
 
-# Start all services except the app (db, minio, thumbor, thumbor proxy)
+# Start all services except the app (db, minio, imagor, imagor proxy)
 dev-full:
     @echo "Starting all development services..."
-    docker compose up -d postgres minio createbuckets thumbor lexurgy
+    docker compose up -d postgres minio createbuckets imagor lexurgy
     @echo "Waiting for services to be ready..."
     @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
         echo "Database is unavailable - sleeping"; \
@@ -183,15 +183,15 @@ dev-full:
         echo "Minio is unavailable - sleeping"; \
         sleep 1; \
     done
-    @until curl -f http://localhost:8888/healthcheck >/dev/null 2>&1; do \
-        echo "Thumbor is unavailable - sleeping"; \
+    @until curl -f http://localhost:8888 >/dev/null 2>&1; do \
+        echo "Imagor is unavailable - sleeping"; \
         sleep 1; \
     done
     @echo "All services ready!"
     @echo "PostgreSQL: postgres://user:password@localhost:5432/axismundi"
     @echo "Minio Web UI: http://localhost:9001 (minioadmin/minioadmin123)"
     @echo "Minio S3 API: http://localhost:9000"
-    @echo "Thumbor: http://localhost:8888"
+    @echo "Imagor: http://localhost:8888"
     @echo ""
     @echo "Now you can run: just run"
 
@@ -240,7 +240,7 @@ db-reset:
 # Start Minio S3 storage
 minio:
     @echo "Starting Minio S3 storage..."
-    docker compose up minio createbuckets thumbor -d
+    docker compose up minio createbuckets imagor -d
     @echo "Waiting for Minio to be ready..."
     @until curl -f http://localhost:9000/minio/health/live >/dev/null 2>&1; do \
         echo "Minio is unavailable - sleeping"; \
@@ -252,7 +252,7 @@ minio:
 
 # Stop Minio
 minio-stop:
-    docker compose down minio createbuckets thumbor
+    docker compose down minio createbuckets imagor
 
 export postgres_url := "postgres://user:password@localhost:5432/axismundi"
 

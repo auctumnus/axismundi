@@ -177,7 +177,7 @@ interface AddQuotationModalProps extends EditorBaseProps {
   selection: Range | null;
 }
 
-const addQuotation = (selectedWord: WordOption | null, selectedDefinition: DefinitionOption | null, selection: Range | null, editor: Editor, highlight: Highlight | null) => {
+const addQuotation = (selectedWord: WordOption | null, selectedDefinition: DefinitionOption | null, selection: Range | null, editor: Editor, highlight: Highlight | null, notes: string) => {
   if (!selectedWord || !selectedDefinition || !selection) {
     return;
   }
@@ -193,6 +193,7 @@ const addQuotation = (selectedWord: WordOption | null, selectedDefinition: Defin
     definition_text: definition,
     highlight_start: highlight?.start ?? null,
     highlight_end: highlight?.end ?? null,
+    notes,
     word_slug,
     word_lemma,
     word,
@@ -239,11 +240,13 @@ const AddQuotationModal = ({ editor, open, setOpen, languageCode, selection }: A
   const [selectedDefinition, setSelectedDefinition] = useState<DefinitionOption | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
   const [highlightText, setHighlightText] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string>("");
 
   useEffect(() => {
     if (open) {
       setHighlight(null);
       setHighlightText(null);
+      setNotes("");
     }
   }, [open]);
 
@@ -255,7 +258,7 @@ const AddQuotationModal = ({ editor, open, setOpen, languageCode, selection }: A
   };
 
   return <ModalInner open={open} close={() => setOpen(false)} title="Add quotation" contents={(close) => (
-    <form className="default" onSubmit={(e) => { e.preventDefault(); addQuotation(selectedWord, selectedDefinition, selection, editor, highlight); close(); }}>
+    <form className="default" onSubmit={(e) => { e.preventDefault(); addQuotation(selectedWord, selectedDefinition, selection, editor, highlight, notes); close(); }}>
       {quotationText && (
         <section>
           <label>Highlight</label>
@@ -296,9 +299,14 @@ const AddQuotationModal = ({ editor, open, setOpen, languageCode, selection }: A
           : ""
       }
 
+      <section>
+        <label htmlFor="add-quotation-notes">Notes</label>
+        <input id="add-quotation-notes" type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional notes" />
+      </section>
+
       <div className="button-row">
         <button className="secondary normal" type="button" onClick={close}>Cancel</button>
-        <button className="primary normal" type="button" onClick={() => { addQuotation(selectedWord, selectedDefinition, selection, editor, highlight); close(); }}>Add</button>
+        <button className="primary normal" type="button" onClick={() => { addQuotation(selectedWord, selectedDefinition, selection, editor, highlight, notes); close(); }}>Add</button>
       </div>
     </form>
   )} />
@@ -339,6 +347,7 @@ const EditQuotationModal = ({ editor, open, setOpen, quotation, onSave, language
       : null
   );
   const [highlightText, setHighlightText] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string>(quotation.notes ?? "");
 
   const quotationText = Array.from(
     Editor.nodes<TextElement>(editor, {
@@ -369,6 +378,7 @@ const EditQuotationModal = ({ editor, open, setOpen, quotation, onSave, language
         word,
         highlight_start: highlight?.start ?? null,
         highlight_end: highlight?.end ?? null,
+        notes,
       };
 
       onSave(quotationInfo);
@@ -417,6 +427,11 @@ const EditQuotationModal = ({ editor, open, setOpen, quotation, onSave, language
           </section>
           : ""
       }
+
+      <section>
+        <label htmlFor="edit-quotation-notes">Notes</label>
+        <input id="edit-quotation-notes" type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional notes" />
+      </section>
 
       <div className="button-row">
         <button className="secondary normal" type="button" onClick={close}>Cancel</button>

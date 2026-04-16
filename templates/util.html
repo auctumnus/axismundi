@@ -69,7 +69,7 @@
 {% if let Some(pfp_url) = user.get_profile_picture_url() %}
     {{ pfp_url }}
 {% else %}
-    {{ &crate::config::CONFIG.public_url_base }}/static/default-pfp.webp
+    {{ &crate::config::CONFIG.public_url_base }}/assets/default-pfp.webp
 {% endif %}
 {% endmacro %}
 

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT family_id\n                FROM language_family_members\n                WHERE language_id = $1\n                AND relation_type = 'descendant'\n                LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "family_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "454ca7fa56da4e47a79d79b201269d5f15fd4b6431090c7e9b000001ecb82942"
+}

@@ -83,55 +83,39 @@ services:
       REQUEST_TIMEOUT: 5
       TOTAL_TIMEOUT: 60
 
-  thumbor:
-    image: beeyev/thumbor-s3:slim-alpine
-    container_name: axismundi-thumbor
+  imagor:
+    image: shumc/imagor:latest
+    container_name: axismundi-imagor
     ports:
-      - "8888:8888"
+      - "8888:8000"
     environment:
-      # loader config (read images from s3)
-      LOADER: thumbor_aws.loader
-      AWS_LOADER_BUCKET_NAME: axismundi
-      AWS_LOADER_S3_ACCESS_KEY_ID: minioadmin
-      AWS_LOADER_S3_SECRET_ACCESS_KEY: minioadmin123
-      AWS_LOADER_S3_ENDPOINT_URL: http://minio:9000
-      AWS_LOADER_REGION_NAME: us-east-1
+      PORT: 8000
 
-      # storage config (write processed images)
-      STORAGE: thumbor_aws.storage
-      AWS_STORAGE_BUCKET_NAME: axismundi
-      AWS_STORAGE_S3_ACCESS_KEY_ID: minioadmin
-      AWS_STORAGE_S3_SECRET_ACCESS_KEY: minioadmin123
-      AWS_STORAGE_S3_ENDPOINT_URL: http://minio:9000
-      AWS_STORAGE_REGION_NAME: us-east-1
-
-      # result storage config (cache results)
-      RESULT_STORAGE: thumbor_aws.result_storage
-      AWS_RESULT_STORAGE_BUCKET_NAME: axismundi
-      AWS_RESULT_STORAGE_S3_ACCESS_KEY_ID: minioadmin
-      AWS_RESULT_STORAGE_S3_SECRET_ACCESS_KEY: minioadmin123
-      AWS_RESULT_STORAGE_S3_ENDPOINT_URL: http://minio:9000
-      AWS_RESULT_STORAGE_REGION_NAME: us-east-1
-      
       # security - set this to a random string in production
-      SECURITY_KEY: change-me-in-production
-      ALLOW_UNSAFE_URL: "True"  # set to false in production
-      
-      # quality
-      QUALITY: 85
-      WEBP_QUALITY: 80
-      AUTO_WEBP: "True"
-      
-      # caching
-      RESULT_STORAGE_STORES_UNSAFE: "True"
+      IMAGOR_SECRET: change-me-in-production
+      IMAGOR_UNSAFE: 1  # set to 0 in production
 
-      # logging
-      LOG_LEVEL: debug
+      # s3/minio credentials
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_FORCE_PATH_STYLE: 1
+
+      # loader (read source images from minio)
+      S3_LOADER_BUCKET: axismundi
+
+      # result storage (cache processed images in minio)
+      S3_RESULT_STORAGE_BUCKET: axismundi
+      S3_RESULT_STORAGE_BASE_DIR: results
+
+      # quality
+      IMAGOR_AUTO_WEBP: 1
     depends_on:
       - minio
       - createbuckets
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/healthcheck"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3

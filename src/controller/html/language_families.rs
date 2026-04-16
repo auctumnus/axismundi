@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use axum_extra::{TypedHeader, headers::UserAgent};
+use axum_extra::{TypedHeader, extract::Multipart, headers::UserAgent};
 use futures::TryFutureExt;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -14,7 +14,7 @@ use crate::{
     attempt,
     controller::html::{okay, render_template},
     embed::{self, GenericEmbed, render_embed, truncate_description},
-    err::AppError,
+    err::{AppError, bad_request},
     get_user,
     model::{
         language_families::{
@@ -31,6 +31,7 @@ use crate::{
     util::{
         AppState, BackQuery, ListHeaderKind,
         extract_session::Session,
+        s3::S3,
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -45,6 +46,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/language-families/{code}/delete",
             post(delete_language_family_submit),
+        )
+        .route(
+            "/language-families/{code}/change-banner",
+            post(change_language_family_banner),
+        )
+        .route(
+            "/language-families/{code}/clear-banner",
+            post(clear_language_family_banner),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -527,6 +536,100 @@ async fn delete_language_family_submit(
         Ok(()) => (
             StatusCode::SEE_OTHER,
             Redirect::to("/language-families").into_response(),
+        ),
+        Err(e) => crate::controller::html::render_generic_error(s, e).await,
+    }
+}
+
+const MAX_BANNER_SIZE: usize = 5 * 1024 * 1024;
+
+async fn change_language_family_banner(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    Path(code): Path<String>,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        if field.name().unwrap_or("") == "banner" {
+            content_type = field.content_type().map(std::string::ToString::to_string);
+            match field.bytes().await {
+                Ok(bytes) => file_data = Some(bytes.to_vec()),
+                Err(e) => {
+                    return crate::controller::html::render_generic_error(
+                        s,
+                        bad_request(format!("Failed to read file: {e}")),
+                    )
+                    .await;
+                }
+            }
+            break;
+        }
+    }
+
+    let Some(file_data) = file_data else {
+        return crate::controller::html::render_generic_error(
+            s,
+            bad_request("No banner file provided"),
+        )
+        .await;
+    };
+    let Some(content_type) = content_type else {
+        return crate::controller::html::render_generic_error(
+            s,
+            bad_request("No content type provided"),
+        )
+        .await;
+    };
+
+    if file_data.len() > MAX_BANNER_SIZE {
+        return crate::controller::html::render_generic_error(
+            s,
+            bad_request("File size exceeds the maximum limit of 5MB"),
+        )
+        .await;
+    }
+
+    let filename = match S3
+        .upload_banner("family", family.id, &file_data, &content_type)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => return crate::controller::html::render_generic_error(s, e).await,
+    };
+
+    match language_families
+        .update_banner(&user, family.id, &filename)
+        .await
+    {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/language-families/{code}/edit")).into_response(),
+        ),
+        Err(e) => crate::controller::html::render_generic_error(s, e).await,
+    }
+}
+
+async fn clear_language_family_banner(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    match language_families
+        .update_banner(&user, family.id, "")
+        .await
+    {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/language-families/{code}/edit")).into_response(),
         ),
         Err(e) => crate::controller::html::render_generic_error(s, e).await,
     }

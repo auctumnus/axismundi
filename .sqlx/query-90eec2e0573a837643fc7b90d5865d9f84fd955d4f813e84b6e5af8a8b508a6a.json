@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            select\n                lfm.id,\n                lfm.family_id,\n                lf.name as family_name,\n                lf.code as family_code,\n                coalesce(l.name, lfm.title) as \"display_name!\"\n            from language_family_members lfm\n            join language_families lf on lf.id = lfm.family_id\n            left join languages l on l.id = lfm.language_id\n            where exists (\n                select 1 from language_family_permissions lfp\n                where lfp.family = lfm.family_id\n                  and lfp.\"user\" = $1\n                  and lfp.permission >= 'editor'\n            )\n            and not exists (\n                select 1 from sound_change_sets scs\n                where scs.member_id = lfm.id\n            )\n            order by lf.name, lfm.title, l.name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "family_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "family_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "family_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "90eec2e0573a837643fc7b90d5865d9f84fd955d4f813e84b6e5af8a8b508a6a"
+}

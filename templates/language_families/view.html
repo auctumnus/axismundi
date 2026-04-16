@@ -14,6 +14,7 @@
 </script>
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/family-view.css">
+<link rel="stylesheet" href="/static/language-view.css">
 {% endblock %}
 
 {% block content %}
@@ -39,6 +40,9 @@
 {% endif %}
 
 <div class="language-card-full full-card card">
+    {% if let Some(banner_url) = family.get_banner_url() %}
+        <div class="banner"><img src="{{ banner_url }}" alt="" aria-hidden="true"></div>
+    {% endif %}
     <div class="header-with-actions">
         <div class="with-subtitle">
             <h1>{{ family.name }}</h1>
@@ -80,6 +84,17 @@
     {% else %}
         <p class="empty-description">no description yet</p>
     {% endif %}
+
+    <table>
+        <tr>
+            <th>created</th>
+            <td>{% call u::relative(&family.created_at) %}</td>
+        </tr>
+        <tr>
+            <th>members</th>
+            <td>{{ member_count }}</td>
+        </tr>
+    </table>
 </div>
 
 {% if member_count > 0 %}
@@ -88,6 +103,12 @@
     <div class="header-with-actions">
         <h2 class="with-action">members</h2>
         <ul>
+            {% if can_edit_language_family %}
+            <li><a class="with-icon" href="/language-families/{{ family.code }}/members/new">
+                {% call u::icon("plus") %}
+                <span>add member</span>
+            </a></li>
+            {% endif %}
             <li><a class="with-icon" href="/language-families/{{ family.code }}/members">
                 {% call u::icon("list") %}
                 <span>view all</span>

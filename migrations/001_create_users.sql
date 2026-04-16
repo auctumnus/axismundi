@@ -10,6 +10,7 @@ create table users (
     gender text not null default '',
 
     profile_picture_object_id text not null default '',
+    banner_object_id text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

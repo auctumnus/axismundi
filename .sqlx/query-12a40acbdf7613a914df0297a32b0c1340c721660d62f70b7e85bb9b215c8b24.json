@@ -1,0 +1,170 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    u.id as u_id,\n                    u.username as u_username,\n                    u.email as u_email,\n                    u.password_hash as u_password_hash,\n                    u.display_name as u_display_name,\n                    u.description as u_description,\n                    u.pronouns as u_pronouns,\n                    u.gender as u_gender,\n                    u.profile_picture_object_id as u_profile_picture_object_id,\n                    u.verified_at as u_verified_at,\n                    u.tags as u_tags,\n                    u.created_at as u_created_at,\n                    u.updated_at as u_updated_at,\n                    COALESCE(bookmarks.slug, '')::text as \"bookmark!\",\n                    lp.id as \"permission_id?\",\n                    COALESCE(lp.permission, 'viewer') as \"permission!: PermissionLevel\",\n                    lp.accepted_at as \"accepted_at?\",\n                    cs.language_id as \"cs_language_id?\",\n                    cs.user_id as \"cs_user_id?\",\n                    COALESCE(cs.word_count, 0) as \"cs_word_count!\",\n                    COALESCE(cs.translation_count, 0) as \"cs_translation_count!\"\n                FROM users u\n                LEFT JOIN contribution_stats cs ON u.id = cs.user_id AND cs.language_id = $1\n                LEFT JOIN bookmarks ON bookmarks.item = u.id AND bookmarks.resource = 'user'\n                LEFT JOIN language_permissions lp ON lp.\"user\" = u.id AND lp.language = $1 AND lp.accepted_at IS NOT NULL\n                WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)\n                AND (lp.permission IS NULL OR lp.permission >= $4)\n                AND (cs.word_count IS NOT NULL OR cs.translation_count IS NOT NULL OR lp.permission IS NOT NULL)\n                ORDER BY (COALESCE(cs.word_count, 0) + (10 * COALESCE(cs.translation_count, 0))) DESC\n                LIMIT $3 OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "u_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "u_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "u_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "u_password_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "u_display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "u_description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "u_pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "u_gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "u_profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "u_verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "u_tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "u_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "u_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "bookmark!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "permission_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "permission!: PermissionLevel",
+        "type_info": {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "accepted_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "cs_language_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "cs_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "cs_word_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 20,
+        "name": "cs_translation_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        {
+          "Custom": {
+            "name": "permission_level",
+            "kind": {
+              "Enum": [
+                "viewer",
+                "editor",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      false,
+      null,
+      true,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "12a40acbdf7613a914df0297a32b0c1340c721660d62f70b7e85bb9b215c8b24"
+}

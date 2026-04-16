@@ -57,14 +57,28 @@ ul#relation-list {
       gap: 0.25rem;
       font-size: 0.875rem;
       color: var(--foreground-secondary);
+
+      & > span {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.25rem;
+      }
     }
 
     .relation-language-code {
-      font-size: 0.75rem;
-      color: var(--foreground-tertiary);
-      border: var(--border);
+      font-size: 0.8rem;
+      color: var(--foreground-secondary);
+      border: 1px solid var(--foreground-secondary);
       border-radius: var(--rounding);
-      padding: 0.125rem 0.5rem;
+      padding: 0.175rem 0.425rem;
+      margin-left: .5rem;
+      text-transform: uppercase;
+
+      .tooltip {
+        font-size: .75rem;
+        text-transform: none;
+      }
     }
   }
 

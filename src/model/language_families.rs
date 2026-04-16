@@ -31,6 +31,9 @@ pub struct LanguageFamily {
     pub description: String,
     pub tree: Value,
     pub like_count: i64,
+    #[serde(skip)]
+    #[sqlx(default)]
+    pub banner_object_id: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub created_by: Uuid,
@@ -50,6 +53,14 @@ impl LanguageFamily {
         let schema: LanguageFamilyInner = serde_json::from_value(self.tree.clone())
             .map_err(|e| internal_error(format!("Failed to parse tree schema: {}", e)))?;
         Ok(schema)
+    }
+
+    pub fn get_banner_url(&self) -> Option<String> {
+        if self.banner_object_id.is_empty() {
+            None
+        } else {
+            Some(crate::util::s3::S3.get_banner_url(&self.banner_object_id))
+        }
     }
 }
 
@@ -189,7 +200,7 @@ impl LanguageFamilyRepository {
             r#"
                 INSERT INTO language_families (code, name, description, created_by, updated_by)
                 VALUES ($1, $2, $3, $4, $4)
-                RETURNING id, code, name, description, tree, like_count, created_at, updated_at, created_by, updated_by
+                RETURNING id, code, name, description, tree, like_count, banner_object_id, created_at, updated_at, created_by, updated_by
             "#,
             family.code,
             family.name,
@@ -494,7 +505,7 @@ impl LanguageFamilyRepository {
                 UPDATE language_families
                 SET tree = $1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
-                RETURNING id, code, name, description, tree, like_count, created_at, updated_at, created_by, updated_by
+                RETURNING id, code, name, description, tree, like_count, banner_object_id, created_at, updated_at, created_by, updated_by
             "#,
             new_tree,
             family.id
@@ -574,7 +585,7 @@ impl LanguageFamilyRepository {
                 UPDATE language_families
                 SET code = $1, name = $2, description = $3, updated_at = CURRENT_TIMESTAMP, updated_by = $4
                 WHERE id = $5
-                RETURNING id, code, name, description, tree, like_count, created_at, updated_at, created_by, updated_by
+                RETURNING id, code, name, description, tree, like_count, banner_object_id, created_at, updated_at, created_by, updated_by
             "#,
             new_code,
             new_name,
@@ -601,6 +612,41 @@ impl LanguageFamilyRepository {
             .await?;
 
         Ok(updated)
+    }
+
+    pub async fn update_banner(
+        &self,
+        user: &User,
+        id: Uuid,
+        object_key: &str,
+    ) -> AppResult<LanguageFamily> {
+        let perms = LanguageFamilyPermissionRepository::new(self.state.clone());
+        let has_perm = perms
+            .has_permission(user.id, id, PermissionLevel::Editor)
+            .await?;
+
+        if !has_perm {
+            return Err(crate::err::forbidden(
+                "you don't have permission to edit this language family",
+            ));
+        }
+
+        let result = sqlx::query_as!(
+            LanguageFamily,
+            r#"
+                UPDATE language_families
+                SET banner_object_id = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                RETURNING id, code, name, description, tree, like_count, banner_object_id, created_at, updated_at, created_by, updated_by
+            "#,
+            id,
+            object_key
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("language family with id '{id}'")))
     }
 
     pub async fn delete(&self, user: &User, id: Uuid) -> AppResult<()> {
@@ -705,6 +751,7 @@ impl LanguageFamilyRepository {
                     language_families.description,
                     language_families.tree,
                     language_families.like_count,
+                    language_families.banner_object_id,
                     language_families.created_at,
                     language_families.updated_at,
                     language_families.created_by,
@@ -887,6 +934,7 @@ impl LanguageFamilyRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -916,6 +964,7 @@ impl LanguageFamilyRepository {
                     lf.description,
                     lf.tree,
                     lf.like_count,
+                    lf.banner_object_id,
                     lf.created_at,
                     lf.updated_at,
                     lf.created_by,

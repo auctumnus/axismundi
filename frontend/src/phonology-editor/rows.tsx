@@ -1,12 +1,13 @@
-import { useRef } from "react";
+import React, { useRef } from "react";
 import { getMovement, isPathEqual, move, serializePath, type CellPath, type HeadingPath } from "./path";
 import { isFocused, isSelected, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Cell, type Row } from "./table";
 
-const Phoneme = ({ text, annotations, isLast }: { text: string; annotations: number[]; isLast: boolean }) => {
+const Phoneme = ({ text, annotations, isLast, onDoubleClick }: { text: string; annotations: number[]; isLast: boolean; onDoubleClick?: () => void }) => {
+    const handleDoubleClick = onDoubleClick ? (e: React.MouseEvent) => { e.stopPropagation(); onDoubleClick(); } : undefined;
     return (
         <>
-          <span className="phoneme">
+          <span className="phoneme" onDoubleClick={handleDoubleClick}>
               {text}
           </span>
           {annotations.map((index, i) => <><sup key={index} className="annotation-link">{index + 1}{ i === annotations.length - 1 ? "" : ", "}</sup></>)}
@@ -26,6 +27,14 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
       if (!focused) {
         dispatch({ type: "SetFocus", path });
         dispatch({ type: "SetSelect", path });
+      }
+    }
+
+    const onDoubleClick = () => {
+      dispatch({ type: "SetFocus", path });
+      dispatch({ type: "SetSelect", path });
+      if (cell.phonemes.length === 0) {
+        dispatch({ type: "OpenModal", modal: "AddPhoneme" });
       }
     }
 
@@ -57,9 +66,13 @@ const RowCell = ({ cell, path, rowFocused }: { cell: Cell; path: CellPath; rowFo
     const tabIndex = focused ? 0 : -1;
 
     return (
-      <td ref={cellRef} className={className} onClick={onClick} tabIndex={tabIndex} data-path={serializePath(state.body, path)} onKeyDown={onKeyDown}>
+      <td ref={cellRef} className={className} onClick={onClick} onDoubleClick={onDoubleClick} tabIndex={tabIndex} data-path={serializePath(state.body, path)} onKeyDown={onKeyDown}>
         {cell.phonemes.map((p, i) => (
-          <Phoneme key={p.text + i} text={p.text} annotations={p.annotations} isLast={i === cell.phonemes.length - 1} />
+          <Phoneme key={p.text + i} text={p.text} annotations={p.annotations} isLast={i === cell.phonemes.length - 1} onDoubleClick={() => {
+            dispatch({ type: "SetFocus", path });
+            dispatch({ type: "SetSelect", path });
+            dispatch({ type: "OpenModal", modal: "EditPhoneme", phonemeIndex: i });
+          }} />
         ))}
       </td>
     )
@@ -100,6 +113,12 @@ const Th = ({ heading, rowSpan, colSpan, path }: ThCell) => {
     }
   }
 
+  const onDoubleClick = () => {
+    dispatch({ type: "SetFocus", path: { type: "RowHeading", path } });
+    dispatch({ type: "SetSelect", path: { type: "RowHeading", path } });
+    dispatch({ type: "OpenModal", modal: "EditRowHeading" });
+  }
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === " ") {
       e.preventDefault();
@@ -123,7 +142,7 @@ const Th = ({ heading, rowSpan, colSpan, path }: ThCell) => {
   }
 
   return (
-    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "RowHeading", path })}>
+    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onDoubleClick={onDoubleClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "RowHeading", path })}>
       {heading}
     </th>
   );

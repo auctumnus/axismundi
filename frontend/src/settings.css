@@ -146,3 +146,141 @@
   margin-top: 1rem;
   margin-bottom: 0;
 }
+
+.profile-images-container {
+  position: relative;
+  z-index: 0;
+  padding: 0;
+
+  --banner-size: 200px;
+  --pfp-size: 125px;
+
+  height: calc(var(--banner-size) + (var(--pfp-size) / 2) + 1rem);
+
+  .banner {
+    width: 100%;
+    height: var(--banner-size);
+    background-color: light-dark(var(--color-sky-100), var(--color-sky-800));
+    border-top-left-radius: var(--rounding);
+    border-top-right-radius: var(--rounding);
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+
+      &.no-img {
+        display: none;
+      }
+    }
+  }
+
+  .pfp {
+    position: absolute;
+    z-index: 200;
+    border-radius: 100%;
+    --padding: 1rem;
+    left: var(--padding);
+    top: calc(var(--banner-size) - (var(--pfp-size) / 2));
+    width: var(--pfp-size);
+    height: var(--pfp-size);
+
+    outline: 4px solid var(--background-panel);
+    background-color: var(--background-panel);
+
+    .upload-icon {
+      border-radius: 100%;
+    }
+
+    &:dir(rtl) {
+      right: var(--padding);
+      left: auto;
+    }
+
+    &:dir(ltr) {
+      left: var(--padding);
+    }
+
+    img {
+      border-radius: 100%;
+    }
+  }
+
+  .input-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+
+    z-index: 190;
+
+
+    .upload-icon {
+      width: 100%;
+      height: 100%;
+
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+
+      color: transparent;
+      background-color: transparent;
+      transition: color 150ms ease-in-out, background-color 150ms ease-in-out;
+
+      svg.icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 100%;
+        padding: 1rem;
+        color: transparent;
+        background-color: transparent;
+        transition: color 150ms ease-in-out, background-color 150ms ease-in-out;
+      }
+    }
+  input[type="file"] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    appearance: none;
+
+    transition: background-color 150ms ease-in-out;
+    
+    &::file-selector-button {
+      appearance: none;
+    }
+
+  }
+
+    input[type="file"]:is(:hover, :focus) + .upload-icon {
+      color: var(--dark-foreground-primary);
+      background-color: color-mix(in oklab, var(--light-foreground-primary) 20%, transparent);
+      svg.icon {
+        color: var(--dark-foreground-primary);
+        background-color: color-mix(in oklab, var(--light-foreground-primary) 50%, transparent);
+      }
+    }
+  }
+
+
+  .riding {
+    position: absolute;
+    top: var(--banner-size);
+    width: 100%;
+    padding-top: 1rem;
+    padding-right: 1rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .5rem;
+  }
+}
+
+.banner .input-container, input#banner {
+  height: var(--banner-size);
+  width: var(--page-width);
+  max-width: var(--page-width);
+}

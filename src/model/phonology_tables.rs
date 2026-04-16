@@ -258,6 +258,7 @@ impl PhonologyTable {
                                 html.push_str(&phoneme.text);
                                 html.push_str("</span>");
                                 for &annotation_index in &phoneme.annotations {
+                                    let annotation_index = annotation_index + 1; // 1-based for display
                                     write!(html, "<sup><a href=\"#annotation-{annotation_index}\" class=\"annotation\">{annotation_index}</a></sup>").unwrap();
                                 }
                             }
@@ -394,6 +395,7 @@ impl PhonologyTable {
 
         html.push_str("<ol class=\"annotations\">");
         for (i, annotation) in body.annotations.iter().enumerate() {
+            let i = i + 1;
             write!(html, "<li id=\"annotation-{i}\">{annotation}</li>").unwrap();
         }
         html.push_str("</ol>");

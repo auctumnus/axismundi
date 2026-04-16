@@ -50,26 +50,31 @@
       },
       {
         "ordinal": 9,
+        "name": "banner_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "verified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "tags",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "bookmark!",
         "type_info": "Text"
       }
@@ -84,11 +89,12 @@
       false,
       false,
       false,
-      true,
-      true,
-      true,
-      true,
-      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
       false,
       false,
       true,

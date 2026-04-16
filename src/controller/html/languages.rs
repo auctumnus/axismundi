@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use axum_extra::{TypedHeader, headers::UserAgent};
+use axum_extra::{TypedHeader, extract::Multipart, headers::UserAgent};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -15,7 +15,7 @@ use crate::{
     attempt,
     controller::html::{LanguagesWithContributors, okay, render_generic_error, render_template},
     embed::{self, GenericEmbed, render_embed, truncate_description},
-    err::AppError,
+    err::{AppError, bad_request},
     get_user,
     model::{
         contribution_stats::ContributionStatsRepository,
@@ -35,6 +35,7 @@ use crate::{
     util::{
         AppState, BackQuery,
         extract_session::Session,
+        s3::S3,
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -43,7 +44,9 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
     let secure_routes = Router::<AppState>::new()
         .route("/new-language", post(new_language_submit))
         .route("/languages/{code}/edit", post(edit_language_submit))
-        .route("/languages/{code}/delete", post(delete_language_submit));
+        .route("/languages/{code}/delete", post(delete_language_submit))
+        .route("/languages/{code}/change-banner", post(change_language_banner))
+        .route("/languages/{code}/clear-banner", post(clear_language_banner));
 
     let normal_routes = Router::<AppState>::new()
         .route("/new-language", get(new_language_form))
@@ -256,6 +259,8 @@ struct ViewLanguageTemplate {
     json_ld: String,
     phonology_tables: Vec<String>,
     back: String,
+    word_count: i64,
+    translation_count: i64,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -325,6 +330,9 @@ async fn view_language(
         s,
         translations.list_by_language(language.id, get_five,).await
     );
+
+    let word_count = recent_words.total;
+    let translation_count = recent_translations.total;
 
     let can_edit_language = if let Some(user) = s.user() {
         permissions
@@ -496,6 +504,8 @@ async fn view_language(
         other_families: other_families_materialized,
         phonology_tables: tables,
         back: back_query.back.unwrap_or_default(),
+        word_count,
+        translation_count,
     };
 
     okay(render_template(template))
@@ -697,6 +707,83 @@ async fn delete_language_submit(
         Ok(_) => (
             StatusCode::SEE_OTHER,
             Redirect::to("/languages").into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
+    }
+}
+
+const MAX_BANNER_SIZE: usize = 5 * 1024 * 1024;
+
+async fn change_language_banner(
+    s: Session,
+    languages: LanguageRepository,
+    Path(code): Path<String>,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        if field.name().unwrap_or("") == "banner" {
+            content_type = field.content_type().map(std::string::ToString::to_string);
+            match field.bytes().await {
+                Ok(bytes) => file_data = Some(bytes.to_vec()),
+                Err(e) => {
+                    return render_generic_error(
+                        s,
+                        bad_request(format!("Failed to read file: {e}")),
+                    )
+                    .await;
+                }
+            }
+            break;
+        }
+    }
+
+    let Some(file_data) = file_data else {
+        return render_generic_error(s, bad_request("No banner file provided")).await;
+    };
+    let Some(content_type) = content_type else {
+        return render_generic_error(s, bad_request("No content type provided")).await;
+    };
+
+    if file_data.len() > MAX_BANNER_SIZE {
+        return render_generic_error(s, bad_request("File size exceeds the maximum limit of 5MB"))
+            .await;
+    }
+
+    let filename = match S3
+        .upload_banner("language", language.id, &file_data, &content_type)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => return render_generic_error(s, e).await,
+    };
+
+    match languages.update_banner(&user, language.id, &filename).await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{code}/edit")).into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
+    }
+}
+
+async fn clear_language_banner(
+    s: Session,
+    languages: LanguageRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+
+    match languages.update_banner(&user, language.id, "").await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/languages/{code}/edit")).into_response(),
         ),
         Err(e) => render_generic_error(s, e).await,
     }

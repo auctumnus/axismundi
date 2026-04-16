@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                    languages.id,\n                    languages.code,\n                    languages.name,\n                    languages.description,\n                    languages.private,\n                    languages.like_count,\n                    languages.banner_object_id,\n                    languages.created_at,\n                    languages.updated_at,\n                    languages.created_by,\n                    languages.updated_by,\n                    COALESCE(bookmarks.slug, '')::text as \"bookmark!\"\n                FROM languages\n                LEFT JOIN (\n                    SELECT\n                        CASE\n                            WHEN entity_type = 'language' THEN entity_id\n                            WHEN related_entity_type = 'language' THEN related_entity_id\n                        END as lang_id,\n                        MAX(timestamp) as last_activity\n                    FROM user_activities\n                    WHERE user_id = $1\n                        AND (entity_type = 'language' OR related_entity_type = 'language')\n                    GROUP BY lang_id\n                ) as la ON la.lang_id = languages.id\n                LEFT JOIN bookmarks ON bookmarks.item = languages.id AND bookmarks.resource = 'language'\n                WHERE languages.created_by = $1\n                ORDER BY COALESCE(la.last_activity, languages.created_at) DESC\n                LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "private",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "banner_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "bookmark!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c108ecc24e12270c157fd65d54023a08e70289821e7bd63500f8357d7ad8151d"
+}

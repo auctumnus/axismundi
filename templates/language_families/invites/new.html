@@ -5,6 +5,7 @@
 {% block title %}invite user - {{ family.name }} - axismundi{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="/static/components/async-select.css">
 <script type="module" src="/static/user-combobox.js"></script>
 <script type="module">
 document.addEventListener("DOMContentLoaded", () => {
@@ -37,15 +38,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <section>
         <label for="permissions">Permission level</label>
-        <select name="permissions" id="permissions" required>
-            <option value="viewer">Viewer</option>
-            <option value="editor" selected>Editor</option>
-            <option value="admin">Admin</option>
-            {% if can_grant_owner %}
-                <option value="owner">Owner</option>
-            {% endif %}
-        </select>
         {% call u::field_error("permissions") %}
+        <div class="select-container">
+            <select id="permissions" name="permissions" required>
+                <option value="viewer">Viewer</option>
+                <option value="editor" selected>Editor</option>
+                <option value="admin">Admin</option>
+                {% if can_grant_owner %}
+                    <option value="owner">Owner</option>
+                {% endif %}
+            </select>
+            {% call u::icon("chevron-down") %}
+        </div>
     </section>
 
     {% include "languages/permissions/fragments/help_text.html" %}

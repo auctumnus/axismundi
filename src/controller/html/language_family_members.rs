@@ -70,6 +70,14 @@ pub fn create_router() -> Router<AppState> {
             post(delete_member_submit),
         )
         .route("/language-families/{code}/members", get(search_members))
+        .route(
+            "/language-families/{code}/members/new",
+            get(new_member_form),
+        )
+        .route(
+            "/language-families/{code}/members/new",
+            post(new_member_submit),
+        )
         .route("/language-families/{code}/add-root", get(add_root_form))
         .route(
             "/language-families/{code}/members/{id}/add-child",
@@ -1693,4 +1701,86 @@ async fn edit_member_submit(
             (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
+}
+
+#[derive(Template)]
+#[template(path = "language_families/members/new.html")]
+#[allow(dead_code)]
+struct NewMemberTemplate {
+    current_user: Option<User>,
+    family: FamilyWithContributors,
+    available_members: Vec<MemberWithLanguages>,
+    error: Option<AppError>,
+    will_create_audit_log: bool,
+    previous_parent_id: String,
+}
+
+async fn new_member_form(
+    s: Session,
+    State(state): State<AppState>,
+    language_families: LanguageFamilyRepository,
+    members: LanguageFamilyMemberRepository,
+    permissions: LanguageFamilyPermissionRepository,
+    Path(code): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    let can_edit = permissions
+        .has_permission(user.id, family.id, PermissionLevel::Editor)
+        .await
+        .unwrap_or(false);
+
+    if !can_edit {
+        return crate::controller::html::render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to add members to this family"),
+        )
+        .await;
+    }
+
+    let all_raw = attempt!(s, members.all_for_family(family.id).await);
+    let mut available_members = Vec::new();
+    for raw in all_raw {
+        if let Ok(m) = members.materialize(raw).await {
+            available_members.push(m);
+        }
+    }
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_family(&state, &user, family.id).await;
+    let family = attempt!(s, language_families.materialize(family, Some(&user)).await);
+
+    okay(render_template(NewMemberTemplate {
+        current_user: Some(user),
+        family,
+        available_members,
+        error: None,
+        will_create_audit_log,
+        previous_parent_id: String::new(),
+    }))
+}
+
+#[derive(Deserialize)]
+struct NewMemberFormData {
+    parent_id: Uuid,
+}
+
+async fn new_member_submit(
+    s: Session,
+    language_families: LanguageFamilyRepository,
+    Path(code): Path<String>,
+    Form(form): Form<NewMemberFormData>,
+) -> (StatusCode, Response) {
+    get_user!(s);
+    let family = attempt!(s, language_families.find_by_code(&code).await);
+
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&format!(
+            "/language-families/{}/members/{}/add-child",
+            family.code, form.parent_id
+        ))
+        .into_response(),
+    )
 }

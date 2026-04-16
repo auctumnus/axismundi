@@ -7,7 +7,7 @@ use vizoxide::{
     render::{Format, render_to_string},
 };
 
-use crate::err::{AppResult, internal_error};
+use crate::{err::{AppResult, internal_error}, model::word_relations::{RelationDirection, WordRelationType}};
 use crate::model::language_families::{FamilyRelationKindV1, LanguageFamilySchemaV1};
 use crate::model::word_relations::{CognacyRelationKindV1, LeveledCognacy};
 
@@ -19,14 +19,15 @@ use crate::model::word_relations::{CognacyRelationKindV1, LeveledCognacy};
 /// - Compound: bold line
 /// - Calque: dashed line
 /// - Borrowed: dotted line
-pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
+pub fn cognacy_to_svg(cognacy: &LeveledCognacy, current_word_id: Option<Uuid>) -> AppResult<String> {
     let ctx = Context::new()
         .map_err(|e| internal_error(format!("Failed to create graphviz context: {}", e)))?;
 
     let mut g = Graph::builder("cognacy")
         .directed(true)
+        .attribute("class", "cognacy-graph")
         .attribute(graph::RANKDIR, "TB")
-        .attribute(graph::FONTNAME, "sans-serif")
+        .attribute(graph::BGCOLOR, "transparent")
         .attribute(graph::NODESEP, "0.5")
         .attribute(graph::RANKSEP, "0.75")
         .build()
@@ -39,12 +40,29 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
         let word = &cognacy.words[word_id];
         let node_id = word_id.to_string();
 
-        let node = g
+        let node_class = if current_word_id == Some(*word_id) {
+            "cognacy-node current-word"
+        } else {
+            "cognacy-node"
+        };
+
+        let word_url = word.language_code.as_deref().map(|lang_code| {
+            format!("/languages/{}/words/{}/{}", lang_code, word.slug, word.lemma)
+        });
+
+        let mut node_builder = g
             .create_node(&node_id)
             .attribute(node::LABEL, &word.word)
             .attribute(node::SHAPE, "box")
             .attribute(node::STYLE, "rounded")
             .attribute(node::FONTNAME, "sans-serif")
+            .attribute("class", node_class);
+
+        if let Some(url) = &word_url {
+            node_builder = node_builder.attribute(graph::URL, url.as_str());
+        }
+
+        let node = node_builder
             .build()
             .map_err(|e| internal_error(format!("Failed to create node: {}", e)))?;
 
@@ -65,6 +83,10 @@ pub fn cognacy_to_svg(cognacy: &LeveledCognacy) -> AppResult<String> {
         g.create_edge(from_node, to_node, None)
             .attribute(edge::STYLE, style)
             .attribute(edge::PENWIDTH, penwidth)
+            .attribute("arrowhead", "vee")
+            .attribute("arrowsize", "0.75")
+            .attribute("class", "cognacy-edge")
+            .attribute("tooltip", <CognacyRelationKindV1 as Into<WordRelationType>>::into(edge_data.kind).text(&RelationDirection::Antecedent))
             .build()
             .map_err(|e| internal_error(format!("Failed to create edge: {}", e)))?;
     }

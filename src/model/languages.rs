@@ -36,6 +36,19 @@ pub struct Language {
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub bookmark: String,
+    #[serde(skip)]
+    #[sqlx(default)]
+    pub banner_object_id: String,
+}
+
+impl Language {
+    pub fn get_banner_url(&self) -> Option<String> {
+        if self.banner_object_id.is_empty() {
+            None
+        } else {
+            Some(crate::util::s3::S3.get_banner_url(&self.banner_object_id))
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -116,6 +129,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -184,6 +198,7 @@ impl LanguageRepository {
             code: lang_result.code,
             name: lang_result.name,
             like_count: 0,
+            banner_object_id: String::new(),
             description: lang_result.description,
             private: lang_result.private,
             created_at: lang_result.created_at,
@@ -275,6 +290,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -308,6 +324,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -345,6 +362,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -473,6 +491,43 @@ impl LanguageRepository {
         Ok(updated_lang)
     }
 
+    pub async fn update_banner(
+        &self,
+        requestor: &User,
+        id: Uuid,
+        object_key: &str,
+    ) -> AppResult<Language> {
+        ensure_verified(requestor)?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let has_perm = permissions
+            .has_permission(requestor.id, id, PermissionLevel::Editor)
+            .await?;
+
+        if !has_perm {
+            return Err(forbidden("you don't have permission to edit this language"));
+        }
+
+        let result = sqlx::query_as!(
+            Language,
+            r#"
+                UPDATE languages
+                SET banner_object_id = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                RETURNING languages.*, (SELECT slug FROM bookmarks WHERE item = languages.id AND resource = 'language') as "bookmark!"
+            "#,
+            id,
+            object_key
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        result.ok_or_else(|| not_found(format!("language with id '{id}'")))
+    }
+
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         tracing::debug!("Deleting language {id}");
         ensure_verified(requestor)?;
@@ -541,6 +596,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -579,6 +635,7 @@ impl LanguageRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -688,6 +745,7 @@ impl LanguageRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -777,6 +835,7 @@ impl LanguageRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,

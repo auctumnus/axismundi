@@ -170,7 +170,7 @@ pub async fn get_etymology_svg(
 
     match leveled_cognacy {
         Some(cognacy) => {
-            let svg = graph_svg::cognacy_to_svg(&cognacy)?;
+            let svg = graph_svg::cognacy_to_svg(&cognacy, Some(word.id))?;
             Ok(([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response())
         }
         None => Err(not_found("cognacy graph")),

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            UPDATE quotation\n                            SET span_start    = $2,\n                                span_end      = $3,\n                                highlight_start = $4,\n                                highlight_end   = $5,\n                                definition    = $6,\n                                notes         = $7,\n                                updated_by    = $8,\n                                updated_at    = CURRENT_TIMESTAMP\n                            WHERE id = $1 AND translation = $9\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28ca0d0c3a72bfa83c30d4ecf46f5f86aa9a8df7142a68a338471cac47ed1ddf"
+}

@@ -199,6 +199,7 @@ export interface EditorState {
   redoStack: EditorState[];
   keybindState: KeybindState;
   pendingModal: ControlModal | null;
+  pendingPhonemeIndex: number | null;
 }
 
 export const initialState = (body: Body, name: string): EditorState => ({
@@ -211,6 +212,7 @@ export const initialState = (body: Body, name: string): EditorState => ({
     redoStack: [],
     keybindState: "Idle",
     pendingModal: null,
+    pendingPhonemeIndex: null,
 });
 
 export const isFocused = (state: EditorState, path: TablePath): boolean => {
@@ -269,7 +271,7 @@ export type Action =
   | { type: "Undo" }
   | { type: "Redo" }
   | { type: "SetKeybindState", keybindState: KeybindState }
-  | { type: "OpenModal", modal: ControlModal }
+  | { type: "OpenModal", modal: ControlModal, phonemeIndex?: number }
   | { type: "ClearPendingModal" }
 
 const spliceInHeadings = <T extends Row | Column>(
@@ -655,9 +657,9 @@ export const apply = (state: EditorState, action: Action): EditorState => {
                 }
             }
             case "OpenModal":
-                return { ...state, pendingModal: action.modal };
+                return { ...state, pendingModal: action.modal, pendingPhonemeIndex: action.phonemeIndex ?? null };
             case "ClearPendingModal":
-                return { ...state, pendingModal: null };
+                return { ...state, pendingModal: null, pendingPhonemeIndex: null };
             case "SetKeybindState":
                 return { ...state, keybindState: action.keybindState };
             case "Undo": {

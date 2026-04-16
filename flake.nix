@@ -52,6 +52,7 @@
             openssl
             postgresql
             graphviz
+            libwebp
           ]
           ++ lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Security

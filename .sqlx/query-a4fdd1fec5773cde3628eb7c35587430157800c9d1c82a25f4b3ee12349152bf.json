@@ -23,6 +23,7 @@
               "Enum": [
                 "user",
                 "language",
+                "language_family_res",
                 "word",
                 "translation",
                 "translatable",
@@ -137,6 +138,7 @@
               "Enum": [
                 "user",
                 "language",
+                "language_family_res",
                 "word",
                 "translation",
                 "translatable",
@@ -178,7 +180,7 @@
       true,
       false,
       true,
-      true,
+      false,
       true,
       true,
       true,

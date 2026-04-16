@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/slate-editor.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script type="module" src="/static/form-editor.js"></script>
+<script src="/static/languages/edit.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -46,6 +47,25 @@
         <textarea id="description" name="description">{{previous_description}}</textarea>
     </section>
 
+    <button type="submit">Save changes</button>
+</form>
+
+<h2>change banner</h2>
+<form class="default" method="post" action="/languages/{{ language.code }}/change-banner" enctype="multipart/form-data">
+    <div class="banner-input-container" data-tooltip="Upload new banner image">
+        <div class="image-preview-container">
+            <input type="file" id="banner" name="banner" accept="image/*" aria-label="Upload banner image">
+            <span class="upload-icon">
+                {% call u::icon("upload") %}
+            </span>
+        </div>
+        {% if let Some(banner_url) = language.get_banner_url() %}
+            <img id="banner-img-input" src="{{ banner_url }}" alt="Current banner image" aria-label="Current banner image">
+        {% else %}
+            <img id="banner-img-input" src="" alt="No banner image" aria-label="No banner image" class="no-img">
+        {% endif %}
+    </div>
+    <button class="secondary" type="submit" formaction="/languages/{{ language.code }}/clear-banner">Clear banner</button>
     <button type="submit">Save changes</button>
 </form>
 

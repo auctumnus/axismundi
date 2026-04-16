@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     Router,
-    extract::Query,
+    extract::{DefaultBodyLimit, Query},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -51,7 +51,15 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             get(resend_verification_form).post(resend_verification_submit),
         )
         .route("/settings", get(settings_form).post(settings_submit))
-        .route("/change-profile-picture", post(change_profile_picture))
+        .route("/clear-profile-picture", post(clear_profile_picture))
+        .route("/clear-banner", post(clear_banner))
+        .merge(
+            Router::<AppState>::new()
+                .route("/change-profile-picture", post(change_profile_picture))
+                .route("/change-banner", post(change_banner))
+                .route("/change-profile-images", post(change_profile_images))
+                .layer(DefaultBodyLimit::max(MAX_FILE_SIZE)),
+        )
         .route("/logout", get(logout_form).post(logout_submit))
         .route("/users", get(search_users))
         .route("/users/{username}", get(profile));
@@ -554,6 +562,220 @@ async fn change_profile_picture(
             Redirect::to("/settings").into_response(),
         ),
         Err(response) => *response,
+    }
+}
+
+async fn change_banner(
+    s: Session,
+    users: UserRepository,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        if field.name().unwrap_or("") == "banner" {
+            content_type = field.content_type().map(std::string::ToString::to_string);
+            match field.bytes().await {
+                Ok(bytes) => file_data = Some(bytes.to_vec()),
+                Err(e) => {
+                    return render_settings_error(
+                        &user,
+                        bad_request(format!("Failed to read file: {e}")),
+                        StatusCode::BAD_REQUEST,
+                    );
+                }
+            }
+            break;
+        }
+    }
+
+    let Some(file_data) = file_data else {
+        return render_settings_error(
+            &user,
+            bad_request("No banner file provided"),
+            StatusCode::BAD_REQUEST,
+        );
+    };
+    let Some(content_type) = content_type else {
+        return render_settings_error(
+            &user,
+            bad_request("No content type provided"),
+            StatusCode::BAD_REQUEST,
+        );
+    };
+
+    if let Err(response) = validate_file_size(&file_data, &user) {
+        return *response;
+    }
+
+    let filename = match S3
+        .upload_banner("user", user.id, &file_data, &content_type)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => {
+            return render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    match users.update_banner(&user, user.id, &filename).await {
+        Ok(Some(_)) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/settings").into_response(),
+        ),
+        Ok(None) => render_settings_error(
+            &user,
+            bad_request("User not found"),
+            StatusCode::NOT_FOUND,
+        ),
+        Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn change_profile_images(
+    s: Session,
+    users: UserRepository,
+    mut multipart: Multipart,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    let mut pfp_data: Option<(Vec<u8>, String)> = None;
+    let mut banner_data: Option<(Vec<u8>, String)> = None;
+
+    while let Some(field) = multipart.next_field().await.ok().flatten() {
+        let field_name = field.name().unwrap_or("").to_string();
+        let content_type = field.content_type().map(std::string::ToString::to_string);
+
+        match field_name.as_str() {
+            "profile_picture" | "banner" => {
+                let bytes = match field.bytes().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        return render_settings_error(
+                            &user,
+                            bad_request(format!("Failed to read {field_name}: {e}")),
+                            StatusCode::BAD_REQUEST,
+                        );
+                    }
+                };
+                if bytes.is_empty() {
+                    continue;
+                }
+                let ct = match content_type {
+                    Some(ct) => ct,
+                    None => {
+                        return render_settings_error(
+                            &user,
+                            bad_request(format!("No content type for {field_name}")),
+                            StatusCode::BAD_REQUEST,
+                        );
+                    }
+                };
+                if field_name == "profile_picture" {
+                    pfp_data = Some((bytes.to_vec(), ct));
+                } else {
+                    banner_data = Some((bytes.to_vec(), ct));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if pfp_data.is_none() && banner_data.is_none() {
+        return render_settings_error(
+            &user,
+            bad_request("No files provided"),
+            StatusCode::BAD_REQUEST,
+        );
+    }
+
+    if let Some((data, _)) = &pfp_data {
+        if let Err(response) = validate_file_size(data, &user) {
+            return *response;
+        }
+    }
+    if let Some((data, _)) = &banner_data {
+        if let Err(response) = validate_file_size(data, &user) {
+            return *response;
+        }
+    }
+
+    if let Some((data, ct)) = pfp_data {
+        if let Err(response) =
+            upload_and_update_profile_picture(&users, &user, &data, &ct).await
+        {
+            return *response;
+        }
+    }
+
+    if let Some((data, ct)) = banner_data {
+        let filename = match S3.upload_banner("user", user.id, &data, &ct).await {
+            Ok(f) => f,
+            Err(e) => return render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+        };
+        match users.update_banner(&user, user.id, &filename).await {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return render_settings_error(
+                    &user,
+                    bad_request("User not found"),
+                    StatusCode::NOT_FOUND,
+                );
+            }
+            Err(e) => return render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to("/settings").into_response(),
+    )
+}
+
+async fn clear_profile_picture(
+    s: Session,
+    users: UserRepository,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    match users.update_profile_picture(&user, user.id, "").await {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+        Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn clear_banner(
+    s: Session,
+    users: UserRepository,
+) -> (StatusCode, Response) {
+    let Some(user) = s.user().cloned() else {
+        return (
+            StatusCode::SEE_OTHER,
+            Redirect::to("/login?redirect=settings").into_response(),
+        );
+    };
+
+    match users.update_banner(&user, user.id, "").await {
+        Ok(_) => (StatusCode::SEE_OTHER, Redirect::to("/settings").into_response()),
+        Err(e) => render_settings_error(&user, e, StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

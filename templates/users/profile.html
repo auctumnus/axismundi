@@ -21,7 +21,7 @@
 {% if let Some(pfp_url) = user.get_profile_picture_url() %}
     <meta property=og:image content="{{ pfp_url }}">
 {% else %}
-    <meta property=og:image content="/static/default-pfp.webp">
+    <meta property=og:image content="/assets/default-pfp.webp">
 {% endif %}
 {% endblock %}
 
@@ -33,11 +33,15 @@
 {% if !back.is_empty() %}{% call u::back_button(&back, "to search") %}{% endif %}
 
 <div class="card profile-card">
-    <div class="banner"></div>
+    <div class="banner">
+        {% if let Some(banner_url) = user.get_banner_url() %}
+            <img src="{{ banner_url }}" alt="" aria-hidden="true">
+        {% endif %}
+    </div>
     {% if let Some(pfp_url) = user.get_profile_picture_url() %}
         <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="{{ pfp_url }}">
     {% else %}
-        <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="/static/default-pfp.webp">
+        <img class="pfp" alt="{% call u::name(user) %}'s profile picture" src="/assets/default-pfp.webp">
     {% endif %}
     <div class="riding">
         {% if let Some(current_user) = current_user %}

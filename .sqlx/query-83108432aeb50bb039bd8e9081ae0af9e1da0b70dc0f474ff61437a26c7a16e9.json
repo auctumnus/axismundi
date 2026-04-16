@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE language_family_members\n                SET parent_member_id = $1, updated_by = $2, updated_at = CURRENT_TIMESTAMP\n                WHERE id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83108432aeb50bb039bd8e9081ae0af9e1da0b70dc0f474ff61437a26c7a16e9"
+}

@@ -8,6 +8,7 @@ create table language_families (
     -- pre-computed tree structure to avoid runtime materialization
     -- schema: { edges: [{ parent_member_id, child_member_id, family_id, relation_kind }], schema_version: 1 }
     tree jsonb not null default '{"edges": [], "schema_version": 1}',
+    banner_object_id text not null default '',
 
     created_at timestamp with time zone not null default current_timestamp,
     updated_at timestamp with time zone not null default current_timestamp,

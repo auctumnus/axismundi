@@ -8,6 +8,7 @@ export interface QuotationWithWordInfo {
   span_end: number;
   highlight_start: number | null;
   highlight_end: number | null;
+  notes: string;
   definition_id: string;
   definition_text: string;
   word_slug: string;

@@ -293,7 +293,13 @@ const PhonemeControls = ({ isCellSelected, selectTarget }: ControlState) => {
     const editPhoneme = () => {
         if (!selectedHasPhoneme || !state.select) return;
         setModalPurpose('edit');
-        if (hasMultiplePhonemes) {
+        const preselected = state.pendingPhonemeIndex;
+        if (preselected !== null && cell!.phonemes[preselected] !== undefined) {
+            setSelectedPhonemeIndex(preselected);
+            setEditText(cell!.phonemes[preselected]!.text);
+            setModalStep(1);
+            setModalOpen(true);
+        } else if (hasMultiplePhonemes) {
             setModalStep(0);
             setModalOpen(true);
         } else {

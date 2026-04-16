@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ipa_estimators WHERE language_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "77cbd2e768fc7cc44ea4bbd05528650971d81dc9a42f99cd8b819e10ca974b8f"
+}

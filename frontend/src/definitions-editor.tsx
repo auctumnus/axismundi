@@ -199,6 +199,7 @@ function DefinitionRow({
         onChange={(e) => setLocalDef(e.target.value)}
         onBlur={handleBlur}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       />
       <input
         type="text"

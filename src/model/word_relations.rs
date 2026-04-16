@@ -9,8 +9,8 @@ use uuid::Uuid;
 use crate::{
     err::{AppError, AppResult, bad_request},
     model::{
-        language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository,
-        users::User, words::Word,
+        definitions::Definition, language_invites::PermissionLevel,
+        language_permissions::LanguagePermissionRepository, users::User, words::Word,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified, repo_from_parts},
@@ -53,6 +53,25 @@ impl TryFrom<WordRelationType> for CognacyRelationKindV1 {
             _ => Err(bad_request(
                 "word relation type cannot be converted to cognacy relation kind",
             )),
+        }
+    }
+}
+
+impl WordRelationType {
+    pub fn text(&self, direction: &RelationDirection) -> &'static str {
+        match (self, direction) {
+            (WordRelationType::Derived, RelationDirection::Antecedent) => "derived into",
+            (WordRelationType::Derived, RelationDirection::Consequent) => "derived from",
+            (WordRelationType::Descendant, RelationDirection::Antecedent) => "descended into",
+            (WordRelationType::Descendant, RelationDirection::Consequent) => "descended from",
+            (WordRelationType::Compound, RelationDirection::Antecedent) => "compounded into",
+            (WordRelationType::Compound, RelationDirection::Consequent) => "compounded from",
+            (WordRelationType::Calque, RelationDirection::Antecedent) => "calqued into",
+            (WordRelationType::Calque, RelationDirection::Consequent) => "calqued from",
+            (WordRelationType::Borrowed, RelationDirection::Antecedent) => "borrowed into",
+            (WordRelationType::Borrowed, RelationDirection::Consequent) => "borrowed from",
+            (WordRelationType::Related, _) => "related to",
+            (WordRelationType::SeeAlso, _) => "see also",
         }
     }
 }
@@ -177,6 +196,18 @@ impl std::fmt::Display for CognacyRelationKindV1 {
     }
 }
 
+impl From<CognacyRelationKindV1> for WordRelationType {
+    fn from(value: CognacyRelationKindV1) -> Self {
+        match value {
+            CognacyRelationKindV1::Derived => WordRelationType::Derived,
+            CognacyRelationKindV1::Descendant => WordRelationType::Descendant,
+            CognacyRelationKindV1::Compound => WordRelationType::Compound,
+            CognacyRelationKindV1::Calque => WordRelationType::Calque,
+            CognacyRelationKindV1::Borrowed => WordRelationType::Borrowed,
+        }
+    }
+}
+
 pub struct WordRelationRepository {
     state: AppState,
 }
@@ -211,6 +242,7 @@ pub struct SearchWordRelations {
     pub q: Option<String>,
     pub kind: Option<WordRelationType>,
     pub direction: Option<RelationDirection>,
+    pub non_cognacy_relations_only: Option<bool>,
 }
 
 crate::util::text_query!(SearchWordRelations);
@@ -225,6 +257,7 @@ pub struct WordRelationSearchResult {
     pub direction: RelationDirection,
     pub creator: User,
     pub created_at: DateTime<Utc>,
+    pub first_definition: Option<Definition>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1023,7 +1056,15 @@ impl WordRelationRepository {
                     (CASE
                         WHEN word_relations.antecedent = $2 THEN 'consequent'
                         ELSE 'antecedent'
-                    END) as "direction!: String"
+                    END) as "direction!: String",
+                    first_def.id as "def_id: Option<Uuid>",
+                    first_def.definition as "def_definition: Option<String>",
+                    first_def.context as "def_context: Option<String>",
+                    first_def.position as "def_position: Option<i32>",
+                    first_def.created_at as "def_created_at: Option<DateTime<Utc>>",
+                    first_def.updated_at as "def_updated_at: Option<DateTime<Utc>>",
+                    first_def.created_by as "def_created_by: Option<Uuid>",
+                    first_def.updated_by as "def_updated_by: Option<Uuid>"
                 FROM word_relations
                 JOIN words ON
                     (CASE
@@ -1038,19 +1079,32 @@ impl WordRelationRepository {
                 LEFT JOIN word_classes ON word_classes.id = words.word_class
                 LEFT JOIN users AS word_created ON word_created.id = words.created_by
                 LEFT JOIN users AS word_updated ON word_updated.id = words.updated_by
+                LEFT JOIN LATERAL (
+                    SELECT id, word, definition, context, position, created_at, updated_at, created_by, updated_by
+                    FROM definitions
+                    WHERE definitions.word = words.id
+                    ORDER BY position ASC
+                    LIMIT 1
+                ) AS first_def ON true
                 WHERE
                     (CASE
                         WHEN $1 = 'antecedent' THEN word_relations.antecedent = $2
                         WHEN $1 = 'consequent' THEN word_relations.consequent = $2
                         ELSE word_relations.antecedent = $2 OR word_relations.consequent = $2
                     END)
-                    AND ($3::word_relation_type IS NULL OR word_relations.kind = $3)
+                    AND (
+                        CASE
+                            WHEN $3 THEN word_relations.kind IN ('related', 'see_also')
+                            ELSE $4::word_relation_type IS NULL OR word_relations.kind = $4
+                        END
+                    )
                     AND words.id <> $2
                 ORDER BY words.id
-                LIMIT $4 OFFSET $5
+                LIMIT $5 OFFSET $6
             "#,
             search.direction.map(|d| d.to_string()),
             word.id,
+            search.non_cognacy_relations_only.unwrap_or(false),
             search.kind as _,
             i64::from(pagination.limit),
             i64::from(pagination.offset),
@@ -1072,11 +1126,17 @@ impl WordRelationRepository {
                         WHEN $1 = 'consequent' THEN word_relations.consequent = $2
                         ELSE word_relations.antecedent = $2 OR word_relations.consequent = $2
                     END)
-                    AND ($3::word_relation_type IS NULL OR word_relations.kind = $3)
+                    AND (
+                        CASE
+                            WHEN $3 THEN word_relations.kind IN ('related', 'see_also')
+                            ELSE $4::word_relation_type IS NULL OR word_relations.kind = $4
+                        END
+                    )
                     AND words.id <> $2
             "#,
             search.direction.map(|d| d.to_string()),
             word.id,
+            search.non_cognacy_relations_only.unwrap_or(false),
             search.kind as _,
         )
         .fetch_one(&self.state.pool);
@@ -1120,6 +1180,7 @@ impl WordRelationRepository {
                     pronouns: record.creator_pronouns,
                     gender: record.creator_gender,
                     profile_picture_object_id: record.creator_profile_picture_object_id,
+                    banner_object_id: String::new(),
                     tags: record.creator_tags,
                     bookmark: record.creator_bookmark,
                     created_at: record.creator_created_at,
@@ -1128,6 +1189,18 @@ impl WordRelationRepository {
 
                 let direction = RelationDirection::from_str(&record.direction).unwrap();
                 let into_other_language = related_word.language != word.language;
+
+                let first_definition = record.def_id.map(|id| Definition {
+                    id,
+                    word: related_word.id,
+                    definition: record.def_definition.unwrap_or_default(),
+                    context: record.def_context.unwrap_or_default(),
+                    position: record.def_position.unwrap_or(0),
+                    created_at: record.def_created_at.unwrap_or_else(Utc::now),
+                    updated_at: record.def_updated_at.unwrap_or_else(Utc::now),
+                    created_by: record.def_created_by.unwrap_or_default(),
+                    updated_by: record.def_updated_by.unwrap_or_default(),
+                });
 
                 WordRelationSearchResult {
                     word: related_word,
@@ -1138,6 +1211,7 @@ impl WordRelationRepository {
                     direction,
                     creator,
                     created_at: record.relation_created_at,
+                    first_definition,
                 }
             })
             .collect();

@@ -2,17 +2,16 @@ use crate::{
     config::CONFIG,
     err::{AppResult, internal_error},
 };
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use s3::{Bucket, Region, creds::Credentials};
 use std::sync::LazyLock;
-use thumbor::Server;
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct S3Config {
     pub bucket: Box<Bucket>,
-    #[allow(dead_code)]
-    pub public_url_base: String,
-    pub thumbor_server: Server,
+    pub imagor_base_url: String,
+    pub imagor_secret: String,
 }
 
 pub static S3: LazyLock<S3Config> = LazyLock::new(|| {
@@ -39,28 +38,27 @@ pub static S3: LazyLock<S3Config> = LazyLock::new(|| {
         Err(e) => panic!("Failed to initialize S3 bucket: {e}"),
     };
 
-    let thumbor_url = config
+    let imagor_base_url = config
         .public_url_base
         .as_ref()
         .expect("public_url_base must be set for S3 config")
         .clone();
-    let thumbor_security_key = config
-        .thumbor_security_key
+    let imagor_secret = config
+        .imagor_secret
         .as_ref()
-        .expect("thumbor_security_key must be set for S3 config")
+        .expect("imagor_secret must be set for S3 config")
         .clone();
-
-    let thumbor_server = thumbor::Server::new(&thumbor_url, &thumbor_security_key).unwrap();
 
     S3Config {
         bucket,
-        public_url_base: thumbor_url,
-        thumbor_server,
+        imagor_base_url,
+        imagor_secret,
     }
 });
 
-fn saturate_to_i32(value: u32) -> i32 {
-    value.try_into().unwrap_or(i32::MAX)
+fn sign_imagor_path(path: &str, secret: &str) -> String {
+    let hash = hmacsha1::hmac_sha1(secret.as_bytes(), path.as_bytes());
+    URL_SAFE.encode(hash)
 }
 
 impl S3Config {
@@ -98,8 +96,13 @@ impl S3Config {
         file_data: &[u8],
         content_type: &str,
     ) -> AppResult<String> {
-        // determine file extension from content type
-        let extension = match content_type {
+        let (upload_data, upload_type): (Vec<u8>, &str) = if content_type == "image/gif" {
+            (super::images::convert_gif_to_animated_webp(file_data)?, "image/webp")
+        } else {
+            (file_data.to_vec(), content_type)
+        };
+
+        let extension = match upload_type {
             "image/jpeg" => "jpg",
             "image/png" => "png",
             "image/gif" => "gif",
@@ -108,8 +111,8 @@ impl S3Config {
             _ => return Err(internal_error("unsupported image type")),
         };
 
-        let filename = format!("profile-{}.{}", user_id, extension);
-        self.upload_image_original(&filename, file_data, content_type)
+        let filename = format!("profile-{}-{}.{}", user_id, Uuid::new_v4(), extension);
+        self.upload_image_original(&filename, &upload_data, upload_type)
             .await
     }
 
@@ -122,45 +125,45 @@ impl S3Config {
     //     )
     // }
 
-    // /// generates a thumbor url for an image with the given dimensions
-    // /// if thumbor isn't configured, falls back to the original url
-    // /// if a security key is configured, generates a signed url
-    // pub fn get_thumbor_url(&self, filename: &str, width: u32, height: u32) -> String {
-    //     let image_url = format!("originals/{}", filename);
-    //     self.thumbor_server
-    //         .endpoint_builder()
-    //         .resize((saturate_to_i32(width), saturate_to_i32(height)))
-    //         .build()
-    //         .to_url(&image_url)
-    // }
-
-    /// generates a thumbor url with smart cropping (face/feature detection)
-    /// if a security key is configured, generates a signed url
-    pub fn get_thumbor_url_smart(&self, filename: &str, width: u32, height: u32) -> String {
-        let image_url = format!("originals/{}", filename);
-        self.thumbor_server
-            .endpoint_builder()
-            .resize((saturate_to_i32(width), saturate_to_i32(height)))
-            .smart(true)
-            .build()
-            .to_url(&image_url)
+    /// generates a signed imagor url with smart cropping and webp output
+    pub fn get_image_url_smart(&self, filename: &str, width: u32, height: u32) -> String {
+        let path = format!("{}x{}/smart/filters:format(webp)/originals/{}", width, height, filename);
+        let hash = sign_imagor_path(&path, &self.imagor_secret);
+        format!("{}/{}/{}", self.imagor_base_url.trim_end_matches('/'), hash, path)
     }
 
-    // /// generates a thumbor url that fits the image inside the dimensions (maintains aspect ratio)
-    // /// if a security key is configured, generates a signed url
-    // pub fn get_thumbor_url_fit(&self, filename: &str, width: u32, height: u32) -> String {
-    //     let image_url = format!("originals/{}", filename);
-    //     self.thumbor_server
-    //         .endpoint_builder()
-    //         .resize((saturate_to_i32(width), saturate_to_i32(height)))
-    //         .fit_in(thumbor::endpoint::FitIn::Default)
-    //         .build()
-    //         .to_url(&image_url)
-    // }
-
-    // legacy helper that returns a thumbor url for profile pictures
-    // uses smart crop since it's a profile picture
     pub fn get_profile_picture_url(&self, filename: &str) -> String {
-        self.get_thumbor_url_smart(filename, 256, 256)
+        self.get_image_url_smart(filename, 256, 256)
+    }
+
+    pub fn get_banner_url(&self, filename: &str) -> String {
+        self.get_image_url_smart(filename, 800, 200)
+    }
+
+    pub async fn upload_banner(
+        &self,
+        entity_type: &str,
+        entity_id: Uuid,
+        file_data: &[u8],
+        content_type: &str,
+    ) -> AppResult<String> {
+        let (upload_data, upload_type): (Vec<u8>, &str) = if content_type == "image/gif" {
+            (super::images::convert_gif_to_animated_webp(file_data)?, "image/webp")
+        } else {
+            (file_data.to_vec(), content_type)
+        };
+
+        let extension = match upload_type {
+            "image/jpeg" => "jpg",
+            "image/png" => "png",
+            "image/gif" => "gif",
+            "image/webp" => "webp",
+            "image/avif" => "avif",
+            _ => return Err(internal_error("unsupported image type")),
+        };
+
+        let filename = format!("banner-{}-{}-{}.{}", entity_type, entity_id, Uuid::new_v4(), extension);
+        self.upload_image_original(&filename, &upload_data, upload_type)
+            .await
     }
 }

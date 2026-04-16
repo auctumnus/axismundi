@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    id,\n                    translation,\n                    definition,\n                    span_start,\n                    span_end,\n                    highlight_start,\n                    highlight_end,\n                    notes,\n                    created_at,\n                    updated_at,\n                    created_by,\n                    updated_by\n                FROM quotation\n                WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "translation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "definition",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "span_start",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "span_end",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "highlight_start",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "highlight_end",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2cfc646a048acff6cca9899d2106c419232b476684e88ce09b9e1554ec3e4264"
+}

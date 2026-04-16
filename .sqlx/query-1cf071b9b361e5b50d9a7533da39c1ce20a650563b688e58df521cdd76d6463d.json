@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ipa_estimators SET sound_change_set_id = $1 WHERE language_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1cf071b9b361e5b50d9a7533da39c1ce20a650563b688e58df521cdd76d6463d"
+}

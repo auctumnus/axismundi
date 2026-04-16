@@ -16,7 +16,7 @@ use crate::{
         definitions::{Definition, DefinitionRepository}, language_invites::PermissionLevel, language_permissions::LanguagePermissionRepository, languages::{Language, LanguageRepository}, quotations::{Quotation, QuotationRepository, QuotationWithSpan, SearchQuotationsByDefinition}, users::User, word_classes::WordClassRepository, word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult}, words::{Word, WordRepository, WordSearch}
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, BackQuery, extract_session::Session, is_discord},
+    util::{AppState, BackQuery, extract_session::Session, graph_svg::cognacy_to_svg, is_discord},
 };
 
 #[derive(Template)]
@@ -43,6 +43,7 @@ struct LemmaTemplate {
     current_user: Option<User>,
     language: Language,
     word: Word,
+    word_class: Option<crate::model::word_classes::WordClass>,
     // definition, quotations, has_more
     definitions: Vec<(Definition, Vec<QuotationWithSpan>, bool)>,
     other_lemmata: bool,
@@ -54,6 +55,8 @@ struct LemmaTemplate {
     is_liked: bool,
     recent_relations: Vec<WordRelationSearchResult>,
     total_relations: i64,
+    cognacy: Option<String>,
+    non_cognacy_relations: Vec<WordRelationSearchResult>,
 }
 
 
@@ -205,6 +208,7 @@ pub(super) async fn view_lemma(
     words: WordRepository,
     definitions_repo: DefinitionRepository,
     word_relations: WordRelationRepository,
+    word_classes: WordClassRepository,
     permissions: LanguagePermissionRepository,
     quotations: QuotationRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
@@ -230,6 +234,12 @@ pub(super) async fn view_lemma(
         );
     }
 
+    let word_class = if let Some(word_class_id) = word.word_class {
+        Some(attempt!(s, word_classes.find_by_id(word_class_id).await))
+    } else {
+        None
+    };
+
     let user_has_permission = attempt!(
         s,
         permissions
@@ -250,7 +260,7 @@ pub(super) async fn view_lemma(
             )
             .and_then(async |res: PaginatedResponse<Definition>| {
                 res.try_map_async(async |d| {
-                    let quotations = quotations.search_by_definition(Default::default(), PaginatedRequest { limit: 5, offset: 0 }).await?;
+                    let quotations = quotations.search_by_definition(d.clone(), Default::default(), PaginatedRequest { limit: 5, offset: 0 }).await?;
                     let has_more = quotations.total > 5;
                     Ok((d, quotations.items, has_more))
                 }).await
@@ -275,6 +285,9 @@ pub(super) async fn view_lemma(
         false
     };
 
+    let cognacy = attempt!(s, word_relations.get_leveled_cognacy(&word).await);
+    let cognacy = attempt!(s, cognacy.map(|c| cognacy_to_svg(&c, Some(word.id))).transpose());
+
     // Fetch recent word relations (3 most recent, with cognacy relations first)
     let (recent_relations, total_relations) = attempt!(
         s,
@@ -288,10 +301,26 @@ pub(super) async fn view_lemma(
             .map(|res| (res.items, res.total))
     );
 
+    let non_cognacy_relations = attempt!(
+        s,
+        word_relations
+            .search(
+                PaginatedRequest::preview(),
+                SearchWordRelations {
+                    non_cognacy_relations_only: Some(true),
+                    ..Default::default()
+                },
+                &word
+            )
+            .await
+            .map(|res| res.items)
+    );
+
     let template = LemmaTemplate {
         current_user,
         language,
         word,
+        word_class,
         definitions,
         other_lemmata,
         back,
@@ -302,6 +331,8 @@ pub(super) async fn view_lemma(
         is_liked,
         recent_relations,
         total_relations,
+        cognacy,
+        non_cognacy_relations,
     };
 
     let body = render_template(template);

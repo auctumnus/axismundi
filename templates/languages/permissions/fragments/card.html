@@ -2,7 +2,7 @@
 {%- import "languages/permissions/fragments/badge.html" as permission_badge -%}
 
 {% macro render(contributor, base_url) %}
-<li class="contributor-card preview-card">
+<li class="contributor-card">
     <div class="left">
         <div class="contributor-info">
             {% call u::badge(&contributor.user, size="medium") %}

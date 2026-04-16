@@ -34,6 +34,17 @@ where
     }
 }
 
+fn serialize_banner_key<S>(object_id: &str, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if object_id.is_empty() {
+        serializer.serialize_none()
+    } else {
+        serializer.serialize_str(&S3.get_banner_url(object_id))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
     #[serde(skip_serializing)]
@@ -57,6 +68,12 @@ pub struct User {
         serialize_with = "serialize_object_key"
     )]
     pub profile_picture_object_id: String,
+    #[serde(
+        rename(serialize = "banner_url"),
+        serialize_with = "serialize_banner_key"
+    )]
+    #[sqlx(default)]
+    pub banner_object_id: String,
     pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -72,6 +89,14 @@ impl User {
             None
         } else {
             Some(S3.get_profile_picture_url(&self.profile_picture_object_id))
+        }
+    }
+
+    pub fn get_banner_url(&self) -> Option<String> {
+        if self.banner_object_id.is_empty() {
+            None
+        } else {
+            Some(S3.get_banner_url(&self.banner_object_id))
         }
     }
 
@@ -263,6 +288,7 @@ impl UserRepository {
             pronouns: user_result.pronouns,
             gender: user_result.gender,
             profile_picture_object_id: user_result.profile_picture_object_id,
+            banner_object_id: String::new(),
             verified_at: user_result.verified_at,
             tags: vec![],
             created_at: user_result.created_at,
@@ -309,6 +335,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -345,6 +372,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -380,6 +408,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -606,6 +635,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -688,6 +718,7 @@ impl UserRepository {
                     users.pronouns,
                     users.gender,
                     users.profile_picture_object_id,
+                    users.banner_object_id,
                     users.verified_at,
                     users.tags,
                     users.created_at,
@@ -820,6 +851,36 @@ impl UserRepository {
         Ok(result)
     }
 
+    pub async fn update_banner(
+        &self,
+        requestor: &User,
+        user_id: Uuid,
+        object_key: &str,
+    ) -> AppResult<Option<User>> {
+        if requestor.id != user_id {
+            return Err(crate::err::forbidden("cannot update another user's banner"));
+        }
+
+        ensure_verified(requestor)?;
+
+        let result = sqlx::query_as!(
+            User,
+            r#"
+            UPDATE users
+            SET banner_object_id = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            RETURNING users.*, (SELECT slug FROM bookmarks WHERE item = users.id AND resource = 'user') as "bookmark!"
+            "#,
+            user_id,
+            object_key
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn reset_password(
         &self,
         user_id: Uuid,
@@ -879,6 +940,7 @@ impl UserRepository {
                     languages.description,
                     languages.private,
                     languages.like_count,
+                    languages.banner_object_id,
                     languages.created_at,
                     languages.updated_at,
                     languages.created_by,
@@ -917,7 +979,7 @@ impl UserRepository {
             "name": user.name(),
             "alternateName": user.username,
             "url": format!("{}/bookmarks/{}", CONFIG.public_url_base, &user.bookmark),
-            "image": user.get_profile_picture_url().unwrap_or_else(|| format!("{}/static/default-pfp.webp", CONFIG.public_url_base)),
+            "image": user.get_profile_picture_url().unwrap_or_else(|| format!("{}/assets/default-pfp.webp", CONFIG.public_url_base)),
         });
 
         if !user.pronouns.is_empty() {

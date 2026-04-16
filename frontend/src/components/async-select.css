@@ -2,6 +2,7 @@
     display: inline-block;
     position: relative;
     min-width: 300px;
+    width: 100%;
 }
 
 .async-select__control {
@@ -29,6 +30,14 @@
       background-color: var(--input-background-focus);
       border: 1px solid var(--input-border-focus);
     }
+}
+
+.async-select__group-heading {
+    padding-inline: .5rem;
+    padding-bottom: .325rem;
+    font-family: var(--font-heading);
+    color: var(--foreground-secondary);
+    font-size: .8rem;
 }
 
 .async-select__indicators {

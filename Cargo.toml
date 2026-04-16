@@ -51,7 +51,6 @@ bollard = "0.19.4"
 reqwest = "0.12.24"
 fast_image_resize = { version = "5.3.0", features = ["image"] }
 rand = "0.8.5"
-thumbor = "0.1.11"
 chrono-humanize = "0.2.3"
 slug = "0.1.6"
 percent-encoding = "2.3.2"
@@ -66,6 +65,7 @@ phonologist = "1.0.1"
 futures = "0.3.32"
 itertools = "0.14.0"
 serde_html_form = "0.4.0"
+webp-animation = "0.10.0"
 
 [dev-dependencies]
 reqwest = { version = "0.12.24" }

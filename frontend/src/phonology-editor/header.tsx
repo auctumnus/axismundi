@@ -35,6 +35,12 @@ const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
     }
   }
 
+  const onDoubleClick = () => {
+    dispatch({ type: "SetFocus", path: { type: "ColumnHeading", path } });
+    dispatch({ type: "SetSelect", path: { type: "ColumnHeading", path } });
+    dispatch({ type: "OpenModal", modal: "EditColumnHeading" });
+  }
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === " ") {
       e.preventDefault();
@@ -57,7 +63,7 @@ const ColumnTh = ({ heading, rowSpan, colSpan, path }: ThCell) => {
   const tabIndex = focused ? 0 : -1;
 
   return (
-    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "ColumnHeading", path })}>
+    <th rowSpan={rs} colSpan={cs} className={className} onClick={onClick} onDoubleClick={onDoubleClick} onKeyDown={onKeyDown} tabIndex={tabIndex} data-path={serializePath(state.body, { type: "ColumnHeading", path })}>
       {heading}
     </th>
   );

@@ -832,7 +832,7 @@ async fn view_translation(
                 None
             }
         })
-        .unwrap_or("back");
+        .unwrap_or("");
 
     let back_url = back_query.back.clone().unwrap_or_else(|| {
         format!(
