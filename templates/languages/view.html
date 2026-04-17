@@ -223,7 +223,7 @@
 
 <ul class="card-list">
 {% for translation_with_meta in recent_translations %}
-    {% call translation_card::render(translation_with_meta) %}
+    {% call translation_card::render(translation_with_meta, back="", kind="language") %}
 {% endfor %}
 </ul>
 

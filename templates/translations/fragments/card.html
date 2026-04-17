@@ -5,7 +5,7 @@
     <a href="/translatable/{{ translation_with_meta.translation.translatable_slug }}/translation/{{ translation_with_meta.translation.language_code }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
         <span class="left">
             <span class="translation-title title">
-                {% if kind == "language" %}
+                {% if kind.to_string() == "language".to_string() %}
                     {{ translation_with_meta.translation.language_name }}
                 {% else if !translation_with_meta.translation.translated_title.is_empty() %}
                     {{ translation_with_meta.translation.translated_title }}
@@ -15,7 +15,12 @@
             </span>
             <span class="summary ellipse">{{ crate::util::first_sentence(&translation_with_meta.translation.translated_text) }}</span>
             <span class="creator summary">
+                {% if kind.to_string() == "translatable".to_string() %}
+                    <span>{{ translation_with_meta.translation.language_name }}</span>
+                    <span class="spacer" aria-hidden>·</span>
+                {% endif %}
                 {% call u::user_display(&translation_with_meta.author, "small") %}
+                <span class="spacer" aria-hidden>·</span>
                 {% call u::relative(&translation_with_meta.translation.created_at) %}
             </span>
         </span>

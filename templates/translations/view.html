@@ -34,7 +34,7 @@
                 <h1>{{ translation.translated_title }}</h1>
                 <div class="contributors">
                     <span>by</span>
-                    {% call u::badge(&translatable_with_meta.creator, size="small") %}
+                    {% call u::badge(&translation_creator, size="small") %}
                     <span>· into</span>
                     <a href="/languages/{{ &language.code }}">{{ &language.name }}</a>
                 </div>
@@ -42,7 +42,7 @@
                 <h1><a href="/languages/{{ &language.code }}">{{ &language.name }}</a></h1>
                 <div class="contributors">
                     <span>by</span>
-                    {% call u::badge(&translatable_with_meta.creator, size="small") %}
+                    {% call u::badge(&translation_creator, size="small") %}
                 </div>
             {% endif %}
         </div>
@@ -52,14 +52,7 @@
                 <a class="icon button gray" href="/translatable/{{ translatable_with_meta.translatable.slug }}/edit-translation/{{ language.code }}">{% call u::icon("edit") %}</a>
             </li>
             {% endif %}
-            <li><span class="likes like-button {% if translatable_with_meta.is_liked %}liked{% endif %}" data-target="/api/translatable/{{ translatable_with_meta.translatable.slug }}/translations/{{ language.code }}" data-tooltip="Like this translation" role="button">
-                <span class="icon-button-container yellow">
-                    <svg class="icon when-unliked"><use href="#icon-star-outline"></use></svg>
-                    <svg class="icon when-liked"><use href="#icon-star-filled"></use></svg>
-                </span>
-                <span class="like-count">{{ translation.like_count }}</span>
-            </span>
-            </li>
+            <li>{% call u::like_button(translation.like_target(), translation.like_count, translation_is_liked, "Like this translation") %}</li>
         </ul>
     </div>
 
