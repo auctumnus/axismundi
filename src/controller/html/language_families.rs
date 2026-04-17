@@ -31,7 +31,7 @@ use crate::{
     util::{
         AppState, BackQuery, ListHeaderKind,
         extract_session::Session,
-        s3::S3,
+        s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error},
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -541,8 +541,6 @@ async fn delete_language_family_submit(
     }
 }
 
-const MAX_BANNER_SIZE: usize = 5 * 1024 * 1024;
-
 async fn change_language_family_banner(
     s: Session,
     language_families: LanguageFamilyRepository,
@@ -563,7 +561,7 @@ async fn change_language_family_banner(
                 Err(e) => {
                     return crate::controller::html::render_generic_error(
                         s,
-                        bad_request(format!("Failed to read file: {e}")),
+                        multipart_read_error(e),
                     )
                     .await;
                 }
@@ -587,10 +585,13 @@ async fn change_language_family_banner(
         .await;
     };
 
-    if file_data.len() > MAX_BANNER_SIZE {
+    if file_data.len() > MAX_UPLOAD_SIZE {
         return crate::controller::html::render_generic_error(
             s,
-            bad_request("File size exceeds the maximum limit of 5MB"),
+            bad_request(format!(
+                "file too large (over {}MB limit)",
+                MAX_UPLOAD_SIZE / (1024 * 1024)
+            )),
         )
         .await;
     }

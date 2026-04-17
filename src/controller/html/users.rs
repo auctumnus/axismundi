@@ -37,7 +37,7 @@ use crate::{
         AppState, BackQuery, EmptyTemplate,
         extract_session::{SESSION_COOKIE_NAME, Session},
         is_discord,
-        s3::S3,
+        s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error},
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -59,7 +59,7 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
                 .route("/change-profile-picture", post(change_profile_picture))
                 .route("/change-banner", post(change_banner))
                 .route("/change-profile-images", post(change_profile_images))
-                .layer(DefaultBodyLimit::max(MAX_FILE_SIZE)),
+                .layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)),
         )
         .route(
             "/reset-password",
@@ -432,8 +432,6 @@ async fn settings_submit(
     }
 }
 
-const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
-
 fn render_settings_error(
     user: &User,
     error: AppError,
@@ -467,7 +465,7 @@ async fn extract_profile_picture(
                 Err(e) => {
                     return Err(render_settings_error(
                         user,
-                        bad_request(format!("Failed to read file: {e}")),
+                        multipart_read_error(e),
                         StatusCode::BAD_REQUEST,
                     ));
                 }
@@ -497,10 +495,13 @@ async fn extract_profile_picture(
 }
 
 fn validate_file_size(file_data: &[u8], user: &User) -> Result<(), Box<(StatusCode, Response)>> {
-    if file_data.len() > MAX_FILE_SIZE {
+    if file_data.len() > MAX_UPLOAD_SIZE {
         return Err(Box::new(render_settings_error(
             user,
-            bad_request("File size exceeds the maximum limit of 5MB"),
+            bad_request(format!(
+                "file too large (over {}MB limit)",
+                MAX_UPLOAD_SIZE / (1024 * 1024)
+            )),
             StatusCode::BAD_REQUEST,
         )));
     }
@@ -594,7 +595,7 @@ async fn change_banner(
                 Err(e) => {
                     return render_settings_error(
                         &user,
-                        bad_request(format!("Failed to read file: {e}")),
+                        multipart_read_error(e),
                         StatusCode::BAD_REQUEST,
                     );
                 }
@@ -670,7 +671,7 @@ async fn change_profile_images(
                     Err(e) => {
                         return render_settings_error(
                             &user,
-                            bad_request(format!("Failed to read {field_name}: {e}")),
+                            multipart_read_error(e),
                             StatusCode::BAD_REQUEST,
                         );
                     }

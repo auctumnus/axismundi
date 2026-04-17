@@ -35,7 +35,7 @@ use crate::{
     util::{
         AppState, BackQuery,
         extract_session::Session,
-        s3::S3,
+        s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error},
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -718,8 +718,6 @@ async fn delete_language_submit(
     }
 }
 
-const MAX_BANNER_SIZE: usize = 5 * 1024 * 1024;
-
 async fn change_language_banner(
     s: Session,
     languages: LanguageRepository,
@@ -738,11 +736,7 @@ async fn change_language_banner(
             match field.bytes().await {
                 Ok(bytes) => file_data = Some(bytes.to_vec()),
                 Err(e) => {
-                    return render_generic_error(
-                        s,
-                        bad_request(format!("Failed to read file: {e}")),
-                    )
-                    .await;
+                    return render_generic_error(s, multipart_read_error(e)).await;
                 }
             }
             break;
@@ -756,9 +750,15 @@ async fn change_language_banner(
         return render_generic_error(s, bad_request("No content type provided")).await;
     };
 
-    if file_data.len() > MAX_BANNER_SIZE {
-        return render_generic_error(s, bad_request("File size exceeds the maximum limit of 5MB"))
-            .await;
+    if file_data.len() > MAX_UPLOAD_SIZE {
+        return render_generic_error(
+            s,
+            bad_request(format!(
+                "file too large (over {}MB limit)",
+                MAX_UPLOAD_SIZE / (1024 * 1024)
+            )),
+        )
+        .await;
     }
 
     let filename = match S3

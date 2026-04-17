@@ -71,6 +71,8 @@
 </form>
 
 <h2>change profile images</h2>
+{% call u::field_error(name="banner") %}
+{% call u::field_error(name="profile_picture") %}
 <form class="default" method="post" action="/change-profile-images" enctype="multipart/form-data">
     <div class="profile-images-container card">
         <div class="banner" data-tooltip="Upload new banner image">
@@ -99,10 +101,22 @@
                 <img id="pfp-img-input" src="/assets/default-pfp.webp" alt="No profile picture" aria-label="No profile picture">
             {% endif %}
         </div>
-        <div class="riding">
-            <button class="secondary" type="submit" formaction="/clear-profile-picture">Clear profile picture</button>
-            <button class="secondary" type="submit" formaction="/clear-banner">Clear banner</button>
-        </div>
+    </div>
+    <div class="image-sections">
+        <section class="images-labels">
+            <h3>banner</h3>
+            <div>
+                <label class="label-button" for="banner">Upload banner</label>
+                <button class="secondary" type="submit" formaction="/clear-profile-picture">Clear profile picture</button>
+            </div>
+        </section>
+        <section class="images-labels">
+            <h3>profile picture</h3>
+            <div>
+                <label class="label-button" for="profile_picture">Upload profile picture</label>
+                <button class="secondary" type="submit" formaction="/clear-banner">Clear banner</button>
+            </div>
+        </section>
     </div>
     <button type="submit">Save changes</button>
 </form>

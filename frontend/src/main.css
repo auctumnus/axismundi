@@ -415,6 +415,7 @@ main {
 }
 
 a.button,
+label.label-button,
 form.default button[type="submit"],
 button.normal {
   font-family: var(--font-heading);

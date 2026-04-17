@@ -6,7 +6,7 @@ use crate::{
         users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session, s3::S3},
+    util::{AppState, extract_session::Session, s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error}},
 };
 use axum::{
     Json, Router,
@@ -109,7 +109,6 @@ pub async fn resend_verification_email(
     tokens.resend(token_id).await.map(|_| StatusCode::OK)
 }
 
-const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 #[derive(Serialize)]
 pub(crate) struct ProfilePictureUploadResponse {
@@ -142,7 +141,7 @@ pub async fn upload_profile_picture(
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| bad_request(format!("Multipart error: {e}")))?
+        .map_err(multipart_read_error)?
     {
         let field_name = field.name().unwrap_or("");
 
@@ -151,7 +150,7 @@ pub async fn upload_profile_picture(
             let data = field
                 .bytes()
                 .await
-                .map_err(|e| bad_request(format!("Field bytes error: {e}")))?;
+                .map_err(multipart_read_error)?;
             file_data = Some(data.to_vec());
             break;
         }
@@ -160,8 +159,11 @@ pub async fn upload_profile_picture(
     let file_data = file_data.ok_or_else(|| bad_request("No image file provided"))?;
     let content_type = content_type.ok_or_else(|| bad_request("No content type provided"))?;
 
-    if file_data.len() > MAX_FILE_SIZE {
-        return Err(bad_request("File size exceeds the maximum limit of 5MB"));
+    if file_data.len() > MAX_UPLOAD_SIZE {
+        return Err(bad_request(format!(
+            "file too large (over {}MB limit)",
+            MAX_UPLOAD_SIZE / (1024 * 1024)
+        )));
     }
 
     // Upload to S3 (uploads the original to minio)

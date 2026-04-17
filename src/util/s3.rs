@@ -1,11 +1,25 @@
+use axum_extra::extract::multipart::MultipartError;
 use crate::{
     config::CONFIG,
-    err::{AppResult, internal_error},
+    err::{AppError, AppResult, bad_request, internal_error},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use s3::{Bucket, Region, creds::Credentials};
 use std::sync::LazyLock;
 use uuid::Uuid;
+
+pub const MAX_UPLOAD_SIZE: usize = 5 * 1024 * 1024;
+
+pub fn multipart_read_error(e: MultipartError) -> AppError {
+    if e.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE {
+        bad_request(format!(
+            "file too large (over {}MB limit)",
+            MAX_UPLOAD_SIZE / (1024 * 1024)
+        ))
+    } else {
+        bad_request(format!("failed to read file: {e}"))
+    }
+}
 
 #[derive(Clone)]
 pub struct S3Config {
