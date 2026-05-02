@@ -23,6 +23,7 @@ pub mod user_activities;
 pub mod user_bans;
 pub mod user_tags;
 pub mod users;
+pub mod word_categories;
 pub mod word_classes;
 pub mod word_relations;
 pub mod words;

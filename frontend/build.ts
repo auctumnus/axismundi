@@ -72,6 +72,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/annotation.tsx',
   'src/etymology-modal.tsx',
   'src/word-combobox.tsx',
+  'src/word-categories-multiselect.tsx',
   'src/user-combobox.tsx',
   'src/phonology-editor.tsx',
   'src/definitions-editor.tsx',

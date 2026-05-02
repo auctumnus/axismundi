@@ -67,6 +67,9 @@ pub struct CreateWord {
     pub notes: Option<String>,
 
     pub extra: Option<JsonValue>,
+
+    #[serde(default)]
+    pub categories: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -84,6 +87,23 @@ pub struct UpdateWord {
     pub notes: Option<String>,
 
     pub extra: Option<JsonValue>,
+
+    #[serde(default)]
+    pub categories: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryRef {
+    pub id: Uuid,
+    pub name: String,
+    pub abbreviation: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WordWithCategories {
+    #[serde(flatten)]
+    pub word: Word,
+    pub categories: Vec<CategoryRef>,
 }
 
 pub struct WordRepository {
@@ -236,6 +256,17 @@ impl WordRepository {
             .find_by_abbreviation(&language, &word.word_class)
             .await?;
 
+        let category_ids = if let Some(ref abbrevs) = word.categories {
+            let categories = crate::model::word_categories::WordCategoryRepository::new(
+                self.state.clone(),
+            );
+            categories
+                .resolve_abbreviations(language, abbrevs)
+                .await?
+        } else {
+            Vec::new()
+        };
+
         let (slug, lemma) = self.make_slug_and_lemma(language, &word.word).await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
@@ -290,6 +321,15 @@ impl WordRepository {
 
         if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
             return Err(bad_request("you don't have permission to create words"));
+        }
+
+        if !category_ids.is_empty() {
+            let categories = crate::model::word_categories::WordCategoryRepository::new(
+                self.state.clone(),
+            );
+            categories
+                .set_categories_for_word_tx(word_result.id, &category_ids, tx)
+                .await?;
         }
 
         // Create activity if language is public
@@ -438,6 +478,15 @@ impl WordRepository {
             None
         };
 
+        let category_ids = if let Some(ref abbrevs) = updates.categories {
+            let categories = crate::model::word_categories::WordCategoryRepository::new(
+                self.state.clone(),
+            );
+            Some(categories.resolve_abbreviations(word.language, abbrevs).await?)
+        } else {
+            None
+        };
+
         let mut tx = self.state.pool.begin().await?;
 
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
@@ -537,6 +586,15 @@ impl WordRepository {
         )
         .fetch_optional(&mut *tx)
         .await?;
+
+        if let Some(ids) = category_ids.as_ref() {
+            let categories = crate::model::word_categories::WordCategoryRepository::new(
+                self.state.clone(),
+            );
+            categories
+                .set_categories_for_word_tx(word.id, ids, &mut tx)
+                .await?;
+        }
 
         tx.commit().await?;
 
@@ -965,6 +1023,81 @@ impl WordRepository {
         })
     }
 
+    /// Load up to `limit` categories (by name) for a single word, returning the slim
+    /// `CategoryRef` shape for embedding in JSON responses.
+    pub async fn load_categories(&self, word_id: Uuid, limit: i64) -> AppResult<Vec<CategoryRef>> {
+        let rows = sqlx::query!(
+            r#"
+                SELECT word_categories.id, word_categories.name, word_categories.abbreviation
+                FROM word_categories
+                JOIN word_word_categories ON word_word_categories.category = word_categories.id
+                WHERE word_word_categories.word = $1
+                ORDER BY word_categories.name
+                LIMIT $2
+            "#,
+            word_id,
+            limit
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| CategoryRef {
+                id: r.id,
+                name: r.name,
+                abbreviation: r.abbreviation,
+            })
+            .collect())
+    }
+
+    /// Batch-load categories for many words at once. Returns one Vec<CategoryRef> per
+    /// input word id, in the same order as `word_ids`. Each list is capped at `limit_per_word`.
+    pub async fn load_categories_batch(
+        &self,
+        word_ids: &[Uuid],
+        limit_per_word: i64,
+    ) -> AppResult<Vec<Vec<CategoryRef>>> {
+        if word_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let rows = sqlx::query!(
+            r#"
+                SELECT
+                    word_word_categories.word as "word!",
+                    word_categories.id as "id!",
+                    word_categories.name as "name!",
+                    word_categories.abbreviation as "abbreviation!",
+                    row_number() OVER (PARTITION BY word_word_categories.word ORDER BY word_categories.name) as "rn!"
+                FROM word_word_categories
+                JOIN word_categories ON word_categories.id = word_word_categories.category
+                WHERE word_word_categories.word = ANY($1)
+            "#,
+            word_ids
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        let mut by_word: std::collections::HashMap<Uuid, Vec<CategoryRef>> =
+            std::collections::HashMap::new();
+        for row in rows {
+            if row.rn > limit_per_word {
+                continue;
+            }
+            by_word.entry(row.word).or_default().push(CategoryRef {
+                id: row.id,
+                name: row.name,
+                abbreviation: row.abbreviation,
+            });
+        }
+
+        Ok(word_ids
+            .iter()
+            .map(|id| by_word.remove(id).unwrap_or_default())
+            .collect())
+    }
+
     pub async fn as_embed(&self, word: &Word) -> AppResult<GenericEmbed> {
         let language = LanguageRepository::new(self.state.clone())
             .find_by_id(word.language)
@@ -1199,6 +1332,7 @@ mod tests {
                     ipa: None,
                     notes: Some("test notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await
@@ -1295,6 +1429,7 @@ mod tests {
                     ipa: None,
                     notes: Some("test notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await
@@ -1313,6 +1448,7 @@ mod tests {
                     ipa: None,
                     notes: Some("updated notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await
@@ -1412,6 +1548,7 @@ mod tests {
                     ipa: None,
                     notes: Some("test notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await

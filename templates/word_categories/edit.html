@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}edit {{ word_category.name }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>edit word category</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}/edit">
+    <section>
+        <label for="abbreviation">Abbreviation</label>
+        {% call u::field_error(name="abbreviation") %}
+        <input type="text" id="abbreviation" name="abbreviation" required value="{{previous_abbreviation}}">
+        <span class="hint">short form (e.g., "m", "f", "anim")</span>
+    </section>
+
+    <section>
+        <label for="name">Name</label>
+        {% call u::field_error(name="name") %}
+        <input type="text" id="name" name="name" required value="{{previous_name}}">
+        <span class="hint">full name (e.g., "masculine", "feminine", "animate")</span>
+    </section>
+
+    <section>
+        <label for="notes">Notes (optional)</label>
+        {% call u::field_error(name="notes") %}
+        <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
+        <span class="hint">additional information about this word category (supports Markdown)</span>
+    </section>
+
+    <button type="submit">Save changes</button>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}" class="breadcrumb">{{ word_category.name }}</a>
+{% endblock %}
+
+
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

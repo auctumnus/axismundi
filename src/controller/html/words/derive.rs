@@ -21,6 +21,7 @@ use crate::{
         languages::{Language, LanguageRepository},
         sound_change_sets::{DerivationPath, SoundChangeSetRepository},
         users::User,
+        word_categories::WordCategoryRepository,
         word_classes::WordClassRepository,
         word_relations::WordRelationType,
         words::{WordRepository, WordWithMeta},
@@ -149,6 +150,7 @@ pub(super) async fn derive_submit(
     languages: LanguageRepository,
     language_families: LanguageFamilyRepository,
     word_classes: WordClassRepository,
+    word_categories: WordCategoryRepository,
     words: WordRepository,
     scs: SoundChangeSetRepository,
     definitions: DefinitionRepository,
@@ -278,6 +280,42 @@ pub(super) async fn derive_submit(
         None
     };
 
+    // Match each source-word category to a target-language category by abbreviation;
+    // silently skip ones that don't exist in the target language.
+    let source_categories = match word_categories
+        .list_by_word(word.word.id, None)
+        .await
+    {
+        Ok(cats) => cats,
+        Err(e) => {
+            return attempt!(
+                s,
+                render_error(e)
+                    .await
+                    .map(|t| (StatusCode::INTERNAL_SERVER_ERROR, render_template(t)))
+            );
+        }
+    };
+    let mut matched_category_abbrevs = Vec::new();
+    for source_cat in &source_categories {
+        match word_categories
+            .find_by_abbreviation(&target_language.id, &source_cat.abbreviation)
+            .await
+        {
+            Ok(cat) => matched_category_abbrevs.push(cat.abbreviation),
+            Err(e) if e.status_code == StatusCode::NOT_FOUND => {}
+            Err(e) => {
+                let status_code = e.status_code;
+                return attempt!(
+                    s,
+                    render_error(e)
+                        .await
+                        .map(|t| (status_code, render_template(t)))
+                );
+            }
+        }
+    }
+
     let (input_word, is_from_ipa) = if word.word.ipa.is_empty() {
         (word.word.word.clone(), false)
     } else {
@@ -319,6 +357,7 @@ pub(super) async fn derive_submit(
         word_class,
         definitions,
         contexts,
+        categories: matched_category_abbrevs,
         antecedent_bookmark: Some(word.word.bookmark.clone()),
         relation_kind: Some(WordRelationType::Derived),
     };

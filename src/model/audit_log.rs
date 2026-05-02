@@ -19,6 +19,7 @@ use crate::model::translatable::Translatable;
 use crate::model::translations::Translation;
 use crate::model::user_tags::UserTagRepository;
 use crate::model::users::User;
+use crate::model::word_categories::WordCategory;
 use crate::model::word_classes::WordClass;
 use crate::model::word_relations::WordRelation;
 use crate::model::words::Word;
@@ -35,6 +36,7 @@ pub enum AuditableResource {
     LanguageFamilyMember,
     Word,
     WordClass,
+    WordCategory,
     Translation,
     Translatable,
     WordRelation,
@@ -62,6 +64,7 @@ pub enum AuditableResourceResolved {
     LanguageFamilyMember(LanguageFamilyMember),
     Word(Word),
     WordClass(WordClass),
+    WordCategory(WordCategory),
     Translation(Translation),
     Translatable(Translatable),
     WordRelation(WordRelation),
@@ -194,6 +197,7 @@ impl AuditLogRepository {
         use crate::model::translatable::TranslatableRepository;
         use crate::model::translations::TranslationRepository;
         use crate::model::users::UserRepository;
+        use crate::model::word_categories::WordCategoryRepository;
         use crate::model::word_classes::WordClassRepository;
         use crate::model::words::WordRepository;
 
@@ -241,6 +245,13 @@ impl AuditLogRepository {
                     .await
                     .ok()
                     .map(AuditableResourceResolved::WordClass)
+            }
+            AuditableResource::WordCategory => {
+                let repo = WordCategoryRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::WordCategory)
             }
             AuditableResource::Translation => {
                 let repo = TranslationRepository::new(self.state.clone());

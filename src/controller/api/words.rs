@@ -4,6 +4,7 @@ use crate::{
         languages::LanguageRepository,
         words::{
             CreateWord, CrossLanguageSearchResponse, UpdateWord, Word, WordRepository, WordSearch,
+            WordWithCategories,
         },
     },
     pagination::{PaginatedRequest, PaginatedResponse},
@@ -16,6 +17,29 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use validator::Validate;
+
+const CATEGORY_LIMIT: i64 = 5;
+
+async fn wrap_with_categories(
+    words: &WordRepository,
+    word: Word,
+) -> AppResult<WordWithCategories> {
+    let categories = words.load_categories(word.id, CATEGORY_LIMIT).await?;
+    Ok(WordWithCategories { word, categories })
+}
+
+async fn wrap_listing_with_categories(
+    words: &WordRepository,
+    items: Vec<Word>,
+) -> AppResult<Vec<WordWithCategories>> {
+    let ids: Vec<uuid::Uuid> = items.iter().map(|w| w.id).collect();
+    let category_lists = words.load_categories_batch(&ids, CATEGORY_LIMIT).await?;
+    Ok(items
+        .into_iter()
+        .zip(category_lists)
+        .map(|(word, categories)| WordWithCategories { word, categories })
+        .collect())
+}
 
 pub fn create_router() -> axum::Router<crate::util::AppState> {
     axum::Router::new()
@@ -47,7 +71,7 @@ pub async fn create_word(
     languages: LanguageRepository,
     words: WordRepository,
     Json(req): Json<CreateWord>,
-) -> ApiResponse<Json<Word>> {
+) -> ApiResponse<Json<WordWithCategories>> {
     req.validate()?;
 
     let Some(requestor) = s.user() else {
@@ -56,7 +80,9 @@ pub async fn create_word(
 
     let language = languages.find_by_code(&code).await?;
 
-    words.create(requestor, language.id, req).await.map(Json)
+    let word = words.create(requestor, language.id, req).await?;
+    let result = wrap_with_categories(&words, word).await?;
+    Ok(Json(result))
 }
 
 pub async fn get_word(
@@ -64,13 +90,13 @@ pub async fn get_word(
     languages: LanguageRepository,
     words: WordRepository,
     Path((code, slug, lemma)): Path<(String, String, i32)>,
-) -> ApiResponse<Json<Word>> {
+) -> ApiResponse<Json<WordWithCategories>> {
     let language = languages.find_by_code(&code).await?;
     let word = words
         .find_by_slug_and_lemma(s.user(), language.id, &slug, lemma)
         .await?;
-
-    Ok(Json(word))
+    let result = wrap_with_categories(&words, word).await?;
+    Ok(Json(result))
 }
 
 pub async fn search_words(
@@ -79,10 +105,18 @@ pub async fn search_words(
     Path(code): Path<String>,
     pagination: PaginatedRequest,
     axum::extract::Query(query): axum::extract::Query<WordSearch>,
-) -> PaginatedApiResponse<Word> {
+) -> PaginatedApiResponse<WordWithCategories> {
     let language = languages.find_by_code(&code).await?;
 
-    words.search(&language.id, pagination, query).await
+    let response = words.search(&language.id, pagination, query).await?;
+    let items = wrap_listing_with_categories(&words, response.items).await?;
+    Ok(PaginatedResponse {
+        items,
+        total: response.total,
+        offset: response.offset,
+        limit: response.limit,
+        has_more: response.has_more,
+    })
 }
 
 #[derive(serde::Deserialize)]
@@ -121,17 +155,18 @@ pub async fn edit_word(
     words: WordRepository,
     Path((code, slug, lemma)): Path<(String, String, i32)>,
     Json(updates): Json<UpdateWord>,
-) -> ApiResponse<Json<Word>> {
+) -> ApiResponse<Json<WordWithCategories>> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
     let language = languages.find_by_code(&code).await?;
 
-    words
+    let word = words
         .update_by_lemma(requestor, language.id, &slug, lemma, updates)
-        .await
-        .map(Json)
+        .await?;
+    let result = wrap_with_categories(&words, word).await?;
+    Ok(Json(result))
 }
 
 pub async fn delete_word(

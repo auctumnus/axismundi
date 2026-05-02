@@ -17,10 +17,9 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
-        quotations::{
-            Quotation, QuotationRepository, QuotationWithSpan, SearchQuotationsByDefinition,
-        },
+        quotations::{QuotationRepository, QuotationWithSpan},
         users::User,
+        word_categories::{WordCategory, WordCategoryRepository},
         word_classes::WordClassRepository,
         word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult},
         words::{Word, WordRepository, WordSearch},
@@ -54,6 +53,7 @@ struct LemmaTemplate {
     language: Language,
     word: Word,
     word_class: Option<crate::model::word_classes::WordClass>,
+    word_categories: Vec<WordCategory>,
     // definition, quotations, has_more
     definitions: Vec<(Definition, Vec<QuotationWithSpan>, bool)>,
     other_lemmata: bool,
@@ -218,6 +218,7 @@ pub(super) async fn view_lemma(
     definitions_repo: DefinitionRepository,
     word_relations: WordRelationRepository,
     word_classes: WordClassRepository,
+    word_categories_repo: WordCategoryRepository,
     permissions: LanguagePermissionRepository,
     quotations: QuotationRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
@@ -248,6 +249,8 @@ pub(super) async fn view_lemma(
     } else {
         None
     };
+
+    let word_categories = attempt!(s, word_categories_repo.list_by_word(word.id, None).await);
 
     let user_has_permission = attempt!(
         s,
@@ -345,6 +348,7 @@ pub(super) async fn view_lemma(
         language,
         word,
         word_class,
+        word_categories,
         definitions,
         other_lemmata,
         back,

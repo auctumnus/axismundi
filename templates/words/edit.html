@@ -51,6 +51,24 @@
     </section>
 
     <section>
+        <label for="word_categories">Categories</label>
+        {% call u::field_error(name="categories") %}
+        <div id="word-categories-mount" class="async-multi-select-mount"
+             data-input-id="word_categories"
+             data-input-name="categories[]">
+            <select multiple id="word_categories" name="categories[]">
+                {% for c in word_categories %}
+                    <option value="{{ c.abbreviation }}"
+                      {% if selected_category_abbrevs.contains(&c.abbreviation) %}selected{% endif %}>
+                        {{ c.name }} ({{ c.abbreviation }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <span class="hint">if you don't see a category you want, <a href="/languages/{{ language.code }}/new-word-category">add a new word category</a></span>
+    </section>
+
+    <section>
         {% call u::field_error(name="definitions") %}
         <div id="definitions-editor-mount">
             <label>Definitions</label>
@@ -114,6 +132,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="module" src="/static/word-categories-multiselect.js"></script>
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountDefinitionsEditor) {
@@ -135,8 +154,20 @@
         formId: 'edit-word-form'
       });
     }
+    if (window.mountWordCategoriesMultiselect) {
+      const allOptions = JSON.parse(document.getElementById('word-categories-options').textContent);
+      const initialSelected = JSON.parse(document.getElementById('word-categories-selected').textContent);
+      window.mountWordCategoriesMultiselect('word-categories-mount', {
+        inputId: 'word_categories',
+        inputName: 'categories[]',
+        allOptions,
+        initialSelectedAbbrevs: initialSelected,
+      });
+    }
   });
 </script>
 <script type="application/json" id="definitions-initial">{{ definitions_json | safe }}</script>
 <script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
+<script type="application/json" id="word-categories-options">{{ word_categories_json | safe }}</script>
+<script type="application/json" id="word-categories-selected">{{ selected_category_abbrevs | json | safe }}</script>
 {% endblock %}

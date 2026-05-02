@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}{{ word_category.name }} - {{ language.name }} - axismundi{% endblock %}
+{% block embed_title %}{{ word_category.name }} ({{ word_category.abbreviation }}.) - {{ language.name }}{% endblock %}
+{% block embed_description %}{{ language.name }} word category{% endblock %}
+{% block oembed_url_path %}{% let code = &language.code %}{% let abbr = &word_category.abbreviation %}{{ crate::util::urlencode(&format!("languages/{code}/word-categories/{abbr}")) }}{% endblock %}
+
+{% block head %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+<link rel="stylesheet" href="/static/word-class-view.css">
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+    <div class="header-with-actions">
+        <h1>
+            <span>{{ word_category.name }}</span>
+            <span class="word-class-abbreviation-header">({{ word_category.abbreviation }})</span>
+        </h1>
+        {% if let Some(_user) = current_user %}
+        <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+            <a class="icon button gray" href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}/edit" data-tooltip="Edit word category">
+                {% call u::icon("edit") %}
+            </a>
+            <a class="icon button gray" href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}/delete" data-tooltip="Delete word category">
+                {% call u::icon("delete") %}
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="word-class-meta">
+        <span class="meta-item">
+            <span class="meta-label">created by</span>
+            {% call u::badge(&creator, "small") %}
+            {% call u::relative(&word_category.created_at) %}
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">updated</span>
+            {% call u::relative(&word_category.updated_at) %}
+        </span>
+    </div>
+
+    {% if !rendered_notes.is_empty() %}
+    <div class="word-class-notes">
+        <h3>Notes</h3>
+        <div class="markdown-content">{{ rendered_notes|safe }}</div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}" class="breadcrumb">{{ word_category.name }}</a>
+{% endblock %}
+
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

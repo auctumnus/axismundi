@@ -173,6 +173,7 @@ pub(super) async fn loan_submit(
         word_class,
         definitions,
         contexts,
+        categories: Vec::new(),
         antecedent_bookmark: Some(word.word.bookmark.clone()),
         relation_kind: Some(WordRelationType::Borrowed),
     };

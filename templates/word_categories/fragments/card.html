@@ -1,0 +1,20 @@
+{%- import "util.html" as u -%}
+
+{% macro render(word_category, language_code, creator) %}
+<li class="word-class-card">
+    <a href="/languages/{{ language_code }}/word-categories/{{ word_category.abbreviation }}">
+        <span class="left">
+            <span class="word-class-name">{{ word_category.name }} (<span class="word-class-abbreviation">{{ word_category.abbreviation }}</span>.)</span>
+            {% if !word_category.notes.is_empty() %}<span class="word-class-notes">{{ crate::util::first_sentence(&word_category.notes) }}</span>{% endif %}
+            <span class="creator">
+                {% call u::user_display(creator, "small") %} {% call u::relative(&word_category.created_at) %}
+            </span>
+        </span>
+        <span class="right">
+            <svg class="icon chevron"><use href="#icon-chevron-right"></use></svg>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(word_category, language_code, creator) %}

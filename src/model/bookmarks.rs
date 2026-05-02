@@ -1,6 +1,7 @@
 use crate::err::{AppResult, not_found};
 use crate::model::{
-    languages::LanguageRepository, users::UserRepository, word_classes::WordClassRepository,
+    languages::LanguageRepository, users::UserRepository,
+    word_categories::WordCategoryRepository, word_classes::WordClassRepository,
     words::WordRepository,
 };
 use crate::util::AppState;
@@ -25,6 +26,7 @@ pub enum ResourceType {
     Language,
     Lemma,
     WordClass,
+    WordCategory,
     UserSession,
 }
 
@@ -35,6 +37,7 @@ impl ResourceType {
             ResourceType::Language => Box::new(LanguageRepository::new(state.clone())),
             ResourceType::Lemma => Box::new(WordRepository::new(state.clone())),
             ResourceType::WordClass => Box::new(WordClassRepository::new(state.clone())),
+            ResourceType::WordCategory => Box::new(WordCategoryRepository::new(state.clone())),
             ResourceType::UserSession => panic!("UserSession bookmarks are not supported"),
         }
     }

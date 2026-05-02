@@ -46,6 +46,7 @@ mod translatables;
 mod translations;
 mod user_bans;
 mod users;
+mod word_categories;
 mod word_classes;
 mod word_relations;
 mod words;
@@ -80,6 +81,8 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_word_relation_routes, normal_word_relation_routes) =
         word_relations::create_router();
     let (secure_word_class_routes, normal_word_class_routes) = word_classes::create_router();
+    let (secure_word_category_routes, normal_word_category_routes) =
+        word_categories::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
     let (secure_translation_routes, normal_translation_routes) = translations::create_router();
     let (secure_bookmark_routes, normal_bookmark_routes) = bookmarks::create_router();
@@ -103,6 +106,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_word_routes)
         .merge(secure_word_relation_routes)
         .merge(secure_word_class_routes)
+        .merge(secure_word_category_routes)
         .merge(secure_translatable_routes)
         .merge(secure_translation_routes)
         .merge(secure_bookmark_routes)
@@ -128,6 +132,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_word_routes)
         .merge(normal_word_relation_routes)
         .merge(normal_word_class_routes)
+        .merge(normal_word_category_routes)
         .merge(normal_translatable_routes)
         .merge(normal_translation_routes)
         .merge(normal_bookmark_routes)

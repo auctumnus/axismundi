@@ -15,6 +15,8 @@
             <a href="/languages/{{ word.language_code.as_ref().unwrap() }}/words/{{ word.slug }}/{{ word.lemma }}">{{ word.word }}</a>
         {% when crate::model::audit_log::AuditableResourceResolved::WordClass(_) %}
             <span>a word class</span>
+        {% when crate::model::audit_log::AuditableResourceResolved::WordCategory(_) %}
+            <span>a word category</span>
         {% when crate::model::audit_log::AuditableResourceResolved::Translation(translation) %}
             <a href="/translatable/{{ translation.translatable_slug }}/translation/{{ translation.language_code }}">a translation</a>
         {% when crate::model::audit_log::AuditableResourceResolved::Translatable(translatable) %}
@@ -48,6 +50,8 @@
             <span>a word</span>
         {% when crate::model::audit_log::AuditableResource::WordClass %}
             <span>a word class</span>
+        {% when crate::model::audit_log::AuditableResource::WordCategory %}
+            <span>a word category</span>
         {% when crate::model::audit_log::AuditableResource::Translation %}
             <span>a translation</span>
         {% when crate::model::audit_log::AuditableResource::Translatable %}
