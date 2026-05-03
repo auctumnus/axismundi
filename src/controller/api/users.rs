@@ -6,7 +6,11 @@ use crate::{
         users::{CreateUser, UpdateUser, User, UserRepository, UserSearch},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, extract_session::Session, s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error}},
+    util::{
+        AppState,
+        extract_session::Session,
+        s3::{MAX_UPLOAD_SIZE, S3, multipart_read_error},
+    },
 };
 use axum::{
     Json, Router,
@@ -109,7 +113,6 @@ pub async fn resend_verification_email(
     tokens.resend(token_id).await.map(|_| StatusCode::OK)
 }
 
-
 #[derive(Serialize)]
 pub(crate) struct ProfilePictureUploadResponse {
     profile_picture_url: String,
@@ -138,19 +141,12 @@ pub async fn upload_profile_picture(
     let mut file_data: Option<Vec<u8>> = None;
     let mut content_type: Option<String> = None;
 
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(multipart_read_error)?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(multipart_read_error)? {
         let field_name = field.name().unwrap_or("");
 
         if field_name == "image" {
             content_type = field.content_type().map(std::string::ToString::to_string);
-            let data = field
-                .bytes()
-                .await
-                .map_err(multipart_read_error)?;
+            let data = field.bytes().await.map_err(multipart_read_error)?;
             file_data = Some(data.to_vec());
             break;
         }

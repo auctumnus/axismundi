@@ -126,7 +126,11 @@ impl EmailService for ResendEmailService {
         to: &str,
         token: &str,
     ) -> AppResult<()> {
-        let reset_url = &CONFIG.url(&format!("reset-password?token={}&uid={}", urlencode(token), user_id));
+        let reset_url = &CONFIG.url(&format!(
+            "reset-password?token={}&uid={}",
+            urlencode(token),
+            user_id
+        ));
         let subject = "reset your password";
         let html = ResetPasswordHTML { reset_url }.render().map_err(|e| {
             crate::err::internal_error(format!("failed to render reset password email: {}", e))
@@ -155,10 +159,20 @@ impl EmailService for ResendEmailService {
         new_email: &str,
     ) -> AppResult<()> {
         let subject = "your email address has been changed";
-        let html = ChangeEmailHTML { old_email, new_email }.render().map_err(|e| {
+        let html = ChangeEmailHTML {
+            old_email,
+            new_email,
+        }
+        .render()
+        .map_err(|e| {
             crate::err::internal_error(format!("failed to render change email email: {}", e))
         })?;
-        let text = ChangeEmailText { old_email, new_email }.render().map_err(|e| {
+        let text = ChangeEmailText {
+            old_email,
+            new_email,
+        }
+        .render()
+        .map_err(|e| {
             crate::err::internal_error(format!("failed to render change email email: {}", e))
         })?;
 

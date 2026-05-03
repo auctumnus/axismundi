@@ -1,8 +1,7 @@
 use crate::err::{AppResult, not_found};
 use crate::model::{
-    languages::LanguageRepository, users::UserRepository,
-    word_categories::WordCategoryRepository, word_classes::WordClassRepository,
-    words::WordRepository,
+    languages::LanguageRepository, users::UserRepository, word_categories::WordCategoryRepository,
+    word_classes::WordClassRepository, words::WordRepository,
 };
 use crate::util::AppState;
 use async_trait::async_trait;

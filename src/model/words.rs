@@ -257,12 +257,9 @@ impl WordRepository {
             .await?;
 
         let category_ids = if let Some(ref abbrevs) = word.categories {
-            let categories = crate::model::word_categories::WordCategoryRepository::new(
-                self.state.clone(),
-            );
-            categories
-                .resolve_abbreviations(language, abbrevs)
-                .await?
+            let categories =
+                crate::model::word_categories::WordCategoryRepository::new(self.state.clone());
+            categories.resolve_abbreviations(language, abbrevs).await?
         } else {
             Vec::new()
         };
@@ -324,9 +321,8 @@ impl WordRepository {
         }
 
         if !category_ids.is_empty() {
-            let categories = crate::model::word_categories::WordCategoryRepository::new(
-                self.state.clone(),
-            );
+            let categories =
+                crate::model::word_categories::WordCategoryRepository::new(self.state.clone());
             categories
                 .set_categories_for_word_tx(word_result.id, &category_ids, tx)
                 .await?;
@@ -479,10 +475,13 @@ impl WordRepository {
         };
 
         let category_ids = if let Some(ref abbrevs) = updates.categories {
-            let categories = crate::model::word_categories::WordCategoryRepository::new(
-                self.state.clone(),
-            );
-            Some(categories.resolve_abbreviations(word.language, abbrevs).await?)
+            let categories =
+                crate::model::word_categories::WordCategoryRepository::new(self.state.clone());
+            Some(
+                categories
+                    .resolve_abbreviations(word.language, abbrevs)
+                    .await?,
+            )
         } else {
             None
         };
@@ -588,9 +587,8 @@ impl WordRepository {
         .await?;
 
         if let Some(ids) = category_ids.as_ref() {
-            let categories = crate::model::word_categories::WordCategoryRepository::new(
-                self.state.clone(),
-            );
+            let categories =
+                crate::model::word_categories::WordCategoryRepository::new(self.state.clone());
             categories
                 .set_categories_for_word_tx(word.id, ids, &mut tx)
                 .await?;
@@ -698,6 +696,17 @@ impl WordRepository {
             None
         };
 
+        let category_ids: Option<Vec<Uuid>> = if search.categories.is_empty() {
+            None
+        } else {
+            Some(
+                crate::model::word_categories::WordCategoryRepository::new(self.state.clone())
+                    .resolve_abbreviations(*language, &search.categories)
+                    .await?,
+            )
+        };
+        let category_count = i64::try_from(search.categories.len()).unwrap_or(0);
+
         let items_future = sqlx::query_as!(
             Word,
             r#"
@@ -734,6 +743,11 @@ impl WordRepository {
                 AND ($3::TIMESTAMPTZ IS NULL OR words.created_at < $3)
                 AND ($4::TIMESTAMPTZ IS NULL OR words.created_at > $4)
                 AND ($5::TEXT IS NULL OR words.slug = $5)
+                AND ($9::UUID[] IS NULL OR (
+                    SELECT COUNT(DISTINCT category)
+                    FROM word_word_categories
+                    WHERE word = words.id AND category = ANY($9)
+                ) = $10)
                 ORDER BY (
                     CASE
                         WHEN $6::TEXT IS NOT NULL AND words.word ILIKE '%' || $6 || '%' THEN 100.0
@@ -756,7 +770,9 @@ impl WordRepository {
             search.exact_slug,
             search.q,
             i64::from(pagination.limit),
-            i64::from(pagination.offset)
+            i64::from(pagination.offset),
+            category_ids.as_deref(),
+            category_count,
         )
         .fetch_all(&self.state.pool);
 
@@ -770,12 +786,19 @@ impl WordRepository {
                 AND ($3::TIMESTAMPTZ IS NULL OR created_at < $3)
                 AND ($4::TIMESTAMPTZ IS NULL OR created_at > $4)
                 AND ($5::TEXT IS NULL OR slug = $5)
+                AND ($6::UUID[] IS NULL OR (
+                    SELECT COUNT(DISTINCT category)
+                    FROM word_word_categories
+                    WHERE word = words.id AND category = ANY($6)
+                ) = $7)
             "#,
             language,
             word_class,
             search.created_before,
             search.created_after,
             search.exact_slug,
+            category_ids.as_deref(),
+            category_count,
         )
         .fetch_one(&self.state.pool);
 
@@ -1193,6 +1216,8 @@ pub struct WordSearch {
     pub word_class: Option<String>,
     pub created_before: Option<DateTime<Utc>>,
     pub created_after: Option<DateTime<Utc>>,
+    #[serde(default, rename = "categories[]")]
+    pub categories: Vec<String>,
 }
 
 text_query!(WordSearch);

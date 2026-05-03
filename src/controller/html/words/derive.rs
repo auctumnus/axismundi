@@ -282,10 +282,7 @@ pub(super) async fn derive_submit(
 
     // Match each source-word category to a target-language category by abbreviation;
     // silently skip ones that don't exist in the target language.
-    let source_categories = match word_categories
-        .list_by_word(word.word.id, None)
-        .await
-    {
+    let source_categories = match word_categories.list_by_word(word.word.id, None).await {
         Ok(cats) => cats,
         Err(e) => {
             return attempt!(

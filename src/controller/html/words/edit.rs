@@ -473,8 +473,7 @@ pub(super) async fn estimate_ipa_submit(
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
     let word_categories_repo =
         crate::model::word_categories::WordCategoryRepository::new(state.clone());
-    let word_categories_list =
-        attempt!(s, word_categories_repo.list_all(language.id).await);
+    let word_categories_list = attempt!(s, word_categories_repo.list_all(language.id).await);
     let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
     let definitions_json =

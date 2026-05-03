@@ -13,6 +13,7 @@
         {% if can_edit_language %}
             <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
             <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
+            <li><a href="/languages/{{ language.code }}/import-words">import csv</a></li>
         {% endif %}
         <li><a href="/report/new?resource_type=language&resource_id={{ language.id }}">report</a></li>
     </ul>

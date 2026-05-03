@@ -176,7 +176,7 @@ impl PaginationTemplate {
         pagination: &PaginatedRequest,
         query: Q,
     ) -> Self {
-        let first_search = serde_urlencoded::to_string(&query).unwrap_or_default();
+        let first_search = serde_html_form::to_string(&query).unwrap_or_default();
         let first_page = format!("{base_url}?{first_search}");
 
         let previous_search = serialize_search(&pagination.with_previous_page(), &query);
@@ -207,7 +207,7 @@ impl PaginationTemplate {
         pagination: &PaginatedRequest,
         query: Q,
     ) -> Self {
-        let first_search = serde_urlencoded::to_string(&query).unwrap_or_default();
+        let first_search = serde_html_form::to_string(&query).unwrap_or_default();
         let first_page = format!("{base_url}?{first_search}");
 
         let previous_search = serialize_search(&pagination.with_previous_page(), &query);

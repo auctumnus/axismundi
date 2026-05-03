@@ -20,10 +20,7 @@ use validator::Validate;
 
 const CATEGORY_LIMIT: i64 = 5;
 
-async fn wrap_with_categories(
-    words: &WordRepository,
-    word: Word,
-) -> AppResult<WordWithCategories> {
+async fn wrap_with_categories(words: &WordRepository, word: Word) -> AppResult<WordWithCategories> {
     let categories = words.load_categories(word.id, CATEGORY_LIMIT).await?;
     Ok(WordWithCategories { word, categories })
 }
@@ -104,7 +101,7 @@ pub async fn search_words(
     words: WordRepository,
     Path(code): Path<String>,
     pagination: PaginatedRequest,
-    axum::extract::Query(query): axum::extract::Query<WordSearch>,
+    axum_extra::extract::Query(query): axum_extra::extract::Query<WordSearch>,
 ) -> PaginatedApiResponse<WordWithCategories> {
     let language = languages.find_by_code(&code).await?;
 

@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::Response,
 };
@@ -13,6 +13,7 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::LanguageRepository,
+        word_categories::{WordCategory, WordCategoryRepository},
         word_classes::{WordClass, WordClassRepository},
         words::{WordRepository, WordSearch, WordWithMeta},
     },
@@ -25,9 +26,26 @@ use crate::{
 };
 #[derive(Template)]
 #[template(path = "words/fragments/query.html")]
-struct WordSearchOptions {
-    query: WordSearch,
-    word_classes: Vec<WordClass>,
+pub(super) struct WordSearchOptions {
+    pub query: WordSearch,
+    pub word_classes: Vec<WordClass>,
+    pub word_categories: Vec<WordCategory>,
+    pub word_categories_json: String,
+    pub selected_category_abbrevs: Vec<String>,
+}
+
+pub(super) fn build_categories_json(categories: &[WordCategory]) -> String {
+    let items: Vec<serde_json::Value> = categories
+        .iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "name": c.name,
+                "abbreviation": c.abbreviation,
+            })
+        })
+        .collect();
+    serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -37,10 +55,11 @@ pub(super) async fn word_search(
     languages: LanguageRepository,
     words: WordRepository,
     word_classes: WordClassRepository,
+    word_categories: WordCategoryRepository,
     permissions: LanguagePermissionRepository,
     Path(language_code): Path<String>,
-    Query(query): Query<WordSearch>,
-    Query(pagination): Query<PaginatedRequest>,
+    axum_extra::extract::Query(query): axum_extra::extract::Query<WordSearch>,
+    axum_extra::extract::Query(pagination): axum_extra::extract::Query<PaginatedRequest>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -63,9 +82,15 @@ pub(super) async fn word_search(
     };
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let word_categories_list = attempt!(s, word_categories.list_all(language.id).await);
+    let word_categories_json = build_categories_json(&word_categories_list);
+    let selected_category_abbrevs = query.categories.clone();
     let query_template = WordSearchOptions {
         query: query.clone(),
         word_classes: word_classes_list,
+        word_categories: word_categories_list,
+        word_categories_json,
+        selected_category_abbrevs,
     };
 
     let breadcrumbs = html::languages::Breadcrumb {

@@ -31,7 +31,7 @@ use crate::{
     util::{
         AppState, BackQuery, ListHeaderKind,
         extract_session::Session,
-        s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error},
+        s3::{MAX_UPLOAD_SIZE, S3, multipart_read_error},
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };

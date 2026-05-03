@@ -6,6 +6,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="/static/components/modal.css">
+<link rel="stylesheet" href="/static/components/async-select.css">
 <link rel="stylesheet" href="/static/words/edit.css">
 <script defer src="/static/words/edit.js"></script>
 <link rel="stylesheet" href="/static/slate-editor.css">
@@ -50,6 +51,9 @@
         </div>
     </section>
 
+    {% if word_categories.is_empty() %}
+        <span class="hint">to use word categories, like noun animacy or verb conjugation classes, <a href="/languages/{{ language.code }}/new-word-category">add a word category</a></span>
+    {% else %}
     <section>
         <label for="word_categories">Categories</label>
         {% call u::field_error(name="categories") %}
@@ -67,6 +71,7 @@
         </div>
         <span class="hint">if you don't see a category you want, <a href="/languages/{{ language.code }}/new-word-category">add a new word category</a></span>
     </section>
+    {% endif %}
 
     <section>
         {% call u::field_error(name="definitions") %}

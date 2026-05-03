@@ -257,6 +257,69 @@ impl WordCategoryRepository {
         Ok(result)
     }
 
+    /// Look up a category by abbreviation; if missing, look up by name (treating the abbreviation
+    /// as a candidate name); if still missing, create one with `name = abbreviation = abbreviation`.
+    /// Used by the csv importer's auto-create path.
+    pub async fn find_or_create_by_abbreviation(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        abbreviation: &str,
+    ) -> AppResult<WordCategory> {
+        use axum::http::StatusCode;
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_code(lang_code).await?;
+
+        match self.find_by_abbreviation(&language.id, abbreviation).await {
+            Ok(existing) => return Ok(existing),
+            Err(e) if e.status_code == StatusCode::NOT_FOUND => {}
+            Err(e) => return Err(e),
+        }
+
+        if let Some(existing) = self.find_by_name(language.id, abbreviation).await? {
+            return Ok(existing);
+        }
+
+        self.create(
+            requestor,
+            lang_code,
+            CreateWordCategory {
+                name: abbreviation.to_string(),
+                abbreviation: abbreviation.to_string(),
+                notes: None,
+            },
+        )
+        .await
+    }
+
+    async fn find_by_name(&self, language: Uuid, name: &str) -> AppResult<Option<WordCategory>> {
+        let result = sqlx::query_as!(
+            WordCategory,
+            r#"
+                SELECT
+                    word_categories.id,
+                    word_categories.language,
+                    word_categories.name,
+                    word_categories.abbreviation,
+                    word_categories.notes,
+                    word_categories.created_at,
+                    word_categories.updated_at,
+                    word_categories.created_by,
+                    word_categories.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_categories
+                LEFT JOIN bookmarks ON bookmarks.item = word_categories.id AND bookmarks.resource = 'word_category'
+                WHERE word_categories.language = $1 AND word_categories.name = $2
+            "#,
+            language,
+            name
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn find_by_abbreviation(
         &self,
         language: &Uuid,
@@ -312,8 +375,7 @@ impl WordCategoryRepository {
         let current = self.find_by_id(id).await?;
 
         if let Some(name) = &updates.name {
-            if name != &current.name
-                && self.name_exists_in_language(current.language, name).await?
+            if name != &current.name && self.name_exists_in_language(current.language, name).await?
             {
                 return Err(bad_request(
                     "word category name already exists in this language",
@@ -449,12 +511,9 @@ impl WordCategoryRepository {
         category_ids: &[Uuid],
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> AppResult<()> {
-        sqlx::query!(
-            "DELETE FROM word_word_categories WHERE word = $1",
-            word_id
-        )
-        .execute(&mut **tx)
-        .await?;
+        sqlx::query!("DELETE FROM word_word_categories WHERE word = $1", word_id)
+            .execute(&mut **tx)
+            .await?;
 
         for category_id in category_ids {
             sqlx::query!(

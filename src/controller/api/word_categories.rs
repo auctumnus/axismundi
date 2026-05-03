@@ -224,11 +224,7 @@ mod tests {
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        for (abbr, name) in [
-            ("m", "masculine"),
-            ("f", "feminine"),
-            ("n", "neuter"),
-        ] {
+        for (abbr, name) in [("m", "masculine"), ("f", "feminine"), ("n", "neuter")] {
             let body = json!({
                 "abbreviation": abbr,
                 "name": name,
@@ -289,10 +285,7 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
         }
 
-        let request = get(&format!(
-            "languages/{lang_code}/word-categories?q=mas"
-        ))
-        .await;
+        let request = get(&format!("languages/{lang_code}/word-categories?q=mas")).await;
         let response = app.call(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -595,9 +588,7 @@ mod tests {
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let request = delete_without_auth(&format!(
-            "languages/{lang_code}/word-categories/dual"
-        ));
+        let request = delete_without_auth(&format!("languages/{lang_code}/word-categories/dual"));
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }

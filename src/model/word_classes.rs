@@ -224,6 +224,70 @@ impl WordClassRepository {
         Ok(result)
     }
 
+    /// Look up a class by abbreviation; if missing, look up by name (treating the abbreviation
+    /// as a candidate name); if still missing, create one with `name = abbreviation = abbreviation`.
+    /// Used by the csv importer's auto-create path. Commits its own transaction, so the caller's
+    /// later `find_by_abbreviation` lookups (which use the pool) will see it.
+    pub async fn find_or_create_by_abbreviation(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        abbreviation: &str,
+    ) -> AppResult<WordClass> {
+        use axum::http::StatusCode;
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_code(lang_code).await?;
+
+        match self.find_by_abbreviation(&language.id, abbreviation).await {
+            Ok(existing) => return Ok(existing),
+            Err(e) if e.status_code == StatusCode::NOT_FOUND => {}
+            Err(e) => return Err(e),
+        }
+
+        if let Some(existing) = self.find_by_name(language.id, abbreviation).await? {
+            return Ok(existing);
+        }
+
+        self.create(
+            requestor,
+            lang_code,
+            CreateWordClass {
+                name: abbreviation.to_string(),
+                abbreviation: abbreviation.to_string(),
+                notes: None,
+            },
+        )
+        .await
+    }
+
+    async fn find_by_name(&self, language: Uuid, name: &str) -> AppResult<Option<WordClass>> {
+        let result = sqlx::query_as!(
+            WordClass,
+            r#"
+                SELECT
+                    word_classes.id,
+                    word_classes.language,
+                    word_classes.name,
+                    word_classes.abbreviation,
+                    word_classes.notes,
+                    word_classes.created_at,
+                    word_classes.updated_at,
+                    word_classes.created_by,
+                    word_classes.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_classes
+                LEFT JOIN bookmarks ON bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class'
+                WHERE word_classes.language = $1 AND word_classes.name = $2
+            "#,
+            language,
+            name
+        )
+        .fetch_optional(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
     pub async fn find_by_abbreviation(
         &self,
         language: &Uuid,

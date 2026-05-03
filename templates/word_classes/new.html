@@ -19,14 +19,12 @@
         <label for="abbreviation">Abbreviation</label>
         {% call u::field_error(name="abbreviation") %}
         <input type="text" id="abbreviation" name="abbreviation" required value="{{previous_abbreviation}}">
-        <span class="hint">short form (e.g., "n", "v", "adj")</span>
     </section>
 
     <section>
         <label for="name">Name</label>
         {% call u::field_error(name="name") %}
         <input type="text" id="name" name="name" required value="{{previous_name}}">
-        <span class="hint">full name (e.g., "noun", "verb", "adjective")</span>
     </section>
 
     <section>

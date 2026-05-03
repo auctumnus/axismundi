@@ -59,6 +59,8 @@ export const AsyncSelect = <
       className={props.className + " async-select"}
       classNamePrefix="async-select"
       unstyled
+      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+      menuPosition="fixed"
       components={{
         DropdownIndicator,
         ClearIndicator,
