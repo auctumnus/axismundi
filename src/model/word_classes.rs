@@ -64,6 +64,28 @@ impl WordClassRepository {
         lang_code: &str,
         word_class: CreateWordClass,
     ) -> AppResult<WordClass> {
+        self.create_inner(requestor, lang_code, word_class, false).await
+    }
+
+    /// Like `create`, but does not write a per-row audit log entry. Intended
+    /// for bulk operations like dictionary import where the caller emits a
+    /// single summary audit log afterwards.
+    pub async fn create_silent(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        word_class: CreateWordClass,
+    ) -> AppResult<WordClass> {
+        self.create_inner(requestor, lang_code, word_class, true).await
+    }
+
+    async fn create_inner(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        word_class: CreateWordClass,
+        silent: bool,
+    ) -> AppResult<WordClass> {
         use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
         use crate::model::language_permissions::{
             CheckPermissionReq, LanguagePermissionRepository,
@@ -115,30 +137,42 @@ impl WordClassRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        // Check permission with audit
         let permissions = LanguagePermissionRepository::new(self.state.clone());
-        let perm_check = permissions
-            .check_permission_with_audit(
-                CheckPermissionReq {
-                    user: requestor.id,
-                    language: language.id,
-                    required_level: PermissionLevel::Editor,
-                    action_type: AuditActionType::Created,
-                    resource_type: AuditableResource::WordClass,
-                    resource_id: wc_result.id,
-                    context: Some(serde_json::json!({
-                        "name": &word_class.name,
-                        "abbreviation": &word_class.abbreviation,
-                    })),
-                },
-                &mut tx,
-            )
-            .await?;
+        if silent {
+            let has_perm = permissions
+                .has_permission(requestor.id, language.id, PermissionLevel::Editor)
+                .await?;
+            if !has_perm
+                && !crate::util::is_admin_or_mod(&self.state, requestor.id).await?
+            {
+                return Err(bad_request(
+                    "you don't have permission to create word classes",
+                ));
+            }
+        } else {
+            let perm_check = permissions
+                .check_permission_with_audit(
+                    CheckPermissionReq {
+                        user: requestor.id,
+                        language: language.id,
+                        required_level: PermissionLevel::Editor,
+                        action_type: AuditActionType::Created,
+                        resource_type: AuditableResource::WordClass,
+                        resource_id: wc_result.id,
+                        context: Some(serde_json::json!({
+                            "name": &word_class.name,
+                            "abbreviation": &word_class.abbreviation,
+                        })),
+                    },
+                    &mut tx,
+                )
+                .await?;
 
-        if perm_check == PermissionCheck::NoPermission {
-            return Err(bad_request(
-                "you don't have permission to create word classes",
-            ));
+            if perm_check == PermissionCheck::NoPermission {
+                return Err(bad_request(
+                    "you don't have permission to create word classes",
+                ));
+            }
         }
 
         // Generate and insert bookmark
@@ -248,7 +282,7 @@ impl WordClassRepository {
             return Ok(existing);
         }
 
-        self.create(
+        self.create_silent(
             requestor,
             lang_code,
             CreateWordClass {

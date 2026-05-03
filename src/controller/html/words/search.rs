@@ -45,7 +45,12 @@ pub(super) fn build_categories_json(categories: &[WordCategory]) -> String {
             })
         })
         .collect();
-    serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
+    let raw = serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string());
+    // Escape `<`, `>`, `&` so user-controlled name/abbreviation values can't
+    // close the surrounding <script type="application/json"> block.
+    raw.replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026")
 }
 
 #[allow(clippy::too_many_arguments)]

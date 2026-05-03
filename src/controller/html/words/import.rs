@@ -12,6 +12,9 @@ use crate::{
     controller::html::{okay, render_generic_error, render_template},
     err::{AppError, AppResult, bad_request, forbidden},
     model::{
+        audit_log::{
+            AuditActionType, AuditLogRepository, AuditableResource, CreateAuditLog,
+        },
         definitions::{CreateDefinition, DefinitionRepository},
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
@@ -303,6 +306,11 @@ fn validate_options(opts: &ImportOptions) -> AppResult<()> {
 /// Parse `bytes` as csv per `opts` and import each row as a word + definition into `language`.
 /// Per-row failures are collected in `summary.skipped` rather than aborting; only csv-level
 /// errors, the row cap, or a `Fail` policy hit on an unknown class/category cause an `Err`.
+///
+/// On completion, emits a single audit log entry summarising the import when the
+/// acting user does not have direct editor permission on the language (i.e. is
+/// acting as admin/mod). Editors with direct permission generate no audit log,
+/// matching the per-row semantics of regular word/definition creation.
 pub async fn import_csv_bytes(
     state: &AppState,
     user: &User,
@@ -351,6 +359,26 @@ pub async fn import_csv_bytes(
             Err(RowError::Skip(msg)) => skipped.push((row_num, msg)),
             Err(RowError::Fatal(e)) => return Err(e),
         }
+    }
+
+    let has_direct_edit = LanguagePermissionRepository::new(state.clone())
+        .has_permission(user.id, language.id, PermissionLevel::Editor)
+        .await?;
+    if !has_direct_edit {
+        AuditLogRepository::new(state.clone())
+            .create_internal(CreateAuditLog {
+                user_id: Some(user.id),
+                action: AuditActionType::Imported,
+                resource_type: AuditableResource::Language,
+                resource_id: language.id,
+                details: serde_json::json!({
+                    "language_id": language.id,
+                    "language_code": language.code,
+                    "imported": imported,
+                    "skipped": skipped.len(),
+                }),
+            })
+            .await?;
     }
 
     Ok(ImportSummary { imported, skipped })
@@ -562,13 +590,6 @@ async fn process_row(
     parsed: ParsedRow,
     opts: &ImportOptions,
 ) -> Result<(), RowError> {
-    // Pre-flight: ensure the editor has permission. This is also enforced inside create_with_tx,
-    // but checking once up front avoids spamming the audit log on every row.
-    let _ = LanguagePermissionRepository::new(state.clone())
-        .has_permission(user.id, language.id, PermissionLevel::Editor)
-        .await
-        .map_err(RowError::Fatal)?;
-
     // Lowercase class/category abbreviations before lookup so a CSV "N" matches the default "n".
     // Auto-create also uses the lowercased form, keeping new entries consistent with axismundi's
     // default-lowercase convention.
@@ -620,8 +641,11 @@ async fn process_row(
         categories: Some(categories),
     };
 
+    // Silent variants: the import emits a single summary audit log entry after
+    // the loop completes, and never produces user activity entries. Permission
+    // is enforced once in `load_common` before we reach this point.
     let word_id = match words
-        .create_with_tx(user, language.id, create_word, &mut tx)
+        .create_with_tx_silent(user, language.id, create_word, &mut tx)
         .await
     {
         Ok(id) => id,
@@ -629,7 +653,7 @@ async fn process_row(
     };
 
     if let Err(e) = defs
-        .create_with_tx(
+        .create_with_tx_silent(
             user,
             word_id,
             language.id,
@@ -948,5 +972,154 @@ mod tests {
                 w.notes
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_import_as_owner_creates_no_activities_or_audit_logs() {
+        let (state, user, lang) = setup().await;
+
+        let summary = import_csv_bytes(&state, &user, &lang, SXS, &ImportOptions::defaults())
+            .await
+            .unwrap();
+        assert_eq!(summary.imported, 3);
+
+        // No word- or definition-shaped activity rows from the import. (The
+        // language creation in `setup` writes a single `create_language`
+        // activity, which we ignore here.)
+        let word_activities: i64 = sqlx::query_scalar!(
+            "select count(*) from user_activities
+             where user_id = $1 and entity_type in ('word', 'definition')",
+            user.id
+        )
+        .fetch_one(&state.pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+        assert_eq!(
+            word_activities, 0,
+            "import must not create word/definition activities, got {word_activities}"
+        );
+
+        // The owner has direct editor permission, so no audit log either.
+        let audit_count: i64 = sqlx::query_scalar!(
+            "select count(*) from audit_logs where user_id = $1",
+            user.id
+        )
+        .fetch_one(&state.pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+        assert_eq!(
+            audit_count, 0,
+            "owner-driven import should not create audit logs, got {audit_count}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_import_as_admin_creates_exactly_one_audit_log() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+
+        // Owner who owns the language
+        let owner_username = crate::tests::random_name();
+        let _owner_token =
+            crate::tests::make_authed_user(&owner_username, &app, email_service.clone()).await;
+        let owner_id =
+            sqlx::query_scalar!("select id from users where username = $1", owner_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let user_repo = UserRepository::new(app_state.clone());
+        let owner = user_repo.find_by_id(owner_id).await.unwrap();
+
+        let lang = LanguageRepository::new(app_state.clone())
+            .create(
+                &owner,
+                CreateLanguage {
+                    name: "Test Language".to_string(),
+                    code: crate::tests::random_code(),
+                    description: "import test".to_string(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Admin user with no direct permission on the language
+        let admin_username = crate::tests::random_name();
+        let _admin_token =
+            crate::tests::make_authed_user(&admin_username, &app, email_service.clone()).await;
+        let admin_id =
+            sqlx::query_scalar!("select id from users where username = $1", admin_username)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        sqlx::query!(
+            "insert into user_tags (user_id, tag, hidden) values ($1, 'admin', false)",
+            admin_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let admin = user_repo.find_by_id(admin_id).await.unwrap();
+
+        let summary =
+            import_csv_bytes(&app_state, &admin, &lang, SXS, &ImportOptions::defaults())
+                .await
+                .unwrap();
+        assert_eq!(summary.imported, 3);
+
+        // No activities for admin either.
+        let activity_count: i64 = sqlx::query_scalar!(
+            "select count(*) from user_activities where user_id = $1",
+            admin.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+        assert_eq!(
+            activity_count, 0,
+            "import must not create user_activities, got {activity_count}"
+        );
+
+        // Exactly one audit log entry, of action `imported` against the language.
+        let logs = sqlx::query!(
+            r#"
+                select action as "action: crate::model::audit_log::AuditActionType",
+                       resource_type as "resource_type: crate::model::audit_log::AuditableResource",
+                       resource_id,
+                       details
+                from audit_logs
+                where user_id = $1
+            "#,
+            admin.id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            logs.len(),
+            1,
+            "expected exactly 1 audit log entry, got {}",
+            logs.len()
+        );
+        let log = &logs[0];
+        assert!(matches!(
+            log.action,
+            crate::model::audit_log::AuditActionType::Imported
+        ));
+        assert!(matches!(
+            log.resource_type,
+            crate::model::audit_log::AuditableResource::Language
+        ));
+        assert_eq!(log.resource_id, lang.id);
+        assert_eq!(log.details["imported"], serde_json::json!(3));
+        assert_eq!(log.details["skipped"], serde_json::json!(0));
     }
 }

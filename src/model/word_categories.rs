@@ -64,6 +64,30 @@ impl WordCategoryRepository {
         lang_code: &str,
         word_category: CreateWordCategory,
     ) -> AppResult<WordCategory> {
+        self.create_inner(requestor, lang_code, word_category, false)
+            .await
+    }
+
+    /// Like `create`, but does not write a per-row audit log entry. Intended
+    /// for bulk operations like dictionary import where the caller emits a
+    /// single summary audit log afterwards.
+    pub async fn create_silent(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        word_category: CreateWordCategory,
+    ) -> AppResult<WordCategory> {
+        self.create_inner(requestor, lang_code, word_category, true)
+            .await
+    }
+
+    async fn create_inner(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        word_category: CreateWordCategory,
+        silent: bool,
+    ) -> AppResult<WordCategory> {
         use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
         use crate::model::language_permissions::{
             CheckPermissionReq, LanguagePermissionRepository,
@@ -75,10 +99,6 @@ impl WordCategoryRepository {
 
         let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
         let language = languages.find_by_code(lang_code).await?;
-
-        if &word_category.abbreviation == "search" {
-            return Err(bad_request("cannot use 'search' as abbreviation"));
-        }
 
         if self
             .name_exists_in_language(language.id, &word_category.name)
@@ -116,28 +136,41 @@ impl WordCategoryRepository {
         .await?;
 
         let permissions = LanguagePermissionRepository::new(self.state.clone());
-        let perm_check = permissions
-            .check_permission_with_audit(
-                CheckPermissionReq {
-                    user: requestor.id,
-                    language: language.id,
-                    required_level: PermissionLevel::Editor,
-                    action_type: AuditActionType::Created,
-                    resource_type: AuditableResource::WordCategory,
-                    resource_id: wc_result.id,
-                    context: Some(serde_json::json!({
-                        "name": &word_category.name,
-                        "abbreviation": &word_category.abbreviation,
-                    })),
-                },
-                &mut tx,
-            )
-            .await?;
+        if silent {
+            let has_perm = permissions
+                .has_permission(requestor.id, language.id, PermissionLevel::Editor)
+                .await?;
+            if !has_perm
+                && !crate::util::is_admin_or_mod(&self.state, requestor.id).await?
+            {
+                return Err(bad_request(
+                    "you don't have permission to create word categories",
+                ));
+            }
+        } else {
+            let perm_check = permissions
+                .check_permission_with_audit(
+                    CheckPermissionReq {
+                        user: requestor.id,
+                        language: language.id,
+                        required_level: PermissionLevel::Editor,
+                        action_type: AuditActionType::Created,
+                        resource_type: AuditableResource::WordCategory,
+                        resource_id: wc_result.id,
+                        context: Some(serde_json::json!({
+                            "name": &word_category.name,
+                            "abbreviation": &word_category.abbreviation,
+                        })),
+                    },
+                    &mut tx,
+                )
+                .await?;
 
-        if perm_check == PermissionCheck::NoPermission {
-            return Err(bad_request(
-                "you don't have permission to create word categories",
-            ));
+            if perm_check == PermissionCheck::NoPermission {
+                return Err(bad_request(
+                    "you don't have permission to create word categories",
+                ));
+            }
         }
 
         let slug = crate::model::bookmarks::BookmarkRepository::generate_slug();
@@ -280,7 +313,7 @@ impl WordCategoryRepository {
             return Ok(existing);
         }
 
-        self.create(
+        self.create_silent(
             requestor,
             lang_code,
             CreateWordCategory {

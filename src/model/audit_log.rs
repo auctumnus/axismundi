@@ -56,6 +56,18 @@ pub enum PermissionCheck {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordClassResolved {
+    pub word_class: WordClass,
+    pub language_code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordCategoryResolved {
+    pub word_category: WordCategory,
+    pub language_code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum AuditableResourceResolved {
     User(User),
@@ -63,8 +75,8 @@ pub enum AuditableResourceResolved {
     LanguageFamily(LanguageFamily),
     LanguageFamilyMember(LanguageFamilyMember),
     Word(Word),
-    WordClass(WordClass),
-    WordCategory(WordCategory),
+    WordClass(WordClassResolved),
+    WordCategory(WordCategoryResolved),
     Translation(Translation),
     Translatable(Translatable),
     WordRelation(WordRelation),
@@ -88,6 +100,7 @@ pub enum AuditActionType {
     UserUnban,
     AddTag,
     RemoveTag,
+    Imported,
 }
 
 impl AuditActionType {
@@ -100,6 +113,7 @@ impl AuditActionType {
             AuditActionType::UserUnban => "unbanned",
             AuditActionType::AddTag => "added a tag to",
             AuditActionType::RemoveTag => "removed a tag from",
+            AuditActionType::Imported => "imported into",
         }
     }
 }
@@ -241,17 +255,29 @@ impl AuditLogRepository {
             }
             AuditableResource::WordClass => {
                 let repo = WordClassRepository::new(self.state.clone());
-                repo.find_by_id(resource_id)
+                let word_class = repo.find_by_id(resource_id).await.ok()?;
+                let language = LanguageRepository::new(self.state.clone())
+                    .find_by_id(word_class.language)
                     .await
-                    .ok()
-                    .map(AuditableResourceResolved::WordClass)
+                    .ok()?;
+                Some(AuditableResourceResolved::WordClass(WordClassResolved {
+                    word_class,
+                    language_code: language.code,
+                }))
             }
             AuditableResource::WordCategory => {
                 let repo = WordCategoryRepository::new(self.state.clone());
-                repo.find_by_id(resource_id)
+                let word_category = repo.find_by_id(resource_id).await.ok()?;
+                let language = LanguageRepository::new(self.state.clone())
+                    .find_by_id(word_category.language)
                     .await
-                    .ok()
-                    .map(AuditableResourceResolved::WordCategory)
+                    .ok()?;
+                Some(AuditableResourceResolved::WordCategory(
+                    WordCategoryResolved {
+                        word_category,
+                        language_code: language.code,
+                    },
+                ))
             }
             AuditableResource::Translation => {
                 let repo = TranslationRepository::new(self.state.clone());

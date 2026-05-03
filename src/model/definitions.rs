@@ -120,6 +120,34 @@ impl DefinitionRepository {
         definition: CreateDefinition,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> AppResult<Definition> {
+        self.create_with_tx_inner(requestor, word_id, language_id, definition, tx, false)
+            .await
+    }
+
+    /// Like `create_with_tx`, but skips per-row audit log creation. Intended
+    /// for bulk operations where the caller has already verified permission
+    /// and will emit a single summary audit log entry afterwards.
+    pub async fn create_with_tx_silent(
+        &self,
+        requestor: &User,
+        word_id: Uuid,
+        language_id: Uuid,
+        definition: CreateDefinition,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<Definition> {
+        self.create_with_tx_inner(requestor, word_id, language_id, definition, tx, true)
+            .await
+    }
+
+    async fn create_with_tx_inner(
+        &self,
+        requestor: &User,
+        word_id: Uuid,
+        language_id: Uuid,
+        definition: CreateDefinition,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        silent: bool,
+    ) -> AppResult<Definition> {
         definition.validate()?;
 
         let result = sqlx::query_as!(
@@ -142,29 +170,41 @@ impl DefinitionRepository {
         let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
             self.state.clone(),
         );
-        let perm_check = permissions
-            .check_permission_with_audit(
-                crate::model::language_permissions::CheckPermissionReq {
-                    user: requestor.id,
-                    language: language_id,
-                    required_level: PermissionLevel::Editor,
-                    action_type: crate::model::audit_log::AuditActionType::Created,
-                    resource_type: crate::model::audit_log::AuditableResource::Definition,
-                    resource_id: result.id,
-                    context: Some(serde_json::json!({
-                        "word_id": word_id,
-                        "language_id": language_id,
-                        "definition": definition.definition
-                    })),
-                },
-                tx,
-            )
-            .await?;
 
-        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
-            return Err(bad_request(
-                "you don't have permission to create definitions",
-            ));
+        if silent {
+            let has_perm = permissions
+                .has_permission(requestor.id, language_id, PermissionLevel::Editor)
+                .await?;
+            if !has_perm && !crate::util::is_admin_or_mod(&self.state, requestor.id).await? {
+                return Err(bad_request(
+                    "you don't have permission to create definitions",
+                ));
+            }
+        } else {
+            let perm_check = permissions
+                .check_permission_with_audit(
+                    crate::model::language_permissions::CheckPermissionReq {
+                        user: requestor.id,
+                        language: language_id,
+                        required_level: PermissionLevel::Editor,
+                        action_type: crate::model::audit_log::AuditActionType::Created,
+                        resource_type: crate::model::audit_log::AuditableResource::Definition,
+                        resource_id: result.id,
+                        context: Some(serde_json::json!({
+                            "word_id": word_id,
+                            "language_id": language_id,
+                            "definition": definition.definition
+                        })),
+                    },
+                    tx,
+                )
+                .await?;
+
+            if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+                return Err(bad_request(
+                    "you don't have permission to create definitions",
+                ));
+            }
         }
 
         Ok(result)

@@ -243,6 +243,33 @@ impl WordRepository {
         word: CreateWord,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> AppResult<Uuid> {
+        self.create_with_tx_inner(requestor, language, word, tx, false)
+            .await
+    }
+
+    /// Like `create_with_tx`, but does not write a per-row audit log entry
+    /// or a user activity entry. Intended for bulk operations (e.g. dictionary
+    /// import) where the caller has already verified permission and will
+    /// emit a single summary audit log entry afterwards.
+    pub async fn create_with_tx_silent(
+        &self,
+        requestor: &User,
+        language: Uuid,
+        word: CreateWord,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<Uuid> {
+        self.create_with_tx_inner(requestor, language, word, tx, true)
+            .await
+    }
+
+    async fn create_with_tx_inner(
+        &self,
+        requestor: &User,
+        language: Uuid,
+        word: CreateWord,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        silent: bool,
+    ) -> AppResult<Uuid> {
         word.validate()?;
 
         ensure_verified(requestor)?;
@@ -298,26 +325,35 @@ impl WordRepository {
         .execute(&mut **tx)
         .await?;
 
-        let perm_check = permissions
-            .check_permission_with_audit(
-                crate::model::language_permissions::CheckPermissionReq {
-                    user: requestor.id,
-                    language,
-                    required_level: PermissionLevel::Editor,
-                    action_type: crate::model::audit_log::AuditActionType::Created,
-                    resource_type: crate::model::audit_log::AuditableResource::Word,
-                    resource_id: word_result.id,
-                    context: Some(serde_json::json!({
-                        "language_id": language,
-                        "word": word.word
-                    })),
-                },
-                tx,
-            )
-            .await?;
+        if silent {
+            let has_perm = permissions
+                .has_permission(requestor.id, language, PermissionLevel::Editor)
+                .await?;
+            if !has_perm && !crate::util::is_admin_or_mod(&self.state, requestor.id).await? {
+                return Err(bad_request("you don't have permission to create words"));
+            }
+        } else {
+            let perm_check = permissions
+                .check_permission_with_audit(
+                    crate::model::language_permissions::CheckPermissionReq {
+                        user: requestor.id,
+                        language,
+                        required_level: PermissionLevel::Editor,
+                        action_type: crate::model::audit_log::AuditActionType::Created,
+                        resource_type: crate::model::audit_log::AuditableResource::Word,
+                        resource_id: word_result.id,
+                        context: Some(serde_json::json!({
+                            "language_id": language,
+                            "word": word.word
+                        })),
+                    },
+                    tx,
+                )
+                .await?;
 
-        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
-            return Err(bad_request("you don't have permission to create words"));
+            if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+                return Err(bad_request("you don't have permission to create words"));
+            }
         }
 
         if !category_ids.is_empty() {
@@ -328,23 +364,26 @@ impl WordRepository {
                 .await?;
         }
 
-        // Create activity if language is public
-        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
-        let lang = lang_repo.find_by_id(language).await?;
-        if !lang.private {
-            let activity_repo =
-                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo
-                .create_with_tx(
-                    requestor.id,
-                    crate::model::user_activities::ActivityType::CreateWord,
-                    word_result.id,
-                    "word",
-                    Some(language),
-                    Some("language"),
-                    tx,
-                )
-                .await?;
+        if !silent {
+            // Create activity if language is public
+            let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
+            let lang = lang_repo.find_by_id(language).await?;
+            if !lang.private {
+                let activity_repo = crate::model::user_activities::UserActivityRepository::new(
+                    self.state.clone(),
+                );
+                let _activity = activity_repo
+                    .create_with_tx(
+                        requestor.id,
+                        crate::model::user_activities::ActivityType::CreateWord,
+                        word_result.id,
+                        "word",
+                        Some(language),
+                        Some("language"),
+                        tx,
+                    )
+                    .await?;
+            }
         }
 
         Ok(word_result.id)

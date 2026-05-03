@@ -8,6 +8,7 @@ use itertools::MultiUnzip;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::search::build_categories_json;
 use crate::{
     attempt,
     controller::html::{okay, render_template, words::estimate_ipa},
@@ -101,20 +102,6 @@ pub(super) struct EditWordFormData {
     pub(super) categories: Vec<String>,
     pub(super) ipa: Option<String>,
     pub(super) notes: Option<String>,
-}
-
-fn build_categories_json(categories: &[WordCategory]) -> String {
-    let items: Vec<serde_json::Value> = categories
-        .iter()
-        .map(|c| {
-            serde_json::json!({
-                "id": c.id,
-                "name": c.name,
-                "abbreviation": c.abbreviation,
-            })
-        })
-        .collect();
-    serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
 }
 
 #[allow(dead_code)]
