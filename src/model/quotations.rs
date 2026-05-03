@@ -1055,6 +1055,7 @@ mod tests {
                     ipa: None,
                     notes: Some("test notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await
@@ -1217,6 +1218,7 @@ mod tests {
                     ipa: None,
                     notes: Some("test notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await
@@ -1398,6 +1400,7 @@ mod tests {
                     ipa: None,
                     notes: Some("test notes".to_string()),
                     extra: None,
+                    categories: None,
                 },
             )
             .await

@@ -80,11 +80,11 @@ form.default, .modal-inner-container {
         }
       }
     }
+  }
 
-    .hint {
-      font-size: 0.85rem;
-      color: var(--foreground-secondary);
-    }
+  .hint {
+    font-size: 0.85rem;
+    color: var(--foreground-secondary);
   }
 
   ul.field-errors {
@@ -178,10 +178,52 @@ form.default, .modal-inner-container {
     }
   }
 
-  label:has(input[type="checkbox"]) {
+  label:has(input[type="checkbox"], input[type="radio"]) {
     display: flex;
     flex-direction: row;
     gap: 0.5rem;
+    margin-top: .5rem;
+    align-items: center;
+  }
+
+  input[type="radio"] {
+    appearance: none;
+
+    width: 1rem;
+    height: 1rem;
+    border: .15rem solid var(--input-border);
+    border-radius: 100%;
+    background-color: transparent;
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transition: border-color var(--duration-fast) ease-in-out, background-color var(--duration-fast) ease-in-out;
+
+    &:checked {
+      border: .15rem solid var(--input-border-focus);
+    }
+
+    &::before {
+      width: .45rem;
+      height: .45rem;
+      content: "";
+      display: block;
+      border-radius: 100%;
+      background-color: transparent;
+      transition: background-color var(--duration-fast) ease-in-out;
+    }
+
+    &:checked::before {
+      background-color: var(--input-border-focus);
+    }
+
+    &:focus {
+      outline: 2px solid var(--focus-ring);
+      border-color: var(--input-border-focus);
+    }
   }
 
   .select-container {
@@ -436,6 +478,16 @@ section.search-controls {
 
   h2 {
     margin-top: 0;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    h2 {
+      margin-bottom: 0;
+    }
   }
 }
 

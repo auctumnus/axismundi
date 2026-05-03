@@ -64,6 +64,28 @@ impl WordClassRepository {
         lang_code: &str,
         word_class: CreateWordClass,
     ) -> AppResult<WordClass> {
+        self.create_inner(requestor, lang_code, word_class, false).await
+    }
+
+    /// Like `create`, but does not write a per-row audit log entry. Intended
+    /// for bulk operations like dictionary import where the caller emits a
+    /// single summary audit log afterwards.
+    pub async fn create_silent(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        word_class: CreateWordClass,
+    ) -> AppResult<WordClass> {
+        self.create_inner(requestor, lang_code, word_class, true).await
+    }
+
+    async fn create_inner(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        word_class: CreateWordClass,
+        silent: bool,
+    ) -> AppResult<WordClass> {
         use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
         use crate::model::language_permissions::{
             CheckPermissionReq, LanguagePermissionRepository,
@@ -115,30 +137,42 @@ impl WordClassRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        // Check permission with audit
         let permissions = LanguagePermissionRepository::new(self.state.clone());
-        let perm_check = permissions
-            .check_permission_with_audit(
-                CheckPermissionReq {
-                    user: requestor.id,
-                    language: language.id,
-                    required_level: PermissionLevel::Editor,
-                    action_type: AuditActionType::Created,
-                    resource_type: AuditableResource::WordClass,
-                    resource_id: wc_result.id,
-                    context: Some(serde_json::json!({
-                        "name": &word_class.name,
-                        "abbreviation": &word_class.abbreviation,
-                    })),
-                },
-                &mut tx,
-            )
-            .await?;
+        if silent {
+            let has_perm = permissions
+                .has_permission(requestor.id, language.id, PermissionLevel::Editor)
+                .await?;
+            if !has_perm
+                && !crate::util::is_admin_or_mod(&self.state, requestor.id).await?
+            {
+                return Err(bad_request(
+                    "you don't have permission to create word classes",
+                ));
+            }
+        } else {
+            let perm_check = permissions
+                .check_permission_with_audit(
+                    CheckPermissionReq {
+                        user: requestor.id,
+                        language: language.id,
+                        required_level: PermissionLevel::Editor,
+                        action_type: AuditActionType::Created,
+                        resource_type: AuditableResource::WordClass,
+                        resource_id: wc_result.id,
+                        context: Some(serde_json::json!({
+                            "name": &word_class.name,
+                            "abbreviation": &word_class.abbreviation,
+                        })),
+                    },
+                    &mut tx,
+                )
+                .await?;
 
-        if perm_check == PermissionCheck::NoPermission {
-            return Err(bad_request(
-                "you don't have permission to create word classes",
-            ));
+            if perm_check == PermissionCheck::NoPermission {
+                return Err(bad_request(
+                    "you don't have permission to create word classes",
+                ));
+            }
         }
 
         // Generate and insert bookmark
@@ -219,6 +253,70 @@ impl WordClassRepository {
             language
         )
         .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    /// Look up a class by abbreviation; if missing, look up by name (treating the abbreviation
+    /// as a candidate name); if still missing, create one with `name = abbreviation = abbreviation`.
+    /// Used by the csv importer's auto-create path. Commits its own transaction, so the caller's
+    /// later `find_by_abbreviation` lookups (which use the pool) will see it.
+    pub async fn find_or_create_by_abbreviation(
+        &self,
+        requestor: &User,
+        lang_code: &str,
+        abbreviation: &str,
+    ) -> AppResult<WordClass> {
+        use axum::http::StatusCode;
+        let languages = crate::model::languages::LanguageRepository::new(self.state.clone());
+        let language = languages.find_by_code(lang_code).await?;
+
+        match self.find_by_abbreviation(&language.id, abbreviation).await {
+            Ok(existing) => return Ok(existing),
+            Err(e) if e.status_code == StatusCode::NOT_FOUND => {}
+            Err(e) => return Err(e),
+        }
+
+        if let Some(existing) = self.find_by_name(language.id, abbreviation).await? {
+            return Ok(existing);
+        }
+
+        self.create_silent(
+            requestor,
+            lang_code,
+            CreateWordClass {
+                name: abbreviation.to_string(),
+                abbreviation: abbreviation.to_string(),
+                notes: None,
+            },
+        )
+        .await
+    }
+
+    async fn find_by_name(&self, language: Uuid, name: &str) -> AppResult<Option<WordClass>> {
+        let result = sqlx::query_as!(
+            WordClass,
+            r#"
+                SELECT
+                    word_classes.id,
+                    word_classes.language,
+                    word_classes.name,
+                    word_classes.abbreviation,
+                    word_classes.notes,
+                    word_classes.created_at,
+                    word_classes.updated_at,
+                    word_classes.created_by,
+                    word_classes.updated_by,
+                    COALESCE(bookmarks.slug, '')::text as "bookmark!"
+                FROM word_classes
+                LEFT JOIN bookmarks ON bookmarks.item = word_classes.id AND bookmarks.resource = 'word_class'
+                WHERE word_classes.language = $1 AND word_classes.name = $2
+            "#,
+            language,
+            name
+        )
+        .fetch_optional(&self.state.pool)
         .await?;
 
         Ok(result)

@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}import results - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>import results</h1>
+
+{% if total_rows == 0 %}
+    <p>no rows found in the uploaded file.</p>
+{% else %}
+    <p>imported <strong>{{ imported }}</strong> of {{ total_rows }} rows into <strong>{{ language.name }}</strong>!</p>
+{% endif %}
+
+{% if !skipped.is_empty() %}
+    <h2>skipped rows</h2>
+    <p class="hint">{{ skipped.len() }} row{% if skipped.len() != 1 %}s{% endif %} could not be imported:</p>
+    <table class="default">
+        <thead>
+            <tr>
+                <th scope="col">row</th>
+                <th scope="col">reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for (row_num, reason) in skipped %}
+                <tr>
+                    <td>{{ row_num }}</td>
+                    <td>{{ reason }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+<ul class="actions">
+    <li><a href="/languages/{{ language.code }}/import-words">import another file</a></li>
+    <li><a href="/languages/{{ language.code }}/words">view words</a></li>
+</ul>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

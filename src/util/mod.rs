@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    err::{AppError, AppResult, internal_error}, md::render_md, model::users::User, pagination::PaginatedRequest
+    err::{AppError, AppResult, internal_error},
+    md::render_md,
+    model::users::User,
+    pagination::PaginatedRequest,
 };
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -223,9 +226,7 @@ pub fn relative_time(timestamp: &chrono::DateTime<Utc>) -> String {
 }
 
 pub fn strip(text: &str) -> String {
-    ammonia::Builder::empty()
-        .clean(text)
-        .to_string()
+    ammonia::Builder::empty().clean(text).to_string()
 }
 
 pub fn first_sentence(text: &str) -> String {
@@ -239,8 +240,8 @@ pub fn first_sentence(text: &str) -> String {
 }
 
 pub fn serialize_search<T: Serialize>(pagination: &PaginatedRequest, query: T) -> String {
-    let q = serde_urlencoded::to_string(query).unwrap_or_default();
-    let p = serde_urlencoded::to_string(pagination).unwrap_or_default();
+    let q = serde_html_form::to_string(query).unwrap_or_default();
+    let p = serde_html_form::to_string(pagination).unwrap_or_default();
     if q.is_empty() {
         p
     } else if p.is_empty() {

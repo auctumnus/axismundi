@@ -1,8 +1,8 @@
-use axum_extra::extract::multipart::MultipartError;
 use crate::{
     config::CONFIG,
     err::{AppError, AppResult, bad_request, internal_error},
 };
+use axum_extra::extract::multipart::MultipartError;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use s3::{Bucket, Region, creds::Credentials};
 use std::sync::LazyLock;

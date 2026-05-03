@@ -28,7 +28,13 @@
   }
 }
 
-.english-content, .source-content, .description-content, .translated-content, .ipa-content, .gloss-content, .notes-content {
+.english-content,
+.source-content,
+.description-content,
+.translated-content,
+.ipa-content,
+.gloss-content,
+.notes-content {
   display: none;
 }
 
@@ -41,7 +47,6 @@
 .tabs:has(#notes-tab:checked) .notes-content {
   display: block;
 }
-
 
 .tabs:has(#english-tab:checked) label[for="english-tab"],
 .tabs:has(#source-tab:checked) label[for="source-tab"],

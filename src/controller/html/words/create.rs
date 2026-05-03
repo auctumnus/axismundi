@@ -7,6 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::search::build_categories_json;
 use crate::{
     attempt,
     controller::html::{okay, render_template, words::estimate_ipa},
@@ -18,6 +19,7 @@ use crate::{
         languages::{Language, LanguageRepository},
         sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
         users::User,
+        word_categories::{WordCategory, WordCategoryRepository},
         word_classes::{WordClass, WordClassRepository},
         word_relations::{CreateWordRelation, WordRelationRepository, WordRelationType},
         words::{CreateWord, Word, WordRepository, WordWithMeta},
@@ -33,6 +35,9 @@ struct NewWordTemplate {
     error: Option<crate::err::AppError>,
     language: Language,
     word_classes: Vec<WordClass>,
+    word_categories: Vec<WordCategory>,
+    selected_category_abbrevs: Vec<String>,
+    word_categories_json: String,
     previous_word: String,
     previous_word_class: String,
     previous_definition: String,
@@ -81,6 +86,8 @@ pub(super) struct NewWordPrefill {
     pub definitions: Vec<String>,
     #[serde(default, rename = "contexts[]")]
     pub contexts: Vec<String>,
+    #[serde(default, rename = "categories[]")]
+    pub categories: Vec<String>,
     pub antecedent_bookmark: Option<String>,
     pub relation_kind: Option<WordRelationType>,
 }
@@ -93,6 +100,8 @@ pub(super) struct NewWordFormData {
     pub(super) definitions: Vec<String>,
     #[serde(default, rename = "contexts[]")]
     pub(super) contexts: Vec<String>,
+    #[serde(default, rename = "categories[]")]
+    pub(super) categories: Vec<String>,
     pub(super) ipa: Option<String>,
     pub(super) notes: Option<String>,
     pub(super) antecedent_bookmark: Option<String>,
@@ -138,6 +147,7 @@ struct CreateCommon {
     current_user: User,
     language: Language,
     word_classes_list: Vec<WordClass>,
+    word_categories_list: Vec<WordCategory>,
     ipa_estimator: Option<SoundChangeSet>,
     antecedent: Option<WordWithMeta>,
     can_edit_language: bool,
@@ -155,12 +165,14 @@ async fn create_common(
     let languages = LanguageRepository::new(state.clone());
     let permissions = LanguagePermissionRepository::new(state.clone());
     let word_classes = WordClassRepository::new(state.clone());
+    let word_categories = WordCategoryRepository::new(state.clone());
 
     let Some(current_user) = s.user().cloned() else {
         return Err(forbidden(""));
     };
     let language = languages.find_by_code(language_code).await?;
     let word_classes_list = word_classes.list_all(language.id).await?;
+    let word_categories_list = word_categories.list_all(language.id).await?;
     let ipa_estimator = languages.get_ipa_estimator(language.id).await?;
     let antecedent = lookup_antecedent(state, antecedent_bookmark, &current_user).await;
 
@@ -181,6 +193,7 @@ async fn create_common(
         can_delete_language,
         will_create_audit_log,
         word_classes_list,
+        word_categories_list,
         ipa_estimator,
     });
 }
@@ -196,6 +209,7 @@ pub(super) async fn new_word(
         current_user,
         language,
         word_classes_list,
+        word_categories_list,
         ipa_estimator,
         antecedent,
         can_edit_language,
@@ -229,11 +243,16 @@ pub(super) async fn new_word(
         },
     };
 
+    let word_categories_json = build_categories_json(&word_categories_list);
+
     let template = NewWordTemplate {
         current_user: Some(current_user),
         error,
         language,
         word_classes: word_classes_list,
+        word_categories: word_categories_list,
+        selected_category_abbrevs: prefill.categories,
+        word_categories_json,
 
         previous_word: prefill.word.unwrap_or_default(),
         previous_word_class: prefill.word_class.unwrap_or_default(),
@@ -307,6 +326,7 @@ pub(super) async fn new_word_submit(
         current_user,
         language,
         word_classes_list,
+        word_categories_list,
         ipa_estimator,
         antecedent,
         can_edit_language,
@@ -335,6 +355,7 @@ pub(super) async fn new_word_submit(
     // for `create_definitions`.
     let definitions_for_err = form.definitions.clone();
     let contexts_for_err = form.contexts.clone();
+    let categories_for_err = form.categories.clone();
 
     let render_err = |error: AppError| {
         let previous_definitions_json =
@@ -348,11 +369,16 @@ pub(super) async fn new_word_submit(
             &previous_contexts,
         );
 
+        let word_categories_json = build_categories_json(&word_categories_list);
+
         let template = NewWordTemplate {
             current_user: Some(current_user.clone()),
             error: Some(error),
             language: language.clone(),
             word_classes: word_classes_list,
+            word_categories: word_categories_list,
+            selected_category_abbrevs: categories_for_err.clone(),
+            word_categories_json,
             previous_word: form.word.clone(),
             previous_word_class: form.word_class.clone(),
             previous_definition,
@@ -426,6 +452,7 @@ pub(super) async fn new_word_submit(
         ipa: form.ipa.clone(),
         notes: form.notes.clone(),
         extra: None,
+        categories: Some(form.categories.clone()),
     };
 
     let result = create_word_and_definitions(
@@ -463,6 +490,7 @@ pub(super) async fn estimate_ipa_new_word(
         current_user,
         language,
         word_classes_list,
+        word_categories_list,
         ipa_estimator,
         antecedent,
         can_edit_language,
@@ -496,6 +524,9 @@ pub(super) async fn estimate_ipa_new_word(
         &previous_contexts,
     );
 
+    let selected_category_abbrevs = form.categories.clone();
+    let word_categories_json = build_categories_json(&word_categories_list);
+
     let estimated_ipa = if let Some(estimator) = &ipa_estimator {
         match estimate_ipa(sets, &estimator.id, &form.word).await {
             Ok(ipa) => Some(ipa),
@@ -505,6 +536,9 @@ pub(super) async fn estimate_ipa_new_word(
                     error: Some(error),
                     language,
                     word_classes: word_classes_list,
+                    word_categories: word_categories_list,
+                    selected_category_abbrevs,
+                    word_categories_json,
 
                     previous_word: form.word,
                     previous_word_class: form.word_class,
@@ -538,6 +572,9 @@ pub(super) async fn estimate_ipa_new_word(
         error,
         language,
         word_classes: word_classes_list,
+        word_categories: word_categories_list,
+        selected_category_abbrevs,
+        word_categories_json,
 
         previous_word: form.word,
         previous_word_class: form.word_class,

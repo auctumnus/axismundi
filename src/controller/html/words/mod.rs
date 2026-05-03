@@ -4,19 +4,20 @@ mod derive;
 mod derive_or_loan;
 mod edit;
 mod fragments;
+mod import;
 mod loan;
 mod search;
 mod view;
 
 pub use fragments::*;
 
-use axum::Router;
+use axum::{Router, extract::DefaultBodyLimit};
 use uuid::Uuid;
 
 use crate::{
     err::{AppError, AppResult, bad_request},
     model::sound_change_sets::SoundChangeSetRepository,
-    util::AppState,
+    util::{AppState, s3::MAX_UPLOAD_SIZE},
 };
 
 use axum::routing::{get, post};
@@ -102,6 +103,18 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/languages/{language}/words/{slug}/{lemma}/loan",
             post(loan::loan_submit),
+        )
+        .route(
+            "/languages/{language}/import-words",
+            get(import::import_form),
+        )
+        .merge(
+            Router::<AppState>::new()
+                .route(
+                    "/languages/{language}/import-words",
+                    post(import::import_submit),
+                )
+                .layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)),
         );
 
     let normal_routes = Router::<AppState>::new()

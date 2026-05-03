@@ -11,3 +11,39 @@
         {% call u::icon("chevron-down") %}
     </div>
 </section>
+
+{% if !word_categories.is_empty() %}
+<link rel="stylesheet" href="/static/components/async-select.css">
+<section>
+    <label for="word_categories">Categories</label>
+    <div id="word-categories-mount" class="async-multi-select-mount"
+         data-input-id="word_categories"
+         data-input-name="categories[]">
+        <select multiple id="word_categories" name="categories[]">
+            {% for c in word_categories %}
+                <option value="{{ c.abbreviation }}"
+                  {% if selected_category_abbrevs.contains(&c.abbreviation) %}selected{% endif %}>
+                    {{ c.name }} ({{ c.abbreviation }})
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+</section>
+<script type="module" src="/static/word-categories-multiselect.js"></script>
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountWordCategoriesMultiselect) {
+      const allOptions = JSON.parse(document.getElementById('word-categories-options').textContent);
+      const initialSelected = JSON.parse(document.getElementById('word-categories-selected').textContent);
+      window.mountWordCategoriesMultiselect('word-categories-mount', {
+        inputId: 'word_categories',
+        inputName: 'categories[]',
+        allOptions,
+        initialSelectedAbbrevs: initialSelected,
+      });
+    }
+  });
+</script>
+<script type="application/json" id="word-categories-options">{{ word_categories_json | safe }}</script>
+<script type="application/json" id="word-categories-selected">{{ selected_category_abbrevs | json | safe }}</script>
+{% endif %}

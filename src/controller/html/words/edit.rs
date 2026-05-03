@@ -8,6 +8,7 @@ use itertools::MultiUnzip;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::search::build_categories_json;
 use crate::{
     attempt,
     controller::html::{okay, render_template, words::estimate_ipa},
@@ -19,6 +20,7 @@ use crate::{
         languages::{Language, LanguageRepository},
         sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
         users::User,
+        word_categories::{WordCategory, WordCategoryRepository},
         word_classes::{WordClass, WordClassRepository},
         words::{Word, WordRepository},
     },
@@ -35,6 +37,9 @@ struct EditWordTemplate {
     language: crate::model::languages::Language,
     word: Word,
     word_classes: Vec<WordClass>,
+    word_categories: Vec<WordCategory>,
+    selected_category_abbrevs: Vec<String>,
+    word_categories_json: String,
     previous_word: String,
     previous_word_class: Option<String>,
     previous_definitions: Vec<String>,
@@ -93,6 +98,8 @@ pub(super) struct EditWordFormData {
     pub(super) contexts: Vec<String>,
     #[serde(default, rename = "definition_ids[]")]
     pub(super) definition_ids: Vec<String>,
+    #[serde(default, rename = "categories[]")]
+    pub(super) categories: Vec<String>,
     pub(super) ipa: Option<String>,
     pub(super) notes: Option<String>,
 }
@@ -103,6 +110,8 @@ struct EditCommon {
     language: Language,
     word: Word,
     word_classes_list: Vec<WordClass>,
+    word_categories_list: Vec<WordCategory>,
+    current_category_abbrevs: Vec<String>,
     ipa_estimator: Option<SoundChangeSet>,
     can_edit_language: bool,
     can_delete_language: bool,
@@ -119,6 +128,7 @@ async fn edit_common(
     let languages = LanguageRepository::new(state.clone());
     let permissions = LanguagePermissionRepository::new(state.clone());
     let word_classes = WordClassRepository::new(state.clone());
+    let word_categories = WordCategoryRepository::new(state.clone());
     let words = WordRepository::new(state.clone());
 
     let Some(current_user) = s.user().cloned() else {
@@ -129,6 +139,13 @@ async fn edit_common(
         .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
         .await?;
     let word_classes_list = word_classes.list_all(language.id).await?;
+    let word_categories_list = word_categories.list_all(language.id).await?;
+    let current_category_abbrevs = word_categories
+        .list_by_word(word.id, None)
+        .await?
+        .into_iter()
+        .map(|c| c.abbreviation)
+        .collect();
     let ipa_estimator = languages.get_ipa_estimator(language.id).await?;
 
     let can_edit_language = permissions
@@ -145,6 +162,8 @@ async fn edit_common(
         language,
         word,
         word_classes_list,
+        word_categories_list,
+        current_category_abbrevs,
         ipa_estimator,
         can_edit_language,
         can_delete_language,
@@ -163,6 +182,8 @@ pub(super) async fn edit_word(
         language,
         word,
         word_classes_list,
+        word_categories_list,
+        current_category_abbrevs,
         ipa_estimator,
         can_edit_language: user_has_permission,
         will_create_audit_log,
@@ -200,12 +221,17 @@ pub(super) async fn edit_word(
         &previous_definition_ids,
     );
 
+    let word_categories_json = build_categories_json(&word_categories_list);
+
     let template = EditWordTemplate {
         current_user: Some(current_user),
         error: None,
         language,
         word: word.clone(),
         word_classes: word_classes_list,
+        word_categories: word_categories_list,
+        selected_category_abbrevs: current_category_abbrevs,
+        word_categories_json,
         previous_word: word.word,
         previous_word_class: word.word_class_abbreviation,
         previous_definitions,
@@ -237,6 +263,7 @@ pub(super) async fn edit_word_submit(
         language,
         word,
         word_classes_list,
+        word_categories_list,
         ipa_estimator,
         can_edit_language: user_has_permission,
         will_create_audit_log,
@@ -250,12 +277,16 @@ pub(super) async fn edit_word_submit(
         let definitions_json =
             build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
         let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
+        let word_categories_json = build_categories_json(&word_categories_list);
         let template = EditWordTemplate {
             current_user: Some(current_user.clone()),
             error: Some(error),
             language: language.clone(),
             word: word.clone(),
             word_classes: word_classes_list,
+            word_categories: word_categories_list,
+            selected_category_abbrevs: form.categories.clone(),
+            word_categories_json,
             previous_word: form.word.clone(),
             previous_word_class: Some(form.word_class.clone()),
             previous_definitions: form.definitions.clone(),
@@ -302,6 +333,7 @@ pub(super) async fn edit_word_submit(
         ipa: form.ipa.clone(),
         notes: form.notes.clone(),
         extra: None,
+        categories: Some(form.categories.clone()),
     };
 
     let result = async {
@@ -426,11 +458,15 @@ pub(super) async fn estimate_ipa_submit(
         will_create_audit_log_for_language(&state, &user, language.id).await;
 
     let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let word_categories_repo =
+        crate::model::word_categories::WordCategoryRepository::new(state.clone());
+    let word_categories_list = attempt!(s, word_categories_repo.list_all(language.id).await);
     let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
     let definitions_json =
         build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
     let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
+    let word_categories_json = build_categories_json(&word_categories_list);
 
     let estimated_ipa = match &ipa_estimator {
         Some(scs) => match estimate_ipa(sets, &scs.id, &form.word).await {
@@ -443,6 +479,9 @@ pub(super) async fn estimate_ipa_submit(
                     language,
                     word,
                     word_classes: word_classes_list,
+                    word_categories: word_categories_list,
+                    selected_category_abbrevs: form.categories.clone(),
+                    word_categories_json,
                     previous_word: form.word.clone(),
                     previous_word_class: Some(form.word_class.clone()),
                     previous_definitions: form.definitions.clone(),
@@ -470,6 +509,9 @@ pub(super) async fn estimate_ipa_submit(
         language,
         word,
         word_classes: word_classes_list,
+        word_categories: word_categories_list,
+        selected_category_abbrevs: form.categories.clone(),
+        word_categories_json,
         previous_word: form.word.clone(),
         previous_word_class: Some(form.word_class.clone()),
         previous_definitions: form.definitions.clone(),

@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}delete {{ word_category.name }}? - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>delete word category</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}/delete">
+    <section>
+        <p>Are you sure you want to delete the word category <strong>{{ word_category.name }}</strong> ({{ word_category.abbreviation }})?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete word category</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}" class="breadcrumb">{{ word_category.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

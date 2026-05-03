@@ -19,6 +19,7 @@ use crate::model::translatable::Translatable;
 use crate::model::translations::Translation;
 use crate::model::user_tags::UserTagRepository;
 use crate::model::users::User;
+use crate::model::word_categories::WordCategory;
 use crate::model::word_classes::WordClass;
 use crate::model::word_relations::WordRelation;
 use crate::model::words::Word;
@@ -35,6 +36,7 @@ pub enum AuditableResource {
     LanguageFamilyMember,
     Word,
     WordClass,
+    WordCategory,
     Translation,
     Translatable,
     WordRelation,
@@ -54,6 +56,18 @@ pub enum PermissionCheck {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordClassResolved {
+    pub word_class: WordClass,
+    pub language_code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordCategoryResolved {
+    pub word_category: WordCategory,
+    pub language_code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum AuditableResourceResolved {
     User(User),
@@ -61,7 +75,8 @@ pub enum AuditableResourceResolved {
     LanguageFamily(LanguageFamily),
     LanguageFamilyMember(LanguageFamilyMember),
     Word(Word),
-    WordClass(WordClass),
+    WordClass(WordClassResolved),
+    WordCategory(WordCategoryResolved),
     Translation(Translation),
     Translatable(Translatable),
     WordRelation(WordRelation),
@@ -85,6 +100,7 @@ pub enum AuditActionType {
     UserUnban,
     AddTag,
     RemoveTag,
+    Imported,
 }
 
 impl AuditActionType {
@@ -97,6 +113,7 @@ impl AuditActionType {
             AuditActionType::UserUnban => "unbanned",
             AuditActionType::AddTag => "added a tag to",
             AuditActionType::RemoveTag => "removed a tag from",
+            AuditActionType::Imported => "imported into",
         }
     }
 }
@@ -194,6 +211,7 @@ impl AuditLogRepository {
         use crate::model::translatable::TranslatableRepository;
         use crate::model::translations::TranslationRepository;
         use crate::model::users::UserRepository;
+        use crate::model::word_categories::WordCategoryRepository;
         use crate::model::word_classes::WordClassRepository;
         use crate::model::words::WordRepository;
 
@@ -237,10 +255,29 @@ impl AuditLogRepository {
             }
             AuditableResource::WordClass => {
                 let repo = WordClassRepository::new(self.state.clone());
-                repo.find_by_id(resource_id)
+                let word_class = repo.find_by_id(resource_id).await.ok()?;
+                let language = LanguageRepository::new(self.state.clone())
+                    .find_by_id(word_class.language)
                     .await
-                    .ok()
-                    .map(AuditableResourceResolved::WordClass)
+                    .ok()?;
+                Some(AuditableResourceResolved::WordClass(WordClassResolved {
+                    word_class,
+                    language_code: language.code,
+                }))
+            }
+            AuditableResource::WordCategory => {
+                let repo = WordCategoryRepository::new(self.state.clone());
+                let word_category = repo.find_by_id(resource_id).await.ok()?;
+                let language = LanguageRepository::new(self.state.clone())
+                    .find_by_id(word_category.language)
+                    .await
+                    .ok()?;
+                Some(AuditableResourceResolved::WordCategory(
+                    WordCategoryResolved {
+                        word_category,
+                        language_code: language.code,
+                    },
+                ))
             }
             AuditableResource::Translation => {
                 let repo = TranslationRepository::new(self.state.clone());

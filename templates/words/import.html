@@ -1,0 +1,162 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}import csv - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+<h1>import words from csv</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/languages/{{ language.code }}/import-words" enctype="multipart/form-data">
+    <section>
+        <label for="file">CSV file</label>
+        <input type="file" id="file" name="file" accept=".csv,text/csv" required>
+        <div class="hint">maximum file size: 5mb, maximum rows: 10000</div>
+    </section>
+
+    <fieldset>
+        <legend>
+            <h2>Format</h2>
+        </legend>
+
+        <section>
+            <label for="separator">Separator</label>
+            <div class="select-container">
+                <select id="separator" name="separator">
+                    <option value="comma" {% if options.separator == SeparatorChoice::Comma %}selected{% endif %}>comma (,)</option>
+                    <option value="tab" {% if options.separator == SeparatorChoice::Tab %}selected{% endif %}>tab</option>
+                    <option value="semicolon" {% if options.separator == SeparatorChoice::Semicolon %}selected{% endif %}>semicolon (;)</option>
+                </select>
+                {% call u::icon("chevron-down") %}
+            </div>
+        </section>
+
+        <section>
+            <label for="quote">Quote character</label>
+            <div class="select-container">
+                <select id="quote" name="quote">
+                    <option value="double" {% if options.quote == QuoteChoice::Double %}selected{% endif %}>double quote (")</option>
+                    <option value="single" {% if options.quote == QuoteChoice::Single %}selected{% endif %}>single quote (')</option>
+                    <option value="none" {% if options.quote == QuoteChoice::None %}selected{% endif %}>none</option>
+                </select>
+                {% call u::icon("chevron-down") %}
+            </div>
+        </section>
+
+        <section>
+            <label>
+                <input type="checkbox" name="has_header" value="on" {% if options.has_header %}checked{% endif %}>
+                first row is a header (skip it)
+            </label>
+        </section>
+    </fieldset>
+
+    <fieldset>
+        <legend>
+            <h2>Column mapping</h2>
+        </legend>
+
+        <section>
+            <label for="col_word">Word column index</label>
+            <input type="text" id="col_word" name="col_word" min="1" step="1"
+                {% if let Some(v) = options.col_word %}value="{{ v + 1 }}"{% endif %}>
+            <span class="hint">which column contains the word?</span>
+        </section>
+
+        <section>
+            <label for="col_definition">Definition column index</label>
+            <input type="text" id="col_definition" name="col_definition" min="1" step="1"
+                {% if let Some(v) = options.col_definition %}value="{{ v + 1 }}"{% endif %}>
+            <span class="hint">which column contains the definition?</span>
+        </section>
+
+        <section>
+            <label for="col_word_class">Word class column index (PoS abbreviation)</label>
+            <input type="text" id="col_word_class" name="col_word_class" min="1" step="1"
+                {% if let Some(v) = options.col_word_class %}value="{{ v + 1 }}"{% endif %}>
+            <span class="hint">which column contains the word class, or part of speech?</span>
+        </section>
+
+        <section>
+            <label for="col_word_category">Word category column index (optional)</label>
+            <input type="text" id="col_word_category" name="col_word_category" min="1" step="1"
+                {% if let Some(v) = options.col_word_category %}value="{{ v + 1 }}"{% endif %}>
+            <span class="hint">which column contains the word category?</span>
+        </section>
+
+        <section>
+            <label for="col_ipa">IPA column index (optional)</label>
+            <input type="text" id="col_ipa" name="col_ipa" min="1" step="1"
+                {% if let Some(v) = options.col_ipa %}value="{{ v + 1 }}"{% endif %}>
+            <span class="hint">which column contains the IPA transcription?</span>
+        </section>
+
+        <section>
+            <label for="col_notes">Notes column index (optional)</label>
+            <input type="text" id="col_notes" name="col_notes" min="1" step="1"
+                {% if let Some(v) = options.col_notes %}value="{{ v + 1 }}"{% endif %}>
+            <span class="hint">which column contains notes about the word?</span>
+        </section>
+    </fieldset>
+
+    <fieldset>
+        <legend><h3>If a word class abbreviation isn't in this language yet</h3></legend>
+        <section>
+            <label>
+                <input type="radio" name="on_unknown_class" value="auto_create"
+                    {% if options.on_unknown_class == UnknownPolicy::AutoCreate %}checked{% endif %}>
+                auto-create it (with name = abbreviation, you can rename later)
+            </label>
+            <label>
+                <input type="radio" name="on_unknown_class" value="skip_row"
+                    {% if options.on_unknown_class == UnknownPolicy::SkipRow %}checked{% endif %}>
+                skip importing it
+            </label>
+            <label>
+                <input type="radio" name="on_unknown_class" value="fail"
+                    {% if options.on_unknown_class == UnknownPolicy::Fail %}checked{% endif %}>
+                fail the whole import
+            </label>
+        </section>
+    </fieldset>
+
+    <fieldset>
+        <legend><h3>If a word category abbreviation isn't in this language yet</h3></legend>
+        <section>
+            <label>
+                <input type="radio" name="on_unknown_category" value="auto_create"
+                    {% if options.on_unknown_category == UnknownCategoryPolicy::AutoCreate %}checked{% endif %}>
+                auto-create it (with name = abbreviation, you can rename later)
+            </label>
+            <label>
+                <input type="radio" name="on_unknown_category" value="skip_category"
+                    {% if options.on_unknown_category == UnknownCategoryPolicy::SkipCategory %}checked{% endif %}>
+                skip adding the category for that word, but import the word anyway
+            </label>
+            <label>
+                <input type="radio" name="on_unknown_category" value="fail"
+                    {% if options.on_unknown_category == UnknownCategoryPolicy::Fail %}checked{% endif %}>
+                fail the whole import
+            </label>
+        </section>
+    </fieldset>
+
+    <button type="submit">Import</button>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

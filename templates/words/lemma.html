@@ -113,6 +113,17 @@
                 <th>updated</th>
                 <td>{% call u::relative(&word.updated_at) %}</td>
             </tr>
+            {% if !word_categories.is_empty() %}
+            <tr>
+                <th>categories</th>
+                <td>
+                    {% for c in word_categories %}
+                        <a href="/languages/{{ language.code }}/word-categories/{{ c.abbreviation }}"
+                           class="word-category">{{ c.name }} ({{ c.abbreviation }})</a>{% if !loop.last %}, {% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endif %}
         </table>
     </div>
 </div>

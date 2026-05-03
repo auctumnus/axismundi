@@ -30,6 +30,7 @@ mod user_activities;
 mod user_bans;
 mod user_tags;
 mod users;
+mod word_categories;
 mod word_classes;
 mod word_relations;
 mod words;
@@ -62,6 +63,7 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(language_permissions::create_router())
         .merge(language_invites::create_router())
         .merge(word_classes::create_router())
+        .merge(word_categories::create_router())
         .merge(words::create_router())
         .merge(word_relations::create_router())
         .merge(definitions::create_router())

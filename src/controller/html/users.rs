@@ -22,11 +22,11 @@ use crate::{
     err::{AppError, bad_request},
     model::{
         email_verification_tokens::EmailVerificationTokenRepository,
-        password_reset_tokens::PasswordResetTokenRepository,
         language_families::{
             FamilyWithContributors, LanguageFamilyRepository, SearchLanguageFamilies,
         },
         languages::{LanguageRepository, LanguageSearch},
+        password_reset_tokens::PasswordResetTokenRepository,
         sessions::SessionRepository,
         translatable::{TranslatableRepository, TranslatableSearch},
         user_activities::UserActivityRepository,
@@ -37,7 +37,7 @@ use crate::{
         AppState, BackQuery, EmptyTemplate,
         extract_session::{SESSION_COOKIE_NAME, Session},
         is_discord,
-        s3::{S3, MAX_UPLOAD_SIZE, multipart_read_error},
+        s3::{MAX_UPLOAD_SIZE, S3, multipart_read_error},
         search_template::{SearchTemplateArgs, make_search_layout},
     },
 };
@@ -851,7 +851,9 @@ async fn reset_password_submit(
     }
 
     let current_user = s.user().cloned();
-    okay(render_template(PasswordResetSuccessTemplate { current_user }))
+    okay(render_template(PasswordResetSuccessTemplate {
+        current_user,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -892,7 +894,10 @@ async fn reset_password_confirm(
         Err(e) => return render_error(e),
     };
 
-    match users.reset_password(form.uid, token_record, &form.new_password).await {
+    match users
+        .reset_password(form.uid, token_record, &form.new_password)
+        .await
+    {
         Ok(()) => (
             StatusCode::SEE_OTHER,
             Redirect::to("/login").into_response(),

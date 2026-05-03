@@ -7,9 +7,10 @@ use axum::{
 use axum_extra::{TypedHeader, headers::UserAgent};
 use futures::TryFutureExt;
 
+use super::search::{WordSearchOptions, build_categories_json};
 use crate::{
     attempt,
-    controller::html::{okay, render_generic_error, render_template},
+    controller::html::{self, okay, render_generic_error, render_template, words},
     embed::{EmbedTarget, render_embed},
     err::not_found,
     model::{
@@ -17,34 +18,22 @@ use crate::{
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
-        quotations::{
-            Quotation, QuotationRepository, QuotationWithSpan, SearchQuotationsByDefinition,
-        },
+        quotations::{QuotationRepository, QuotationWithSpan},
         users::User,
+        word_categories::{WordCategory, WordCategoryRepository},
         word_classes::WordClassRepository,
         word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult},
-        words::{Word, WordRepository, WordSearch},
+        words::{Word, WordRepository, WordSearch, WordWithMeta},
     },
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, BackQuery, extract_session::Session, graph_svg::cognacy_to_svg, is_discord},
+    util::{
+        AppState, BackQuery, ListHeaderKind,
+        extract_session::Session,
+        graph_svg::cognacy_to_svg,
+        is_discord,
+        search_template::{SearchTemplateArgs, make_search_layout},
+    },
 };
-
-#[derive(Template)]
-#[template(path = "words/lemmata.html")]
-#[allow(dead_code)]
-struct LemmataTemplate {
-    current_user: Option<User>,
-    language: Language,
-    word: String,
-    lemmata: Vec<Word>,
-    parts_of_speech: Vec<String>,
-    words_definitions: Vec<Vec<Definition>>,
-    user_has_permission: bool,
-    rendered_notes: Vec<String>,
-    creators: Vec<User>,
-    contributor_counts: Vec<i64>,
-    is_liked_list: Vec<bool>,
-}
 
 #[derive(Template)]
 #[template(path = "words/lemma.html")]
@@ -54,6 +43,7 @@ struct LemmaTemplate {
     language: Language,
     word: Word,
     word_class: Option<crate::model::word_classes::WordClass>,
+    word_categories: Vec<WordCategory>,
     // definition, quotations, has_more
     definitions: Vec<(Definition, Vec<QuotationWithSpan>, bool)>,
     other_lemmata: bool,
@@ -76,14 +66,64 @@ pub(super) async fn view_lemmata(
     languages: LanguageRepository,
     words: WordRepository,
     word_classes: WordClassRepository,
-    definitions_repo: DefinitionRepository,
+    word_categories: WordCategoryRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug)): Path<(String, String)>,
+    axum_extra::extract::Query(mut query): axum_extra::extract::Query<WordSearch>,
+    axum_extra::extract::Query(pagination): axum_extra::extract::Query<PaginatedRequest>,
 ) -> (StatusCode, Response) {
     let current_user = s.user().cloned();
     let language = attempt!(s, languages.find_by_code(&language_code).await);
 
-    let user_has_permission = if let Some(user) = &current_user {
+    query.exact_slug = Some(slug.clone());
+
+    let user_applied_filters = query.q.is_some()
+        || query.word_class.is_some()
+        || query.created_before.is_some()
+        || query.created_after.is_some()
+        || !query.categories.is_empty();
+
+    // Shortcut: when the user hasn't applied any filters and this slug has
+    // exactly one lemma, skip the search page and go to the lemma's full view.
+    if !user_applied_filters {
+        match attempt!(s, words.count_by_slug(language.id, &slug).await) {
+            0 => {
+                return render_generic_error(s, not_found(format!("word with slug '{slug}'")))
+                    .await;
+            }
+            1 => {
+                let only = attempt!(
+                    s,
+                    words
+                        .search(
+                            &language.id,
+                            PaginatedRequest {
+                                limit: 1,
+                                offset: 0,
+                            },
+                            query.clone(),
+                        )
+                        .await
+                );
+                if let Some(lemma) = only.items.first() {
+                    return (
+                        StatusCode::SEE_OTHER,
+                        Redirect::to(&format!(
+                            "/languages/{}/words/{}/{}",
+                            language_code, slug, lemma.lemma
+                        ))
+                        .into_response(),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let search_action = format!("/languages/{}/words/{}", language.code, slug);
+    let back_url = crate::util::back_url(&search_action, &pagination, &query);
+
+    let can_edit_language = if let Some(user) = &current_user {
         let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
             .await
             .unwrap_or(false);
@@ -97,117 +137,60 @@ pub(super) async fn view_lemmata(
         false
     };
 
-    // Search for all words with this slug
-    let search = WordSearch {
-        exact_slug: Some(slug.clone()),
-        ..Default::default()
+    let word_classes_list = attempt!(s, word_classes.list_all(language.id).await);
+    let word_categories_list = attempt!(s, word_categories.list_all(language.id).await);
+    let word_categories_json = build_categories_json(&word_categories_list);
+    let selected_category_abbrevs = query.categories.clone();
+    let query_template = WordSearchOptions {
+        query: query.clone(),
+        word_classes: word_classes_list,
+        word_categories: word_categories_list,
+        word_categories_json,
+        selected_category_abbrevs,
     };
 
-    let lemmata = attempt!(
-        s,
-        words
-            .search(&language.id, PaginatedRequest::default(), search)
-            .await
-    )
-    .items;
+    let breadcrumbs = html::languages::Breadcrumb {
+        language: &language,
+    };
 
-    if lemmata.is_empty() {
-        return render_generic_error(s, not_found(format!("word with slug '{slug}'"))).await;
-    }
+    let results = words
+        .search(&language.id, pagination.clone(), query.clone())
+        .and_then(|results| results.try_map_async(|word| words.materialize(word, s.user())))
+        .await;
 
-    // If there's only one lemma, redirect to it directly
-    if lemmata.len() == 1 {
-        let lemma = &lemmata[0];
-        return (
-            StatusCode::SEE_OTHER,
-            Redirect::to(&format!(
-                "/languages/{}/words/{}/{}",
-                language_code, slug, lemma.lemma
-            ))
-            .into_response(),
-        );
-    }
+    let render_item = |word_with_meta: &WordWithMeta| words::PreviewCard {
+        word_with_meta: word_with_meta.clone(),
+        back_url: &back_url,
+    };
 
-    let word = lemmata[0].word.clone();
+    let header = words::Header {
+        can_edit_language,
+        language: &language,
+        kind: ListHeaderKind::Search,
+    };
 
-    // Fetch the word class names and definitions for each lemma
-    let mut parts_of_speech = Vec::new();
-    let mut words_definitions = Vec::new();
-    let mut rendered_notes = Vec::new();
-    let mut creators = Vec::new();
-    let mut contributor_counts = Vec::new();
-    let mut is_liked_list = Vec::new();
+    let footer = html::languages::Footer {
+        can_edit_language,
+        language: &language,
+    };
 
-    for lemma in &lemmata {
-        let pos_name = if let Some(word_class_id) = lemma.word_class {
-            match word_classes.find_by_id(word_class_id).await {
-                Ok(wc) => wc.name,
-                Err(_) => "Unknown".to_string(),
-            }
-        } else {
-            "Unknown".to_string()
-        };
-        parts_of_speech.push(pos_name);
-
-        // Fetch top 10 definitions for this lemma
-        let definitions = match definitions_repo
-            .list_by_word(
-                lemma.id,
-                PaginatedRequest {
-                    limit: 10,
-                    offset: 0,
-                },
-            )
-            .await
-        {
-            Ok(res) => res.items,
-            Err(_) => vec![],
-        };
-        words_definitions.push(definitions);
-
-        // Render notes for this lemma
-        let notes = attempt!(s, WordRepository::render_notes(lemma));
-        rendered_notes.push(notes);
-
-        // Fetch creator
-        let creator = attempt!(s, words.find_creator(&lemma.id).await);
-        creators.push(creator);
-
-        // Fetch contributor count
-        let contributor_count = attempt!(s, words.count_contributors(lemma.id).await);
-        contributor_counts.push(contributor_count);
-
-        // Check if liked by current user
-        let is_liked = if let Some(user) = &current_user {
-            words.is_liked(&lemma.id, &user.id).await.unwrap_or(false)
-        } else {
-            false
-        };
-        is_liked_list.push(is_liked);
-
-        println!(
-            "Lemma ID: {}, Definitions: {:?}",
-            lemma.id,
-            words_definitions.last()
-        );
-    }
-
-    let template = LemmataTemplate {
+    let template = make_search_layout(SearchTemplateArgs {
         current_user,
-        language,
-        word,
-        lemmata,
-        parts_of_speech,
-        words_definitions,
-        user_has_permission,
-        rendered_notes,
-        creators,
-        contributor_counts,
-        is_liked_list,
-    };
+        header,
+        query_template,
+        query,
+        results,
+        pagination,
+        search_name: "words",
+        search_action,
+        render_item,
+    })
+    .with_breadcrumbs(breadcrumbs)
+    .with_footer(footer);
 
-    let body = render_template(template);
-    okay(body)
+    let status = template.status();
+
+    (status, render_template(template))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -218,6 +201,7 @@ pub(super) async fn view_lemma(
     definitions_repo: DefinitionRepository,
     word_relations: WordRelationRepository,
     word_classes: WordClassRepository,
+    word_categories_repo: WordCategoryRepository,
     permissions: LanguagePermissionRepository,
     quotations: QuotationRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
@@ -248,6 +232,8 @@ pub(super) async fn view_lemma(
     } else {
         None
     };
+
+    let word_categories = attempt!(s, word_categories_repo.list_by_word(word.id, None).await);
 
     let user_has_permission = attempt!(
         s,
@@ -345,6 +331,7 @@ pub(super) async fn view_lemma(
         language,
         word,
         word_class,
+        word_categories,
         definitions,
         other_lemmata,
         back,

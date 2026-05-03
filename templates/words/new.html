@@ -7,6 +7,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="/static/components/modal.css">
+<link rel="stylesheet" href="/static/components/async-select.css">
 <link rel="stylesheet" href="/static/words/edit.css">
 <script defer src="/static/words/edit.js"></script>
 <link rel="stylesheet" href="/static/slate-editor.css">
@@ -62,6 +63,28 @@
         </div>
         <span class="hint">if you don't see a word class you want, <a href="/languages/{{ language.code }}/new-word-class">add a new word class</a></span>
     </section>
+
+    {% if word_categories.is_empty() %}
+        <span class="hint">to use word categories, like noun animacy or verb conjugation classes, <a href="/languages/{{ language.code }}/new-word-category">add a word category</a></span>
+    {% else %}
+    <section>
+        <label for="word_categories">Categories</label>
+        {% call u::field_error(name="categories") %}
+        <div id="word-categories-mount" class="async-multi-select-mount"
+             data-input-id="word_categories"
+             data-input-name="categories[]">
+            <select multiple id="word_categories" name="categories[]">
+                {% for c in word_categories %}
+                    <option value="{{ c.abbreviation }}"
+                      {% if selected_category_abbrevs.contains(&c.abbreviation) %}selected{% endif %}>
+                        {{ c.name }} ({{ c.abbreviation }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <span class="hint">if you don't see a category you want, <a href="/languages/{{ language.code }}/new-word-category">add a new word category</a></span>
+    </section>
+    {% endif %}
 
     <section>
         {% call u::field_error(name="definitions") %}
@@ -128,6 +151,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="module" src="/static/word-categories-multiselect.js"></script>
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountDefinitionsEditor) {
@@ -149,8 +173,20 @@
         formId: 'new-word-form'
       });
     }
+    if (window.mountWordCategoriesMultiselect) {
+      const allOptions = JSON.parse(document.getElementById('word-categories-options').textContent);
+      const initialSelected = JSON.parse(document.getElementById('word-categories-selected').textContent);
+      window.mountWordCategoriesMultiselect('word-categories-mount', {
+        inputId: 'word_categories',
+        inputName: 'categories[]',
+        allOptions,
+        initialSelectedAbbrevs: initialSelected,
+      });
+    }
   });
 </script>
 <script type="application/json" id="definitions-initial">{{ previous_definitions_json | safe }}</script>
 <script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
+<script type="application/json" id="word-categories-options">{{ word_categories_json | safe }}</script>
+<script type="application/json" id="word-categories-selected">{{ selected_category_abbrevs | json | safe }}</script>
 {% endblock %}
