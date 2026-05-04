@@ -360,7 +360,6 @@ mod tests {
         let body = crate::tests::response_to_value(response.into_body()).await;
         assert!(body["items"].is_array());
         let items = body["items"].as_array().unwrap();
-        println!("Items: {:#?}", items);
         assert!(
             items
                 .iter()

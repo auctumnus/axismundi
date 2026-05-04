@@ -236,7 +236,6 @@ struct ViewWordCategoryTemplate {
     word_category: WordCategory,
     rendered_notes: String,
     creator: User,
-    #[allow(dead_code)]
     user_has_permission: bool,
     can_edit_language: bool,
     json_ld: String,

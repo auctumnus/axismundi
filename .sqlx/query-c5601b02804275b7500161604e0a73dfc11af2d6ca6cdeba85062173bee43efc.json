@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT word_categories.id, word_categories.name, word_categories.abbreviation\n                FROM word_categories\n                JOIN word_word_categories ON word_word_categories.category = word_categories.id\n                WHERE word_word_categories.word = $1\n                ORDER BY word_categories.name\n                LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "abbreviation",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c5601b02804275b7500161604e0a73dfc11af2d6ca6cdeba85062173bee43efc"
+}

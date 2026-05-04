@@ -125,7 +125,7 @@ pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> 
         .send()
         .await;
 
-    println!("Received response from Lexurgy: {:?}", response);
+    tracing::debug!("received response from lexurgy: {:?}", response);
 
     match response {
         Ok(response) => {

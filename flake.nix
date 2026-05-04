@@ -14,7 +14,16 @@
       rust-overlay,
       flake-utils,
     }:
-    flake-utils.lib.eachDefaultSystem (
+    let
+      # nixos module: consumed by a system flake to declare the deployment.
+      # not per-system; lives outside eachDefaultSystem.
+      nixosModule = import ./nix/module.nix;
+    in
+    {
+      nixosModules.default = nixosModule;
+      nixosModules.axismundi = nixosModule;
+    }
+    // flake-utils.lib.eachDefaultSystem (
       system:
       let
         overlays = [ (import rust-overlay) ];
@@ -28,6 +37,17 @@
             "rust-analyzer"
             "llvm-tools-preview"
           ];
+        };
+
+        # buildRustPackage needs a rustPlatform built around our pinned toolchain,
+        # not the nixpkgs default rustc.
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
+
+        axismundi = pkgs.callPackage ./nix/package.nix {
+          inherit rustPlatform;
         };
 
         nativeBuildInputs = with pkgs; [
@@ -44,13 +64,16 @@
           clang
           llvmPackages.libclang
           graphviz
+          jq
+          age
+          rclone
         ];
 
         buildInputs =
           with pkgs;
           [
             openssl
-            postgresql
+            postgresql_18
             graphviz
             libwebp
           ]
@@ -59,12 +82,39 @@
             darwin.apple_sdk.frameworks.CoreFoundation
           ];
 
+        # convenience helper for the source = "local" deploy loop.
+        # backs up prod, dry-runs pending migrations, builds the image, and
+        # restarts the systemd unit. assumes the user has sudo for the restart.
+        # usage from a clone of this repo: `nix run .#deploy-local`
+        deploy-local = pkgs.writeShellApplication {
+          name = "axismundi-deploy-local";
+          runtimeInputs = with pkgs; [
+            podman
+            postgresql_18
+            sqlx-cli
+            jq
+            git
+            coreutils
+          ];
+          text = ''
+            exec ${pkgs.bash}/bin/bash "$(git rev-parse --show-toplevel)/scripts/deploy.sh" "$@"
+          '';
+        };
+
       in
       {
         devShells.default = pkgs.mkShell {
           inherit nativeBuildInputs buildInputs;
           stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+        };
+
+        packages.default = axismundi;
+        packages.axismundi = axismundi;
+        packages.deploy-local = deploy-local;
+        apps.deploy-local = {
+          type = "app";
+          program = "${deploy-local}/bin/axismundi-deploy-local";
         };
       }
     );

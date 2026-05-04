@@ -290,7 +290,6 @@ async fn view_language(
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
     {
-        println!("hi discord!");
         return okay(
             render_embed(
                 embed::EmbedTarget::Discord,

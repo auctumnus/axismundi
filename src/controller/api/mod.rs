@@ -11,6 +11,7 @@ use tower_governor::governor::GovernorConfig;
 mod audit_logs;
 mod bookmarks;
 mod definitions;
+mod health;
 mod language_families;
 mod language_family_invites;
 mod language_family_members;
@@ -102,13 +103,17 @@ pub fn create_api_controller() -> Router<AppState> {
             }))
             .merge(normal_routes.layer(tower_governor::GovernorLayer {
                 config: normal_governor,
-            }));
+            }))
+            // health sits outside the rate limiters — monitoring shouldn't
+            // share a per-IP budget with public traffic.
+            .merge(health::create_router());
     }
 
     #[cfg(test)]
     Router::<AppState>::new()
         .merge(secure_routes)
         .merge(normal_routes)
+        .merge(health::create_router())
 }
 
 #[cfg(test)]
@@ -262,8 +267,6 @@ pub(crate) mod tests {
             panic!("Failed to create user {username}");
         }
         assert_eq!(resp.status(), 200);
-
-        println!("made user {username}");
 
         // verify email
         let sent_emails = email_service.get_sent_emails();

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<head>
+  <title>axismundi | coming soon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg-light: oklch(96.8% 0.007 247.896);
+      --bg-dark: oklch(12.9% 0.042 264.695);
+      background-color: light-dark(var(--bg-light), var(--bg-dark));
+      color: light-dark(var(--bg-dark), var(--bg-light));
+      font-family: 'Roboto', 'Noto Sans', Arial, sans-serif;
+      margin: 1rem;
+    }
+
+    h1 {
+      font-family: 'Roboto Slab', 'Roboto', 'Noto Sans', Arial, sans-serif;
+      font-size: inherit;
+      display: flex;
+      align-items: center;
+      margin-bottom: 2rem;
+      font-weight: normal;
+
+      svg {
+        height: 1.25rem;
+        margin-right: .5rem;
+      }
+    }
+
+    a {
+      color: light-dark(oklch(55.4% 0.046 257.417), oklch(70.4% 0.04 256.788));
+      text-decoration: none;
+      &:hover {
+        color: inherit;
+        text-decoration: underline;
+      }
+    }
+
+    ul {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+
+      li {
+        margin-bottom: .5rem;
+        list-style: disc;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>
+    <svg xmlns="http://www.w3.org/2000/svg" width="35.906" height="28.357" viewBox="0 0 9.5 7.503"><path d="M109.75 162.506v7.228zM105 169.75h9.5z" style="fill:none;stroke:currentColor;stroke-width:.48734;stroke-dasharray:none;stroke-opacity:1" transform="translate(-105 -162.497)"/><path d="M109.75 162.506s.249 7.244-4.75 7.244" style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:.5;stroke-dasharray:none;stroke-opacity:1" transform="translate(-105 -162.497)"/><path d="M109.75 162.506s-.243 7.244 4.75 7.244" style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:.499999;stroke-dasharray:none;stroke-opacity:1" transform="translate(-105 -162.497)"/></svg>
+    <span>axismundi</span>
+  </h1>
+  <p>sorry, we're not open just yet (or our web server is down)! in the meantime:</p>
+  <ul>
+    <li><a href="https://discord.gg/VGzdwcdKzu">join us on discord</a> to hear about beta tests and follow development</li>
+    <li>check out <a href="https://github.com/auctumnus/axismundi">the source code</a></li>
+  </ul>
+</body>
+</html>

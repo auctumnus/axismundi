@@ -236,7 +236,6 @@ mod tests {
         let response = app.call(request).await.unwrap();
 
         let body = crate::tests::response_to_value(response.into_body()).await;
-        println!("List word classes body: {body}");
         assert!(body["items"].is_array());
         // Should have 3 custom + 7 default = 10 total
         assert_eq!(body["items"].as_array().unwrap().len(), 10);

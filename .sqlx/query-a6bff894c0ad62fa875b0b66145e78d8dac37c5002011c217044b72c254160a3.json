@@ -34,7 +34,8 @@
                 "word_class",
                 "user_session",
                 "translation",
-                "translatable"
+                "translatable",
+                "word_category"
               ]
             }
           }
@@ -57,7 +58,8 @@
                 "word_class",
                 "user_session",
                 "translation",
-                "translatable"
+                "translatable",
+                "word_category"
               ]
             }
           }

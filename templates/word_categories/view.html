@@ -24,12 +24,14 @@
         </h1>
         {% if let Some(_user) = current_user %}
         <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+            {% if user_has_permission %}
             <a class="icon button gray" href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}/edit" data-tooltip="Edit word category">
                 {% call u::icon("edit") %}
             </a>
             <a class="icon button gray" href="/languages/{{ language.code }}/word-categories/{{ word_category.abbreviation }}/delete" data-tooltip="Delete word category">
                 {% call u::icon("delete") %}
             </a>
+            {% endif %}
         </div>
         {% endif %}
     </div>

@@ -63,7 +63,8 @@
                 "language_family",
                 "language_family_member",
                 "language_family_invite",
-                "language_family_permission"
+                "language_family_permission",
+                "word_category"
               ]
             }
           }
@@ -121,7 +122,8 @@
                 "language_family",
                 "language_family_member",
                 "language_family_invite",
-                "language_family_permission"
+                "language_family_permission",
+                "word_category"
               ]
             }
           }

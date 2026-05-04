@@ -62,7 +62,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = create_router(app_state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], CONFIG.port));
+    // bind all interfaces — when containerized, the host-side port mapping
+    // is `127.0.0.1:<port>:<port>` (loopback-only), so external exposure is
+    // controlled at the host layer. binding 127.0.0.1 inside the container
+    // makes the app unreachable from the published host port.
+    let addr = SocketAddr::from(([0, 0, 0, 0], CONFIG.port));
     tracing::debug!("listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

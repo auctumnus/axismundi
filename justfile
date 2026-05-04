@@ -1,6 +1,11 @@
 default:
   just --list
 
+# Symlink scripts/pre-commit.sh into .git/hooks/ (run once per clone)
+install-hooks:
+    ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
+    @echo "pre-commit hook installed -> scripts/pre-commit.sh"
+
 dev:
   just dev-full
   @echo "Starting the app..."
@@ -263,3 +268,32 @@ seed scale="1.0":
 # Seed with fresh db (clears first)
 seed-fresh scale="1.0":
     DATABASE_URL={{postgres_url}} SEED_SCALE={{scale}} SEED_CLEAR=1 cargo run --bin seed
+
+# Take a postgres backup (writes to backups/, prints path)
+backup:
+    ./scripts/backup-db.sh
+
+# Restore a backup into the database from config.json (DESTRUCTIVE, prompts)
+restore backup:
+    ./scripts/restore-db.sh {{backup}}
+
+# Dry-run pending migrations against an ephemeral copy of the latest backup
+dry-run-migrations backup="":
+    ./scripts/dry-run-migrations.sh {{backup}}
+
+# Encrypt a local backup with age and upload to backblaze b2 (defaults to latest)
+backup-offsite backup="":
+    ./scripts/backup-offsite.sh {{backup}}
+
+# Mirror the minio bucket to b2 (additive copy, excludes imagor cache)
+backup-minio:
+    ./scripts/backup-minio.sh
+
+# Fresh db backup pushed offsite + minio mirrored to b2
+backup-all:
+    ./scripts/backup-offsite.sh "$(./scripts/backup-db.sh)"
+    ./scripts/backup-minio.sh
+
+# Deploy: backup -> dry-run migrations -> apply migrations -> build axismundi:local -> restart service
+deploy *args="":
+    ./scripts/deploy.sh {{args}}

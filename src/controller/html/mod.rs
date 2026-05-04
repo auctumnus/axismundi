@@ -280,7 +280,6 @@ async fn oembed(
     State(state): State<AppState>,
     Query(request): Query<embed::OEmbedRequest>,
 ) -> Result<impl axum::response::IntoResponse, AppError> {
-    println!("sdbgffdskljgbfdgksj");
     let response = embed::get_oembed(state, &request).await?;
 
     Ok(axum::Json(response))

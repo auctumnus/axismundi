@@ -943,7 +943,6 @@ mod tests {
             fetched_report["resolution_status"].as_str().unwrap(),
             "in_progress"
         );
-        println!("Fetched report: {}", fetched_report);
         assert!(
             fetched_report["resolution_note"]
                 .as_str()

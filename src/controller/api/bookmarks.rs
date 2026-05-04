@@ -51,8 +51,6 @@ mod tests {
         assert_eq!(body["username"], username);
         assert!(body["bookmark"].is_string());
 
-        println!("Bookmark body: {body}");
-
         let bookmark = body["bookmark"].as_str().unwrap();
 
         let change_username_request = put(
@@ -191,8 +189,6 @@ mod tests {
             .unwrap()
             .to_str()
             .unwrap();
-        println!("Location: {location}");
-        println!("Expected to end with: languages/{lang_code}/words/test_new/1");
         assert!(location.ends_with(&format!("languages/{lang_code}/words/test_new/1")));
     }
 

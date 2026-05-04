@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    word_word_categories.word as \"word!\",\n                    word_categories.id as \"id!\",\n                    word_categories.name as \"name!\",\n                    word_categories.abbreviation as \"abbreviation!\",\n                    row_number() OVER (PARTITION BY word_word_categories.word ORDER BY word_categories.name) as \"rn!\"\n                FROM word_word_categories\n                JOIN word_categories ON word_categories.id = word_word_categories.category\n                WHERE word_word_categories.word = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "abbreviation!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "rn!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "7137f634946447658c90affcc794e0c15b5d6b279d95e3b54af5c00a12f1cf24"
+}

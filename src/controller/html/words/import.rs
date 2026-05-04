@@ -604,24 +604,30 @@ async fn process_row(
     )
     .await?;
 
-    let categories: Vec<String> = if let Some(cat_abbr) = parsed.category_abbr.as_ref() {
-        let cat_lookup = cat_abbr.to_lowercase();
-        match resolve_category(
-            state,
-            user,
-            lang_code,
-            &language.id,
-            &cat_lookup,
-            opts.on_unknown_category,
-        )
-        .await?
-        {
-            Some(a) => vec![a],
-            None => vec![],
+    let mut categories: Vec<String> = Vec::new();
+    if let Some(cat_field) = parsed.category_abbr.as_ref() {
+        for piece in cat_field.split(',') {
+            let trimmed = piece.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let cat_lookup = trimmed.to_lowercase();
+            if let Some(a) = resolve_category(
+                state,
+                user,
+                lang_code,
+                &language.id,
+                &cat_lookup,
+                opts.on_unknown_category,
+            )
+            .await?
+            {
+                if !categories.contains(&a) {
+                    categories.push(a);
+                }
+            }
         }
-    } else {
-        vec![]
-    };
+    }
 
     let words = WordRepository::new(state.clone());
     let defs = DefinitionRepository::new(state.clone());

@@ -383,8 +383,6 @@ async fn settings_submit(
         return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
-    println!("display name in form: {:?}", form.display_name);
-
     match users
         .update(
             &user,

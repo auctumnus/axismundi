@@ -1,0 +1,12 @@
+{
+    "backblaze": {
+        "application_key": "XXXXXXXXXXXXXXXXXX/XXXXXXXXXXX",
+        "key_id": "0000000000000000000000000",
+        "bucket": "axismundi",
+        "endpoint": "https://s3.us-east-005.backblazeb2.com"
+    },
+    "age": {
+        "recipient": "age00000000000000000000000000000000000000000000000000000000000"
+    },
+    "healthcheck_url": "https://example.com/healthcheck"
+}

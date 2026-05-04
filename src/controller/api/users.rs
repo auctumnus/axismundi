@@ -200,7 +200,6 @@ pub async fn reset_password_start(
     tokens: PasswordResetTokenRepository,
     Json(ResetPasswordRequest { email }): Json<ResetPasswordRequest>,
 ) -> ApiResponse<StatusCode> {
-    println!("started password reset");
     let Ok(user) = users.find_by_email(&email).await else {
         // Do not reveal whether the email exists
         // TODO: consider adding a small delay here to mitigate timing attacks
@@ -208,10 +207,10 @@ pub async fn reset_password_start(
     };
     let token = tokens.create(user.id).await?;
 
-    println!("sending password reset email to {}", user.email);
+    tracing::info!("sending password reset email to user {}", user.id);
 
     if let Err(e) = tokens.send(user.id, &user.email, &token).await {
-        eprintln!("Failed to send password reset email: {e}");
+        tracing::error!("failed to send password reset email for user {}: {e}", user.id);
     }
 
     Ok(StatusCode::OK)
@@ -636,7 +635,6 @@ mod tests {
         // so we probably need a visual hash or something?
 
         let profile_picture_url = profile_picture_url.unwrap().as_str().unwrap();
-        println!("Profile picture URL: {}", profile_picture_url);
         let profile_picture_response = reqwest::get(profile_picture_url).await.unwrap();
         assert_eq!(profile_picture_response.status(), StatusCode::OK);
     }
