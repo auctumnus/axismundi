@@ -167,8 +167,14 @@ rustPlatform.buildRustPackage {
 
     # the binary uses ServeDir with relative paths ("assets", "frontend/dist"),
     # so the wrapper has to enter the share dir before exec.
+    # GVBINDIR pins libgvc's plugin lookup to the exact graphviz derivation in
+    # the runtime closure — without it, layout discovery falls through to a
+    # compile-time path that may not match and fails with "Layout type: dot
+    # not recognized" at the first svg render.
     for bin in axismundi seed; do
-      wrapProgram $out/bin/$bin --chdir $out/share/axismundi
+      wrapProgram $out/bin/$bin \
+        --chdir $out/share/axismundi \
+        --set GVBINDIR ${graphviz}/lib/graphviz
     done
   '';
 

@@ -35,6 +35,10 @@ RUN curl -fsSL "https://gitlab.com/graphviz/graphviz/-/archive/${GRAPHVIZ_VERSIO
     && cmake --build build -j"$(nproc)" \
     && cmake --install build \
     && ldconfig \
+    # cmake-built graphviz doesn't run `dot -c` post-install the way autotools does,
+    # so libgvc has no plugin manifest. without it, layout lookup fails at runtime
+    # with "Layout type: dot not recognized" even though the plugin .so files exist.
+    && /usr/local/bin/dot -c \
     && cd .. && rm -rf "graphviz-${GRAPHVIZ_VERSION}"
 
 # Install bun (the frontend uses bun, not npm — package.json has bun.lock,
