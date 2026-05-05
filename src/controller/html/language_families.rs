@@ -262,9 +262,8 @@ async fn view_language_family(
         usize::try_from(attempt!(s, members.count_by_family(family.id).await)).unwrap_or(0);
 
     // Generate family tree SVG
-    let family_tree_svg = crate::util::graph_svg::render_family_tree(&family, &members)
-        .await
-        .unwrap_or_default();
+    let family_tree_svg = attempt!(s, crate::util::graph_svg::render_family_tree(&family, &members)
+        .await);
 
     let json_ld = attempt!(
         s,
