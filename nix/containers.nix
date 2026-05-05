@@ -160,6 +160,11 @@ in
               PORT = "8000";
               S3_ENDPOINT = "http://axismundi-minio:9000";
               S3_FORCE_PATH_STYLE = "1";
+              # imagor's s3 loader uses aws-sdk-go-v2, which refuses to
+              # initialize without a region. when that init fails imagor
+              # silently falls through to the http loader, which tries to
+              # fetch `originals/...` as `https://originals/...` and 404s.
+              AWS_REGION = cfg.config.s3.region;
               S3_LOADER_BUCKET = cfg.minio.bucket;
               S3_RESULT_STORAGE_BUCKET = cfg.minio.bucket;
               S3_RESULT_STORAGE_BASE_DIR = "results";
