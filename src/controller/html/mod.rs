@@ -120,6 +120,9 @@ pub fn create_html_controller() -> Router<AppState> {
     let normal_routes = Router::<AppState>::new()
         .route("/", get(landing))
         .route("/home", get(home))
+        .route("/privacy", get(privacy))
+        .route("/terms", get(terms))
+        .route("/rules", get(rules))
         .route("/services/oembed", axum::routing::get(oembed))
         .nest_service("/static", ServeDir::new("frontend/dist"))
         .nest_service("/assets", ServeDir::new("assets"))
@@ -274,6 +277,42 @@ async fn home(
 
     let body = render_template(template);
     (StatusCode::OK, body)
+}
+
+#[derive(Template)]
+#[template(path = "privacy.html")]
+struct PrivacyTemplate {
+    current_user: Option<User>,
+}
+
+async fn privacy(s: Session) -> impl IntoResponse {
+    render_template(PrivacyTemplate {
+        current_user: s.user().cloned(),
+    })
+}
+
+#[derive(Template)]
+#[template(path = "terms.html")]
+struct TermsTemplate {
+    current_user: Option<User>,
+}
+
+async fn terms(s: Session) -> impl IntoResponse {
+    render_template(TermsTemplate {
+        current_user: s.user().cloned(),
+    })
+}
+
+#[derive(Template)]
+#[template(path = "rules.html")]
+struct RulesTemplate {
+    current_user: Option<User>,
+}
+
+async fn rules(s: Session) -> impl IntoResponse {
+    render_template(RulesTemplate {
+        current_user: s.user().cloned(),
+    })
 }
 
 async fn oembed(
