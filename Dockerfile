@@ -35,10 +35,6 @@ RUN curl -fsSL "https://gitlab.com/graphviz/graphviz/-/archive/${GRAPHVIZ_VERSIO
     && cmake --build build -j"$(nproc)" \
     && cmake --install build \
     && ldconfig \
-    # cmake-built graphviz doesn't run `dot -c` post-install the way autotools does,
-    # so libgvc has no plugin manifest. without it, layout lookup fails at runtime
-    # with "Layout type: dot not recognized" even though the plugin .so files exist.
-    && /usr/local/bin/dot -c \
     && cd .. && rm -rf "graphviz-${GRAPHVIZ_VERSION}"
 
 # Install bun (the frontend uses bun, not npm — package.json has bun.lock,
@@ -89,9 +85,16 @@ RUN apt-get update && apt-get install -y \
     libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull graphviz runtime from the builder, where we built it.
+# Pull graphviz runtime from the builder, where we built it. We need `dot` in
+# the runtime stage too: `dot -c` writes the libgvc plugin manifest
+# (lib/graphviz/config6) by enumerating the .so files at their *runtime* paths,
+# so it has to run after the COPY here — running it in the builder produces no
+# config6 (silently) because the plugin layout there isn't the one libgvc will
+# see at exec time. without config6, layout lookup fails with
+# "Layout type: dot not recognized" even though the plugins are present.
+COPY --from=builder /usr/local/bin/dot /usr/local/bin/dot
 COPY --from=builder /usr/local/lib/ /usr/local/lib/
-RUN ldconfig
+RUN ldconfig && /usr/local/bin/dot -c
 
 WORKDIR /app
 
