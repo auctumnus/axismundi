@@ -1,0 +1,88 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "words/fragments/card.html" as word_card -%}
+{%- import "words/fragments/footer.html" as word_f -%}
+
+{% block title %}derive {{ word.word.word }}? - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/words/derive-or-loan.css">
+{% endblock %}
+
+{% block content %}
+
+<h1>derive {{ word.word.word }}?</h1>
+
+<div class="context-cards">
+    <div class="context-card word-context">
+        <span class="context-label">for word</span>
+        <ul class="standalone-card">
+            {% call word_card::render(&word) %}
+        </ul>
+    </div>
+</div>
+
+<ul class="derive-or-loan-options card-list">
+    <li>
+        <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive-into-same-language">
+            <div class="left" aria-hidden>
+                {% call u::icon("arrow-downward") %}
+            </div>
+            <div class="spacer"></div>
+            <div class="right">
+                <h2>derive into the same language</h2>
+                <span>create a new word in this language derived from this one</span>
+            </div>
+        </a>
+    </li>
+    {% if has_families %}
+        <li>
+            <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive-into-different-language">
+                <div class="left" aria-hidden>
+                    {% call u::icon("arrow-split") %}
+                </div>
+                <div class="spacer"></div>
+                <div class="right">
+                    <h2>derive into a different language</h2>
+                    <span>run sound changes to derive into a descendant in this language's family</span>
+                </div>
+            </a>
+        </li>
+    {% else %}
+        <li>
+            <div class="card first-interaction-card">
+                <h2>no derivation paths from this language</h2>
+                <p>
+                    in order to automatically derive this word into child languages, there must be sound change
+                    sets defined in the language family for derivation.
+                </p>
+                {% if let Some(primary_language_family) = primary_language_family %}
+                    <div class="actions">
+                        <a class="button primary-button" href="/language-families/{{ primary_language_family.code }}">view language family</a>
+                    </div>
+                {% else %}
+                    <p>
+                        if there is no language family associated to this word's language, you should create one first
+                        and then add its children and sound change sets for derivation.
+                    </p>
+                    <div class="actions">
+                        <a class="button primary-button" href="/new-language-family">create language family</a>
+                    </div>
+                {% endif %}
+            </div>
+        </li>
+    {% endif %}
+</ul>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}" class="breadcrumb">{{ word.word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call word_f::word_section(word.word, language, true, other_lemmata) %}
+{% endblock %}

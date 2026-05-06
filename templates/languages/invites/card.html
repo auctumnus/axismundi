@@ -1,7 +1,7 @@
 {%- import "util.html" as u -%}
 
 {% macro render_invite_card(invite, inviting_user, invited_user, permission_level, revoke_link, can_revoke) %}
-<span class="invite-card">
+<li class="invite-card">
     <span class="left">
         <span class="invite-info">
             {% call u::badge(&inviting_user, "small") %}

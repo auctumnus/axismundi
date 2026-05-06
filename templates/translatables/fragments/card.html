@@ -11,10 +11,12 @@
                 <span class="summary ellipse">{{ crate::util::first_sentence(translatable_with_meta.translatable.english) }}</span>
             {% endif %}
             <ul class="translatable-summary summary">
+                <li>{% call u::user_display(&translatable_with_meta.creator, "small") %}</li>
                 {% let words_count = translatable_with_meta.translatable.words_count() %}
                 {% let translations_count = translatable_with_meta.translatable.translations_count %}
                 <li>{{ words_count }} {% if words_count == (1 as usize) %}word{% else %}words{% endif %}</li>
                 <li>{{ translations_count }} {% match *translations_count %}{% when 1 %}translation{% else %}translations{% endmatch %}</li>
+                <li>{% call u::relative(&translatable_with_meta.translatable.created_at) %}</li>
             </ul>
         </span>
         {% let target = "/api/translatable/" ~ translatable_with_meta.translatable.slug %}

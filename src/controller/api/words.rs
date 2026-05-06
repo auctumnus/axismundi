@@ -120,6 +120,7 @@ pub async fn search_words(
 pub struct CrossLanguageSearchQuery {
     pub q: String,
     pub exclude_id: Option<uuid::Uuid>,
+    #[allow(dead_code)]
     #[serde(default = "default_limit")]
     pub limit: i64,
 }

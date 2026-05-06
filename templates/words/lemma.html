@@ -173,13 +173,15 @@
         </div>
     </div>
 
-    <h2>see also</h2>
+    {% if !non_cognacy_relations.is_empty() %}
+        <h2>see also</h2>
 
-    <ul class="card-list">
-        {% for relation in non_cognacy_relations %}
-            {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
-        {% endfor %}
-    </ul>
+        <ul class="card-list">
+            {% for relation in non_cognacy_relations %}
+                {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
+            {% endfor %}
+        </ul>
+    {% endif %}
 {% else %}
 <div class="header-with-actions">
     <h2>related words</h2>

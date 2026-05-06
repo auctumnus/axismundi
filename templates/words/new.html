@@ -137,7 +137,8 @@
         <input type="hidden" name="antecedent_bookmark" value="{{ antecedent.word.bookmark }}">
         <input type="hidden" name="relation_kind" value="{{ relation_kind }}">
     {% endif %}
-    <button type="submit">Create word</button>
+    <button type="submit" formaction="/languages/{{ language.code }}/new-word?continue=1">Create and continue</button>
+    <button type="submit" class="secondary">Create word</button>
 </form>
 {% endblock %}
 

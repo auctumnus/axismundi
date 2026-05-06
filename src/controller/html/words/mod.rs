@@ -136,6 +136,14 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             get(derive::derive_form),
         )
         .route(
+            "/languages/{language}/words/{slug}/{lemma}/derive-into-different-language",
+            get(derive::derive_into_different_language_form),
+        )
+        .route(
+            "/languages/{language}/words/{slug}/{lemma}/derive-into-same-language",
+            get(derive::derive_into_same_language),
+        )
+        .route(
             "/languages/{language}/words/{slug}/{lemma}/loan",
             get(loan::loan_form),
         )

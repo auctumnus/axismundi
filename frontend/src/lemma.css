@@ -87,6 +87,10 @@ ul.quotations {
     flex-direction: column;
     gap: .325rem;
   }
+
+  &:not(:has(li)) {
+    display: none;
+  }
 }
 
 .quotation-link {

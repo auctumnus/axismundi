@@ -31,6 +31,18 @@ use crate::{
 };
 
 #[derive(Template)]
+#[template(path = "words/derive.html")]
+#[allow(dead_code)]
+struct DeriveTemplate {
+    current_user: Option<User>,
+    language: Language,
+    word: WordWithMeta,
+    has_families: bool,
+    primary_language_family: Option<LanguageFamily>,
+    other_lemmata: bool,
+}
+
+#[derive(Template)]
 #[template(path = "words/derive_into_family.html")]
 #[allow(dead_code)]
 struct DeriveIntoFamilyTemplate {
@@ -66,6 +78,62 @@ pub(super) struct DeriveIntoFamilyLoanForm {
 }
 
 pub(super) async fn derive_form(
+    s: Session,
+    languages: LanguageRepository,
+    language_families: LanguageFamilyRepository,
+    words: WordRepository,
+    scs: SoundChangeSetRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .and_then(|word| words.materialize(word, Some(&current_user)))
+            .await
+    );
+    let other_lemmata = attempt!(s, words.count_by_slug(language.id, &slug).await) > 1;
+
+    let paths = attempt!(
+        s,
+        scs.find_derivation_paths(&current_user, language.id).await
+    );
+    let has_families = !paths.is_empty();
+
+    let primary_language_family = attempt!(
+        s,
+        language_families
+            .search(
+                SearchLanguageFamilies {
+                    has_language: Some(language.code.clone()),
+                    ..Default::default()
+                },
+                PaginatedRequest {
+                    limit: 1,
+                    offset: 0
+                }
+            )
+            .await
+    )
+    .items
+    .into_iter()
+    .next();
+
+    let template = DeriveTemplate {
+        current_user: Some(current_user),
+        language,
+        word,
+        has_families,
+        primary_language_family,
+        other_lemmata,
+    };
+
+    okay(render_template(template))
+}
+
+pub(super) async fn derive_into_different_language_form(
     s: Session,
     languages: LanguageRepository,
     language_families: LanguageFamilyRepository,
@@ -137,6 +205,69 @@ pub(super) async fn derive_form(
     };
 
     okay(render_template(template))
+}
+
+pub(super) async fn derive_into_same_language(
+    s: Session,
+    languages: LanguageRepository,
+    words: WordRepository,
+    word_categories: WordCategoryRepository,
+    definitions: DefinitionRepository,
+    Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+) -> (StatusCode, Response) {
+    let current_user = get_user!(&s);
+    let language = attempt!(s, languages.find_by_code(&language_code).await);
+    let word = attempt!(
+        s,
+        words
+            .find_by_slug_and_lemma(Some(&current_user), language.id, &slug, lemma)
+            .and_then(|word| words.materialize(word, Some(&current_user)))
+            .await
+    );
+
+    let (definition_strs, context_strs) = attempt!(
+        s,
+        definitions
+            .list_by_word(
+                word.word.id,
+                PaginatedRequest {
+                    limit: 100,
+                    offset: 0,
+                },
+            )
+            .await
+            .map(|r| r
+                .items
+                .into_iter()
+                .map(|d| (d.definition, d.context))
+                .unzip())
+    );
+
+    let categories = attempt!(s, word_categories.list_by_word(word.word.id, None).await);
+    let category_abbrevs = categories.into_iter().map(|c| c.abbreviation).collect();
+
+    let prefill = NewWordPrefill {
+        word: Some(word.word.word.clone()),
+        ipa: Some(word.word.ipa.clone()),
+        word_class: word.word.word_class_abbreviation.clone(),
+        definitions: definition_strs,
+        contexts: context_strs,
+        categories: category_abbrevs,
+        antecedent_bookmark: Some(word.word.bookmark.clone()),
+        relation_kind: Some(WordRelationType::Derived),
+    };
+
+    let query_string = attempt!(
+        s,
+        serde_html_form::to_string(&prefill).map_err(Into::<AppError>::into)
+    );
+
+    let redirect_url = format!("/languages/{}/new-word?{}", language.code, query_string);
+
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&redirect_url).into_response(),
+    )
 }
 
 #[derive(Deserialize)]

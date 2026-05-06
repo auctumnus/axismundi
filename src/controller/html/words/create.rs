@@ -92,6 +92,12 @@ pub(super) struct NewWordPrefill {
     pub relation_kind: Option<WordRelationType>,
 }
 
+#[derive(Deserialize, Default)]
+pub(super) struct NewWordSubmitQuery {
+    #[serde(rename = "continue")]
+    pub continue_: Option<String>,
+}
+
 #[derive(Deserialize)]
 pub(super) struct NewWordFormData {
     pub(super) word: String,
@@ -319,6 +325,7 @@ pub(super) async fn new_word_submit(
     s: Session,
     State(state): State<AppState>,
     Path(language_code): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<NewWordSubmitQuery>,
     axum_extra::extract::Form(form): axum_extra::extract::Form<NewWordFormData>,
 ) -> (StatusCode, Response) {
     let antecedent_bookmark = form.antecedent_bookmark.as_deref();
@@ -466,14 +473,20 @@ pub(super) async fn new_word_submit(
     .await;
 
     match result {
-        Ok(word) => (
-            StatusCode::SEE_OTHER,
-            Redirect::to(&format!(
-                "/languages/{}/words/{}/{}",
-                language_code, word.slug, word.lemma
-            ))
-            .into_response(),
-        ),
+        Ok(word) => {
+            let redirect_url = if query.continue_.is_some() {
+                format!("/languages/{}/new-word", language_code)
+            } else {
+                format!(
+                    "/languages/{}/words/{}/{}",
+                    language_code, word.slug, word.lemma
+                )
+            };
+            (
+                StatusCode::SEE_OTHER,
+                Redirect::to(&redirect_url).into_response(),
+            )
+        }
         Err(e) => render_err(e),
     }
 }

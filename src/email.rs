@@ -177,9 +177,9 @@ impl EmailService for ResendEmailService {
         })?;
 
         let email_old =
-            CreateEmailBaseOptions::new(&self.from_email, [old_email], subject).with_html(&html);
+            CreateEmailBaseOptions::new(&self.from_email, [old_email], subject).with_html(&html).with_text(&text);
         let email_new =
-            CreateEmailBaseOptions::new(&self.from_email, [new_email], subject).with_html(&html);
+            CreateEmailBaseOptions::new(&self.from_email, [new_email], subject).with_html(&html).with_text(&text);
 
         self.client.emails.send(email_old).await.map_err(|e| {
             crate::err::internal_error(format!("failed to send email to old address: {}", e))

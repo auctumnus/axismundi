@@ -228,15 +228,6 @@ pub enum RelationDirection {
     Consequent,
 }
 
-impl RelationDirection {
-    pub fn preposition(&self) -> &str {
-        match self {
-            RelationDirection::Antecedent => "from",
-            RelationDirection::Consequent => "into",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SearchWordRelations {
     pub q: Option<String>,

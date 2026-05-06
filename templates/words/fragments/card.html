@@ -18,7 +18,7 @@
                 <span class="word-definition no-definition">no definition</span>
             {% endif %}
             <span class="creator">
-                created by {% call u::user_display(&word_with_meta.creator, "small") %} {% call u::relative(&word_with_meta.word.created_at) %}
+                {% call u::user_display(&word_with_meta.creator, "small") %} · {% call u::relative(&word_with_meta.word.created_at) %}
             </span>
         </span>
         {% call u::like_button(word_with_meta.like_target(), word_with_meta.word.like_count, word_with_meta.is_liked, "Like this word") %}
