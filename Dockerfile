@@ -5,8 +5,11 @@ FROM rust:1.88-slim-trixie AS builder
 
 # Install system dependencies for building. libclang-dev is needed by
 # bindgen (graphviz-sys) — without it we get "Unable to find libclang"
-# during the cargo build. We install graphviz from source below, so no
-# libgraphviz-dev here.
+# during the cargo build. libltdl-dev is required for graphviz's plugin
+# loader: without it, cmake silently disables `with_ltdl` and libgvc is
+# built with the entire dlopen path compiled out, so every render fails
+# with "Format: X not recognized. No formats found." — even `-Tdot`. We
+# install graphviz from source below, so no libgraphviz-dev here.
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -20,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     flex \
     bison \
     libexpat1-dev \
+    libltdl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Build graphviz 12.x from source. Debian's libgraphviz-dev is stuck at
@@ -31,14 +35,13 @@ ARG GRAPHVIZ_VERSION=12.2.1
 RUN curl -fsSL "https://gitlab.com/graphviz/graphviz/-/archive/${GRAPHVIZ_VERSION}/graphviz-${GRAPHVIZ_VERSION}.tar.gz" \
         | tar -xz \
     && cd "graphviz-${GRAPHVIZ_VERSION}" \
-    && cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
+    # CMAKE_INSTALL_LIBDIR=lib forces a flat lib dir; GNUInstallDirs would
+    # otherwise pick lib/x86_64-linux-gnu on debian, which we'd then have to
+    # mirror in the runtime stage's COPY paths.
+    && cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
     && cmake --install build \
     && ldconfig \
-    # cmake-built graphviz doesn't run `dot -c` post-install the way autotools does,
-    # so libgvc has no plugin manifest. without it, layout lookup fails at runtime
-    # with "Layout type: dot not recognized" even though the plugin .so files exist.
-    && /usr/local/bin/dot -c \
     && cd .. && rm -rf "graphviz-${GRAPHVIZ_VERSION}"
 
 # Install bun (the frontend uses bun, not npm — package.json has bun.lock,
@@ -87,11 +90,17 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     libwebp7 \
     libexpat1 \
+    libltdl7 \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull graphviz runtime from the builder, where we built it.
+# Pull graphviz runtime from the builder. We need `dot` here too: `dot -c`
+# enumerates the plugin .so files at their *runtime* paths and writes the
+# config6 manifest libgvc reads on every load — running it in the builder
+# would record builder-stage paths and leave the runtime image without a
+# manifest.
+COPY --from=builder /usr/local/bin/dot /usr/local/bin/dot
 COPY --from=builder /usr/local/lib/ /usr/local/lib/
-RUN ldconfig
+RUN ldconfig && /usr/local/bin/dot -c
 
 WORKDIR /app
 
