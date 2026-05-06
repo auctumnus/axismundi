@@ -1041,7 +1041,6 @@ main > :is(h1, h2, h3), main .header-with-actions {
     align-items: end;
     gap: 0.5rem;
     padding: 0;
-    max-wi
   }
 
   ul.icons {
