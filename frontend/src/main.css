@@ -439,7 +439,7 @@ button.normal {
   font-weight: 450;
 
   transition: background-color var(--duration-fast)
-    cubic-bezier(0.3, 0, 0.8, 0.15);
+    cubic-bezier(0.3, 0, 0.8, 0.15), opacity var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15);
 
   &.secondary {
     border: 1px solid var(--foreground-primary);

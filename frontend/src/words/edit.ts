@@ -1,4 +1,4 @@
-const estimate = async (word: string, soundChangeSetId: string) => {
+const estimate = async (word: string, soundChangeSetId: string, signal?: AbortSignal) => {
   const response = await fetch(
     `/api/sound-change-sets/${soundChangeSetId}/run`,
     {
@@ -7,6 +7,7 @@ const estimate = async (word: string, soundChangeSetId: string) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ input_words: [word] }),
+      signal,
     },
   );
   if (response.ok) {
@@ -35,6 +36,19 @@ const getOrCreateFieldErrors = (section: HTMLElement): HTMLUListElement => {
 const clearFieldErrors = (section: HTMLElement) => {
   const ul = section.querySelector("ul.field-errors");
   if (ul) ul.remove();
+};
+
+const debounce = (func: Function, delay: number) => {
+  let timeoutId: number | null = null;
+  return (...args: any[]) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = window.setTimeout(() => {
+      func(...args);
+      timeoutId = null;
+    }, delay);
+  };
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -81,14 +95,20 @@ document.addEventListener("DOMContentLoaded", () => {
       "data-sound-change-set",
     );
     if (!soundChangeSetId) return;
-    estimateButton.addEventListener("click", async (event) => {
-      event.preventDefault();
+
+    let controller: AbortController | null = null;
+
+    const e = async (event: Event) => {
       const word = wordInput.value;
+      if (controller) {
+        controller.abort();
+      }
       try {
         setRunning();
         const [estimatedIpa] = await Promise.all([
           (async () => {
-            const r = await estimate(word, soundChangeSetId);
+            controller = new AbortController();
+            const r = await estimate(word, soundChangeSetId, controller.signal);
             return r;
           })(),
           new Promise((resolve) => setTimeout(resolve, 500)), // ensure the saving state is visible for at least 500ms
@@ -96,11 +116,30 @@ document.addEventListener("DOMContentLoaded", () => {
         ipaInput.value = estimatedIpa;
         setIdle();
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          // Ignore abort errors
+          return;
+        }
         console.error("Error estimating IPA:", error);
         setErrored(
           error instanceof Error ? error.message : "Failed to estimate IPA",
         );
       }
+    };
+
+    estimateButton.addEventListener("click", (event) => {
+      event.preventDefault(); e(event)
+    });
+
+    const wordEvent = (event: Event) => {
+      debounce(() => e(event), 500)();
+    }
+
+    wordInput.addEventListener("input", wordEvent);
+
+    ipaInput.addEventListener("input", () => {
+      wordInput.removeEventListener("input", wordEvent);
+      setIdle();
     });
   }
 });
