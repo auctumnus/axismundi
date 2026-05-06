@@ -31,7 +31,14 @@ ARG GRAPHVIZ_VERSION=12.2.1
 RUN curl -fsSL "https://gitlab.com/graphviz/graphviz/-/archive/${GRAPHVIZ_VERSION}/graphviz-${GRAPHVIZ_VERSION}.tar.gz" \
         | tar -xz \
     && cd "graphviz-${GRAPHVIZ_VERSION}" \
-    && cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
+    # CMAKE_INSTALL_LIBDIR=lib pins the lib dir to /usr/local/lib (overriding
+    # GNUInstallDirs's debian multi-arch autodetection, which would otherwise
+    # bake /usr/local/lib/x86_64-linux-gnu/graphviz into libgvc as the plugin
+    # search path). without this pin, libgvc looks for plugins at the
+    # multi-arch path while cmake actually installs them to lib/graphviz, so
+    # plugin discovery silently finds zero entries and `dot -c` writes no
+    # config6 — manifesting as "Layout type: dot not recognized" at runtime.
+    && cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
     && cmake --install build \
     && ldconfig \
