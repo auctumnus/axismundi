@@ -392,16 +392,19 @@ main {
     text-decoration: underline;
   }
 
-  > ul {
+  ul {
     margin-top: 0;
     margin-bottom: 1rem;
     padding-left: 1.5rem;
-    max-width: 70ch;
 
     li {
       margin-bottom: 0.5rem;
       list-style: disc;
     }
+  }
+
+  > ul:not(.card-list) {
+    max-width: 70ch;
   }
 }
 
