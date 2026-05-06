@@ -392,7 +392,7 @@ main {
     text-decoration: underline;
   }
 
-  ul {
+  > ul {
     margin-top: 0;
     margin-bottom: 1rem;
     padding-left: 1.5rem;
@@ -1038,6 +1038,7 @@ main > :is(h1, h2, h3), main .header-with-actions {
     align-items: end;
     gap: 0.5rem;
     padding: 0;
+    max-wi
   }
 
   ul.icons {
