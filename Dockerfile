@@ -5,8 +5,11 @@ FROM rust:1.88-slim-trixie AS builder
 
 # Install system dependencies for building. libclang-dev is needed by
 # bindgen (graphviz-sys) — without it we get "Unable to find libclang"
-# during the cargo build. We install graphviz from source below, so no
-# libgraphviz-dev here.
+# during the cargo build. libltdl-dev is required for graphviz's plugin
+# loader: without it, cmake silently disables `with_ltdl` and libgvc is
+# built with the entire dlopen path compiled out, so every render fails
+# with "Format: X not recognized. No formats found." — even `-Tdot`. We
+# install graphviz from source below, so no libgraphviz-dev here.
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -20,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     flex \
     bison \
     libexpat1-dev \
+    libltdl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Build graphviz 12.x from source. Debian's libgraphviz-dev is stuck at
@@ -86,20 +90,17 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     libwebp7 \
     libexpat1 \
+    libltdl7 \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull graphviz runtime from the builder, where we built it. graphviz 12.2.1's
-# cmake build silently no-ops `dot -c` (the function that's supposed to write
-# libgvc's plugin manifest at lib/graphviz/config6), so we ship a hand-written
-# manifest instead. Without it, libgvc registers zero plugins at runtime and
-# every render fails with "Layout type: dot not recognized" even though the
-# plugin .so files are present. The file's contents match what `dot -c` would
-# produce on a working install, scoped to the 4 plugins this build actually
-# ships (no cairo/pango/gd → loadimage entries pruned).
+# Pull graphviz runtime from the builder. We need `dot` here too: `dot -c`
+# enumerates the plugin .so files at their *runtime* paths and writes the
+# config6 manifest libgvc reads on every load — running it in the builder
+# would record builder-stage paths and leave the runtime image without a
+# manifest.
 COPY --from=builder /usr/local/bin/dot /usr/local/bin/dot
 COPY --from=builder /usr/local/lib/ /usr/local/lib/
-COPY graphviz-config6 /usr/local/lib/graphviz/config6
-RUN ldconfig
+RUN ldconfig && /usr/local/bin/dot -c
 
 WORKDIR /app
 
