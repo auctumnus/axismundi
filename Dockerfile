@@ -31,13 +31,9 @@ ARG GRAPHVIZ_VERSION=12.2.1
 RUN curl -fsSL "https://gitlab.com/graphviz/graphviz/-/archive/${GRAPHVIZ_VERSION}/graphviz-${GRAPHVIZ_VERSION}.tar.gz" \
         | tar -xz \
     && cd "graphviz-${GRAPHVIZ_VERSION}" \
-    # CMAKE_INSTALL_LIBDIR=lib pins the lib dir to /usr/local/lib (overriding
-    # GNUInstallDirs's debian multi-arch autodetection, which would otherwise
-    # bake /usr/local/lib/x86_64-linux-gnu/graphviz into libgvc as the plugin
-    # search path). without this pin, libgvc looks for plugins at the
-    # multi-arch path while cmake actually installs them to lib/graphviz, so
-    # plugin discovery silently finds zero entries and `dot -c` writes no
-    # config6 — manifesting as "Layout type: dot not recognized" at runtime.
+    # CMAKE_INSTALL_LIBDIR=lib forces a flat lib dir; GNUInstallDirs would
+    # otherwise pick lib/x86_64-linux-gnu on debian, which we'd then have to
+    # mirror in the runtime stage's COPY paths.
     && cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
     && cmake --install build \
@@ -92,16 +88,18 @@ RUN apt-get update && apt-get install -y \
     libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull graphviz runtime from the builder, where we built it. We need `dot` in
-# the runtime stage too: `dot -c` writes the libgvc plugin manifest
-# (lib/graphviz/config6) by enumerating the .so files at their *runtime* paths,
-# so it has to run after the COPY here — running it in the builder produces no
-# config6 (silently) because the plugin layout there isn't the one libgvc will
-# see at exec time. without config6, layout lookup fails with
-# "Layout type: dot not recognized" even though the plugins are present.
+# Pull graphviz runtime from the builder, where we built it. graphviz 12.2.1's
+# cmake build silently no-ops `dot -c` (the function that's supposed to write
+# libgvc's plugin manifest at lib/graphviz/config6), so we ship a hand-written
+# manifest instead. Without it, libgvc registers zero plugins at runtime and
+# every render fails with "Layout type: dot not recognized" even though the
+# plugin .so files are present. The file's contents match what `dot -c` would
+# produce on a working install, scoped to the 4 plugins this build actually
+# ships (no cairo/pango/gd → loadimage entries pruned).
 COPY --from=builder /usr/local/bin/dot /usr/local/bin/dot
 COPY --from=builder /usr/local/lib/ /usr/local/lib/
-RUN ldconfig && /usr/local/bin/dot -c
+COPY graphviz-config6 /usr/local/lib/graphviz/config6
+RUN ldconfig
 
 WORKDIR /app
 
