@@ -1,0 +1,12 @@
+@layer reset, tokens, layout, components, page, utilities;
+
+@import "base/reset.css" layer(reset);
+@import "base/colors.css" layer(tokens);
+@import "base/tokens.css" layer(tokens);
+@import "base/typography.css" layer(tokens);
+@import "layout/page.css" layer(layout);
+@import "layout/header.css" layer(layout);
+@import "layout/footer.css" layer(layout);
+@import "layout/sidebar.css" layer(layout);
+@import "components/card.css" layer(components);
+@import "components/button.css" layer(components);

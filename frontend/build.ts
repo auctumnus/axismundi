@@ -1,7 +1,7 @@
 import { readdir, mkdir, readFile, writeFile, watch, copyFile } from 'fs/promises';
 import { join, dirname, relative, extname, basename } from 'path';
 import { existsSync } from 'fs';
-import { transform } from 'lightningcss';
+import { bundleAsync, Features } from 'lightningcss';
 import { transform as swcTransform } from '@swc/core';
 
 const srcDir = join(import.meta.dir, 'src');
@@ -31,12 +31,14 @@ async function getAllFiles(dir: string, files: string[] = []): Promise<string[]>
 }
 
 async function processCSS(inputPath: string, outputPath: string) {
-  const css = await readFile(inputPath, 'utf8');
-  const result = transform({
-    code: Buffer.from(css),
+  const result = await bundleAsync({
+    filename: inputPath,
     minify: true,
     sourceMap: false,
-    filename: basename(inputPath)
+    drafts: {
+      customMedia: true,
+    },
+    include: Features.CustomMediaQueries,
   });
 
   await writeFile(outputPath, result.code);

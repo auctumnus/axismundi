@@ -379,6 +379,16 @@ main {
     margin-bottom: 1rem;
   }
 
+  @media (max-width: 400px) {
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+    }
+  }
+
   p:not(:last-child) {
     margin-bottom: 1rem;
   }
@@ -963,11 +973,27 @@ footer {
       list-style: none;
       margin: 0;
 
-      &:not(:last-child)::after {
+      &:not(:last-child) > span::after {
         content: "·";
-        margin: 0 0.5rem;
+        margin: 0 .6rem;
+      }
+
+      &.on-medium {
+        display: none;
+      }
+
+      @media (min-width: 500px) {
+        &.on-medium {
+          display: inline;
+        }
       }
     }
+  }
+}
+
+@media (max-width: 400px) {
+  .card, .preview-card a {
+    padding: .75rem .85rem;
   }
 }
 
