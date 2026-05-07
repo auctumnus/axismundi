@@ -586,6 +586,12 @@ const PhonemeControls = ({ isCellSelected, selectTarget }: ControlState) => {
   const closeModal = () => {
     setModalOpen(false);
     setModalStep(0);
+    dispatch({ type: "SetKeybindState", keybindState: "Idle" });
+  };
+
+  const closeAddModal = () => {
+    setAddModalOpen(false);
+    dispatch({ type: "SetKeybindState", keybindState: "Idle" });
   };
 
   const addPhoneme = () => {
@@ -651,7 +657,7 @@ const PhonemeControls = ({ isCellSelected, selectTarget }: ControlState) => {
   const handleAddSave = (newPhoneme: string) => {
     if (!state.select) return;
     dispatch({ type: "AddPhoneme", phoneme: newPhoneme, path: state.select });
-    setAddModalOpen(false);
+    closeAddModal();
   };
 
   useEffect(() => {
@@ -741,7 +747,7 @@ const PhonemeControls = ({ isCellSelected, selectTarget }: ControlState) => {
         kind="add"
         phonemeIndex={0}
         open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
+        onClose={closeAddModal}
         onSave={handleAddSave}
       />
       <ControlButton
@@ -826,6 +832,7 @@ const AnnotationControls = ({ isCellSelected, selectTarget }: ControlState) => {
   const closeModal = () => {
     setModalOpen(false);
     setModalStep(0);
+    dispatch({ type: "SetKeybindState", keybindState: "Idle" });
   };
 
   // --- step handlers ---
