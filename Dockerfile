@@ -110,6 +110,7 @@ COPY --from=builder /app/sqlx ./
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY assets ./assets
 
 EXPOSE 3000
 
