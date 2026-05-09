@@ -102,3 +102,38 @@
     {{ crate::util::relative_time(timestamp) }}
 </time>
 {% endmacro %}
+
+{% macro meta_creator_row(creator) %}
+<tr>
+    <th>by</th>
+    <td>{% call badge(creator, size="small") %}</td>
+</tr>
+{% endmacro %}
+
+{% macro meta_contributors_row(contributors, all_link) %}
+<tr>
+    <th>by</th>
+    <td>
+    {% if contributors.len() <= 1 %}
+        {% call badge(contributors[0], size="small") %}
+    {% else %}
+        <a href="{{ all_link }}" class="contributor-stack" data-tooltip="View all contributors">
+            <ul class="contributor-list">
+            {% for contributor in contributors %}
+                <li class="compressed-pfps">
+                    {% call pfp(contributor, size="small") %}
+                </li>
+            {% endfor %}
+            </ul>
+        </a>
+    {% endif %}
+    </td>
+</tr>
+{% endmacro %}
+
+{% macro meta_updated_row(timestamp, updater) %}
+<tr>
+    <th>updated</th>
+    <td>{% if let Some(u) = updater %}{% call badge(u, size="small") %} · {% endif %}{% call relative(timestamp) %}</td>
+</tr>
+{% endmacro %}

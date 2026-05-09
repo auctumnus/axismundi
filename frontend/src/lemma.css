@@ -28,6 +28,13 @@
   }
 }
 
+.word-card-full .header-with-actions {
+  margin-bottom: 0px;
+  .subtitle {
+    margin-top: .5rem;
+  }
+}
+
 .word-card-full table {
   margin-top: 1rem;
   padding-top: 0;
@@ -111,7 +118,6 @@ ul.quotations {
   .cognacy-svg {
     overflow: auto;
     margin-top: 0px;
-    padding: 0.5rem;
     background-color: var(--background-page);
     border: var(--border);
     border-radius: var(--rounding);

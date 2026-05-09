@@ -17,6 +17,7 @@ use crate::{
     err::{AppError, bad_request},
     get_user,
     model::{
+        contribution_stats::{ContributionStatsRepository, ContributionsSearch},
         language_families::{
             CreateLanguageFamily, FamilyWithContributors, LanguageFamily, LanguageFamilyRepository,
             SearchLanguageFamilies,
@@ -146,11 +147,15 @@ async fn search_language_families(
 
 #[derive(Template)]
 #[template(path = "language_families/view.html")]
+#[allow(dead_code)]
 struct ViewLanguageFamilyTemplate {
     current_user: Option<User>,
     family: LanguageFamily,
     owner: User,
+    updater: Option<User>,
     contributor_count: usize,
+    top_contributors: Vec<User>,
+    contributors_link: String,
     member_count: usize,
     rendered_description: String,
     can_edit_language_family: bool,
@@ -171,11 +176,17 @@ async fn view_language_family(
     invites: LanguageFamilyInviteRepository,
     members: LanguageFamilyMemberRepository,
     users: UserRepository,
+    contribution_stats: ContributionStatsRepository,
     Path(code): Path<String>,
     Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let family = attempt!(s, language_families.find_by_code(&code).await);
     let owner = attempt!(s, users.find_by_id(family.created_by).await);
+    let updater = if family.updated_by != family.created_by {
+        Some(attempt!(s, users.find_by_id(family.updated_by).await))
+    } else {
+        None
+    };
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
     {
@@ -212,6 +223,24 @@ async fn view_language_family(
     // Count contributors (non-owner permissions)
     let contributor_count =
         usize::try_from(attempt!(s, permissions.count_contributors(family.id).await)).unwrap_or(0);
+
+    let top_contributors = attempt!(
+        s,
+        contribution_stats
+            .search_top_contributors_for_family(
+                &family.code,
+                &ContributionsSearch {
+                    q: None,
+                    permission_level: None,
+                },
+                &PaginatedRequest {
+                    limit: 5,
+                    offset: 0,
+                },
+            )
+            .await
+    )
+    .items;
 
     let can_edit_language_family = if let Some(user) = s.user() {
         permissions
@@ -271,11 +300,16 @@ async fn view_language_family(
             .map_err(Into::into)
     );
 
+    let contributors_link = format!("/language-families/{}/contributors", family.code);
+
     let template = ViewLanguageFamilyTemplate {
         current_user: s.user().cloned(),
         family,
         owner,
+        updater,
         contributor_count,
+        top_contributors,
+        contributors_link,
         rendered_description,
         can_edit_language_family,
         can_delete_language_family,

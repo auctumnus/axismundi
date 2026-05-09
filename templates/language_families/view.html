@@ -46,17 +46,7 @@
         <div class="banner"><img src="{{ banner_url }}" alt="" aria-hidden="true"></div>
     {% endif %}
     <div class="header-with-actions">
-        <div class="with-subtitle">
-            <h1>{{ family.name }}</h1>
-            <div class="contributors subtitle">
-                <span>by</span>
-                {% call u::badge(&owner, size="small") %}
-                {% if contributor_count > 1 %}
-                    <span>and</span>
-                    <a href="/language-families/{{ family.code }}/contributors">{{ contributor_count - 1 }} contributor{% if contributor_count != 1 %}s{% endif %}</a>
-                {% endif %}
-            </div>
-        </div>
+        <h1>{{ family.name }}</h1>
         <ul class="icons">
             {% if can_edit_language_family %}
                 <li><a class="icon button gray" href="/language-families/{{ family.code }}/edit" data-tooltip="Edit language">
@@ -92,6 +82,8 @@
             <th>created</th>
             <td>{% call u::relative(&family.created_at) %}</td>
         </tr>
+        {% call u::meta_contributors_row(top_contributors, contributors_link) %}
+        {% call u::meta_updated_row(&family.updated_at, updater.as_ref()) %}
         <tr>
             <th>members</th>
             <td>{{ member_count }}</td>

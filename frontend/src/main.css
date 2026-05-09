@@ -949,53 +949,6 @@ footer {
     color: var(--foreground-secondary);
   }
 
-  ul.contributor-list {
-    display: flex;
-    flex-direction: row;
-    padding: 0;
-    margin: 0;
-
-    li {
-      list-style: none;
-    }
-  }
-
-  li.compressed-pfps {
-    margin-bottom: 0;
-
-    &:not(:first-child) {
-      position: relative;
-      margin-left: -8px;
-      &::before {
-        content: "\00A0";
-        display: inline-block;
-        width: 22px;
-        height: 22px;
-        background-color: var(--background-panel);
-        border-radius: 100%;
-        position: absolute;
-        left: -12px;
-        top: -0.5px;
-      }
-    }
-
-    &:nth-child(1) {
-      z-index: 5;
-    }
-    &:nth-child(2) {
-      z-index: 4;
-    }
-    &:nth-child(3) {
-      z-index: 3;
-    }
-    &:nth-child(4) {
-      z-index: 2;
-    }
-    &:nth-child(5) {
-      z-index: 1;
-    }
-  }
-
   .translatable-summary {
     list-style-type: none;
     margin: 0;
@@ -1023,6 +976,71 @@ ul.card-list {
   li {
     list-style: none;
   }
+}
+
+ul.contributor-list {
+  display: flex;
+  flex-direction: row;
+  padding: 0;
+  margin: 0;
+
+  li {
+    list-style: none;
+  }
+  /*
+  &:hover {
+    li.compressed-pfps:not(:first-child) {
+      margin-left: .125rem;
+      &::before {
+        background-color: transparent;
+      }
+    }
+  }
+  */
+}
+
+li.compressed-pfps {
+  margin-bottom: 0;
+  transition: margin-left var(--duration-fast) var(--curve);
+
+  &:not(:first-child) {
+    position: relative;
+    margin-left: -8px;
+    &::before {
+      content: "\00A0";
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      background-color: var(--background-panel);
+      border-radius: 100%;
+      position: absolute;
+      left: -12px;
+      top: -0.5px;
+      transition: background-color var(--duration-fast) var(--curve);
+    }
+  }
+
+  &:nth-child(1) {
+    z-index: 5;
+  }
+  &:nth-child(2) {
+    z-index: 4;
+  }
+  &:nth-child(3) {
+    z-index: 3;
+  }
+  &:nth-child(4) {
+    z-index: 2;
+  }
+  &:nth-child(5) {
+    z-index: 1;
+  }
+}
+
+a.contributor-stack {
+  display: inline-block;
+  text-decoration: none;
+  color: inherit;
 }
 
 .contributors {
@@ -1272,6 +1290,10 @@ button.with-icon {
   .standalone-card .full-card {
     margin: 0;
   }
+}
+
+.full-card .header-with-actions {
+  margin-bottom: 0;
 }
 
 .context-card {

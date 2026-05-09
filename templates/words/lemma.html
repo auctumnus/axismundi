@@ -19,7 +19,9 @@
 
 <div class="card word-card-full">
     <div class="header-with-actions">
+        {% if !word.ipa.is_empty() %}
         <div class="with-subtitle">
+        {% endif %}
             <h1 class="word-header">
                 <span>{{ word.word }}</span>
                 {% if let Some(word_class) = word_class %}
@@ -35,14 +37,12 @@
                 </span>
                 {% endif %}
             </h1>
-            <div class="contributors">
-                <span>by</span>
-                {% call u::badge(&creator, size="small") %}
-                {% if contributor_count > 0 %}
-                    <span>and {{ contributor_count }} other contributor{% if contributor_count != 1 %}s{% endif %}</span>
-                {% endif %}
+        {% if !word.ipa.is_empty() %}
+            <div class="subtitle">
+                <span class="ipa">/{{ word.ipa }}/</span>
             </div>
         </div>
+        {% endif %}
         <ul class="icons">
             {% if user_has_permission %}
                 <li><a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit" data-tooltip="Edit word">
@@ -64,7 +64,7 @@
         </div>
 
         <div class="word-meta">
-            {% if !word.ipa.is_empty() %}<span class="ipa">/{{ word.ipa }}/</span>{% endif %}
+            
         </div>
 
 
@@ -111,10 +111,14 @@
                 <th>created</th>
                 <td>{% call u::relative(&word.created_at) %}</td>
             </tr>
+            {% call u::meta_creator_row(&creator) %}
+            {% if contributor_count > 0 %}
             <tr>
-                <th>updated</th>
-                <td>{% call u::relative(&word.updated_at) %}</td>
+                <th>contributors</th>
+                <td>{{ contributor_count }} other contributor{% if contributor_count != 1 %}s{% endif %}</td>
             </tr>
+            {% endif %}
+            {% call u::meta_updated_row(&word.updated_at, updater.as_ref()) %}
             {% if !word_categories.is_empty() %}
             <tr>
                 <th>categories</th>

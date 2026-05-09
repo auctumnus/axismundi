@@ -21,13 +21,7 @@
 
 <div class="sound-change-card full-card card">
     <div class="header-with-actions">
-        <div class="with-subtitle">
-            <h1>{{ set.name }}</h1>
-            <div class="contributors">
-                <span>by</span>
-                {% call u::badge(&author, size="small") %}
-            </div>
-        </div>
+        <h1>{{ set.name }}</h1>
         <ul class="icons">
             {% if can_edit %}
                 {% if let Some(lang) = language %}
@@ -62,6 +56,15 @@
             {{ rendered_description | safe }}
         </p>
     {% endif %}
+
+    <table>
+        <tr>
+            <th>created</th>
+            <td>{% call u::relative(&set.created_at) %}</td>
+        </tr>
+        {% call u::meta_creator_row(&author) %}
+        {% call u::meta_updated_row(&set.updated_at, updater.as_ref()) %}
+    </table>
 </div>
 
 {% if let Some(lang) = language %}
