@@ -1227,19 +1227,61 @@ impl WordRelationRepository {
         })
     }
 
+    /// Filter cognacy edges to those relevant to `focus`, applying a one-hop cutoff:
+    /// include all ancestors and descendants of `focus`, plus any node connected by
+    /// a single edge to one of those (a co-ancestor or co-descendant), but do not
+    /// follow further edges out of those one-hop nodes. Without this, a shared
+    /// ancestor pulls in unrelated branches that a reader doesn't intuitively
+    /// consider "related" to the focus word.
+    fn filter_edges_for_focus(edges: &[CognacyEdgeV1], focus: Uuid) -> Vec<CognacyEdgeV1> {
+        use std::collections::HashSet;
+
+        let mut core: HashSet<Uuid> = HashSet::new();
+        core.insert(focus);
+
+        let mut to_visit = vec![focus];
+        while let Some(node) = to_visit.pop() {
+            for edge in edges {
+                if edge.consequent == node && core.insert(edge.antecedent) {
+                    to_visit.push(edge.antecedent);
+                }
+            }
+        }
+
+        let mut to_visit = vec![focus];
+        while let Some(node) = to_visit.pop() {
+            for edge in edges {
+                if edge.antecedent == node && core.insert(edge.consequent) {
+                    to_visit.push(edge.consequent);
+                }
+            }
+        }
+
+        edges
+            .iter()
+            .filter(|e| core.contains(&e.antecedent) || core.contains(&e.consequent))
+            .copied()
+            .collect()
+    }
+
     pub async fn get_cognacy(&self, word: &Word) -> AppResult<Option<CognacyFull>> {
         let cognacy = self.find_cognacy(word.cognacy).await?;
 
         if let Some(cognacy) = cognacy {
-            // get all word IDs from the cognacy graph
-            let word_ids: Vec<Uuid> = match &cognacy.inner {
+            let (filtered_inner, word_ids): (CognacyInner, Vec<Uuid>) = match cognacy.inner {
                 CognacyInner::V1(schema) => {
+                    let filtered_edges = Self::filter_edges_for_focus(&schema.edges, word.id);
                     let mut ids = std::collections::HashSet::new();
-                    for edge in &schema.edges {
+                    ids.insert(word.id);
+                    for edge in &filtered_edges {
                         ids.insert(edge.antecedent);
                         ids.insert(edge.consequent);
                     }
-                    ids.into_iter().collect()
+                    let new_schema = CognacySchemaV1 {
+                        edges: filtered_edges,
+                        schema_version: schema.schema_version,
+                    };
+                    (CognacyInner::V1(new_schema), ids.into_iter().collect())
                 }
             };
 
@@ -1284,7 +1326,10 @@ impl WordRelationRepository {
             let words_map: HashMap<Uuid, Word> = words.into_iter().map(|w| (w.id, w)).collect();
 
             Ok(Some(CognacyFull {
-                cognacy,
+                cognacy: Cognacy {
+                    id: cognacy.id,
+                    inner: filtered_inner,
+                },
                 words: words_map,
             }))
         } else {
