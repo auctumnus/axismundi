@@ -80,6 +80,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/sound-change-sets/view.ts',
   'src/tooltip.ts',
   'src/translations/quotations-editor.tsx',
+  'src/panzoom-enhance.ts',
 ];
 
 async function bundleReactFiles() {

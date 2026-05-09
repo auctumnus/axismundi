@@ -65,18 +65,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const setRunning = () => {
       estimateButton.disabled = true;
-      estimateButton.textContent = "Estimating...";
+      estimateButton.ariaLabel = "Estimating IPA";
+      estimateButton.classList.add("loading");
+
       if (ipaSection) clearFieldErrors(ipaSection);
     };
 
     const setIdle = () => {
       estimateButton.disabled = false;
-      estimateButton.textContent = "Estimate IPA";
+      estimateButton.ariaLabel = "Estimate IPA";
+      estimateButton.classList.remove("loading");
     };
 
     const setErrored = (message: string) => {
       estimateButton.disabled = false;
-      estimateButton.textContent = "Estimate IPA";
+      estimateButton.ariaLabel = "Error estimating IPA";
+      estimateButton.classList.remove("loading");
       if (ipaSection) {
         const ul = getOrCreateFieldErrors(ipaSection);
         ul.innerHTML = "";

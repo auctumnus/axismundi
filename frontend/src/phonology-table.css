@@ -1,9 +1,14 @@
+.phonology-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+}
+
 table.phonology-table {
     border-spacing: 0;
     border-collapse: separate;
     border: var(--border);
     border-radius: var(--rounding);
-    width: 100%;
+    width: var(--page-width-standard);
     margin-block: 1rem;
     background-color: var(--background-panel);
     overflow: hidden;

@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {%- import "util.html" as u -%}
+{%- import "words/fragments/card.html" as word_card -%}
 {%- import "languages/fragments/footer.html" as lang_f -%}
 
 {% block title %}{{ word_category.name }} - {{ language.name }} - axismundi{% endblock %}
@@ -55,6 +56,25 @@
     </div>
     {% endif %}
 </div>
+
+<div class="header-with-actions">
+    <h2>words</h2>
+    <ul>
+        <li><a class="with-icon" href="/languages/{{ language.code }}/words?categories[]={{ word_category.abbreviation|urlencode }}">
+            {% call u::icon("list") %}
+            <span>view all</span>
+        </a></li>
+    </ul>
+</div>
+{% if !recent_words.is_empty() %}
+<ul class="card-list">
+    {% for word_with_meta in recent_words %}
+        {% call word_card::render(&word_with_meta) %}
+    {% endfor %}
+</ul>
+{% else %}
+<p class="empty-description">no words in this category yet</p>
+{% endif %}
 
 {% endblock %}
 

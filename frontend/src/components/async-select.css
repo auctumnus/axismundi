@@ -63,6 +63,39 @@
   }
 }
 
+.async-select__multi-value {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+}
+
+.async-select__multi-value__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 50%;
+  color: var(--foreground-secondary);
+  transition: background-color 150ms ease-in-out;
+  position: relative;
+  top: 1px;
+
+  &:hover {
+    background-color: var(--input-background-focus);
+    color: var(--foreground-primary);
+  }
+
+  svg.icon {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+}
+
+.async-select__multi-value__label {
+  font-size: .9rem;
+}
+
 .async-select__placeholder {
   color: var(--foreground-secondary);
 }

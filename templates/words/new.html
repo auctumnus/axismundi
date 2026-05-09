@@ -43,13 +43,13 @@
 {% endif %}
 
 <form id="new-word-form" class="default" method="post" action="/languages/{{ language.code }}/new-word">
-    <section>
+    <section class="word-section">
         <label for="word">Word</label>
         {% call u::field_error(name="word") %}
         <input type="text" id="word" name="word" required value="{{previous_word}}">
     </section>
 
-    <section>
+    <section class="select-word-class-section">
         <label for="word_class">Word class</label>
         {% call u::field_error(name="word_class") %}
         <div class="select-container">
@@ -65,9 +65,9 @@
     </section>
 
     {% if word_categories.is_empty() %}
-        <span class="hint">to use word categories, like noun animacy or verb conjugation classes, <a href="/languages/{{ language.code }}/new-word-category">add a word category</a></span>
+        <span class="hint" class="select-word-categories-section">to use word categories, like noun animacy or verb conjugation classes, <a href="/languages/{{ language.code }}/new-word-category">add a word category</a></span>
     {% else %}
-    <section>
+    <section class="select-word-categories-section">
         <label for="word_categories">Categories</label>
         {% call u::field_error(name="categories") %}
         <div id="word-categories-mount" class="async-multi-select-mount"
@@ -86,7 +86,7 @@
     </section>
     {% endif %}
 
-    <section>
+    <section class="definitions-section">
         {% call u::field_error(name="definitions") %}
         <div id="definitions-editor-mount">
             <label>Definitions</label>
@@ -103,7 +103,7 @@
         </div>
     </section>
 
-    <section>
+    <section class="ipa-section">
         <label for="ipa">IPA transcription (optional)</label>
         {% call u::field_error(name="ipa") %}
         <div class="ipa-estimator">
@@ -112,11 +112,11 @@
                 <button
                     type="submit"
                     id="estimate-ipa"
-                    class="secondary"
+                    class="icon gray"
                     formaction="/languages/{{ language.code }}/new-word/estimate-ipa"
                     data-sound-change-set="{{ sound_change_set.id }}"
                 >
-                    Estimate IPA
+                    <svg><use href="#icon-refresh"></use></svg>
                 </button>
             {% else %}
                 <span class="hint">to automatically estimate IPA, <a href="/languages/{{ language.code }}/sound-change-sets">create a sound change set</a> and mark it as an ipa estimator</span>
@@ -127,7 +127,7 @@
         {% endif %}
     </section>
 
-    <section>
+    <section class="notes-section">
         <label for="notes">Notes (optional)</label>
         {% call u::field_error(name="notes") %}
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>

@@ -38,6 +38,17 @@ const ClearIndicator = <OptionType,>({
   );
 };
 
+const CrossIcon = ({
+}) => {
+  return (
+    <span className="indicator">
+      <svg className="icon" aria-hidden>
+        <use href="#icon-close-small" />
+      </svg>
+    </span>
+  );
+}
+
 const NoOptionsMessage = <OptionType,>(props: NoticeProps<OptionType>) => {
   return (
     <div className="no-options">
@@ -65,6 +76,7 @@ export const AsyncSelect = <
         DropdownIndicator,
         ClearIndicator,
         NoOptionsMessage,
+        CrossIcon,
         ...props.components,
       }}
     />

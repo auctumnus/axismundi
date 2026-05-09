@@ -221,7 +221,7 @@ async fn home(
             s,
             contribution_stats.get_top_contributors(&lang.id, 5).await
         );
-        let is_liked = attempt!(s, languages.is_liked(&user.id, &lang.id).await);
+        let is_liked = attempt!(s, languages.is_liked(&lang.id, &user.id).await);
         let l = LanguagesWithContributors {
             language: lang.clone(),
             top_contributors,

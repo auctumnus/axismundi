@@ -257,7 +257,6 @@ const RichTextExample = React.forwardRef<CustomEditor, RichTextEditorProps>(
             renderElement={renderElement}
             renderLeaf={renderLeaf}
             spellCheck
-            autoFocus
             onKeyDown={onKeyDown}
           />
           {target && (

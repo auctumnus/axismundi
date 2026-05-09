@@ -1,3 +1,4 @@
+{%- import "util.html" as u -%}
 {% import 'languages/fragments/footer.html' as l %}
 
 {% macro word_class_section(word_class, language, can_edit_language) %}
@@ -7,8 +8,14 @@
         <ul>
             <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}">view word class</a></li>
             {% if can_edit_language %}
-                <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/edit">edit word class</a></li>
-                <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/delete">delete word class</a></li>
+                <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/edit">
+                    {% call u::icon("edit") %}
+                    <span>edit word class</span>
+                </a></li>
+                <li><a href="/languages/{{ language.code }}/word-classes/{{ word_class.abbreviation }}/delete">
+                    {% call u::icon("delete") %}
+                    <span>delete word class</span>
+                </a></li>
             {% endif %}
         </ul>
     </li>

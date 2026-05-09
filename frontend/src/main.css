@@ -75,7 +75,8 @@
   --header-height: 3rem;
   --user-panel-width: 200px;
 
-  --page-width: 800px;
+  --page-width-standard: 800px;
+  --page-width: var(--page-width-standard);
 
   --rounding: 4px;
 
@@ -211,7 +212,7 @@ header {
   }
 }
 
-body.js-mobile-nav.nav-sidebar-open header, body.js-mobile-nav.nav-sidebar-closing header {
+html.js-mobile-nav body.nav-sidebar-open header, html.js-mobile-nav body.nav-sidebar-closing header {
   box-shadow: none;
 }
 
@@ -552,6 +553,51 @@ footer {
     list-style: none;
     padding: 0;
 
+    li ul {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    li ul li {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+
+      padding-left: 0;
+      margin: 0;
+
+      padding-right: 1rem;
+
+      a {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: .5rem;
+        padding: .5rem .325rem;        
+        flex: 1;
+        background-color: transparent;
+
+        border-radius: var(--rounding);
+        transition: background-color var(--duration-very-fast) var(--curve);
+
+        &:not(:has(svg)) {
+          padding-left: calc(20px + .5rem + .325rem);
+        }
+
+        &:hover {
+          text-decoration: none;
+          background-color: color-mix(
+            in oklab,
+            var(--foreground-primary) 10%,
+            transparent
+          );
+        }
+      }
+    }
+
     li h2 {
       font-weight: 600;
       margin-bottom: 0.5rem;
@@ -560,8 +606,6 @@ footer {
 
     a {
       color: var(--foreground-secondary);
-
-      margin-top: 0.5rem;
 
       &:hover {
         color: var(--foreground-primary);
@@ -619,7 +663,7 @@ footer {
     top: calc(var(--header-height) + 1rem);
     left: 1rem;
 
-    width: calc(200px - 2rem);
+    width: calc(300px - 2rem);
     max-height: calc(100dvh - var(--header-height) - 2rem);
     overflow-y: auto;
   }
@@ -666,7 +710,7 @@ footer {
     opacity: 1;
   }
 
-  body.js-mobile-nav footer ul.sections {
+  html.js-mobile-nav footer ul.sections {
     position: fixed;
     top: calc(var(--header-height));
     left: 0;
@@ -688,12 +732,12 @@ footer {
       transform var(--duration-medium) var(--curve);
   }
 
-  body.js-mobile-nav.nav-sidebar-open footer ul.sections {
+  html.js-mobile-nav body.nav-sidebar-open footer ul.sections {
     transform: translateX(0);
     pointer-events: auto;
   }
 
-  body.js-mobile-nav.nav-sidebar-open #nav-sidebar-backdrop {
+  html.js-mobile-nav body.nav-sidebar-open #nav-sidebar-backdrop {
     left: min(80vw, 320px);
   }
 }
@@ -1035,6 +1079,10 @@ main > :is(h1, h2, h3), main .header-with-actions {
     align-items: flex-start;
   }
 
+  &:has(+ .phonology-table-scroll) {
+    margin-bottom: 0;
+  }
+
   ul {
     display: flex;
     flex-direction: row;
@@ -1084,6 +1132,7 @@ main > :is(h1, h2, h3), main .header-with-actions {
 
 a.icon.button,
 button.icon,
+form.default button.icon[type="submit"],
 .icon-button-container {
   display: inline-flex;
   flex-direction: column;

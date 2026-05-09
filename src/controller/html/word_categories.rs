@@ -23,7 +23,9 @@ use crate::{
         word_categories::{
             CreateWordCategory, UpdateWordCategory, WordCategory, WordCategoryRepository,
         },
+        words::{WordRepository, WordSearch, WordWithMeta},
     },
+    pagination::PaginatedRequest,
     util::{AppState, extract_session::Session},
 };
 
@@ -239,6 +241,7 @@ struct ViewWordCategoryTemplate {
     user_has_permission: bool,
     can_edit_language: bool,
     json_ld: String,
+    recent_words: Vec<WordWithMeta>,
 }
 
 async fn view_word_category(
@@ -248,6 +251,7 @@ async fn view_word_category(
     word_categories: WordCategoryRepository,
     permissions: LanguagePermissionRepository,
     users: UserRepository,
+    words: WordRepository,
     Path((code, abbreviation)): Path<(String, String)>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -311,6 +315,28 @@ async fn view_word_category(
         .map_err(Into::into)
     );
 
+    let recent_words_page = attempt!(
+        s,
+        words
+            .search(
+                &language.id,
+                PaginatedRequest {
+                    limit: 5,
+                    offset: 0,
+                },
+                WordSearch {
+                    categories: vec![word_category.abbreviation.clone()],
+                    ..Default::default()
+                },
+            )
+            .await
+    );
+
+    let mut recent_words = Vec::with_capacity(recent_words_page.items.len());
+    for word in recent_words_page.items {
+        recent_words.push(attempt!(s, words.materialize(word, s.user()).await));
+    }
+
     let template = ViewWordCategoryTemplate {
         current_user: s.user().cloned(),
         language,
@@ -320,6 +346,7 @@ async fn view_word_category(
         user_has_permission,
         can_edit_language: user_has_permission,
         json_ld,
+        recent_words,
     };
 
     let body = render_template(template);

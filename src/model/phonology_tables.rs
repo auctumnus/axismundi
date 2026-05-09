@@ -317,6 +317,8 @@ impl PhonologyTable {
         }
         html.push_str("</ul></div>");
 
+        html.push_str("<div class=\"phonology-table-scroll\">");
+
         write!(
             html,
             "<table class=\"phonology-table\" aria-labelledby=\"table-{}\">",
@@ -392,6 +394,7 @@ impl PhonologyTable {
         html.push_str("</tbody>");
 
         html.push_str("</table>");
+        html.push_str("</div>");
 
         html.push_str("<ol class=\"annotations\">");
         for (i, annotation) in body.annotations.iter().enumerate() {

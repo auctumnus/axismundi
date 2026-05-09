@@ -547,7 +547,7 @@ async fn view_phonology_table(
             .await
     );
     let is_liked = if let Some(user) = s.user() {
-        attempt!(s, languages.is_liked(&user.id, &language.id).await)
+        attempt!(s, languages.is_liked(&language.id, &user.id).await)
     } else {
         false
     };

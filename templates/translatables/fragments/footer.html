@@ -1,3 +1,4 @@
+{%- import "util.html" as u -%}
 {% macro translatable_section(translatable, can_edit_translatable) %}
 <li>
     <h2>{{ translatable.title }}</h2>
@@ -5,7 +6,10 @@
         <li><a href="/translatable/{{ translatable.slug }}">main page</a></li>
         <li><a href="/translatable/{{ translatable.slug }}/translations">translations</a></li>
         {% if can_edit_translatable %}
-            <li><a href="/translatable/{{ translatable.slug }}/edit">edit translatable</a></li>
+            <li><a href="/translatable/{{ translatable.slug }}/edit">
+                {% call u::icon("edit") %}
+                <span>edit translatable</span>
+            </a></li>
         {% endif %}
         <li><a href="/translatable/{{ translatable.slug }}/new-translation">new translation</a></li>
         <li><a href="/report/new?resource_type=translatable&resource_id={{ translatable.id }}">report</a></li>

@@ -328,7 +328,14 @@ impl WordRelationRepository {
                 consequent,
                 relation.kind as WordRelationType,
                 requestor.id,
-            ).fetch_one(&mut **tx).await?;
+            ).fetch_one(&mut **tx).await.map_err(|e| {
+                if let sqlx::Error::Database(db_err) = &e {
+                    if db_err.constraint() == Some("word_relations_antecedent_consequent_unique") {
+                        return bad_request("a relation between these two words already exists");
+                    }
+                }
+                e.into()
+            })?;
 
         // Check permissions on both languages with audit
         let permissions = LanguagePermissionRepository::new(self.state.clone());

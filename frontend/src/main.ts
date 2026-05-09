@@ -109,8 +109,6 @@ const initializeMobileNavSidebar = () => {
 
   const isMobile = () => window.innerWidth < 1200;
 
-  document.body.classList.add("js-mobile-nav");
-
   const backdrop = document.createElement("div");
   backdrop.id = "nav-sidebar-backdrop";
   document.body.appendChild(backdrop);

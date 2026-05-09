@@ -1,4 +1,5 @@
 {% import "languages/fragments/footer.html" as l %}
+{%- import "util.html" as u -%}
 
 {% macro word_section(word, language, can_edit, other_lemmata) %}
     {% call l::language_section(language, can_edit) %}
@@ -12,8 +13,14 @@
                 <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}">view all lemmata</a></li>
             {% endif %}
             {% if can_edit %}
-                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit">edit word</a></li>
-                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">delete word</a></li>
+                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit">
+                    {% call u::icon("edit") %}
+                    <span>edit word</span>
+                </a></li>
+                <li><a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">
+                    {% call u::icon("delete") %}
+                    <span>delete word</span>
+                </a></li>
             {% endif %}
             <li><a href="/report/new?resource_type=word&resource_id={{ word.id }}">report</a></li>
         </ul>

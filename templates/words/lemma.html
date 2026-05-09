@@ -7,8 +7,10 @@
 
 {% block head %}
 <script src="/static/like-button.js" type="module" defer></script>
+<script src="/static/panzoom-enhance.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/lemma.css">
 <link rel="stylesheet" href="/static/relation-card.css">
+<link rel="stylesheet" href="/static/panzoom-enhance.css">
 {% endblock %}
 
 {% block content %}
@@ -138,7 +140,7 @@
         <a class="button" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/loan">loan</a>
     </div>
 </div>
-{% else %}
+{% else if !recent_relations.is_empty() %}
 {% if let Some(cognacy) = cognacy %}
     <div class="card cognacy-card">
         <div class="header-with-actions">
@@ -168,7 +170,7 @@
                 </a></li>
             </ul>
         </div>
-        <div class="cognacy-svg">
+        <div class="cognacy-svg" data-panzoom data-panzoom-focus=".current-word">
             {{ cognacy | safe }}
         </div>
     </div>

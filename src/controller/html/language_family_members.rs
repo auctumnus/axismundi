@@ -187,7 +187,7 @@ async fn view_member(
                 .await
         );
         let is_liked = if let Some(user) = s.user() {
-            attempt!(s, languages.is_liked(&user.id, &language.id).await)
+            attempt!(s, languages.is_liked(&language.id, &user.id).await)
         } else {
             false
         };

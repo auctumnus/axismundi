@@ -1,14 +1,30 @@
+{%- import "util.html" as u -%}
 {% macro family_section(family, can_edit_family) %}
 <li>
     <h2>{{ family.name }}</h2>
     <ul>
         <li><a href="/language-families/{{ family.code }}">view language family</a></li>
-        <li><a href="/language-families/{{ family.code }}/members">members</a></li>
-        <li><a href="/language-families/{{ family.code }}/contributors">contributors</a></li>
+        <li><a href="/language-families/{{ family.code }}/members">
+            {% call u::icon("tree") %}
+            <span>members</span>
+        </a></li>
+        <li><a href="/language-families/{{ family.code }}/contributors">
+            {% call u::icon("group") %}
+            <span>contributors</span>
+        </a></li>
         {% if can_edit_family %}
-            <li><a href="/language-families/{{ family.code }}/edit">edit language family</a></li>
-            <li><a href="/language-families/{{ family.code }}/add-member">add member</a></li>
-            <li><a href="/language-families/{{ family.code }}/invites">invites</a></li>
+            <li><a href="/language-families/{{ family.code }}/edit">
+                {% call u::icon("edit") %}
+                <span>edit language family</span>
+            </a></li>
+            <li><a href="/language-families/{{ family.code }}/add-member">
+                {% call u::icon("plus") %}
+                <span>add member</span>
+            </a></li>
+            <li><a href="/language-families/{{ family.code }}/invites">
+                {% call u::icon("mail") %}
+                <span>invites</span>
+            </a></li>
         {% endif %}
     </ul>
 </li>

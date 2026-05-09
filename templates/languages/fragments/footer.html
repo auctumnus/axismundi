@@ -1,20 +1,43 @@
+{%- import "util.html" as u -%}
 {% macro language_section(language, can_edit_language) %}
 <li>
     <h2>{{ language.name }}</h2>
     <ul>
         <li><a href="/languages/{{ language.code }}">main page</a></li>
-        <li><a href="/languages/{{ language.code }}/words">dictionary</a></li>
-        <li><a href="/languages/{{ language.code }}/translations">translations</a></li>
+        <li><a href="/languages/{{ language.code }}/words">
+            {% call u::icon("article") %}
+            <span>dictionary</span>
+        </a></li>
+        <li><a href="/languages/{{ language.code }}/new-word">
+            {% call u::icon("plus") %}
+            <span>new word</span>
+        </a></li>
         <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
         <li><a href="/languages/{{ language.code }}/word-categories">word categories</a></li>
-        <li><a href="/languages/{{ language.code }}/contributors">contributors</a></li>
+        <li><a href="/languages/{{ language.code }}/translations">translations</a></li>
         <li><a href="/languages/{{ language.code }}/phonology-tables">phonology tables</a></li>
-        <li><a href="/languages/{{ language.code }}/sound-change-sets">sound change sets</a></li>
+        <li><a href="/languages/{{ language.code }}/sound-change-sets">
+            {% call u::icon("translate") %}
+            <span>sound change sets</span>
+        </a></li>
         {% if can_edit_language %}
-            <li><a href="/languages/{{ language.code }}/edit">edit language</a></li>
-            <li><a href="/languages/{{ language.code }}/invites">invites</a></li>
-            <li><a href="/languages/{{ language.code }}/import-words">import csv</a></li>
+            <li><a href="/languages/{{ language.code }}/edit">
+                {% call u::icon("edit") %}
+                <span>edit language</span>
+            </a></li>
+            <li><a href="/languages/{{ language.code }}/import-words">
+                {% call u::icon("upload") %}
+                <span>import csv</span>
+            </a></li>
+            <li><a href="/languages/{{ language.code }}/invites">
+                {% call u::icon("mail") %}
+                <span>invites</span>
+            </a></li>
         {% endif %}
+        <li><a href="/languages/{{ language.code }}/contributors">
+            {% call u::icon("group") %}
+            <span>contributors</span>
+        </a></li>
         <li><a href="/report/new?resource_type=language&resource_id={{ language.id }}">report</a></li>
     </ul>
 </li>

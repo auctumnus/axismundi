@@ -123,6 +123,7 @@ form.default, .modal-inner-container {
     font-size: 1rem;
     outline: 0;
     outline-color: transparent;
+    height: 2.5rem;
 
     transition:
       background-color 250ms ease-in-out,

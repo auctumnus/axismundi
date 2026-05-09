@@ -209,6 +209,7 @@ function DefinitionRow({
         onChange={(e) => setLocalCtx(e.target.value)}
         onBlur={handleBlur}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       />
     </motion.div>
   );

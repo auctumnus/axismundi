@@ -1,3 +1,4 @@
+{%- import "util.html" as u -%}
 {%- import "languages/fragments/footer.html" as l -%}
 {%- import "translatables/fragments/footer.html" as t -%}
 
@@ -9,7 +10,10 @@
         <ul>
             <li><a href="/translatable/{{ translatable.slug }}/translation/{{ language.code }}">view translation</a></li>
             {% if can_edit_language %}
-                <li><a href="/translatable/{{ translatable.slug }}/edit-translation/{{ language.code }}">edit translation</a></li>
+                <li><a href="/translatable/{{ translatable.slug }}/edit-translation/{{ language.code }}">
+                    {% call u::icon("edit") %}
+                    <span>edit translation</span>
+                </a></li>
             {% endif %}
             <li><a href="/report/new?resource_type=translation&resource_id={{ translation.id }}">report</a></li>
         </ul>

@@ -13,8 +13,10 @@
 {{ json_ld | safe }}
 </script>
 <script src="/static/like-button.js" type="module" defer></script>
+<script src="/static/panzoom-enhance.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/family-view.css">
 <link rel="stylesheet" href="/static/language-view.css">
+<link rel="stylesheet" href="/static/panzoom-enhance.css">
 {% endblock %}
 
 {% block content %}
@@ -115,7 +117,7 @@
             </a></li>
         </ul>
     </div>
-    <div class="family-tree-svg-container">
+    <div class="family-tree-svg-container" data-panzoom>
         {{ family_tree_svg | safe }}
     </div>
 </div>

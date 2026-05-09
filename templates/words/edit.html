@@ -100,11 +100,11 @@
                 <button
                     type="submit"
                     id="estimate-ipa"
-                    class="secondary"
+                    class="icon gray"
                     formaction="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/estimate-ipa"
                     data-sound-change-set="{{ sound_change_set.id }}"
                 >
-                    Estimate IPA
+                    <svg><use href="#icon-refresh"></use></svg>
                 </button>
             {% else %}
                 <span class="hint">to automatically estimate IPA, <a href="/languages/{{ language.code }}/sound-change-sets">create a sound change set</a> and mark it as an ipa estimator</span>

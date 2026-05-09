@@ -521,7 +521,7 @@ async fn new_translation_step_1_submit(
             .get_top_contributors(&language.id, 5)
             .await
     );
-    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
     let language_with_contributors = LanguagesWithContributors {
         language: language.clone(),
         top_contributors,
@@ -607,7 +607,7 @@ async fn new_translation_step_2_submit(
             .get_top_contributors(&language.id, 5)
             .await
     );
-    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
 
     let create = CreateTranslation {
         translated_text: form.translated_text.clone(),
@@ -944,7 +944,7 @@ async fn edit_translation_form(
             .get_top_contributors(&language.id, 5)
             .await
     );
-    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
     let language_with_contributors = LanguagesWithContributors {
         language: language.clone(),
         top_contributors,
@@ -1077,7 +1077,7 @@ async fn edit_translation_submit(
             .get_top_contributors(&language.id, 5)
             .await
     );
-    let is_liked = attempt!(s, languages.is_liked(&user.id, &language.id).await);
+    let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
     let language_with_contributors = LanguagesWithContributors {
         language: language.clone(),
         top_contributors,
