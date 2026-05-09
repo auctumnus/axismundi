@@ -656,20 +656,20 @@ footer {
   }
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1250px) {
   footer ul.sections {
     flex-direction: column;
     position: fixed;
     top: calc(var(--header-height) + 1rem);
     left: 1rem;
 
-    width: calc(300px - 2rem);
+    width: calc(250px - 2rem);
     max-height: calc(100dvh - var(--header-height) - 2rem);
     overflow-y: auto;
   }
 }
 
-@media (max-width: 1199.98px) {
+@media (max-width: 1249.98px) {
   body.nav-sidebar-open {
     overflow: hidden;
   }
@@ -730,6 +730,14 @@ footer {
     pointer-events: none;
     transition:
       transform var(--duration-medium) var(--curve);
+
+    > li {
+      width: 100%;
+    }
+
+    li ul li a {
+      width: 100%;
+    }
   }
 
   html.js-mobile-nav body.nav-sidebar-open footer ul.sections {
