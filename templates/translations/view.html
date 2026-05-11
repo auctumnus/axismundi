@@ -27,16 +27,10 @@
 
 {% call translatable_full_card::render(&translatable_with_meta, can_edit_translatable, &rendered_description) %}
 
-<div class="card translation-card">
+<div class="card translation-card full-card">
     <div class="header-with-actions">
         {% if !translation.translated_title.is_empty() %}
-            <div class="with-subtitle">
-                <h1>{{ translation.translated_title }}</h1>
-                <div class="subtitle">
-                    <span>into</span>
-                    <a href="/languages/{{ &language.code }}">{{ &language.name }}</a>
-                </div>
-            </div>
+            <h1>{{ translation.translated_title }}</h1>
         {% else %}
             <h1><a href="/languages/{{ &language.code }}">{{ &language.name }}</a></h1>
         {% endif %}
@@ -94,12 +88,18 @@
         </div>
     {% endif %}
 
-    <table>
+    <table class="metadata-table">
         <tr>
             <th>created</th>
             <td>{% call u::relative(&translation.created_at) %}</td>
         </tr>
         {% call u::meta_creator_row(&translation_creator) %}
+        <tr>
+            <th>into</th>
+            <td>
+                <a href="/languages/{{ &language.code }}">{{ &language.name }}</a>
+            </td>
+        </tr>
         {% call u::meta_updated_row(&translation.updated_at, translation_updater.as_ref()) %}
     </table>
 </div>

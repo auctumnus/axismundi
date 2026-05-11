@@ -106,7 +106,7 @@
             <div class="rendered-notes markdown-content">{{ rendered_notes|safe }}</div>
         {% endif %}
         
-        <table>
+        <table class="metadata-table">
             <tr>
                 <th>created</th>
                 <td>{% call u::relative(&word.created_at) %}</td>

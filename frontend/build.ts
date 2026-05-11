@@ -81,6 +81,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/tooltip.ts',
   'src/translations/quotations-editor.tsx',
   'src/panzoom-enhance.ts',
+  'src/components/markdown-editor/markdown-editor.ts',
 ];
 
 async function bundleReactFiles() {

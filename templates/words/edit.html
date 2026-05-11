@@ -138,7 +138,9 @@
 
 {% block scripts %}
 <script type="module" src="/static/word-categories-multiselect.js"></script>
-<script type="module">
+<script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
+<link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
+<script defer>
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountDefinitionsEditor) {
       const initial = JSON.parse(document.getElementById('definitions-initial').textContent);
@@ -147,17 +149,8 @@
         isEdit: true,
       });
     }
-    if (window.mountFormEditor) {
-      const notesTextarea = document.getElementById('notes');
-      const notesDiv = document.createElement('div');
-      notesDiv.id = 'notes';
-      notesTextarea.replaceWith(notesDiv);
-      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
-      window.mountFormEditor('notes', {
-        initialValue: initialValue,
-        inputName: 'notes',
-        formId: 'edit-word-form'
-      });
+    if (window.mountMarkdownEditor) {
+      window.mountMarkdownEditor('#notes', 'notes-label');
     }
     if (window.mountWordCategoriesMultiselect) {
       const allOptions = JSON.parse(document.getElementById('word-categories-options').textContent);

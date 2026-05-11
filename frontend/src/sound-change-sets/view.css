@@ -21,34 +21,4 @@
   .header-with-actions {
     margin-top: 0.5rem;
   }
-
-  > table {
-    margin-top: 1rem;
-    padding-top: 0;
-    border: 0;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-
-    tbody {
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-
-    tr {
-      display: flex;
-      flex-direction: row;
-      gap: 0.5rem;
-    }
-
-    th {
-      color: var(--foreground-secondary);
-      font-weight: normal;
-      text-align: left;
-    }
-  }
 }
