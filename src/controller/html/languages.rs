@@ -256,7 +256,10 @@ struct ViewLanguageTemplate {
     primary_family: Option<FamilyWithContributors>,
     other_families: Vec<FamilyWithContributors>,
     owner: User,
+    updater: Option<User>,
     contributor_count: i64,
+    top_contributors: Vec<User>,
+    contributors_link: String,
     rendered_description: String,
     can_edit_language: bool,
     can_delete_language: bool,
@@ -282,11 +285,17 @@ async fn view_language(
     permissions: LanguagePermissionRepository,
     invites: crate::model::language_invites::LanguageInviteRepository,
     phonology_tables: PhonologyTableRepository,
+    contribution_stats: ContributionStatsRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
     Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let language = attempt!(s, languages.find_by_code(&code).await);
     let owner = attempt!(s, languages.find_owner(language.id).await);
+    let updater = if language.updated_by != language.created_by {
+        Some(attempt!(s, users.find_by_id(language.updated_by).await))
+    } else {
+        None
+    };
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
     {
@@ -319,6 +328,12 @@ async fn view_language(
         );
     }
     let contributor_count = attempt!(s, languages.count_contributors(language.id).await);
+    let top_contributors = attempt!(
+        s,
+        contribution_stats
+            .get_top_contributors(&language.id, 5)
+            .await
+    );
     let rendered_description = attempt!(s, LanguageRepository::render_description(&language));
     let get_five = PaginatedRequest {
         limit: 5,
@@ -492,13 +507,18 @@ async fn view_language(
             .map_err(Into::into)
     );
 
+    let contributors_link = format!("/languages/{}/contributors", language.code);
+
     let template = ViewLanguageTemplate {
         current_user: s.user().cloned(),
         recent_words: words_with_meta,
         recent_translations: translations_with_authors,
         language,
         owner,
+        updater,
         contributor_count,
+        contributors_link,
+        top_contributors,
         rendered_description,
         can_edit_language,
         can_delete_language,

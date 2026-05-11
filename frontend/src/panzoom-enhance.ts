@@ -66,6 +66,7 @@ function makeControls(
   svg: SVGSVGElement,
   scene: SVGGraphicsElement,
   instance: PanZoom,
+  focusTarget: SVGGraphicsElement | null,
 ): HTMLDivElement {
   const wrap = document.createElement('div');
   wrap.className = 'panzoom-controls';
@@ -82,7 +83,13 @@ function makeControls(
   zoomOut.addEventListener('click', () => zoomAt(1 / 1.4));
 
   const reset = makeButton('reset view', 'refresh');
-  reset.addEventListener('click', () => fitToContainer(svg, scene, instance));
+  reset.addEventListener('click', () => {
+    if (focusTarget) {
+      focusOn(svg, focusTarget, instance);
+    } else {
+      fitToContainer(svg, scene, instance);
+    }
+  });
 
   wrap.append(zoomIn, zoomOut, reset);
   // stop pointer events from initiating a pan on the svg
@@ -162,7 +169,7 @@ function enhance(container: HTMLElement): PanZoom | null {
     }
   });
 
-  container.appendChild(makeControls(svg, scene, instance));
+  container.appendChild(makeControls(svg, scene, instance, focusTarget));
 
   return instance;
 }

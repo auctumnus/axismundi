@@ -10,9 +10,8 @@
 <link rel="stylesheet" href="/static/components/async-select.css">
 <link rel="stylesheet" href="/static/words/edit.css">
 <script defer src="/static/words/edit.js"></script>
-<link rel="stylesheet" href="/static/slate-editor.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-<script type="module" src="/static/form-editor.js"></script>
+<link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
+<script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
 <script type="module" src="/static/definitions-editor.js"></script>
 {% endblock %}
 
@@ -128,7 +127,7 @@
     </section>
 
     <section class="notes-section">
-        <label for="notes">Notes (optional)</label>
+        <label for="notes" id="notes-label">Notes (optional)</label>
         {% call u::field_error(name="notes") %}
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
@@ -162,17 +161,8 @@
         isEdit: false,
       });
     }
-    if (window.mountFormEditor) {
-      const notesTextarea = document.getElementById('notes');
-      const notesDiv = document.createElement('div');
-      notesDiv.id = 'notes';
-      notesTextarea.replaceWith(notesDiv);
-      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
-      window.mountFormEditor('notes', {
-        initialValue: initialValue,
-        inputName: 'notes',
-        formId: 'new-word-form'
-      });
+    if (window.mountMarkdownEditor) {
+      window.mountMarkdownEditor('#notes', 'notes-label');
     }
     if (window.mountWordCategoriesMultiselect) {
       const allOptions = JSON.parse(document.getElementById('word-categories-options').textContent);
@@ -187,7 +177,6 @@
   });
 </script>
 <script type="application/json" id="definitions-initial">{{ previous_definitions_json | safe }}</script>
-<script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 <script type="application/json" id="word-categories-options">{{ word_categories_json | safe }}</script>
 <script type="application/json" id="word-categories-selected">{{ selected_category_abbrevs | json | safe }}</script>
 {% endblock %}

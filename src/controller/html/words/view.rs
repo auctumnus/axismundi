@@ -19,7 +19,7 @@ use crate::{
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         quotations::{QuotationRepository, QuotationWithSpan},
-        users::User,
+        users::{User, UserRepository},
         word_categories::{WordCategory, WordCategoryRepository},
         word_classes::WordClassRepository,
         word_relations::{SearchWordRelations, WordRelationRepository, WordRelationSearchResult},
@@ -51,6 +51,7 @@ struct LemmaTemplate {
     user_has_permission: bool,
     rendered_notes: String,
     creator: User,
+    updater: Option<User>,
     contributor_count: i64,
     is_liked: bool,
     recent_relations: Vec<WordRelationSearchResult>,
@@ -204,6 +205,7 @@ pub(super) async fn view_lemma(
     word_categories_repo: WordCategoryRepository,
     permissions: LanguagePermissionRepository,
     quotations: QuotationRepository,
+    users: UserRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
     Query(params): Query<BackQuery>,
     user_agent: Option<TypedHeader<UserAgent>>,
@@ -282,6 +284,13 @@ pub(super) async fn view_lemma(
 
     let creator = attempt!(s, words.find_creator(&word.id).await);
 
+    let updater = match (word._updated_by, word._created_by) {
+        (Some(updated_by), Some(created_by)) if updated_by != created_by => {
+            Some(attempt!(s, users.find_by_id(updated_by).await))
+        }
+        _ => None,
+    };
+
     let contributor_count = attempt!(s, words.count_contributors(word.id).await);
 
     let is_liked = if let Some(user) = &current_user {
@@ -338,6 +347,7 @@ pub(super) async fn view_lemma(
         user_has_permission,
         rendered_notes,
         creator,
+        updater,
         contributor_count,
         is_liked,
         recent_relations,

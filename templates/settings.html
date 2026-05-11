@@ -6,9 +6,8 @@
 
 {% block head %}
 <link rel="stylesheet" href="/static/settings.css">
-<link rel="stylesheet" href="/static/slate-editor.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-<script type="module" src="/static/form-editor.js"></script>
+<link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
+<script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
 <script src="/static/settings.js" defer></script>
 <noscript>
     <style>
@@ -49,7 +48,7 @@
     </section>
 
     <section>
-        <label for="description">Description (optional)</label>
+        <label for="description" id="description-label">Description (optional)</label>
         {% call u::field_error(name="description") %}
         <textarea id="description" name="description" rows="4">{{prev!(current_user, previous_input, description)}}</textarea>
     </section>
@@ -154,19 +153,9 @@
 
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
-    if (window.mountFormEditor) {
-      const descriptionTextarea = document.getElementById('description');
-      const descriptionDiv = document.createElement('div');
-      descriptionDiv.id = 'description';
-      descriptionTextarea.replaceWith(descriptionDiv);
-      const initialValue = JSON.parse(document.getElementById('description-initial-value').textContent);
-      window.mountFormEditor('description', {
-        initialValue: initialValue,
-        inputName: 'description',
-        formId: 'settings-form'
-      });
+    if (window.mountMarkdownEditor) {
+      window.mountMarkdownEditor('#description', 'description-label');
     }
   });
 </script>
-<script type="application/json" id="description-initial-value">{{ prev!(current_user, previous_input, description) | json | safe }}</script>
 {% endblock %}

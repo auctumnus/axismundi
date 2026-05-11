@@ -7,9 +7,8 @@
 {% block title %}add grouping in {{ family.family.name }} - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/slate-editor.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-<script type="module" src="/static/form-editor.js"></script>
+<link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
+<script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -50,7 +49,7 @@
     </section>
 
     <section>
-        <label for="notes">Notes</label>
+        <label for="notes" id="notes-label">Notes</label>
         {% call u::field_error(name="notes") %}
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
@@ -60,21 +59,11 @@
 
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
-    if (window.mountFormEditor) {
-      const notesTextarea = document.getElementById('notes');
-      const notesDiv = document.createElement('div');
-      notesDiv.id = 'notes';
-      notesTextarea.replaceWith(notesDiv);
-      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
-      window.mountFormEditor('notes', {
-        initialValue: initialValue,
-        inputName: 'notes',
-        formId: 'add-grouping-form'
-      });
+    if (window.mountMarkdownEditor) {
+      window.mountMarkdownEditor('#notes', 'notes-label');
     }
   });
 </script>
-<script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 {% endblock %}
 
 {% block breadcrumb %}

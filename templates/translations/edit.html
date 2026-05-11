@@ -17,14 +17,14 @@
 </script>
 <link rel="stylesheet" href="/static/components/async-select.css">
 <link rel="stylesheet" href="/static/word-combobox.css">
-<link rel="stylesheet" href="/static/slate-editor.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-<script type="module" src="/static/form-editor.js"></script>
+<link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
+<script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
 <script type="module" src="/static/translations/quotations-editor.js"></script>
 <link rel="stylesheet" href="/static/translations/quotations-editor.css">
 <script src="/static/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/translatables/full-card.css">
 <link rel="stylesheet" href="/static/components/modal.css">
+<link rel="stylesheet" href="/static/slate-editor.css">
 {% endblock %}
 {% block content %}
 
@@ -85,7 +85,7 @@
     </section>
 
     <section>
-        <label for="notes">Notes</label>
+        <label for="notes" id="notes-label">Notes</label>
         {% call u::field_error(name="notes") %}
         <textarea id="notes" name="notes">{{ previous_notes }}</textarea>
     </section>
@@ -98,21 +98,11 @@
 
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
-    if (window.mountFormEditor) {
-      const descriptionTextarea = document.getElementById('notes');
-      const descriptionDiv = document.createElement('div');
-      descriptionDiv.id = 'notes';
-      descriptionTextarea.replaceWith(descriptionDiv);
-      const initialValue = JSON.parse(document.getElementById('notes-initial-value').textContent);
-      window.mountFormEditor('notes', {
-        initialValue: initialValue,
-        inputName: 'notes',
-        formId: 'edit-translation-form'
-      });
+    if (window.mountMarkdownEditor) {
+      window.mountMarkdownEditor('#notes', 'notes-label');
     }
   });
 </script>
-<script type="application/json" id="notes-initial-value">{{ previous_notes | json | safe }}</script>
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountQuotationsEditor) {

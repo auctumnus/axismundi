@@ -15,12 +15,12 @@
             </span>
             <span class="summary ellipse">{{ crate::util::first_sentence(&translation_with_meta.translation.translated_text) }}</span>
             <span class="creator summary">
+                {% call u::user_display(&translation_with_meta.author, "small") %}
+                <span class="spacer" aria-hidden>·</span>
                 {% if kind.to_string() == "translatable".to_string() %}
                     <span>{{ translation_with_meta.translation.language_name }}</span>
                     <span class="spacer" aria-hidden>·</span>
                 {% endif %}
-                {% call u::user_display(&translation_with_meta.author, "small") %}
-                <span class="spacer" aria-hidden>·</span>
                 {% call u::relative(&translation_with_meta.translation.created_at) %}
             </span>
         </span>

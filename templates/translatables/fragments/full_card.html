@@ -3,13 +3,7 @@
 {% macro render(translatable_with_meta, can_edit_translatable, rendered_description) %}
 <div class="card full-card">
     <div class="header-with-actions">
-        <div class="with-subtitle">
-            <h1>{{ translatable_with_meta.translatable.title }}</h1>
-            <div class="contributors">
-                <span>added by</span>
-                {% call u::badge(&translatable_with_meta.creator, size="small") %}
-            </div>
-        </div>
+        <h1>{{ translatable_with_meta.translatable.title }}</h1>
         <ul class="icons">
             {% if can_edit_translatable %}
             <li>
@@ -92,10 +86,20 @@
             </div>
         {% endif %}
     </div>
+
+    <table class="metadata-table">
+        <tr>
+            <th>created</th>
+            <td>{% call u::relative(&translatable_with_meta.translatable.created_at) %}</td>
+        </tr>
+        {% call u::meta_creator_row(&translatable_with_meta.creator) %}
+        {% call u::meta_updated_row(&translatable_with_meta.translatable.updated_at, translatable_with_meta.updater.as_ref()) %}
+    </table>
 </div>
 <script defer>
     document.addEventListener("DOMContentLoaded", () => {
         const expandableLabel = document.querySelector(".expandable-label");
+        if(!expandableLabel) return;
         const expandableContent = document.querySelector(".expandable-content");
         expandableLabel.addEventListener("click", () => {
             expandableContent.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -309,3 +309,8 @@ button.with-icon.add-definition {
   }
 }
 
+#estimate-ipa {
+  height: 2.5rem;
+  width: 2.5rem;
+  padding: .5rem;
+}

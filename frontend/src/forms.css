@@ -123,7 +123,10 @@ form.default, .modal-inner-container {
     font-size: 1rem;
     outline: 0;
     outline-color: transparent;
-    height: 2.5rem;
+
+    &:not(textarea) {
+      height: 2.5rem;
+    }
 
     transition:
       background-color 250ms ease-in-out,
@@ -420,6 +423,12 @@ button.search.button[type="submit"] {
 .search-bar-container {
   display: flex;
   flex-direction: row;
+
+  input[type="search"] {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    height: 2.9rem !important;
+  }
 }
 
 section.search-controls {

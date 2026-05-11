@@ -477,6 +477,11 @@ async fn view(
     };
 
     let author = attempt!(s, users.find_by_id(set.created_by).await);
+    let updater = if set.updated_by != set.created_by {
+        Some(attempt!(s, users.find_by_id(set.updated_by).await))
+    } else {
+        None
+    };
 
     let (language_with_contributors, can_edit_language, _can_delete_language) = attempt!(
         s,
@@ -501,6 +506,7 @@ async fn view(
         current_user: s.user().cloned(),
         set,
         author,
+        updater,
         rendered_description,
         can_edit: can_edit_language,
         back: back_query.back.unwrap_or_default(),
@@ -1281,6 +1287,7 @@ struct ViewGlobalTemplate {
     current_user: Option<User>,
     set: SoundChangeSet,
     author: User,
+    updater: Option<User>,
     rendered_description: String,
     can_edit: bool,
     back: String,
@@ -1308,6 +1315,11 @@ async fn view_global(
     };
 
     let author = attempt!(s, users.find_by_id(set.created_by).await);
+    let updater = if set.updated_by != set.created_by {
+        Some(attempt!(s, users.find_by_id(set.updated_by).await))
+    } else {
+        None
+    };
 
     let can_edit = if let Some(user) = s.user() {
         sets.can_edit(user.id, &set).await.unwrap_or(false)
@@ -1366,6 +1378,7 @@ async fn view_global(
         current_user: s.user().cloned(),
         set,
         author,
+        updater,
         rendered_description,
         can_edit,
         back: back_query.back.unwrap_or_default(),

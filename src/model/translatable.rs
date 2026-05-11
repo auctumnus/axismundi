@@ -41,7 +41,6 @@ pub struct Translatable {
     #[serde(skip_serializing)]
     pub created_by: Uuid,
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
     pub updated_by: Uuid,
 }
 
@@ -50,6 +49,7 @@ pub struct TranslatableWithMeta {
     pub translatable: Translatable,
     pub is_liked: bool,
     pub creator: User,
+    pub updater: Option<User>,
 }
 
 impl Translatable {
@@ -129,10 +129,16 @@ impl TranslatableRepository {
         };
         let users = crate::model::users::UserRepository::new(self.state.clone());
         let creator = users.find_by_id(translatable.created_by).await?;
+        let updater = if translatable.updated_by != translatable.created_by {
+            Some(users.find_by_id(translatable.updated_by).await?)
+        } else {
+            None
+        };
         Ok(TranslatableWithMeta {
             translatable,
             is_liked,
             creator,
+            updater,
         })
     }
 

@@ -28,33 +28,10 @@
   }
 }
 
-.word-card-full table {
-  margin-top: 1rem;
-  padding-top: 0;
-  border: 0;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-
-  tbody {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  tr {
-    display: flex;
-    flex-direction: row;
-    gap: 0.5rem;
-  }
-
-  th {
-    color: var(--foreground-secondary);
-    font-weight: normal;
-    text-align: left;
+.word-card-full .header-with-actions {
+  margin-bottom: 0px;
+  .subtitle {
+    margin-top: .5rem;
   }
 }
 
@@ -111,7 +88,6 @@ ul.quotations {
   .cognacy-svg {
     overflow: auto;
     margin-top: 0px;
-    padding: 0.5rem;
     background-color: var(--background-page);
     border: var(--border);
     border-radius: var(--rounding);

@@ -684,6 +684,7 @@ struct ViewTranslationTemplate {
     language: Language,
     translation: Translation,
     translation_creator: User,
+    translation_updater: Option<User>,
     #[allow(dead_code)]
     current_user_has_permission: bool,
     can_edit_translatable: bool,
@@ -719,6 +720,11 @@ async fn view_translation(
     );
 
     let translation_creator = attempt!(s, users.find_by_id(translation.created_by).await);
+    let translation_updater = if translation.updated_by != translation.created_by {
+        Some(attempt!(s, users.find_by_id(translation.updated_by).await))
+    } else {
+        None
+    };
 
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
@@ -851,6 +857,7 @@ async fn view_translation(
         language,
         translation,
         translation_creator,
+        translation_updater,
         current_user_has_permission,
         can_edit_translatable,
         can_edit_language,

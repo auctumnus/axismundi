@@ -66,17 +66,7 @@
         <div class="banner"><img src="{{ banner_url }}" alt="" aria-hidden="true"></div>
     {% endif %}
     <div class="header-with-actions">
-        <div class="with-subtitle">
-            <h1>{{ language.name }}</h1>
-            <div class="contributors">
-                <span>by</span>
-                {% call u::badge(&owner, size="small") %}
-                {% if contributor_count > 0 %}
-                    <span>and</span>
-                    <a class="and-more" href="/languages/{{ language.code }}/contributors">{{ contributor_count }} contributor{% if contributor_count != 1 %}s{% endif %}</a>
-                {% endif %}
-            </div>
-        </div>
+        <h1>{{ language.name }}</h1>
         <ul class="icons">
             {% if can_edit_language %}
                 <li><a class="icon button gray" href="/languages/{{ language.code }}/edit" data-tooltip="Edit language">
@@ -105,11 +95,13 @@
         <p class="empty-description">no description yet</p>
     {% endif %}
 
-    <table>
+    <table class="metadata-table">
         <tr>
             <th>created</th>
             <td>{% call u::relative(&language.created_at) %}</td>
         </tr>
+        {% call u::meta_contributors_row(top_contributors, contributors_link) %}
+        {% call u::meta_updated_row(&language.updated_at, updater.as_ref()) %}
         <tr>
             <th>words</th>
             <td>{{ word_count }}</td>
