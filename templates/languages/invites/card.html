@@ -11,20 +11,18 @@
         <span class="invite-permissions">
             as {{ permission_level.display_name() }}
         </span>
-        <span class="invite-meta">
-            <span class="invite-timestamp">
+        <ul class="card-meta invite-meta">
+            <li class="invite-timestamp">
                 {% call u::relative(&invite.sent_at) %}
-            </span>
+            </li>
             {% if let Some(accepted_at) = &invite.accepted_at %}
-                <span class="invite-accepted">
+                <li class="invite-accepted">
                     Accepted {% call u::relative(accepted_at) %}
-                </span>
+                </li>
             {% else %}
-                <span class="invite-pending">Pending
-                </span>
+                <li class="invite-pending">Pending</li>
             {% endif %}
-
-        </span>
+        </ul>
     </span>
 
     {% if can_revoke %}

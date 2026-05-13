@@ -6,11 +6,12 @@
 {% block title %}{{ word.word }}{% if other_lemmata %} ({{ word.lemma }}){% endif %} - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
-<script src="/static/like-button.js" type="module" defer></script>
-<script src="/static/panzoom-enhance.js" type="module" defer></script>
-<link rel="stylesheet" href="/static/lemma.css">
-<link rel="stylesheet" href="/static/relation-card.css">
-<link rel="stylesheet" href="/static/panzoom-enhance.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<script src="/static/components/panzoom/panzoom-enhance.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/page/words/lemma.css">
+<link rel="stylesheet" href="/static/components/cards/relation-card.css">
+<link rel="stylesheet" href="/static/components/panzoom/panzoom-enhance.css">
+<link rel="stylesheet" href="/static/components/metadata-table.css">
 {% endblock %}
 
 {% block content %}
@@ -103,7 +104,7 @@
         {% endif %}
 
         {% if !rendered_notes.is_empty() %}
-            <div class="rendered-notes markdown-content">{{ rendered_notes|safe }}</div>
+            <div class="rendered-notes markdown">{{ rendered_notes|safe }}</div>
         {% endif %}
         
         <table class="metadata-table">

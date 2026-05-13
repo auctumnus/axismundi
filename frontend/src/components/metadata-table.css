@@ -1,0 +1,30 @@
+.metadata-table {
+  margin-top: 1rem;
+  padding-top: 0;
+  border: 0;
+  font-size: 0.9rem;
+  gap: 0.5rem;
+
+  &,
+  tbody {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  tbody {
+    gap: 0.125rem 0.5rem;
+  }
+
+  tr {
+    display: flex;
+    flex-direction: row;
+    gap: 0.25rem;
+  }
+
+  th {
+    color: var(--foreground-secondary);
+    font-weight: normal;
+    text-align: left;
+  }
+}

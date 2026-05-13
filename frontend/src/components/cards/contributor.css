@@ -1,0 +1,54 @@
+.contributor-card {
+  display: flex;
+  flex-direction: row;
+  border: var(--border);
+  border-radius: var(--rounding);
+  background-color: var(--background-panel);
+  padding: 1rem;
+  align-items: center;
+
+  transition:
+    border-color var(--duration-very-fast) ease-in-out,
+    box-shadow var(--duration-very-fast) ease-in-out;
+
+  &:hover {
+    border-color: var(--foreground-secondary);
+  }
+
+  .left {
+    flex-grow: 1;
+  }
+
+  .contributor-info {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    width: 100%;
+    margin-bottom: 1rem;
+    align-items: center;
+  }
+
+  .contributor-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-grow: 1;
+  }
+
+  .contribution-stats {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
+}
+
+.search-form {
+  margin-bottom: 1.5rem;
+
+  .form-group {
+    margin-bottom: 0;
+  }
+}

@@ -191,6 +191,7 @@ const mountMarkdownEditor = (target: string, labelID: string) => {
             history(),
             markdown(),
             syntaxHighlighting(mdHighlight),
+            EditorView.lineWrapping,
             keymap.of([
                 ...defaultKeymap,
                 ...historyKeymap,

@@ -6,7 +6,7 @@
 {% block title %}derive {{ word.word.word }}? - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/words/derive-or-loan.css">
+<link rel="stylesheet" href="/static/components/disambiguation.css">
 {% endblock %}
 
 {% block content %}
@@ -22,9 +22,9 @@
     </div>
 </div>
 
-<ul class="derive-or-loan-options card-list">
+<ul class="disambiguation-options card-list">
     <li>
-        <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive-into-same-language">
+        <a class="card disambiguation-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive-into-same-language">
             <div class="left" aria-hidden>
                 {% call u::icon("arrow-downward") %}
             </div>
@@ -37,7 +37,7 @@
     </li>
     {% if has_families %}
         <li>
-            <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive-into-different-language">
+            <a class="card disambiguation-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive-into-different-language">
                 <div class="left" aria-hidden>
                     {% call u::icon("arrow-split") %}
                 </div>

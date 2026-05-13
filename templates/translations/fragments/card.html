@@ -14,15 +14,13 @@
                 {% endif %}
             </span>
             <span class="summary ellipse">{{ crate::util::first_sentence(&translation_with_meta.translation.translated_text) }}</span>
-            <span class="creator summary">
-                {% call u::user_display(&translation_with_meta.author, "small") %}
-                <span class="spacer" aria-hidden>·</span>
+            <ul class="card-meta">
+                <li>{% call u::user_display(&translation_with_meta.author, "small") %}</li>
                 {% if kind.to_string() == "translatable".to_string() %}
-                    <span>{{ translation_with_meta.translation.language_name }}</span>
-                    <span class="spacer" aria-hidden>·</span>
+                    <li>{{ translation_with_meta.translation.language_name }}</li>
                 {% endif %}
-                {% call u::relative(&translation_with_meta.translation.created_at) %}
-            </span>
+                <li>{% call u::relative(&translation_with_meta.translation.created_at) %}</li>
+            </ul>
         </span>
         {% call u::like_button(translation_with_meta.translation.like_target(), translation_with_meta.translation.like_count, translation_with_meta.is_liked, "Like this translation") %}
     </a>

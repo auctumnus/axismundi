@@ -1,0 +1,212 @@
+.card {
+  background-color: var(--background-panel);
+  border: var(--border);
+  border-radius: var(--rounding);
+  padding: 1rem;
+  margin-bottom: 1rem;
+
+  &:has(.header-with-actions:first-child) {
+    padding-top: 0;
+  }
+
+  &:has(.contributors) .header-with-actions {
+    margin-bottom: 0rem;
+  }
+
+  .contributors {
+    margin-bottom: 0.5rem;
+  }
+
+  &:first-child {
+    margin-top: 1rem;
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+
+  div.actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    margin-top: 1rem;
+
+    form.default {
+      margin: 0;
+      display: inline;
+    }
+
+    a.button,
+    button {
+      margin-bottom: 0;
+    }
+  }
+
+  .header-with-actions {
+    @media (max-width: 500px) {
+      ul.icons {
+        > *:not(:last-child) {
+          display: none;
+        }
+      }
+    }
+  }
+}
+
+.standalone-card .card {
+  margin: 0;
+}
+
+.preview-card {
+  a {
+    text-decoration: none;
+    color: inherit;
+
+    display: flex;
+    flex-direction: row;
+    border: var(--border);
+    border-radius: var(--rounding);
+    background-color: var(--background-panel);
+    padding: 1rem;
+    gap: 0.5rem;
+
+    text-decoration: none;
+
+    transition:
+      border-color var(--duration-very-fast) ease-in-out,
+      box-shadow var(--duration-very-fast) ease-in-out;
+
+    &:hover {
+      border-color: var(--foreground-secondary);
+    }
+  }
+
+  .left {
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+
+    .title {
+      color: var(--foreground-primary);
+      font-weight: 600;
+      max-width: max-content;
+    }
+
+    .summary {
+      color: var(--foreground-secondary);
+      font-size: 0.875rem;
+
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+
+      &.empty-description {
+        font-style: italic;
+      }
+    }
+  }
+
+  &:has(.likes) {
+    .left {
+      width: calc(100% - 32px - 2rem);
+    }
+    .summary {
+      width: 100%;
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .creator {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
+}
+
+.card-meta {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--foreground-secondary);
+  max-width: max-content;
+
+  > li {
+    list-style: none;
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.25rem;
+    position: relative;
+
+    &:not(:last-child)::after {
+      content: "·";
+      position: absolute;
+      right: -0.5rem;
+      top: 50%;
+      transform: translate(50%, -50%);
+      pointer-events: none;
+    }
+
+    &.on-medium {
+      display: none;
+    }
+  }
+}
+
+@media (min-width: 600px) {
+  .card-meta > li.on-medium {
+    display: inline;
+  }
+}
+
+ul.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+
+  li {
+    list-style: none;
+  }
+}
+
+.card > .header-with-actions:first-child:has(.icons) {
+  margin-top: 0.5rem;
+}
+
+.first-interaction-card {
+  margin-top: 2rem;
+}
+
+.card-list + .card {
+  margin-top: 1rem;
+}
+
+.card:has(+ .card) {
+  margin-bottom: .5rem;
+}
+
+@media (max-height: 1300px) {
+  .preview-card a, .word-card a, .translatable-context .card.full-card {
+    padding: .75rem !important;
+  }
+}

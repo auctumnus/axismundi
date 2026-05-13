@@ -1,0 +1,45 @@
+[data-panzoom-enhanced] {
+  position: relative;
+}
+
+.panzoom-controls {
+  position: absolute;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  background-color: var(--background-panel);
+  border: var(--border);
+  border-radius: var(--rounding);
+  z-index: var(--z-stacked);
+  touch-action: auto;
+}
+
+.panzoom-controls button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--foreground-primary);
+  cursor: pointer;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--rounding);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panzoom-controls button:hover {
+  background-color: var(--background-page);
+  color: var(--foreground-secondary);
+}
+
+.panzoom-controls .icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}

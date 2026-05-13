@@ -1,0 +1,43 @@
+:root {
+  --spacing: 0.25rem;
+
+  --space-05: calc(var(--spacing) * 0.5); /* .125rem */
+  --space-1: var(--spacing); /* .25rem */
+  --space-15: calc(var(--spacing) * 1.5); /* .375rem */
+  --space-2: calc(var(--spacing) * 2); /* .5rem */
+  --space-3: calc(var(--spacing) * 3); /* .75rem */
+  --space-4: calc(var(--spacing) * 4); /* 1rem */
+  --space-5: calc(var(--spacing) * 5); /* 1.25rem */
+  --space-6: calc(var(--spacing) * 6); /* 1.5rem */
+  --space-8: calc(var(--spacing) * 8); /* 2rem */
+  --space-10: calc(var(--spacing) * 10); /* 2.5rem */
+
+  --width-page: 800px;
+  --width-screen: 100dvw;
+
+  --height-screen: 100dvh;
+
+  --round-05: calc(var(--spacing) * 0.5); /* .125rem */
+  --round-1: var(--spacing); /* .25rem */
+  --round-2: calc(var(--spacing) * 2); /* .5rem */
+
+  --round-full: 50%; /* for pill/circle-shaped elements */
+  --rounding: var(--round-05); /* default rounding for cards etc */
+
+  --z-stacked: 1;
+  --z-header: 100;
+  --z-sidebar: calc(var(--z-header) - 1);
+  --z-overlay: 190;
+  --z-modal: 200;
+  --z-banner: 9000;
+
+  --duration: 100ms;
+
+  --duration-very-fast: var(--duration);
+  --duration-fast: calc(var(--duration) * 1.5); /* 150ms */
+  --duration-medium: calc(var(--duration) * 2); /* 200ms */
+
+  --curve-default: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  --border: 1px solid var(--border-color);
+}

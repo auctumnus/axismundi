@@ -5,9 +5,8 @@
 {% block title %}{{ table.name }} in {{ language.language.name }} - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/language-card.css">
-<link rel="stylesheet" href="/static/phonology-table.css">
-<script src="/static/like-button.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/components/phonology-table.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -22,9 +21,9 @@
 
 {{ rendered_html | safe }}
 
-<p>
+<div class="markdown">
     {{ rendered_description | safe }}
-</p>
+</div>
 
 {% endblock %}
 

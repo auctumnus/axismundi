@@ -1,0 +1,203 @@
+:root {
+  --header-height: 3.5rem;
+  --user-panel-width: 200px;
+}
+
+header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: var(--header-height);
+  background-color: var(--background-page);
+  box-shadow:
+    -20px 20px 25px -5px var(--background-page),
+    20px 20px 25px -5px var(--background-page);
+  position: fixed;
+  z-index: var(--z-header);
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  max-width: initial;
+  transition: box-shadow var(--duration-medium) var(--curve-default);
+
+  .inner {
+    width: var(--width-page);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    isolation: isolate;
+  }
+
+  .left,
+  .right {
+    display: flex;
+    align-items: center;
+  }
+
+  .left {
+    gap: var(--space-2);
+    a.breadcrumb {
+      max-width: 60vw;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+  .right {
+    justify-content: right;
+  }
+
+  .separator {
+    user-select: none;
+    color: var(--foreground-secondary);
+  }
+
+  a#logomark {
+    font-family: var(--font-heading);
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+
+    svg {
+      height: 1.25rem;
+      margin-right: var(--space-2);
+    }
+
+    span {
+      display: none;
+      @media (min-width: 600px) {
+        display: inline;
+      }
+    }
+  }
+}
+
+html.js-mobile-nav body.nav-sidebar-open header,
+html.js-mobile-nav body.nav-sidebar-closing header {
+  box-shadow: none;
+}
+
+#safety-triangle {
+  --height: 3rem;
+  --pfp-width: 1.75rem;
+  --width: calc(var(--user-panel-width));
+
+  position: relative;
+  right: calc(-1 * var(--height));
+
+  width: var(--width);
+  height: var(--height);
+  display: inline-flex;
+  /* so-called triangles when they have 4 vertices */
+  clip-path: polygon(
+    0 var(--height),
+    var(--width) var(--height),
+    var(--width) 0,
+    calc(var(--width) - var(--pfp-width)) 0
+  );
+  user-select: none;
+}
+
+#current-user {
+  cursor: pointer;
+  z-index: var(--z-header);
+}
+
+.user-panel {
+  position: fixed;
+  top: calc(var(--header-height));
+  width: 200px;
+  border-radius: var(--rounding);
+  border: var(--border);
+  background-color: var(--background-panel);
+  box-shadow:
+    0 4px 6px -1px var(--color-shadow),
+    0 2px 4px -2px var(--color-shadow);
+  z-index: var(--z-modal);
+  padding: 0.325rem;
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(0.8) translateY(-20px) translateX(20px);
+  font-size: var(--text-sm);
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  transition:
+    opacity var(--duration-fast) var(--curve-default),
+    visibility var(--duration-fast) var(--curve-default),
+    transform var(--duration-fast) var(--curve-default);
+
+  &.active {
+    visibility: visible;
+    opacity: 1;
+    transform: scale(1) translateY(0) translateX(0);
+  }
+
+  .user-card {
+    display: flex;
+    flex-direction: row;
+    border-bottom: var(--border);
+    padding: 0.325rem 0.5rem 0.5rem 0.5rem;
+    gap: 0.5rem;
+
+    .pfp-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      justify-content: center;
+
+      .display-name {
+        font-weight: bold;
+      }
+    }
+  }
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.25rem;
+
+    a {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      padding: 0.325rem 0.5rem;
+      border-radius: var(--rounding);
+
+      transition: background-color var(--duration-very-fast)
+        var(--curve-default);
+
+      &:hover {
+        background-color: var(--background-page);
+      }
+      svg.icon {
+        position: relative;
+        top: -1px;
+        margin-right: 0.5rem;
+      }
+    }
+  }
+}
+
+@starting-style {
+  .user-panel {
+    opacity: 0;
+  }
+}

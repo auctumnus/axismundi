@@ -1,0 +1,228 @@
+.quotations-editor {
+  .controls,
+  .controls-container {
+    display: flex;
+    flex-direction: row;
+  }
+
+  .controls-container {
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .controls-header {
+    padding: 0.325rem 0.75rem;
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    color: var(--foreground-secondary);
+    background-color: var(--background-panel);
+    border-bottom-left-radius: var(--rounding);
+    border-top-left-radius: var(--rounding);
+    border: var(--border);
+    border-right: 1px solid var(--input-border);
+  }
+  
+
+  .control-button {
+    padding: 0.325rem 0.75rem;
+    border: 1px solid var(--input-border);
+    border-left: 1px solid transparent;
+    background: var(--input-background);
+    cursor: pointer;
+    color: var(--foreground-secondary);
+    transition:
+      color 0.2s,
+      background-color var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15),
+      opacity var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15);
+    font-family: var(--font-normal);
+    font-size: 0.9rem;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    svg {
+      width: 20px;
+      height: 20px;
+      color: inherit;
+    }
+
+    :last-child > & {
+      border-top-right-radius: var(--rounding);
+      border-bottom-right-radius: var(--rounding);
+    }
+
+    &.disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+      background-color: transparent;
+    }
+
+    &:not(.disabled):hover {
+      background-color: var(--input-background-focus);
+      border-color: var(--input-border-focus);
+      border-left: 1px solid var(--input-border-focus);
+      border-bottom: 1px solid var(--input-border-focus);
+    }
+  }
+  
+  .first {
+    .control-button {
+    border-left: var(--border);
+    border-top-left-radius: var(--rounding);
+    border-bottom-left-radius: var(--rounding);
+
+    }
+  }
+
+  .quotation {
+    background-color: color-mix(
+      in oklab,
+      var(--background-panel) 50%,
+      transparent
+    );
+    cursor: pointer;
+    padding: 0.125rem 0.25rem;
+    border-radius: var(--rounding);
+    outline: var(--border);
+    margin-inline: 0.125rem;
+
+    transition: all 150ms ease-in-out;
+
+    .highlight {
+      font-weight: bold;
+    }
+
+    &.selected {
+      color: light-dark(
+        color-mix(in oklab, var(--foreground-primary), black 10%),
+        color-mix(in oklab, var(--foreground-primary), white 10%)
+      );
+      outline: 1px solid var(--input-border-focus);
+      background-color: var(--input-background-focus);
+      background-color: color-mix(
+        in oklab,
+        var(--color-sky-500) 15%,
+        color-mix(in oklab, var(--background-panel) 50%, transparent)
+      );
+    }
+  }
+}
+
+.highlight-picker-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.highlight-picker {
+  padding: 0.4rem 0.6rem;
+  border: var(--input-border);
+  border-radius: var(--rounding);
+  background: var(--input-background);
+  cursor: text;
+  user-select: text;
+  line-height: 1.6;
+
+  mark {
+    font-weight: bold;
+    background-color: transparent;
+  }
+}
+
+.highlight-picker-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 1.5rem;
+}
+
+.confirm-highlight,
+.clear-highlight {
+  font-size: 0.8rem;
+  color: var(--foreground-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  padding: 0;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--foreground-primary);
+  }
+}
+
+.definition-option {
+  display: flex;
+  flex-direction: row;
+  gap: 0.25rem;
+
+  .context-container {
+    color: var(--foreground-secondary);
+
+    .context {
+      font-style: italic;
+    }
+  }
+}
+
+.help-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex-direction: column;
+
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 1rem;
+
+  kbd,
+  .keybind {
+    font-family: var(--font-monospace);
+    background-color: var(--background-panel);
+    border: var(--border);
+    border-radius: var(--rounding);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+
+    & + kbd,
+    & + .keybind {
+      margin-left: 0.5rem;
+    }
+
+    svg {
+      display: inline;
+    }
+  }
+
+  .keybind-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    row-gap: 0.5rem;
+    column-gap: 0.5rem;
+
+    dt {
+      display: flex;
+      justify-content: flex-end;
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .controls-header {
+    display: none;
+  }
+
+  .control-button.first {
+    border-top-left-radius: var(--rounding);
+    border-bottom-left-radius: var(--rounding);
+    border-left-color: var(--input-border);
+  }
+}
+
+[data-slate-editor].quotation-editor {
+  border-top-left-radius: var(--rounding);
+  border-top-right-radius: var(--rounding);
+}

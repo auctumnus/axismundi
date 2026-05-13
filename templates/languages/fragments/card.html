@@ -15,21 +15,22 @@
             <span class="left">
                 <span class="title">{{ language_with_contributors.language.name }}</span>
                 {% call language_summary(&language_with_contributors.language) %}
-                <span class="creator">
-                    {% if language_with_contributors.top_contributors.len() > 1 %}
-                    <ul class="contributor-list">
-                        {% for contributor in language_with_contributors.top_contributors %}
-                        <li class="compressed-pfps">
-                            {% call u::pfp(&contributor, size="small") %}
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                        {% call u::user_display(&language_with_contributors.top_contributors[0], "small") %}
-                    {% endif %}
-                    ·
-                    {% call u::relative(&language_with_contributors.language.created_at) %}
-                </span>
+                <ul class="card-meta">
+                    <li>
+                        {% if language_with_contributors.top_contributors.len() > 1 %}
+                        <ul class="contributor-list">
+                            {% for contributor in language_with_contributors.top_contributors %}
+                            <li class="compressed-pfps">
+                                {% call u::pfp(&contributor, size="small") %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                            {% call u::user_display(&language_with_contributors.top_contributors[0], "small") %}
+                        {% endif %}
+                    </li>
+                    <li>{% call u::relative(&language_with_contributors.language.created_at) %}</li>
+                </ul>
             </span>
             {% call u::like_button("/api/languages/" ~ language_with_contributors.language.code, language_with_contributors.language.like_count, language_with_contributors.is_liked, "Like this language") %}
         </a>

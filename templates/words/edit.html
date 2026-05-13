@@ -5,13 +5,13 @@
 {% block title %}edit {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/components/modal.css">
-<link rel="stylesheet" href="/static/components/async-select.css">
-<link rel="stylesheet" href="/static/words/edit.css">
-<script defer src="/static/words/edit.js"></script>
+<link rel="stylesheet" href="/static/components/modal/modal.css">
+<link rel="stylesheet" href="/static/components/async-select/async-select.css">
+<link rel="stylesheet" href="/static/page/words/edit.css">
+<script defer src="/static/page/words/edit.js"></script>
 <link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
 <script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
-<script type="module" src="/static/definitions-editor.js"></script>
+<script type="module" src="/static/page/words/definitions-editor.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -136,7 +136,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/word-categories-multiselect.js"></script>
+<script type="module" src="/static/components/combobox/word-categories-multiselect.js"></script>
 <script defer>
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountDefinitionsEditor) {

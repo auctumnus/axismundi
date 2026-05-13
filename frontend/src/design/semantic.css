@@ -1,0 +1,73 @@
+:root {
+  /* colors */
+  --light-background-panel: white;
+  --dark-background-panel: var(--color-slate-950);
+  --light-background-page: var(--color-slate-100);
+  --dark-background-page: var(--color-slate-900);
+  --light-foreground-primary: var(--color-slate-900);
+  --dark-foreground-primary: var(--color-slate-100);
+
+  --background-panel: light-dark(
+    var(--light-background-panel),
+    var(--dark-background-panel)
+  );
+  --background-page: light-dark(
+    var(--light-background-page),
+    var(--dark-background-page)
+  );
+  --background-intermediate: light-dark(
+    color-mix(
+      in oklab,
+      var(--light-background-panel) 50%,
+      var(--light-background-page)
+    ),
+    color-mix(
+      in oklab,
+      var(--dark-background-panel) 50%,
+      var(--dark-background-page)
+    )
+  );
+
+  --foreground-primary: light-dark(
+    var(--light-foreground-primary),
+    var(--dark-foreground-primary)
+  );
+  --foreground-secondary: light-dark(
+    var(--color-slate-500),
+    var(--color-slate-400)
+  );
+  --foreground-tertiary: light-dark(
+    var(--color-slate-400),
+    var(--color-slate-600)
+  );
+  --foreground-quaternary: light-dark(
+    var(--color-slate-300),
+    var(--color-slate-700)
+  );
+  --foreground-accent: var(--color-sky-500);
+
+  --error-background: light-dark(
+    color-mix(in oklab, var(--color-red-600) 10%, var(--background-panel)),
+    oklch(7.8% 0.092 26.042)
+  );
+  --error-foreground: var(--color-red-700);
+  --error-border: var(--color-red-500);
+
+  --focus-ring: light-dark(
+    color-mix(in oklab, var(--color-sky-500) 40%, transparent),
+    color-mix(in oklab, var(--color-sky-400) 40%, transparent)
+  );
+  --focus-ring-error: light-dark(
+    color-mix(in oklab, var(--color-red-500) 40%, transparent),
+    color-mix(in oklab, var(--color-red-400) 40%, transparent)
+  );
+
+  --color-shadow: light-dark(
+    color-mix(in oklab, var(--color-slate-900) 10%, transparent),
+    color-mix(in oklab, black 30%, transparent)
+  );
+
+  --shadow-hover:
+    0 10px 15px -3px var(--color-shadow), 0 4px 6px -4px var(--color-shadow);
+  --border-color: light-dark(var(--color-slate-300), var(--color-slate-700));
+}

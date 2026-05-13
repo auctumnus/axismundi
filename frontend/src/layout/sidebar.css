@@ -1,0 +1,100 @@
+@media (min-width: 1250px) {
+  footer ul.sections {
+    flex-direction: column;
+    position: fixed;
+    top: calc(var(--header-height) + 1rem);
+    left: 1rem;
+
+    width: calc(250px - 2rem);
+    max-height: calc(100dvh - var(--header-height) - 2rem);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1249.98px) {
+  body.nav-sidebar-open {
+    overflow: hidden;
+  }
+
+  #nav-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    top: var(--header-height);
+    left: 0;
+    z-index: 98;
+    pointer-events: none;
+    background-color: transparent;
+    transition:
+      left var(--duration-medium) var(--curve-default),
+      background-color var(--duration-medium) var(--curve-default),
+      box-shadow var(--duration-medium) var(--curve-default);
+    max-width: none;
+    margin: 0;
+    border-top-left-radius: 1rem;
+  }
+
+  #nav-sidebar-backdrop::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1rem;
+    height: 1rem;
+    background: radial-gradient(
+      circle at bottom right,
+      transparent 1rem,
+      var(--background-page) 1rem
+    );
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--duration-medium) var(--curve-default);
+  }
+
+  #nav-sidebar-backdrop.active {
+    background-color: rgb(0 0 0 / 0.5);
+    pointer-events: auto;
+  }
+
+  #nav-sidebar-backdrop.active::before {
+    opacity: 1;
+  }
+
+  html.js-mobile-nav footer ul.sections {
+    position: fixed;
+    top: calc(var(--header-height));
+    left: 0;
+    bottom: 0;
+    width: min(80vw, 320px);
+    max-width: none;
+    margin: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+    background-color: var(--background-page);
+    padding: 0 1rem 1rem;
+    overflow-y: auto;
+    z-index: 99;
+
+    transform: translateX(-100%);
+    pointer-events: none;
+    transition: transform var(--duration-medium) var(--curve-default);
+
+    > li {
+      width: 100%;
+    }
+
+    li ul li a {
+      text-decoration: none;
+      width: 100%;
+    }
+  }
+
+  html.js-mobile-nav body.nav-sidebar-open footer ul.sections {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  html.js-mobile-nav body.nav-sidebar-open #nav-sidebar-backdrop {
+    left: min(80vw, 320px);
+  }
+}

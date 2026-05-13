@@ -1,0 +1,14 @@
+.empty-description {
+  color: var(--foreground-secondary);
+  font-style: italic;
+}
+
+.ellipse {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.preserve-breaks {
+  white-space: pre-wrap;
+}

@@ -8,15 +8,13 @@
 {% block title %}{% call u::name(user) %} - axismundi{% endblock %}
 
 {% block head %}
-<script src="/static/like-button.js" type="module" defer></script>
-<link rel="stylesheet" href="/static/profile.css">
-<link rel="stylesheet" href="/static/activity.css">
-<link rel="stylesheet" href="/static/language-card.css">
-<link rel="stylesheet" href="/static/language-family-card.css">
-<link rel="stylesheet" href="/static/word-card.css">
-<link rel="stylesheet" href="/static/translatable-card.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/page/users/profile.css">
+<link rel="stylesheet" href="/static/components/activity.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<link rel="stylesheet" href="/static/components/metadata-table.css">
 
-<script src="/static/time.js" type="module" defer></script>
+<script src="/static/components/time.js" type="module" defer></script>
 
 {% if let Some(pfp_url) = user.get_profile_picture_url() %}
     <meta property=og:image content="{{ pfp_url }}">
@@ -69,7 +67,7 @@
             {% endif %}
         </div>
         {% if !rendered_description.is_empty() %}
-            {{ rendered_description | safe }}
+            <div class="markdown">{{ rendered_description | safe }}</div>
         {% endif %}
     </div>
 

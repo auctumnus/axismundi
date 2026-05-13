@@ -8,11 +8,11 @@
 {% block title %}{{ set.name }}{% if let Some(lang) = language %} in {{ lang.language.name }}{% endif %} - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/language-card.css">
-<link rel="stylesheet" href="/static/sound-change-sets/view.css">
-<link rel="stylesheet" href="/static/sound-changer.css">
-<script src="/static/like-button.js" type="module" defer></script>
-<script src="/static/sound-change-sets/view.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/page/sound-changes/view.css">
+<link rel="stylesheet" href="/static/page/sound-changes/runner/sound-changer.css">
+<link rel="stylesheet" href="/static/components/metadata-table.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<script src="/static/page/sound-changes/view.js" type="module" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -52,9 +52,9 @@
         </ul>
     </div>
     {% if !rendered_description.is_empty() %}
-        <p>
+        <div class="markdown">
             {{ rendered_description | safe }}
-        </p>
+        </div>
     {% endif %}
 
     <table class="metadata-table">

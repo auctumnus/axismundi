@@ -13,7 +13,7 @@
 </section>
 
 {% if !word_categories.is_empty() %}
-<link rel="stylesheet" href="/static/components/async-select.css">
+<link rel="stylesheet" href="/static/components/async-select/async-select.css">
 <section>
     <label for="word_categories">Categories</label>
     <div id="word-categories-mount" class="async-multi-select-mount"
@@ -29,7 +29,7 @@
         </select>
     </div>
 </section>
-<script type="module" src="/static/word-categories-multiselect.js"></script>
+<script type="module" src="/static/components/combobox/word-categories-multiselect.js"></script>
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountWordCategoriesMultiselect) {

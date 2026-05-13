@@ -10,7 +10,7 @@
             {% else %}
                 <span class="summary ellipse">{{ crate::util::first_sentence(translatable_with_meta.translatable.english) }}</span>
             {% endif %}
-            <ul class="translatable-summary summary">
+            <ul class="card-meta">
                 <li>{% call u::user_display(&translatable_with_meta.creator, "small") %}</li>
                 {% let words_count = translatable_with_meta.translatable.words_count() %}
                 {% let translations_count = translatable_with_meta.translatable.translations_count %}

@@ -1,0 +1,37 @@
+.translation-card .aside {
+  font-size: 0.875rem;
+}
+
+.language-card-full {
+  position: relative;
+  &:has(.banner) {
+    padding-top: 200px;
+  }
+
+  .header-with-actions {
+    margin-bottom: 0;
+    margin-top: .5rem;
+  }
+}
+
+.language-card-full .banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  border-top-left-radius: var(--rounding);
+  border-top-right-radius: var(--rounding);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.contributors .and-more {
+  color: var(--foreground-secondary);
+}

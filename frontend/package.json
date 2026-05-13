@@ -6,7 +6,7 @@
   "scripts": {
     "build": "bun build.ts",
     "build:annotation": "parcel build",
-    "build:lexurgy-grammar": "lezer-generator ./lexurgy.grammar -o src/lexurgy-parser.js",
+    "build:lexurgy-grammar": "lezer-generator ./lexurgy.grammar -o src/page/sound-changes/runner/lexurgy-parser.js",
     "dev": "bun build.ts -- --watch",
     "format": "prettier --write src/**/*.ts src/**/*.tsx src/**/*.css",
     "lint": "eslint src/**/*.ts",

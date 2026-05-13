@@ -7,15 +7,14 @@
         <div class="contributor-info">
             {% call u::badge(&contributor.user, size="medium") %}
         </div>
-        <div class="contribution-stats">
-            {% call permission_badge::render(contributor.permission) %}
+        <ul class="card-meta">
+            <li>{% call permission_badge::render(contributor.permission) %}</li>
             {% if let Some(created_at) = contributor.created_at %}
-                <span class="separator">·</span>
-                <span class="contributor-since">
+                <li class="contributor-since">
                     since {% call u::relative(&created_at) %}
-                </span>
+                </li>
             {% endif %}
-        </div>
+        </ul>
     </div>
     <div class="permission-actions">
         {% if contributor.can_edit %}

@@ -1,0 +1,121 @@
+#icon-store {
+  display: none;
+}
+
+body {
+  color-scheme: light dark;
+
+  font-family: var(--font-normal);
+  background-color: var(--background-page);
+  color: var(--foreground-primary);
+
+  display: flex;
+  flex-direction: column;
+
+  min-height: var(--height-screen);
+  max-width: var(--width-screen);
+
+  margin-top: calc(var(--header-height) + 20px);
+
+  overflow-x: hidden;
+
+  > * {
+    max-width: var(--width-page);
+    margin: 0 auto;
+  }
+
+  &:has(#sitewide-banner) {
+    padding-bottom: 2.5rem;
+  }
+}
+
+@media (max-width: 816px) {
+  :root {
+    --width-page: calc(100dvw - (var(--space-4) * 2));
+  }
+
+  body,
+  header {
+    padding: 0 var(--space-4);
+  }
+}
+
+main {
+  flex: 1;
+  width: var(--width-page);
+}
+
+#sitewide-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  z-index: 9999;
+
+  &.error {
+    background-color: var(--error-background);
+    color: var(--error-foreground);
+    border-bottom: 1px solid var(--error-border);
+  }
+}
+
+.skip-to-main-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background-color: var(--background-page);
+  color: var(--foreground-primary);
+  padding: 0.5rem;
+  z-index: 1000;
+  transition: top var(--duration-fast) ease-in-out;
+
+  &:focus {
+    top: 0;
+  }
+}
+
+.back-link + .context-cards {
+  margin-top: 1.5rem;
+}
+
+.back-link {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1.75rem;
+  color: var(--foreground-secondary);
+  text-decoration: none;
+
+  transition: color var(--duration-very-fast) ease-in-out;
+
+  svg.icon {
+    transition: color var(--duration-very-fast) ease-in-out;
+    position: relative;
+    top: 0.5px;
+  }
+
+  &:hover {
+    text-decoration: underline;
+    color: var(--foreground-primary);
+
+    svg.icon {
+      color: var(--foreground-primary);
+    }
+  }
+}
+
+svg.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--foreground-secondary);
+}
+
+a {
+  color: var(--foreground-primary);
+  text-decoration: underline;
+}

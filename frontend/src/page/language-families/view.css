@@ -1,0 +1,55 @@
+.family-tree-svg-container {
+  overflow: auto;
+  margin-top: 0px;
+  background-color: var(--background-page);
+  border: var(--border);
+  border-radius: var(--rounding);
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--rounding);
+    pointer-events: none;
+    box-shadow: 
+      inset 0 0 1rem 0 var(--background-page),
+      inset 0 0 .5rem 0 var(--background-page);
+  }
+}
+
+svg {
+  .language-family-node {
+    a {
+      text-decoration: none;
+
+      &:hover path {
+        stroke: var(--foreground-secondary);
+      }
+    }
+    text {
+      font-family: inherit;
+      font-size: 12px;
+      fill: var(--foreground-primary);
+    }
+    path {
+      transition: stroke var(--duration-very-fast) ease-in-out;
+      fill: var(--background-panel);
+      stroke: var(--border-color);
+      stroke-width: 1px;
+    }
+  }
+  .language-family-edge {
+    polygon {
+      fill: var(--foreground-secondary);
+      stroke: var(--foreground-secondary);
+    }
+    path {
+      stroke: var(--foreground-secondary);
+      stroke-width: 1px;
+    }
+  }
+}

@@ -5,16 +5,16 @@
 {% block title %}derive or loan {{ word.word.word }}? - {{ language.name }} - axismundi{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/words/derive-or-loan.css">
+<link rel="stylesheet" href="/static/components/disambiguation.css">
 {% endblock %}
 
 {% block content %}
 
 <h1>derive or loan {{ word.word.word }}?</h1>
 
-<ul class="derive-or-loan-options card-list">
+<ul class="disambiguation-options card-list">
     <li>
-        <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive">
+        <a class="card disambiguation-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/derive">
             <div class="left" aria-hidden>
                 {% call u::icon("arrow-split") %}
             </div>
@@ -26,7 +26,7 @@
         </a>
     </li>
     <li>
-        <a class="card derive-or-loan-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/loan">
+        <a class="card disambiguation-option" href="/languages/{{ language.code }}/words/{{ word.word.slug }}/{{ word.word.lemma }}/loan">
             <div class="left" aria-hidden>
                 {% call u::icon("forward") %}
             </div>

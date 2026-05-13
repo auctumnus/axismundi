@@ -1,0 +1,196 @@
+a.button,
+label.label-button,
+form.default button[type="submit"],
+button.normal {
+  font-family: var(--font-heading);
+  padding: 0.625rem 0.75rem;
+  border: none;
+  border-radius: var(--rounding);
+  background-color: var(--foreground-primary);
+  color: var(--background-page);
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 450;
+  text-align: center;
+
+  transition:
+    background-color var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15),
+    opacity var(--duration-fast) cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  &.secondary {
+    border: 1px solid var(--foreground-primary);
+    background-color: transparent;
+    color: var(--foreground-primary);
+
+    &:hover {
+      background-color: color-mix(
+        in oklab,
+        var(--foreground-primary) 10%,
+        transparent
+      ) !important;
+    }
+  }
+
+  &.danger {
+    background-color: var(--error-foreground);
+    color: var(--error-background);
+
+    &:hover {
+      background-color: color-mix(
+        in oklab,
+        var(--error-foreground) 60%,
+        transparent
+      );
+    }
+  }
+
+  &:not(.icon, .danger, :disabled, &[disabled]):hover {
+    background-color: var(--foreground-secondary);
+  }
+
+  &:disabled,
+  &[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+a.button {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+form.default button[type="reset"],
+button.clear {
+  font-family: var(--font-heading);
+  padding: 0.75rem;
+  border: none;
+  border-radius: var(--rounding);
+  background-color: transparent;
+  color: var(--foreground-primary);
+  background-color: light-dark(--background-panel);
+  border: 1px solid var(--foreground-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+
+  transition: background-color var(--duration-fast)
+    cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  &:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--foreground-primary) 10%,
+      transparent
+    );
+  }
+}
+
+a.icon.button,
+button.icon,
+form.default button.icon[type="submit"],
+.icon-button-container {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 100%;
+  cursor: pointer;
+
+  background-color: transparent;
+  color: var(--foreground-secondary);
+  font-size: 0.875rem;
+
+  transition:
+    background-color var(--duration-very-fast) ease-in-out,
+    color var(--duration-very-fast) ease-in-out;
+
+  svg {
+    width: 24px;
+    height: 24px;
+    color: inherit;
+  }
+
+  &.yellow:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-amber-400) 10%,
+      transparent 90%
+    );
+    color: var(--color-amber-400);
+  }
+
+  &.green:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-green-600) 10%,
+      transparent 90%
+    );
+    color: var(--color-green-600);
+  }
+
+  &.gray:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--foreground-secondary) 10%,
+      transparent 90%
+    );
+    color: var(--foreground-secondary);
+  }
+
+  &.disabled,
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+a.with-icon,
+button.with-icon {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--foreground-secondary);
+  cursor: pointer;
+  text-decoration: none;
+
+  svg.icon {
+    position: relative;
+    top: 0.5px;
+    z-index: 0;
+  }
+
+  &:hover {
+    text-decoration: underline;
+    color: var(--foreground-primary);
+  }
+
+  &:hover svg.icon {
+    color: var(--foreground-primary);
+  }
+
+  @media (max-width: 520px) {
+    svg.icon {
+      display: none;
+    }
+    span {
+      display: inline;
+    }
+  }
+
+  @media (max-width: 470px) {
+    span {
+      display: none;
+    }
+    svg.icon {
+      display: inline;
+    }
+  }
+}

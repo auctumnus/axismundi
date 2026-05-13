@@ -12,7 +12,7 @@
 <script type="application/ld+json">
 {{ json_ld | safe }}
 </script>
-<link rel="stylesheet" href="/static/word-class-view.css">
+<link rel="stylesheet" href="/static/page/word-classes/view.css">
 {% endblock %}
 
 {% block content %}
@@ -52,7 +52,7 @@
     {% if !rendered_notes.is_empty() %}
     <div class="word-class-notes">
         <h3>Notes</h3>
-        <div class="markdown-content">{{ rendered_notes|safe }}</div>
+        <div class="markdown">{{ rendered_notes|safe }}</div>
     </div>
     {% endif %}
 </div>

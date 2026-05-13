@@ -1,0 +1,119 @@
+footer {
+  margin-top: 3rem;
+  margin-bottom: 3rem;
+
+  width: var(--page-width);
+
+  ul.sections {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+
+    li ul {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    li ul li {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+
+      padding-left: 0;
+      margin: 0;
+
+      padding-right: 1rem;
+
+      a {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.325rem;
+        flex: 1;
+        background-color: transparent;
+
+        border-radius: var(--rounding);
+        transition: background-color var(--duration-very-fast)
+          var(--curve-default);
+
+        &:not(:has(svg)) {
+          padding-left: calc(20px + 0.5rem + 0.325rem);
+        }
+
+        &:hover {
+          text-decoration: none;
+          background-color: color-mix(
+            in oklab,
+            var(--foreground-primary) 10%,
+            transparent
+          );
+        }
+      }
+    }
+
+    li h2 {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-family: var(--font-heading);
+    }
+
+    a {
+      color: var(--foreground-secondary);
+      text-decoration: none;
+
+      &:hover {
+        color: var(--foreground-primary);
+        text-decoration: underline;
+      }
+    }
+  }
+
+  ul.last,
+  ul.socials {
+    width: calc(var(--width-page) - var(--space-05));
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+    margin-top: 1rem;
+
+    font-size: 0.9rem;
+
+    li {
+      margin-bottom: 0;
+    }
+
+    a {
+      color: var(--foreground-secondary);
+      text-decoration: none;
+
+      &:hover {
+        color: var(--foreground-primary);
+        text-decoration: underline;
+      }
+    }
+  }
+
+  ul.socials {
+    margin-top: 2rem;
+    li a {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.25rem;
+
+      .bluesky {
+        width: 1.125rem;
+        height: 1.125rem;
+        margin-right: 0.125rem;
+      }
+    }
+  }
+}

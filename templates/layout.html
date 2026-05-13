@@ -15,15 +15,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto+Slab:wght@100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/reset.css">
-    <link rel="stylesheet" href="/static/colors.css">
     <link rel="stylesheet" href="/static/main.css">
-    <link rel="stylesheet" href="/static/forms.css">
     <meta name="darkreader-lock">
     <script>document.documentElement.classList.add('js-mobile-nav');</script>
     <script type="module" defer src="/static/main.js"></script>
-    <script src="/static/tooltip.js" defer></script>
-    <link rel="stylesheet" href="/static/tooltip.css">
+    <script src="/static/components/tooltip/tooltip.js" defer></script>
+    <link rel="stylesheet" href="/static/components/tooltip/tooltip.css">
     {% block head %}{% endblock %}
     {% if let Some(user) = current_user %}
     <script>

@@ -1,8 +1,13 @@
 import { readdir, mkdir, readFile, writeFile, watch, copyFile } from 'fs/promises';
-import { join, dirname, relative, extname, basename } from 'path';
+import { join, dirname, relative, extname, basename, resolve as resolvePath } from 'path';
 import { existsSync } from 'fs';
-import { transform } from 'lightningcss';
+import { bundleAsync } from 'lightningcss';
 import { transform as swcTransform } from '@swc/core';
+
+// CSS dependency graph: entry -> imports it pulls in, and the reverse.
+// Used in watch mode to rebuild entries when an imported fragment changes.
+const cssDeps = new Map<string, Set<string>>();
+const cssReverseDeps = new Map<string, Set<string>>();
 
 const srcDir = join(import.meta.dir, 'src');
 const distDir = join(import.meta.dir, 'dist');
@@ -30,17 +35,62 @@ async function getAllFiles(dir: string, files: string[] = []): Promise<string[]>
   return files;
 }
 
+// Files imported into main.css live under a cascade layer determined by their
+// folder. Wrapping the source in `@layer X { ... }` at read time spares us from
+// annotating every `@import` with `layer(X)` and keeps the layering visible at
+// the file level. lightningcss can't synthesize this on its own for nested
+// imports, so we do it in the resolver.
+function getLayerForFile(filePath: string): string | null {
+  const rel = relative(srcDir, filePath);
+  if (rel.startsWith('..') || rel === '' || rel.startsWith('/')) return null;
+  if (rel === 'reset.css') return 'reset';
+  if (rel === 'utilities.css') return 'utilities';
+  const top = rel.split('/')[0];
+  if (top === 'design' || top === 'layout' || top === 'components' || top === 'page') {
+    return top;
+  }
+  return null;
+}
+
 async function processCSS(inputPath: string, outputPath: string) {
-  const css = await readFile(inputPath, 'utf8');
-  const result = transform({
-    code: Buffer.from(css),
+  const deps = new Set<string>();
+  const result = await bundleAsync({
+    filename: inputPath,
     minify: true,
     sourceMap: false,
-    filename: basename(inputPath)
+    resolver: {
+      resolve(specifier, originatingFile) {
+        const resolved = resolvePath(dirname(originatingFile), specifier);
+        deps.add(resolved);
+        return resolved;
+      },
+      async read(file) {
+        const source = await readFile(file, 'utf8');
+        const layer = getLayerForFile(file);
+        return layer ? `@layer ${layer} {\n${source}\n}\n` : source;
+      },
+    },
   });
 
+  // Refresh the dep graph for this entry: clear stale reverse links, then add fresh ones.
+  const previous = cssDeps.get(inputPath);
+  if (previous) {
+    for (const dep of previous) {
+      cssReverseDeps.get(dep)?.delete(inputPath);
+    }
+  }
+  cssDeps.set(inputPath, deps);
+  for (const dep of deps) {
+    let entries = cssReverseDeps.get(dep);
+    if (!entries) {
+      entries = new Set();
+      cssReverseDeps.set(dep, entries);
+    }
+    entries.add(inputPath);
+  }
+
   await writeFile(outputPath, result.code);
-  console.log(`Processed CSS: ${relative(process.cwd(), inputPath)} → ${relative(process.cwd(), outputPath)}`);
+  console.log(`Bundled CSS: ${relative(process.cwd(), inputPath)} → ${relative(process.cwd(), outputPath)}`);
 }
 
 async function processJS(inputPath: string, outputPath: string) {
@@ -68,20 +118,18 @@ async function processJS(inputPath: string, outputPath: string) {
 
 // Entry points that need bundling (React components and main entry)
 const BUNDLE_ENTRY_POINTS = [
-  'src/form-editor.tsx',
-  'src/annotation.tsx',
-  'src/etymology-modal.tsx',
-  'src/word-combobox.tsx',
-  'src/word-categories-multiselect.tsx',
-  'src/user-combobox.tsx',
-  'src/phonology-editor.tsx',
-  'src/definitions-editor.tsx',
-  'src/sound-change-runner.ts',
-  'src/sound-change-sets/view.ts',
-  'src/tooltip.ts',
-  'src/translations/quotations-editor.tsx',
-  'src/panzoom-enhance.ts',
+  'src/components/combobox/word-combobox.tsx',
+  'src/components/combobox/word-categories-multiselect.tsx',
+  'src/components/combobox/user-combobox.tsx',
   'src/components/markdown-editor/markdown-editor.ts',
+  'src/components/panzoom/panzoom-enhance.ts',
+  'src/components/tooltip/tooltip.ts',
+  'src/page/languages/phonology-editor.tsx',
+  'src/page/sound-changes/runner/sound-change-runner.ts',
+  'src/page/sound-changes/view.ts',
+  'src/page/translations/quotations-editor.tsx',
+  'src/page/words/definitions-editor.tsx',
+  'src/main.ts'
 ];
 
 async function bundleReactFiles() {
@@ -114,7 +162,8 @@ async function bundleReactFiles() {
 
   for (const entry of existingEntrypoints) {
     const relativePath = relative(import.meta.dir, entry);
-    console.log(`Bundled: ${relativePath} → dist/${basename(entry, extname(entry))}.js`);
+    const outRelative = relative(srcDir, entry).replace(/\.tsx?$/, '.js');
+    console.log(`Bundled: ${relativePath} → dist/${outRelative}`);
   }
 }
 
@@ -211,6 +260,25 @@ async function watchFiles() {
             await bundleReactFiles();
           } else {
             await processFile(filePath);
+
+            // If a CSS file changed, also rebuild every entry that @imports it.
+            if (filePath.endsWith('.css')) {
+              const canonical = resolvePath(filePath);
+              const dependents = cssReverseDeps.get(canonical);
+              if (dependents) {
+                // Snapshot: processCSS rewrites cssReverseDeps[canonical], and
+                // deleting + re-adding an entry during Set iteration makes the
+                // iterator revisit it — infinite loop.
+                for (const entry of [...dependents]) {
+                  if (entry === canonical) continue;
+                  const entryRelative = relative(srcDir, entry);
+                  const entryOutDir = join(distDir, dirname(entryRelative));
+                  await ensureDir(entryOutDir);
+                  const entryOutPath = join(entryOutDir, basename(entry));
+                  await processCSS(entry, entryOutPath);
+                }
+              }
+            }
           }
         }
       }

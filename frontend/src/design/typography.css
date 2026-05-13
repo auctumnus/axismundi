@@ -1,0 +1,15 @@
+:root {
+  --font-normal: "Roboto", "Noto Sans", Arial, sans-serif;
+  --font-heading: "Roboto Slab", "Roboto", "Noto Sans", Arial, sans-serif;
+  --font-monospace: "Berkeley Mono", "Roboto Mono", monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+}

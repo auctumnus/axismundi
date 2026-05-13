@@ -20,9 +20,10 @@
             {% else %}
                 <span class="word-definition no-definition">no definition</span>
             {% endif %}
-            <span class="creator">
-                <span>{{ relation.relation.kind.text(relation.direction) }}</span> <span class="spacer" aria-hidden>·</span> <span>relation created by {% call u::user_display(&relation.creator, "small") %} {% call u::relative(&relation.created_at) %}</span>
-            </span>
+            <ul class="card-meta">
+                <li>{{ relation.relation.kind.text(relation.direction) }}</li>
+                <li>relation created by {% call u::user_display(&relation.creator, "small") %} {% call u::relative(&relation.created_at) %}</li>
+            </ul>
         </span>
     </a>
     {% if user_has_permission %}

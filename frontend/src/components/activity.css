@@ -1,0 +1,74 @@
+ul.activities {
+  background: linear-gradient(
+    to right,
+    transparent 24px,
+    var(--foreground-secondary) 25px,
+    transparent 26px
+  );
+}
+
+.activity-item {
+  .top {
+    background-color: var(--background-panel);
+    border-top-left-radius: var(--rounding);
+    border-top-right-radius: var(--rounding);
+    border: var(--border);
+    border-bottom: none;
+
+    font-size: 0.875rem;
+    padding: 0.625rem 1rem;
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+
+    gap: 0.2rem;
+    position: relative;
+
+    &::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 2rem;
+      background: linear-gradient(
+        to right,
+        transparent,
+        var(--background-panel) 50%
+      );
+    }
+
+    a {
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    time,
+    .verb,
+    .preposition {
+      color: var(--foreground-secondary);
+    }
+
+    @media (max-width: 400px) {
+      .verb {
+        display: none;
+      }
+    }
+  }
+
+  ul {
+    padding-left: 0;
+    li :is(a, .card) {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+  }
+}

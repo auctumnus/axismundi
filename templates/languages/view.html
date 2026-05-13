@@ -32,11 +32,11 @@
   }]
 }
 </script>
-<script src="/static/like-button.js" type="module" defer></script>
-<link rel="stylesheet" href="/static/language-view.css">
-<link rel="stylesheet" href="/static/word-card.css">
-<link rel="stylesheet" href="/static/translation-card.css">
-<link rel="stylesheet" href="/static/phonology-table.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<link rel="stylesheet" href="/static/components/metadata-table.css">
+<link rel="stylesheet" href="/static/page/languages/view.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<link rel="stylesheet" href="/static/components/phonology-table.css">
 {% endblock %}
 
 {% block content %}
@@ -90,7 +90,7 @@
 
 
     {% if !rendered_description.is_empty() %}
-        <p>{{ rendered_description | safe }}</p>
+        <div class="markdown">{{ rendered_description | safe }}</div>
     {% else %}
         <p class="empty-description">no description yet</p>
     {% endif %}
