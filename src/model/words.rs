@@ -386,6 +386,10 @@ impl WordRepository {
             }
         }
 
+        crate::model::contribution_stats::ContributionStatsRepository::new(self.state.clone())
+            .increment_word_count(&language, &requestor.id, tx)
+            .await?;
+
         Ok(word_result.id)
     }
 
@@ -707,6 +711,14 @@ impl WordRepository {
         let result = sqlx::query!("DELETE FROM words WHERE id = $1", word.id)
             .execute(&mut *tx)
             .await?;
+
+        if result.rows_affected() > 0
+            && let Some(creator_id) = word._created_by
+        {
+            crate::model::contribution_stats::ContributionStatsRepository::new(self.state.clone())
+                .decrement_word_count(&word.language, &creator_id, &mut tx)
+                .await?;
+        }
 
         tx.commit().await?;
 

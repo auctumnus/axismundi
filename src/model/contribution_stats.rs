@@ -37,7 +37,6 @@ impl ContributionStatsRepository {
         Self { state }
     }
 
-    #[allow(dead_code)]
     pub async fn increment_word_count(
         &self,
         language: &Uuid,
@@ -62,7 +61,6 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
-    #[allow(dead_code)]
     pub async fn decrement_word_count(
         &self,
         language: &Uuid,
@@ -87,7 +85,6 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
-    #[allow(dead_code)]
     pub async fn increment_translation_count(
         &self,
         language: &Uuid,
@@ -98,7 +95,7 @@ impl ContributionStatsRepository {
             ContributionStats,
             r#"
                 INSERT INTO contribution_stats (language_id, user_id, word_count, translation_count)
-                VALUES ($1, $2, 1, 0)
+                VALUES ($1, $2, 0, 1)
                 ON CONFLICT (language_id, user_id)
                 DO UPDATE SET
                 translation_count = contribution_stats.translation_count + EXCLUDED.translation_count
@@ -112,7 +109,6 @@ impl ContributionStatsRepository {
         .map_err(Into::into)
     }
 
-    #[allow(dead_code)]
     pub async fn decrement_translation_count(
         &self,
         language: &Uuid,

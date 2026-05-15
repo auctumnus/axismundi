@@ -4,6 +4,12 @@ footer {
 
   width: var(--page-width);
 
+  h2 {
+    font-size: normal;
+    font-weight: 600;
+    margin: 0;
+  }
+
   ul.sections {
     display: flex;
     flex-direction: row;
@@ -99,6 +105,10 @@ footer {
         text-decoration: underline;
       }
     }
+  }
+
+  ul.last {
+    margin-bottom: 2.5rem;
   }
 
   ul.socials {

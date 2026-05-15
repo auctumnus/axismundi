@@ -8,10 +8,12 @@
             {% call u::icon("article") %}
             <span>dictionary</span>
         </a></li>
+        {% if can_edit_language %}
         <li><a href="/languages/{{ language.code }}/new-word">
             {% call u::icon("plus") %}
             <span>new word</span>
         </a></li>
+        {% endif %}
         <li><a href="/languages/{{ language.code }}/word-classes">word classes</a></li>
         <li><a href="/languages/{{ language.code }}/word-categories">word categories</a></li>
         <li><a href="/languages/{{ language.code }}/translations">translations</a></li>

@@ -389,6 +389,10 @@ impl TranslationRepository {
             ));
         }
 
+        crate::model::contribution_stats::ContributionStatsRepository::new(self.state.clone())
+            .increment_translation_count(&language_id, &requestor.id, &mut tx)
+            .await?;
+
         tx.commit().await?;
 
         self.create_translation_activity(requestor, result.id, language_id)
@@ -659,6 +663,12 @@ impl TranslationRepository {
         let result = sqlx::query!("DELETE FROM translation WHERE id = $1", id)
             .execute(&mut *tx)
             .await?;
+
+        if result.rows_affected() > 0 {
+            crate::model::contribution_stats::ContributionStatsRepository::new(self.state.clone())
+                .decrement_translation_count(&existing.language, &existing.created_by, &mut tx)
+                .await?;
+        }
 
         tx.commit().await?;
 

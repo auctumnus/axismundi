@@ -210,3 +210,31 @@ ul.card-list {
     padding: .75rem !important;
   }
 }
+
+.user-card {
+  a {
+    justify-content: flex-start;
+    gap: 1rem;
+
+    .left {
+      flex-grow: 0;
+      min-width: max-content;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    &:has(.display-name) .username {
+      color: var(--foreground-secondary);
+      line-height: var(--leading-tight);
+    }
+
+    .user-bio {
+      margin-top: .25rem;
+      max-width: calc(var(--width-page) - 2rem - 2rem - 2rem - 1rem);
+      /* 2rem page padding, 2rem card padding, 2rem pfp, 1rem gap */
+    }
+  }
+}

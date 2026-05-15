@@ -10,7 +10,7 @@ h1 {
   margin-bottom: 1rem;
 }
 
-h2 {
+h2:not(footer h2) {
   font-family: var(--font-heading);
   font-size: 1.5rem;
   margin-top: 2rem;
@@ -22,7 +22,7 @@ h2 {
     font-size: 1.5rem;
   }
 
-  h2 {
+  h2:not(footer h2) {
     font-size: 1.25rem;
   }
 }

@@ -166,6 +166,10 @@ html.js-mobile-nav body.nav-sidebar-closing header {
       .display-name {
         font-weight: bold;
       }
+
+      &:has(.display-name) .username {
+        color: var(--foreground-secondary);
+      }
     }
   }
 
