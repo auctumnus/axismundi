@@ -472,22 +472,6 @@ impl LanguageRepository {
 
         tx.commit().await?;
 
-        // Create activity if language is public
-        if !updated_lang.private {
-            let activity_repo =
-                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo
-                .create(
-                    requestor.id,
-                    crate::model::user_activities::ActivityType::UpdateLanguage,
-                    updated_lang.id,
-                    "language",
-                    None,
-                    None,
-                )
-                .await?;
-        }
-
         Ok(updated_lang)
     }
 

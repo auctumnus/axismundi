@@ -330,20 +330,6 @@ impl TranslatableRepository {
         let updated_translatable =
             result.ok_or_else(|| not_found(format!("translatable with id '{id}'")))?;
 
-        // Create activity (translatables are always public)
-        let activity_repo =
-            crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-        let _activity = activity_repo
-            .create(
-                requestor.id,
-                crate::model::user_activities::ActivityType::UpdateTranslatable,
-                updated_translatable.id,
-                "translatable",
-                None,
-                None,
-            )
-            .await?;
-
         Ok(updated_translatable)
     }
 

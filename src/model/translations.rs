@@ -282,7 +282,7 @@ impl TranslationRepository {
             let activity_repo =
                 crate::model::user_activities::UserActivityRepository::new(self.state.clone());
             let _activity = activity_repo
-                .create(
+                .create_or_coalesce(
                     requestor.id,
                     crate::model::user_activities::ActivityType::CreateTranslation,
                     translation_id,
@@ -401,31 +401,6 @@ impl TranslationRepository {
         Ok(result)
     }
 
-    pub(crate) async fn create_update_activity(
-        &self,
-        requestor: &User,
-        translation_id: Uuid,
-        language_id: Uuid,
-    ) -> AppResult<()> {
-        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
-        let lang = lang_repo.find_by_id(language_id).await?;
-        if !lang.private {
-            let activity_repo =
-                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo
-                .create(
-                    requestor.id,
-                    crate::model::user_activities::ActivityType::UpdateTranslation,
-                    translation_id,
-                    "translation",
-                    Some(language_id),
-                    Some("language"),
-                )
-                .await?;
-        }
-        Ok(())
-    }
-
     pub async fn update(
         &self,
         requestor: &User,
@@ -525,15 +500,11 @@ impl TranslationRepository {
 
         tx.commit().await?;
 
-        self.create_update_activity(requestor, updated_translation.id, existing.language)
-            .await?;
-
         Ok(updated_translation)
     }
 
     /// Update a translation within a caller-managed transaction.
-    /// The caller is responsible for committing (or rolling back) the transaction,
-    /// and for calling `create_update_activity` after committing.
+    /// The caller is responsible for committing (or rolling back) the transaction.
     pub async fn update_in_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,

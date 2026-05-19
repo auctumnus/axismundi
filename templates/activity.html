@@ -4,6 +4,7 @@
 {%- import "translatables/fragments/card.html" as translatable_card -%}
 {%- import "translations/fragments/card.html" as translation_card -%}
 {%- import "words/fragments/card.html" as word_card -%}
+{%- import "users/fragments/card.html" as user_card -%}
 
 {% macro entity_link(entity) %}
     {% match entity %}
@@ -46,7 +47,7 @@
         {% if show_user %}
             {% call u::badge(&activity.user, "small") %}
         {% endif %}
-        <span class="verb">{{ activity.activity.verb() }}</span>
+        <span class="verb">{{ activity.phrase() }}</span>
         {% if let Some(entity) = activity.related_entity %}
             <span class="preposition">in</span>
             {% match entity %}
@@ -58,9 +59,14 @@
         {% endif %}
         {% call u::relative(&activity.timestamp) %}
     </div>
-    <ul>
-        {% call entity_card(activity.entity) %}
-    </ul>
+    {% match activity.activity %}
+        {% when crate::model::user_activities::ActivityType::UserJoined %}
+            <ul>{% call user_card::render(activity.user) %}</ul>
+        {% else %}
+            <ul>
+                {% call entity_card(activity.entity) %}
+            </ul>
+    {% endmatch %}
 </li>
 {% endmacro %}
 

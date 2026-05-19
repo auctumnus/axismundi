@@ -1,9 +1,14 @@
 {% extends "layout.html" %}
+{%- import "activity.html" as activity -%}
 
 {% block title %}Axismundi{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/page/landing.css">
+<link rel="stylesheet" href="/static/components/activity.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<script src="/static/components/time.js" defer></script>
+<script src="/static/components/like-button.js" type="module" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -23,5 +28,14 @@
     <a href="/register" class="button">Get started</a>
     <a href="/about" class="button secondary">Learn more</a>
 </div>
+
+{% if !activities.is_empty() %}
+<h2>recent activity</h2>
+<ul class="card-list activities">
+    {% for activity in activities %}
+        {% call activity::render(&activity, true) %}
+    {% endfor %}
+</ul>
+{% endif %}
 
 {% endblock %}

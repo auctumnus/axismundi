@@ -390,7 +390,7 @@ impl WordRepository {
                     self.state.clone(),
                 );
                 let _activity = activity_repo
-                    .create_with_tx(
+                    .create_or_coalesce_with_tx(
                         requestor.id,
                         crate::model::user_activities::ActivityType::CreateWord,
                         word_result.id,
@@ -658,24 +658,6 @@ impl WordRepository {
 
         let updated_word =
             result.ok_or_else(|| not_found(format!("word with id '{}'", word.id)))?;
-
-        // Create activity if language is public
-        let lang_repo = crate::model::languages::LanguageRepository::new(self.state.clone());
-        let lang = lang_repo.find_by_id(word.language).await?;
-        if !lang.private {
-            let activity_repo =
-                crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-            let _activity = activity_repo
-                .create(
-                    requestor.id,
-                    crate::model::user_activities::ActivityType::UpdateWord,
-                    updated_word.id,
-                    "word",
-                    Some(word.language),
-                    Some("language"),
-                )
-                .await?;
-        }
 
         Ok(updated_word)
     }

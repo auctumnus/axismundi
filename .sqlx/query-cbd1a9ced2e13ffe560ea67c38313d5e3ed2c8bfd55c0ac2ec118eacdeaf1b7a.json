@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE user_activities\n                    SET count = count + 1,\n                        entity_id = $1,\n                        timestamp = NOW()\n                    WHERE id = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbd1a9ced2e13ffe560ea67c38313d5e3ed2c8bfd55c0ac2ec118eacdeaf1b7a"
+}

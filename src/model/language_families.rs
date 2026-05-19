@@ -604,19 +604,6 @@ impl LanguageFamilyRepository {
 
         tx.commit().await?;
 
-        let activity_repo =
-            crate::model::user_activities::UserActivityRepository::new(self.state.clone());
-        let _activity = activity_repo
-            .create(
-                user.id,
-                crate::model::user_activities::ActivityType::UpdateLanguageFamily,
-                updated.id,
-                "language_family",
-                None,
-                None,
-            )
-            .await?;
-
         Ok(updated)
     }
 

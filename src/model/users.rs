@@ -808,6 +808,20 @@ impl UserRepository {
                     crate::model::sessions::SessionRepository::new(self.state.clone());
                 session_repo.invalidate_all(user_id).await?;
 
+                let activity_repo =
+                    crate::model::user_activities::UserActivityRepository::new(self.state.clone());
+                let _ = activity_repo
+                    .create_with_tx(
+                        user.id,
+                        crate::model::user_activities::ActivityType::UserJoined,
+                        user.id,
+                        "user",
+                        None,
+                        None,
+                        &mut tx,
+                    )
+                    .await?;
+
                 tx.commit().await?;
                 Ok(user)
             } else {

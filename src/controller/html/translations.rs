@@ -1327,11 +1327,7 @@ async fn edit_translation_submit(
     .await;
 
     match result {
-        Ok(updated) => {
-            // Fire activity log outside the transaction (best-effort)
-            let _ = translations
-                .create_update_activity(&user, updated.id, existing_translation.language)
-                .await;
+        Ok(_updated) => {
             let redirect_url = format!(
                 "/translatable/{}/translation/{}",
                 redirect_slug, language.code

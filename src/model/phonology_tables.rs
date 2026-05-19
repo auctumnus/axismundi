@@ -4,7 +4,6 @@ use askama::filters::{Html, escape};
 use crate::model::language_invites::PermissionLevel;
 use crate::model::language_permissions::LanguagePermissionRepository;
 use crate::model::languages::Language;
-use crate::model::user_activities::{ActivityType, UserActivityRepository};
 use crate::model::user_bans::UserBanRepository;
 use crate::model::users::User;
 use crate::pagination::{PaginatedRequest, PaginatedResponse};
@@ -631,17 +630,6 @@ impl PhonologyTableRepository {
         )
         .fetch_one(&self.state.pool)
         .await?;
-
-        UserActivityRepository::new(self.state.clone())
-            .create(
-                requestor.id,
-                ActivityType::UpdateLanguage,
-                existing.language_id,
-                "language",
-                None,
-                None,
-            )
-            .await?;
 
         Ok(updated)
     }

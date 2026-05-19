@@ -168,15 +168,23 @@ fn render_template<T: Template>(template: T) -> Response {
 #[template(path = "landing.html")]
 struct LandingTemplate {
     current_user: Option<User>,
+    activities: Vec<UserActivity>,
 }
 
-async fn landing(s: Session) -> impl IntoResponse {
+async fn landing(activities_repo: UserActivityRepository, s: Session) -> (StatusCode, Response) {
     if let Some(_user) = s.user() {
-        return Redirect::to("/home").into_response();
+        return (StatusCode::OK, Redirect::to("/home").into_response());
     }
 
     let current_user = s.user().cloned();
-    render_template(LandingTemplate { current_user })
+    let Ok(activities) = activities_repo.list_site_wide(current_user.as_ref()).await else {
+        return render_generic_error(s, internal_error("Failed to load recent activity")).await;
+    };
+    let body = render_template(LandingTemplate {
+        current_user,
+        activities,
+    });
+    (StatusCode::OK, body)
 }
 
 #[derive(Debug, Clone, Serialize)]

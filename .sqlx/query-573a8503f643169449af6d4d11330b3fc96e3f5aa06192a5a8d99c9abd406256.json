@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                INSERT INTO user_activities (user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type)\n                VALUES ($1, $2, $3, $4, $5, $6)\n                RETURNING id\n            ",
+  "query": "\n                    INSERT INTO user_activities (user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type)\n                    VALUES ($1, $2, $3, $4, $5, $6)\n                    RETURNING id\n                ",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "ff38fcf7173ff6c1d36b2ffc62fc0be5b2a21811f03678cf27c4fe715c978a00"
+  "hash": "573a8503f643169449af6d4d11330b3fc96e3f5aa06192a5a8d99c9abd406256"
 }

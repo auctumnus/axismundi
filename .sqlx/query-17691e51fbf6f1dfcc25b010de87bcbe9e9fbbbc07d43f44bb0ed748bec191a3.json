@@ -28,7 +28,8 @@
                 "user_ban",
                 "user_unban",
                 "add_tag",
-                "remove_tag"
+                "remove_tag",
+                "imported"
               ]
             }
           }
@@ -96,7 +97,8 @@
                 "user_ban",
                 "user_unban",
                 "add_tag",
-                "remove_tag"
+                "remove_tag",
+                "imported"
               ]
             }
           }

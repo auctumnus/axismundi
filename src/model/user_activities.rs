@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -14,7 +14,7 @@ use crate::{
     util::AppState,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "activity_type", rename_all = "snake_case")]
 pub enum ActivityType {
     CreateWord,
@@ -27,6 +27,7 @@ pub enum ActivityType {
     UpdateLanguage,
     CreateLanguageFamily,
     UpdateLanguageFamily,
+    UserJoined,
 }
 
 impl ActivityType {
@@ -42,6 +43,7 @@ impl ActivityType {
             | ActivityType::UpdateTranslatable
             | ActivityType::UpdateTranslation
             | ActivityType::UpdateLanguageFamily => "updated",
+            ActivityType::UserJoined => "joined",
         }
     }
 }
@@ -72,11 +74,28 @@ pub struct UserActivity {
     #[serde(skip_serializing)]
     pub related_entity_type: Option<String>,
     pub timestamp: DateTime<Utc>,
+    pub count: i32,
     pub user: User,
 
     // materialized
     pub entity: ActivityEntity,
     pub related_entity: Option<ActivityEntity>,
+}
+
+impl UserActivity {
+    /// Count-aware verb phrase shown in the feed. For coalesced rows, the
+    /// count is woven into the phrase ("added 23 words"); otherwise this
+    /// falls back to the bare verb followed by an entity card in the template.
+    pub fn phrase(&self) -> String {
+        match (self.activity, self.count) {
+            (ActivityType::UserJoined, _) => "joined".to_string(),
+            (ActivityType::CreateWord, n) if n > 1 => format!("added {n} words"),
+            (ActivityType::CreateTranslation, n) if n > 1 => {
+                format!("added {n} translations")
+            }
+            _ => self.activity.verb().to_string(),
+        }
+    }
 }
 
 pub struct UserActivityRepository {
@@ -100,6 +119,7 @@ impl UserActivityRepository {
                     ua.related_entity_id,
                     ua.related_entity_type,
                     ua.timestamp,
+                    ua.count,
                     u.id as "u_id!",
                     u.username as "u_username!",
                     u.email as "u_email!",
@@ -131,6 +151,7 @@ impl UserActivityRepository {
                 entity_id: record.entity_id,
                 related_entity_id: record.related_entity_id,
                 timestamp: record.timestamp,
+                count: record.count,
                 user: User {
                     id: record.u_id,
                     username: record.u_username,
@@ -229,6 +250,126 @@ impl UserActivityRepository {
         Ok(record.id)
     }
 
+    /// Coalesce a repeated create activity (CreateWord / CreateTranslation) into the user's
+    /// most recent matching row if one is still "active": either within the last 10 minutes,
+    /// or within the last 24 hours AND the user hasn't done anything else since. Otherwise
+    /// inserts a new row. Runs inside the caller's transaction so the activity write is
+    /// atomic with the entity insert.
+    pub async fn create_or_coalesce_with_tx(
+        &self,
+        user_id: Uuid,
+        activity: ActivityType,
+        entity_id: Uuid,
+        entity_type: &str,
+        related_entity_id: Option<Uuid>,
+        related_entity_type: Option<&str>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AppResult<Uuid> {
+        // Find the latest matching activity (and lock it) plus the user's overall latest.
+        let candidate = sqlx::query!(
+            r#"
+                WITH latest_matching AS (
+                    SELECT id, timestamp
+                    FROM user_activities
+                    WHERE user_id = $1
+                      AND activity = $2
+                      AND related_entity_id = $3
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                    FOR UPDATE
+                ),
+                latest_any AS (
+                    SELECT id
+                    FROM user_activities
+                    WHERE user_id = $1
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                )
+                SELECT
+                    lm.id AS "match_id?",
+                    lm.timestamp AS "match_ts?",
+                    la.id AS "any_id?"
+                FROM latest_matching lm
+                FULL OUTER JOIN latest_any la ON TRUE
+            "#,
+            user_id,
+            activity as ActivityType,
+            related_entity_id,
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        let coalesce_target = candidate.and_then(|c| {
+            let match_id = c.match_id?;
+            let match_ts = c.match_ts?;
+            let age = Utc::now() - match_ts;
+            let in_burst = age < Duration::minutes(10);
+            let uninterrupted = c.any_id == Some(match_id) && age < Duration::hours(24);
+            (in_burst || uninterrupted).then_some(match_id)
+        });
+
+        if let Some(match_id) = coalesce_target {
+            sqlx::query!(
+                r#"
+                    UPDATE user_activities
+                    SET count = count + 1,
+                        entity_id = $1,
+                        timestamp = NOW()
+                    WHERE id = $2
+                "#,
+                entity_id,
+                match_id,
+            )
+            .execute(&mut **tx)
+            .await?;
+            Ok(match_id)
+        } else {
+            let record = sqlx::query!(
+                r#"
+                    INSERT INTO user_activities (user_id, activity, entity_id, entity_type, related_entity_id, related_entity_type)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING id
+                "#,
+                user_id,
+                activity as ActivityType,
+                entity_id,
+                entity_type,
+                related_entity_id,
+                related_entity_type
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+            Ok(record.id)
+        }
+    }
+
+    /// Same as `create_or_coalesce_with_tx` but opens its own short transaction for callers
+    /// that aren't already inside one (e.g. translation creation).
+    pub async fn create_or_coalesce(
+        &self,
+        user_id: Uuid,
+        activity: ActivityType,
+        entity_id: Uuid,
+        entity_type: &str,
+        related_entity_id: Option<Uuid>,
+        related_entity_type: Option<&str>,
+    ) -> AppResult<Uuid> {
+        let mut tx = self.state.pool.begin().await?;
+        let id = self
+            .create_or_coalesce_with_tx(
+                user_id,
+                activity,
+                entity_id,
+                entity_type,
+                related_entity_id,
+                related_entity_type,
+                &mut tx,
+            )
+            .await?;
+        tx.commit().await?;
+        Ok(id)
+    }
+
     /// Delete an activity by its ID. Only the related user can delete their own activities.
     pub async fn delete(&self, requestor: &User, id: Uuid) -> AppResult<bool> {
         let activity = self.find_by_id(id, Some(requestor)).await?;
@@ -299,6 +440,7 @@ impl UserActivityRepository {
                     ua.related_entity_id,
                     ua.related_entity_type,
                     ua.timestamp,
+                    ua.count,
                     u.id as "u_id!",
                     u.username as "u_username!",
                     u.email as "u_email!",
@@ -352,6 +494,7 @@ impl UserActivityRepository {
                 entity_id: record.entity_id,
                 related_entity_id: record.related_entity_id,
                 timestamp: record.timestamp,
+                count: record.count,
                 user: User {
                     id: record.u_id,
                     username: record.u_username,
@@ -457,6 +600,7 @@ impl UserActivityRepository {
                     ua.related_entity_id,
                     ua.related_entity_type,
                     ua.timestamp,
+                    ua.count,
                     u.id as "u_id!",
                     u.username as "u_username!",
                     u.email as "u_email!",
@@ -507,6 +651,7 @@ impl UserActivityRepository {
                 entity_id: record.entity_id,
                 related_entity_id: record.related_entity_id,
                 timestamp: record.timestamp,
+                count: record.count,
                 user: User {
                     id: record.u_id,
                     username: record.u_username,
@@ -576,6 +721,7 @@ impl UserActivityRepository {
                     ua.related_entity_id,
                     ua.related_entity_type,
                     ua.timestamp,
+                    ua.count,
                     u.id as "u_id!",
                     u.username as "u_username!",
                     u.email as "u_email!",
@@ -609,6 +755,7 @@ impl UserActivityRepository {
                 entity_id: record.entity_id,
                 related_entity_id: record.related_entity_id,
                 timestamp: record.timestamp,
+                count: record.count,
                 user: User {
                     id: record.u_id,
                     username: record.u_username,

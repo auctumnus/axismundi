@@ -3,6 +3,7 @@
 {% block title %}account created - axismundi{% endblock %}
 
 {% block content %}
+<div class="prose">
 <h1>Account created</h1>
 <p>Your account has been successfully created. You should check your email for a verification link.</p>
 <p>If you don't see the email, try:</p>
@@ -11,5 +12,6 @@
     <li><a href="/resend-verification/{{ token_id }}">resending the verification email</a></li>
     <li><a href="mailto:admin@axismundi.app">contacting support</a></li>
 </ul>
+</div>
 
 {% endblock %}
