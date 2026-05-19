@@ -38,10 +38,14 @@ const timeAgo = (date: Date) => {
 export const initializeTimeElements = () => {
   const timeElements = document.querySelectorAll("time[datetime]");
   timeElements.forEach((timeElement) => {
+    if (timeElement.hasAttribute("data-non-relative")) {
+      return;
+    }
+
     const datetime = timeElement.getAttribute("datetime");
     if (datetime) {
       const date = new Date(datetime);
-      timeElement.textContent = timeAgo(date);
+      
       timeElement.addEventListener("click", () => {
         timeElement.classList.toggle("static-time");
         if (timeElement.classList.contains("static-time")) {

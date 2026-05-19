@@ -23,5 +23,6 @@
 @import "./components/forms.css";
 @import "./components/cards/context.css";
 @import "./components/markdown.css";
+@import "./components/pill.css";
 
 @import "./utilities.css";

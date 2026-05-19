@@ -9,6 +9,7 @@ use crate::{
         language_families::{FamilyWithContributors, LanguageFamilyRepository},
         languages::{Language, LanguageRepository},
         translatable::{TranslatableRepository, TranslatableSearch, TranslatableWithMeta},
+        translatable_of_the_day::{TotdEntry, TranslatableOfTheDayRepository},
         user_activities::{UserActivity, UserActivityRepository},
         users::{User, UserRepository},
     },
@@ -42,9 +43,11 @@ mod languages;
 mod phonology_tables;
 mod reports;
 mod sound_change_sets;
+mod translatable_of_the_day;
 mod translatables;
 mod translations;
 mod user_bans;
+mod user_tags;
 mod users;
 mod word_categories;
 mod word_classes;
@@ -84,11 +87,13 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_word_category_routes, normal_word_category_routes) =
         word_categories::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
+    let (secure_totd_routes, normal_totd_routes) = translatable_of_the_day::create_router();
     let (secure_translation_routes, normal_translation_routes) = translations::create_router();
     let (secure_bookmark_routes, normal_bookmark_routes) = bookmarks::create_router();
     let (secure_invite_routes, normal_invite_routes) = language_invites::create_router();
     let (secure_audit_log_routes, normal_audit_log_routes) = audit_logs::create_router();
     let (secure_ban_routes, normal_ban_routes) = user_bans::create_router();
+    let (secure_user_tag_routes, normal_user_tag_routes) = user_tags::create_router();
     let (secure_report_routes, normal_report_routes) = reports::create_router();
     let (secure_phonology_table_routes, normal_phonology_table_routes) =
         phonology_tables::create_router();
@@ -108,11 +113,13 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_word_class_routes)
         .merge(secure_word_category_routes)
         .merge(secure_translatable_routes)
+        .merge(secure_totd_routes)
         .merge(secure_translation_routes)
         .merge(secure_bookmark_routes)
         .merge(secure_invite_routes)
         .merge(secure_audit_log_routes)
         .merge(secure_ban_routes)
+        .merge(secure_user_tag_routes)
         .merge(secure_report_routes)
         .merge(secure_phonology_table_routes)
         .merge(secure_sound_change_set_routes);
@@ -137,11 +144,13 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_word_class_routes)
         .merge(normal_word_category_routes)
         .merge(normal_translatable_routes)
+        .merge(normal_totd_routes)
         .merge(normal_translation_routes)
         .merge(normal_bookmark_routes)
         .merge(normal_invite_routes)
         .merge(normal_audit_log_routes)
         .merge(normal_ban_routes)
+        .merge(normal_user_tag_routes)
         .merge(normal_report_routes)
         .merge(normal_phonology_table_routes)
         .merge(normal_sound_change_set_routes);
@@ -169,20 +178,30 @@ fn render_template<T: Template>(template: T) -> Response {
 struct LandingTemplate {
     current_user: Option<User>,
     activities: Vec<UserActivity>,
+    totd: Option<TotdEntry>,
 }
 
-async fn landing(activities_repo: UserActivityRepository, s: Session) -> (StatusCode, Response) {
+async fn landing(
+    activities_repo: UserActivityRepository,
+    totd_repo: TranslatableOfTheDayRepository,
+    s: Session,
+) -> (StatusCode, Response) {
     if let Some(_user) = s.user() {
-        return (StatusCode::OK, Redirect::to("/home").into_response());
+        return (StatusCode::SEE_OTHER, Redirect::to("/home").into_response());
     }
 
     let current_user = s.user().cloned();
     let Ok(activities) = activities_repo.list_site_wide(current_user.as_ref()).await else {
         return render_generic_error(s, internal_error("Failed to load recent activity")).await;
     };
+    let Ok(totd) = totd_repo.today(current_user.as_ref()).await else {
+        return render_generic_error(s, internal_error("Failed to load translatable of the day"))
+            .await;
+    };
     let body = render_template(LandingTemplate {
         current_user,
         activities,
+        totd,
     });
     (StatusCode::OK, body)
 }
@@ -205,6 +224,7 @@ struct HomeTemplate {
     families: Vec<FamilyWithContributors>,
     activities: Vec<UserActivity>,
     translatables: Vec<TranslatableWithMeta>,
+    totd: Option<TotdEntry>,
 }
 
 async fn home(
@@ -214,10 +234,11 @@ async fn home(
     translatables: TranslatableRepository,
     activities_repo: UserActivityRepository,
     contribution_stats: ContributionStatsRepository,
+    totd_repo: TranslatableOfTheDayRepository,
     s: Session,
 ) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
-        return (StatusCode::OK, Redirect::to("/").into_response());
+        return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
     let Ok(l) = users.top_languages(user.id, 5).await else {
@@ -258,6 +279,7 @@ async fn home(
                 offset: 0,
             },
             TranslatableSearch::default(),
+            Some(&user),
         )
         .await
         .map_or_else(|_| vec![], |res| res.items);
@@ -274,12 +296,18 @@ async fn home(
         return render_generic_error(s, internal_error("Failed to load user activities")).await;
     };
 
+    let Ok(totd) = totd_repo.today(Some(&user)).await else {
+        return render_generic_error(s, internal_error("Failed to load translatable of the day"))
+            .await;
+    };
+
     let template = HomeTemplate {
         current_user: Some(user),
         languages,
         families,
         activities,
         translatables: translatables_with_liked,
+        totd,
         error: None,
     };
 

@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
+
+{% block title %}unschedule {{ entry.translatable.translatable.title }}? - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>unschedule {{ entry.translatable.translatable.title }}</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/translatable/{{ entry.translatable.translatable.slug }}/unschedule">
+    <section>
+        <p>are you sure you want to unschedule <strong>{{ entry.translatable.translatable.title }}</strong> from <time datetime="{{ entry.date }}" data-non-relative>{{ entry.date.format("%B %-d, %Y") }}</time>?</p>
+        <p>this drops the translatable back into the draft queue at its sort_key position.</p>
+    </section>
+
+    <section class="button-row">
+        <a class="button secondary" href="/translatable-of-the-day/admin/upcoming">cancel</a>
+        <button type="submit" class="danger">unschedule</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/translatable-of-the-day/admin" class="breadcrumb">totd admin</a>
+<span class="separator">/</span>
+<a href="/translatable-of-the-day/admin/upcoming" class="breadcrumb">upcoming</a>
+{% endblock %}
+
+{% block footer %}
+{% let translatable = entry.translatable.translatable.clone() %}
+{% call ts_f::translatable_section(translatable, false) %}
+{% endblock %}

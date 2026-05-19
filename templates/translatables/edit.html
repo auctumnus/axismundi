@@ -45,6 +45,25 @@ go to the <a href="/translatable/{{ translatable.slug }}/edit-source">edit sourc
 
     <button type="submit">Save changes</button>
 </form>
+
+{% if is_staff %}
+    <section class="staff-only-actions">
+        <h2>staff actions</h2>
+        {% if translatable.is_draft() %}
+            <form method="post" action="/translatable/{{ translatable.slug }}/publish">
+                <p class="hint">this translatable is currently a <strong>draft</strong> — invisible to non-staff users.</p>
+                <button type="submit" class="button primary-button">publish now</button>
+            </form>
+        {% else %}
+            <form method="post" action="/translatable/{{ translatable.slug }}/unpublish">
+                {% if let Some(published_at) = translatable.published_at.as_ref() %}
+                    <p class="hint">published {% call u::relative(published_at) %}.</p>
+                {% endif %}
+                <button type="submit" class="button secondary">unpublish (revert to draft)</button>
+            </form>
+        {% endif %}
+    </section>
+{% endif %}
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
     if (window.mountMarkdownEditor) {

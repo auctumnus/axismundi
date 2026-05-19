@@ -1,0 +1,13 @@
+{%- import "translatables/fragments/card.html" as tc -%}
+
+{% macro render(entry) %}
+<section class="featured-totd">
+    <div class="featured-totd-banner">
+        <span class="featured-label">translatable of the day</span>
+        <time datetime="{{ entry.date }}">{{ entry.date.format("%B %-d, %Y") }}</time>
+    </div>
+    <ul class="card-list">
+        {% call tc::render(&entry.translatable) %}
+    </ul>
+</section>
+{% endmacro %}

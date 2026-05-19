@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{%- import "translatable_of_the_day/fragments/featured_card.html" as totd_card -%}
+{%- import "util.html" as u -%}
+
+{% block title %}translatable of the day - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/page/translatable_of_the_day.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<script src="/static/components/time.js" defer></script>
+{% endblock %}
+
+{% block content %}
+
+<h1>translatable of the day</h1>
+
+{% if let Some(entry) = entry %}
+    {% call totd_card::render(entry) %}
+{% else %}
+    <div class="card empty-state">
+        <h2>nothing featured today</h2>
+        <p>the queue is empty. check back tomorrow!</p>
+    </div>
+{% endif %}
+
+<div class="totd-nav">
+    <a class="with-icon" href="/translatable-of-the-day/archive">
+        {% call u::icon("list") %}
+        <span>view archive</span>
+    </a>
+</div>
+
+{% endblock %}

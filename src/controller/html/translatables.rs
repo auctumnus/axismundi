@@ -7,6 +7,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{TypedHeader, headers::UserAgent};
+use chrono::{NaiveDate, Utc};
 use futures::TryFutureExt;
 use serde::Deserialize;
 
@@ -14,13 +15,14 @@ use crate::{
     attempt,
     controller::html::{TranslatableWithMeta, okay, render_generic_error, render_template},
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
-    err::AppError,
+    err::{AppError, bad_request},
     get_user,
     model::{
         translatable::{
             CreateTranslatable, Translatable, TranslatableRepository, TranslatableSearch,
             UpdateTranslatable,
         },
+        translatable_of_the_day::TranslatableOfTheDayRepository,
         translations::{TranslationRepository, TranslationWithLanguageAndContributor},
         users::{User, UserRepository},
     },
@@ -40,7 +42,9 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/translatable/{slug}/delete",
             post(delete_translatable_submit),
-        );
+        )
+        .route("/translatable/{slug}/publish", post(publish_submit))
+        .route("/translatable/{slug}/unpublish", post(unpublish_submit));
 
     let normal_routes = Router::<AppState>::new()
         .route("/new-translatable", get(new_translatable_form))
@@ -73,13 +77,26 @@ pub struct Header<'a> {
 #[allow(dead_code)]
 struct NewTranslatableTemplate {
     current_user: Option<User>,
+    is_staff: bool,
     error: Option<AppError>,
     previous_title: String,
     previous_description: String,
     previous_english: String,
+    previous_as_draft: bool,
+    previous_schedule_date: String,
+    today: NaiveDate,
 }
 
-async fn new_translatable_form(s: Session) -> (StatusCode, Response) {
+#[derive(Deserialize, Default)]
+struct NewTranslatableQuery {
+    #[serde(default)]
+    as_draft: Option<String>,
+}
+
+async fn new_translatable_form(
+    s: Session,
+    Query(q): Query<NewTranslatableQuery>,
+) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (
             StatusCode::UNAUTHORIZED,
@@ -87,12 +104,17 @@ async fn new_translatable_form(s: Session) -> (StatusCode, Response) {
         );
     };
 
+    let is_staff = user.is_admin() || user.is_moderator();
     let template = NewTranslatableTemplate {
         current_user: Some(user),
+        is_staff,
         error: None,
         previous_title: String::new(),
         previous_description: String::new(),
         previous_english: String::new(),
+        previous_as_draft: is_staff && q.as_draft.is_some(),
+        previous_schedule_date: String::new(),
+        today: Utc::now().date_naive(),
     };
 
     (StatusCode::OK, render_template(template).into_response())
@@ -103,6 +125,12 @@ struct NewTranslatableFormData {
     title: String,
     description: Option<String>,
     english: String,
+    /// Staff-only checkbox. Ignored for non-staff submitters.
+    as_draft: Option<String>,
+    /// Staff-only: when set together with `as_draft`, schedule the newly
+    /// created draft for this date as the TotD. Ignored for non-staff or
+    /// when empty.
+    schedule_date: Option<String>,
 }
 
 async fn new_translatable_submit(
@@ -112,20 +140,66 @@ async fn new_translatable_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    let translatable = translatables
-        .create(
-            &user,
-            CreateTranslatable {
-                title: form.title.clone(),
-                english: form.english.clone(),
-                source_name: None,
-                source_url: None,
-                source_content: None,
-                source_language: None,
-                description: form.description.clone(),
-            },
-        )
-        .await;
+    let is_staff = user.is_admin() || user.is_moderator();
+    let as_draft = is_staff && form.as_draft.is_some();
+
+    let schedule_date_raw = form
+        .schedule_date
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let render_form_error =
+        |user: User, error: AppError, status: StatusCode, schedule_raw: &str| {
+            let template = NewTranslatableTemplate {
+                current_user: Some(user),
+                is_staff,
+                error: Some(error),
+                previous_title: form.title.clone(),
+                previous_description: form.description.clone().unwrap_or_default(),
+                previous_english: form.english.clone(),
+                previous_as_draft: as_draft,
+                previous_schedule_date: schedule_raw.to_string(),
+                today: Utc::now().date_naive(),
+            };
+            (status, render_template(template))
+        };
+
+    let schedule_date = if is_staff && as_draft {
+        match schedule_date_raw
+            .map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d"))
+            .transpose()
+        {
+            Ok(d) => d,
+            Err(_) => {
+                return render_form_error(
+                    user,
+                    bad_request("invalid schedule date"),
+                    StatusCode::BAD_REQUEST,
+                    schedule_date_raw.unwrap_or(""),
+                );
+            }
+        }
+    } else {
+        None
+    };
+
+    let payload = CreateTranslatable {
+        title: form.title.clone(),
+        english: form.english.clone(),
+        source_name: None,
+        source_url: None,
+        source_content: None,
+        source_language: None,
+        description: form.description.clone(),
+        as_draft,
+    };
+
+    let translatable = if let Some(date) = schedule_date {
+        translatables.create_and_schedule(&user, payload, date).await
+    } else {
+        translatables.create(&user, payload).await
+    };
 
     match translatable {
         Ok(translatable) => (
@@ -134,16 +208,12 @@ async fn new_translatable_submit(
         ),
         Err(e) => {
             let status_code = e.status_code;
-            let template = NewTranslatableTemplate {
-                current_user: Some(user),
-                error: Some(e),
-                previous_title: form.title.clone(),
-                previous_description: form.description.clone().unwrap_or_default(),
-                previous_english: form.english.clone(),
-            };
-
-            let body = render_template(template);
-            (status_code, body)
+            render_form_error(
+                user,
+                e,
+                status_code,
+                schedule_date_raw.unwrap_or(""),
+            )
         }
     }
 }
@@ -159,7 +229,7 @@ async fn search_translatables(
     let back_url = crate::util::back_url("/translatables", &pagination, &query);
 
     let results = translatables
-        .search(pagination.clone(), query.clone())
+        .search(pagination.clone(), query.clone(), s.user())
         .and_then(|response| {
             response.try_map_async(|translatable| translatables.materialize(translatable, s.user()))
         })
@@ -199,6 +269,8 @@ struct ViewTranslatableTemplate {
     translatable_with_meta: TranslatableWithMeta,
     translations: Vec<TranslationWithLanguageAndContributor>,
     can_edit_translatable: bool,
+    is_admin_or_mod: bool,
+    scheduled_date: Option<NaiveDate>,
     json_ld: String,
     rendered_description: Option<String>,
     back: String,
@@ -209,11 +281,12 @@ async fn view_translatable(
     user_agent: Option<TypedHeader<UserAgent>>,
     translatables: TranslatableRepository,
     translations: TranslationRepository,
+    totd: TranslatableOfTheDayRepository,
     users: UserRepository,
     Path(slug): Path<String>,
     Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let translatable = attempt!(s, translatables.find_by_slug_for(&slug, s.user()).await);
 
     if let Some(ua) = user_agent
         && ua.as_str().to_lowercase().contains("discordbot")
@@ -261,6 +334,20 @@ async fn view_translatable(
     let translatable_with_meta =
         attempt!(s, translatables.materialize(translatable, s.user()).await);
 
+    let is_admin_or_mod = s
+        .user()
+        .is_some_and(|u| u.is_admin() || u.is_moderator());
+
+    let scheduled_date = if is_admin_or_mod && translatable_with_meta.translatable.is_draft() {
+        attempt!(
+            s,
+            totd.scheduled_date_for(translatable_with_meta.translatable.id)
+                .await
+        )
+    } else {
+        None
+    };
+
     // Fetch the 3 most recent translations for this translatable
     let translations = attempt!(
         s,
@@ -284,6 +371,8 @@ async fn view_translatable(
         translatable_with_meta,
         translations: translations.items,
         can_edit_translatable,
+        is_admin_or_mod,
+        scheduled_date,
         json_ld,
         rendered_description,
         back: back_query.back.unwrap_or_default(),
@@ -296,6 +385,7 @@ async fn view_translatable(
 #[allow(dead_code)]
 struct EditTranslatableTemplate {
     current_user: Option<User>,
+    is_staff: bool,
     translatable: Translatable,
     error: Option<AppError>,
     previous_title: String,
@@ -310,10 +400,15 @@ async fn edit_translatable_form(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let is_staff = user.is_admin() || user.is_moderator();
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
 
     let template = EditTranslatableTemplate {
         current_user: Some(user),
+        is_staff,
         translatable: translatable.clone(),
         error: None,
         previous_title: translatable.title,
@@ -331,7 +426,11 @@ async fn edit_translatable_submit(
     Form(updates): Form<UpdateTranslatable>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let is_staff = user.is_admin() || user.is_moderator();
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
 
     match translatables
         .update(&user, translatable.id, updates.clone())
@@ -344,6 +443,7 @@ async fn edit_translatable_submit(
         Err(e) => {
             let template = EditTranslatableTemplate {
                 current_user: Some(user),
+                is_staff,
                 translatable: translatable.clone(),
                 error: Some(e),
                 previous_title: updates.title.unwrap_or_default(),
@@ -355,6 +455,40 @@ async fn edit_translatable_submit(
             (StatusCode::BAD_REQUEST, body)
         }
     }
+}
+
+async fn publish_submit(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
+    attempt!(s, translatables.publish(&user, translatable.id).await);
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response(),
+    )
+}
+
+async fn unpublish_submit(
+    s: Session,
+    translatables: TranslatableRepository,
+    Path(slug): Path<String>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
+    attempt!(s, translatables.unpublish(&user, translatable.id).await);
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response(),
+    )
 }
 
 #[derive(Template)]
@@ -377,7 +511,10 @@ async fn edit_source_form(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
 
     let template = EditSourceTemplate {
         current_user: Some(user),
@@ -399,7 +536,10 @@ async fn edit_source_submit(
     Form(form): Form<UpdateTranslatable>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
 
     match translatables
         .update(&user, translatable.id, form.clone())
@@ -441,7 +581,10 @@ async fn delete_translatable_form(
     Path(slug): Path<String>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
 
     let template = DeleteTranslatableTemplate {
         current_user: Some(user),
@@ -458,7 +601,10 @@ async fn delete_translatable_submit(
     Path(slug): Path<String>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
-    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let translatable = attempt!(
+        s,
+        translatables.find_by_slug_for(&slug, Some(&user)).await
+    );
 
     match translatables.delete(&user, translatable).await {
         Ok(_) => (

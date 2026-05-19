@@ -29,7 +29,6 @@
     display: flex;
     flex-direction: row;
     gap: 0.5rem;
-    margin-bottom: 0.5rem;
     margin-top: 1rem;
 
     form.default {
@@ -59,7 +58,7 @@
 }
 
 .preview-card {
-  a {
+  a, .inner {
     text-decoration: none;
     color: inherit;
 

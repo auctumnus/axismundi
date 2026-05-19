@@ -4,7 +4,12 @@
 <li class="preview-card">
     <a href="/translatable/{{ translatable_with_meta.translatable.slug }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
         <span class="left">
-            <span class="title">{{ translatable_with_meta.translatable.title }}</span>
+            <span class="title">
+                {{ translatable_with_meta.translatable.title }}
+                {% if translatable_with_meta.translatable.is_draft() %}
+                    <span class="pill gray">draft</span>
+                {% endif %}
+            </span>
             {% if !translatable_with_meta.translatable.description.is_empty() %}
                 <span class="summary ellipse">{{ crate::util::first_sentence(&translatable_with_meta.translatable.description) }}</span>
             {% else %}

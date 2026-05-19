@@ -1087,6 +1087,7 @@ mod tests {
                     source_content: None,
                     source_language: None,
                     description: None,
+                    as_draft: false,
                 },
             )
             .await
@@ -1250,6 +1251,7 @@ mod tests {
                     source_content: None,
                     source_language: None,
                     description: None,
+                    as_draft: false,
                 },
             )
             .await
@@ -1432,6 +1434,7 @@ mod tests {
                     source_content: None,
                     source_language: None,
                     description: None,
+                    as_draft: false,
                 },
             )
             .await

@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "translatables/fragments/footer.html" as ts_f -%}
+
+{% block title %}schedule {{ translatable_with_meta.translatable.title }} - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>schedule {{ translatable_with_meta.translatable.title }}</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/translatable/{{ translatable_with_meta.translatable.slug }}/schedule">
+    <section>
+        <p>schedule <strong>{{ translatable_with_meta.translatable.title }}</strong> as the translatable of the day.</p>
+
+        <label for="date">date</label>
+        <input type="date" id="date" name="date" required min="{{ today }}" value="{{ previous_date }}">
+        <span class="hint">pick a date today or in the future. the translatable will be published when the date arrives.</span>
+    </section>
+
+    <section class="button-row">
+        <button type="submit">schedule</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/translatable-of-the-day/admin" class="breadcrumb">totd admin</a>
+{% endblock %}
+
+{% block footer %}
+{% let translatable = translatable_with_meta.translatable.clone() %}
+{% call ts_f::translatable_section(translatable, false) %}
+{% endblock %}

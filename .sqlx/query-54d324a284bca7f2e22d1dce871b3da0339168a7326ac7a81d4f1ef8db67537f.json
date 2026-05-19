@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT scheduled_date AS \"scheduled_date!\", translatable_id, is_auto\n                FROM totd_queue\n                WHERE scheduled_date >= $1\n                ORDER BY scheduled_date\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scheduled_date!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "translatable_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_auto",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "54d324a284bca7f2e22d1dce871b3da0339168a7326ac7a81d4f1ef8db67537f"
+}

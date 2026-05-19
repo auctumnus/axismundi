@@ -1074,6 +1074,7 @@ async fn profile(
                     created_by: Some(username.clone()),
                     ..Default::default()
                 },
+                current_user.as_ref(),
             )
             .and_then(|paginated| {
                 paginated.try_map_async(|translatable| {

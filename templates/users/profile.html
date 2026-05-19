@@ -221,6 +221,14 @@
                 {% else %}
                 <li><a href="/admin/bans/{{ user.username }}/ban">ban this user</a></li>
                 {% endif %}
+                {% if current_user.is_admin() && !user.is_admin() %}
+                    {% if user.is_moderator() %}
+                <li><a href="/admin/users/{{ user.username }}/tags/moderator/delete">remove moderator</a></li>
+                    {% else if !user.is_banned() %}
+                <li><a href="/admin/users/{{ user.username }}/make-moderator">make moderator</a></li>
+                    {% endif %}
+                {% endif %}
+                <li><a href="/admin/users/{{ user.username }}/tags">edit tags</a></li>
             </ul>
         </li>
     {% endif %}

@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{%- import "translatable_of_the_day/fragments/upcoming_row.html" as upcoming -%}
+{%- import "util.html" as u -%}
+
+{% block title %}search totd queue - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/page/translatable_of_the_day.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<link rel="stylesheet" href="/static/components/pagination.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<script src="/static/components/time.js" defer></script>
+{% endblock %}
+
+{% block content %}
+
+<h1>search totd queue</h1>
+
+<p><a class="with-icon" href="/translatable-of-the-day/admin">
+    {% call u::icon("chevron-left") %}
+    <span>back to admin</span>
+</a></p>
+
+{% if upcoming.items.is_empty() %}
+    <div class="card empty-state">
+        <p>no drafts in the queue and nothing scheduled.</p>
+    </div>
+{% else %}
+    <ul class="totd-upcoming-list">
+        {% for row in upcoming.items %}
+            {% call upcoming::render(row, today) %}
+        {% endfor %}
+    </ul>
+    {{ pagination|safe }}
+{% endif %}
+
+{% endblock %}

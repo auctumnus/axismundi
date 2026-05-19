@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT scheduled_date AS \"scheduled_date!\", translatable_id\n                FROM totd_queue\n                WHERE scheduled_date < $1\n                ORDER BY scheduled_date DESC\n                LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scheduled_date!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "translatable_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "737b19b02953a22f7e8e78ae23315128b95e0c0e9dbd41432afe542b8a967dec"
+}

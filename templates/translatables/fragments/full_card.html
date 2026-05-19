@@ -3,7 +3,12 @@
 {% macro render(translatable_with_meta, can_edit_translatable, rendered_description) %}
 <div class="card full-card">
     <div class="header-with-actions">
-        <h1>{{ translatable_with_meta.translatable.title }}</h1>
+        <h1>
+            {{ translatable_with_meta.translatable.title }}
+            {% if translatable_with_meta.translatable.is_draft() %}
+                <span class="pill gray">draft</span>
+            {% endif %}
+        </h1>
         <ul class="icons">
             {% if can_edit_translatable %}
             <li>

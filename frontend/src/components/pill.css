@@ -1,0 +1,43 @@
+.pill {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  background-color: var(--pill-bg);
+  color: var(--pill-fg);
+  font-family: var(--font-normal);
+}
+
+.pill.green {
+  --pill-bg: light-dark(var(--color-green-100), var(--color-green-700));
+  --pill-fg: light-dark(var(--color-green-800), var(--color-green-200));
+}
+
+.pill.blue {
+  --pill-bg: light-dark(var(--color-blue-100), var(--color-blue-700));
+  --pill-fg: light-dark(var(--color-blue-800), var(--color-blue-200));
+}
+
+.pill.yellow {
+  --pill-bg: light-dark(var(--color-yellow-100), var(--color-yellow-700));
+  --pill-fg: light-dark(var(--color-yellow-800), var(--color-yellow-200));
+}
+
+.pill.gray {
+  --pill-bg: light-dark(var(--color-gray-100), var(--color-gray-700));
+  --pill-fg: light-dark(var(--color-gray-800), var(--color-gray-200));
+}
+
+.pill.red {
+  --pill-bg: light-dark(var(--color-red-100), var(--color-red-700));
+  --pill-fg: light-dark(var(--color-red-800), var(--color-red-200));
+}
+
+.pill.orange {
+--pill-bg: light-dark(var(--color-orange-100), var(--color-orange-700));
+--pill-fg: light-dark(var(--color-orange-800), var(--color-orange-200));
+}

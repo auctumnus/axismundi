@@ -7,16 +7,16 @@
         <div class="contributor-info">
             {% call u::badge(&contributor.user, size="medium") %}
         </div>
-        <div class="contribution-stats">
-            {% call permission_badge::render(contributor.permission) %}
-            <span class="text-badge gray">{{ contributor.word_count }} word{% if contributor.word_count != 1 %}s{% endif %}</span>
-            <span class="text-badge gray">{{ contributor.translation_count }} translation{% if contributor.translation_count != 1 %}s{% endif %}</span>
+        <ul class="card-meta">
+            <li>{% call permission_badge::render(contributor.permission) %}</li>
+            <li>{{ contributor.word_count }} word{% if contributor.word_count != 1 %}s{% endif %}</li>
+            <li>{{ contributor.translation_count }} translation{% if contributor.translation_count != 1 %}s{% endif %}</li>
             {% if let Some(created_at) = contributor.created_at %}
-            <span class="contributor-since">
+            <li class="contributor-since">
                 since {% call u::relative(&created_at) %}
-            </span>
+            </li>
             {% endif %}
-        </div>
+        </ul>
     </div>
     <div class="permission-actions">
         {% if contributor.can_edit %}

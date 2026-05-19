@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "users/fragments/card.html" as user_card -%}
+
+{% block title %}remove tag from {% call u::name(target_user) %} - axismundi{% endblock %}
+
+{% block content %}
+<h1>remove tag</h1>
+
+{% call u::top_level_error() %}
+
+<div class="context-cards">
+<span class="context-label">for user</span>
+    <div class="context-card">
+        <ul class="standalone-card">
+            {% call user_card::render(&target_user) %}
+        </ul>
+    </div>
+</div>
+
+<div class="warning">
+    are you sure you want to remove the <code>{{ tag }}</code> tag from {% call u::name(target_user) %}?
+</div>
+
+<form class="default" method="post" action="/admin/users/{{ target_user.username }}/tags/{{ tag }}/delete">
+    <button type="submit">Remove tag</button>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/users/{{ target_user.username }}" class="breadcrumb">{% call u::name(target_user) %}</a>
+<span class="separator">/</span>
+<a href="/admin/users/{{ target_user.username }}/tags" class="breadcrumb">tags</a>
+{% endblock %}

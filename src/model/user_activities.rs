@@ -746,8 +746,27 @@ impl UserActivityRepository {
         .fetch_all(&self.state.pool)
         .await?;
         let mut activities = Vec::new();
+        let requestor_is_staff =
+            requestor.is_some_and(|u| u.is_admin() || u.is_moderator());
 
         for record in records {
+            let entity = self
+                .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
+                .await?;
+
+            // hide draft translatables from non-staff in the activity feed.
+            // a translatable can become a draft after its CreateTranslatable
+            // activity was logged (admin-driven unpublish), so we filter
+            // defensively here in addition to deferring the create-activity
+            // until publish time.
+            if !requestor_is_staff {
+                if let ActivityEntity::Translatable(ref t) = entity {
+                    if t.translatable.is_draft() {
+                        continue;
+                    }
+                }
+            }
+
             activities.push(UserActivity {
                 id: record.id,
                 user_id: record.user_id,
@@ -773,9 +792,7 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
-                    .await?,
+                entity,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
                         related_id,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE totd_queue q\n                SET scheduled_date = NULL,\n                    assigned_by = NULL,\n                    assigned_at = NULL,\n                    is_auto = false\n                FROM (\n                    SELECT scheduled_date AS old_date\n                    FROM totd_queue\n                    WHERE translatable_id = $1\n                ) src\n                WHERE q.translatable_id = $1\n                  AND src.old_date IS NOT NULL\n                  AND src.old_date > current_date\n                RETURNING src.old_date AS \"old_date!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "old_date!",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "eebc5fc371fd9a414501ba1ac3f7ad5aeb7f18cfdb321bee0109bf752d57f848"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO user_activities\n                        (user_id, activity, entity_id, entity_type)\n                    VALUES ($1, 'create_translatable', $2, 'translatable')\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "603034d9dca55e121be4ee3d180721ef38d1f85cada026fad56d92f2c163a452"
+}

@@ -4,6 +4,7 @@
 {%- import "languages/fragments/card.html" as lang_card -%}
 {%- import "language_families/fragments/card.html" as family_card -%}
 {%- import "activity.html" as activity -%}
+{%- import "translatable_of_the_day/fragments/featured_card.html" as totd_card -%}
 
 {% block title %}home - axismundi{% endblock %}
 
@@ -11,6 +12,7 @@
 <script src="/static/page/home.js" defer></script>
 <script src="/static/components/like-button.js" type="module" defer></script>
 <link rel="stylesheet" href="/static/page/home.css">
+<link rel="stylesheet" href="/static/page/translatable_of_the_day.css">
 <link rel="stylesheet" href="/static/components/cards/word.css">
 
 <script src="/static/components/time.js" defer></script>
@@ -24,6 +26,9 @@
 
 <h1><span id="welcome">welcome</span>, {% call u::name(user) %}</h1>
 
+{% if let Some(entry) = totd %}
+    {% call totd_card::render(entry) %}
+{% endif %}
 
 {% if languages.is_empty() %}
 <h2>your languages</h2>

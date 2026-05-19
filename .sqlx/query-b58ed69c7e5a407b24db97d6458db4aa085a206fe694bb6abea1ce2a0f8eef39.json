@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, description, created_by, updated_by)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)\n                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description, 0 AS \"translations_count!\"\n            ",
+  "query": "\n                INSERT INTO translatable (slug, title, english, source_name, source_url, source_content, source_language, description, created_by, updated_by, published_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, NULL)\n                RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description, published_at, 0 AS \"translations_count!\"\n            ",
   "describe": {
     "columns": [
       {
@@ -75,6 +75,11 @@
       },
       {
         "ordinal": 14,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
         "name": "translations_count!",
         "type_info": "Int4"
       }
@@ -107,8 +112,9 @@
       false,
       false,
       false,
+      true,
       null
     ]
   },
-  "hash": "958a55034e7137bd9f7f492110ed89bc0eea2f398beecbf041e8a76278d8c174"
+  "hash": "b58ed69c7e5a407b24db97d6458db4aa085a206fe694bb6abea1ce2a0f8eef39"
 }

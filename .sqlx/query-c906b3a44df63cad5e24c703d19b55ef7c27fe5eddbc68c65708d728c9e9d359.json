@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO totd_queue\n                    (translatable_id, sort_key, scheduled_date, assigned_by, assigned_at, is_auto)\n                SELECT $1::uuid,\n                       hashtextextended($1::uuid::text || c.seed, 0),\n                       $2,\n                       $3,\n                       now(),\n                       false\n                FROM totd_queue_config c\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c906b3a44df63cad5e24c703d19b55ef7c27fe5eddbc68c65708d728c9e9d359"
+}

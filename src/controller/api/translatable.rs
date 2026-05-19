@@ -58,11 +58,12 @@ pub async fn get_translatable(
 }
 
 pub async fn search_translatable(
+    s: Session,
     translatables: TranslatableRepository,
     pagination: PaginatedRequest,
     axum::extract::Query(query): axum::extract::Query<TranslatableSearch>,
 ) -> PaginatedApiResponse<Translatable> {
-    translatables.search(pagination, query).await
+    translatables.search(pagination, query, s.user()).await
 }
 
 pub async fn edit_translatable(

@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{%- import "translatable_of_the_day/fragments/upcoming_row.html" as upcoming -%}
+{%- import "util.html" as u -%}
+
+{% block title %}totd queue - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/page/translatable_of_the_day.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<script src="/static/components/time.js" defer></script>
+{% endblock %}
+
+{% block content %}
+
+<h1>totd queue</h1>
+
+<section class="totd-upcoming">
+    <div class="header-with-actions">
+        <h2 class="with-action">upcoming</h2>
+        <ul>
+            <li><a class="with-icon" href="/new-translatable?as_draft=1">
+                {% call u::icon("plus") %}
+                <span>new draft</span>
+            </a></li>
+            <li><a class="with-icon" href="/translatable-of-the-day/admin/upcoming">
+                {% call u::icon("list") %}
+                <span>view all</span>
+            </a></li>
+        </ul>
+    </div>
+    {% if upcoming_preview.is_empty() %}
+        <p class="empty">no drafts in the queue and nothing scheduled.</p>
+    {% else %}
+        <ul class="totd-upcoming-list">
+            {% for row in upcoming_preview %}
+                {% call upcoming::render(row, today) %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</section>
+
+{% endblock %}

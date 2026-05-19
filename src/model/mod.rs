@@ -18,6 +18,7 @@ pub mod reports;
 pub mod sessions;
 pub mod sound_change_sets;
 pub mod translatable;
+pub mod translatable_of_the_day;
 pub mod translations;
 pub mod user_activities;
 pub mod user_bans;

@@ -1,0 +1,161 @@
+.featured-totd {
+  margin: 1.5rem 0 2rem 0;
+}
+
+.featured-totd-banner {
+  background: var(--background-panel);
+  border: var(--border);
+  border-bottom: none;
+  border-top-left-radius: var(--rounding);
+  border-top-right-radius: var(--rounding);
+  padding: 0.625rem 1rem;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+
+  .featured-label {
+    font-weight: 600;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    color: var(--foreground-primary);
+  }
+
+  time {
+    color: var(--foreground-secondary);
+    font-size: 0.9rem;
+    margin-left: auto;
+  }
+}
+
+.featured-totd ul.card-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+
+  > li :is(a, .card, .preview-card) {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+}
+
+.totd-nav {
+  margin-top: 1.5rem;
+}
+
+.totd-archive {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.totd-archive-row .totd-archive-date {
+  font-weight: 500;
+  color: var(--foreground-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.totd-upcoming-list {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.totd-upcoming-row {
+  .card {
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+  }
+
+  .totd-upcoming-date {
+    font-size: 0.875rem;
+    padding: 0.625rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border: var(--border);
+    border-top-left-radius: var(--rounding);
+    border-top-right-radius: var(--rounding);
+    background-color: var(--background-panel);
+    border-bottom: 0px;
+
+    .left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+  }
+}
+
+.totd-upcoming-row .unschedule-form {
+  margin-top: 0.5rem;
+}
+
+.totd-queue {
+  margin-top: 2rem;
+}
+
+.totd-queue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: var(--border);
+  border-radius: var(--rounding);
+  padding: 0.75rem 1rem;
+  background-color: var(--background-panel);
+
+  .totd-queue-card {
+    display: flex;
+    flex-direction: column;
+
+    .title {
+      font-weight: 500;
+    }
+
+    .summary {
+      color: var(--foreground-secondary);
+      font-size: 0.9rem;
+    }
+  }
+
+  .schedule-form {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+}
+
+.staff-only,
+.staff-only-actions {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background-color: var(--background-panel);
+  border: var(--border);
+  border-radius: var(--rounding);
+}
+
+.staff-only-actions h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: var(--foreground-secondary);
+}
+
+.checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.totd-upcoming-empty {
+  padding: 1rem;
+  color: var(--foreground-secondary);
+}

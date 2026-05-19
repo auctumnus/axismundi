@@ -38,6 +38,19 @@
         <span class="hint">translatable text in english; text in the original language can be entered after creation</span>
     </section>
 
+    {% if is_staff %}
+        <section class="staff-only">
+            <h2>translation of the day queue</h2>
+            <label class="checkbox-label">
+                <input type="checkbox" name="as_draft" value="on"{% if previous_as_draft %} checked{% endif %}>
+                <span>save into queue</span>
+            </label>
+
+            <label for="schedule_date">schedule on day (optional)</label>
+            <input type="date" name="schedule_date" id="schedule_date" min="{{ today }}" value="{{ previous_schedule_date }}">
+        </section>
+    {% endif %}
+
     <button type="submit">Create translatable</button>
 </form>
 

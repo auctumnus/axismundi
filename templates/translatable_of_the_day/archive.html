@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{%- import "translatables/fragments/card.html" as tc -%}
+{%- import "util.html" as u -%}
+
+{% block title %}translatable of the day archive - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/page/translatable_of_the_day.css">
+<link rel="stylesheet" href="/static/components/cards/word.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+<script src="/static/components/time.js" defer></script>
+{% endblock %}
+
+{% block content %}
+
+<h1>translatable of the day · archive</h1>
+
+<p><a class="with-icon" href="/translatable-of-the-day">
+    {% call u::icon("chevron-left") %}
+    <span>back to today</span>
+</a></p>
+
+{% if archive.items.is_empty() %}
+    <div class="card empty-state">
+        <p>no past entries yet.</p>
+    </div>
+{% else %}
+    <ul class="card-list totd-archive">
+        {% for entry in archive.items %}
+            <li class="totd-archive-row">
+                <div class="totd-archive-date">
+                    <time datetime="{{ entry.date }}">{{ entry.date.format("%B %-d, %Y") }}</time>
+                </div>
+                <ul class="card-list">
+                    {% call tc::render(&entry.translatable) %}
+                </ul>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "users/fragments/card.html" as user_card -%}
+
+{% block title %}edit tags for {% call u::name(target_user) %} - axismundi{% endblock %}
+
+{% block content %}
+
+{% call u::audit_log_banner() %}
+
+<h1>edit user tags</h1>
+
+{% call u::top_level_error() %}
+
+<div class="context-cards">
+    <span class="context-label">for user</span>
+    <div class="context-card">
+        <ul class="standalone-card">
+            {% call user_card::render(&target_user) %}
+        </ul>
+    </div>
+</div>
+
+<h2>current tags</h2>
+
+{% if tags.is_empty() %}
+    <p class="empty-description">no tags yet</p>
+{% else %}
+    <ul class="card-list">
+        {% for tag in tags %}
+            <li class="preview-card">
+                <div class="inner">
+                    <div class="left">
+                        <span class="title">{{ tag.tag }}</span>
+                        <ul class="card-meta">
+                            {% if tag.hidden %}
+                                <li class="pill gray">hidden</li>
+                            {% endif %}
+                            <li class="tag-time">{% call u::relative(&tag.created_at) %}</li>
+                        </ul>
+                    </div>
+                    <div class="right">
+                        {% if tag.tag != "admin" %}
+                            <a href="/admin/users/{{ target_user.username }}/tags/{{ tag.tag }}/delete" class="button icon gray" data-tooltip="Remove tag" aria-label="Remove tag">
+                                {% call u::icon("delete") %}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+<h2>add a tag</h2>
+
+<form class="default" method="post" action="/admin/users/{{ target_user.username }}/tags">
+    <section>
+        <label for="tag">Tag</label>
+        {% call u::field_error(name="tag") %}
+        <input type="text" id="tag" name="tag" required minlength="1" maxlength="100" value="{% if let Some(t) = previous_tag %}{{ t }}{% endif %}">
+    </section>
+
+    <section class="checkbox-row">
+        
+        <label for="hidden">
+            <input type="checkbox" id="hidden" name="hidden" {% if previous_hidden %}checked{% endif %}>
+            <span>Hidden (only visible to mods/admins)</span>
+        </label>
+    </section>
+
+    <button type="submit">Add tag</button>
+</form>
+
+<p class="help-text">
+    note: <code>admin</code> tags can only be managed via the database. only admins can grant or remove <code>moderator</code>.
+</p>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/users/{{ target_user.username }}" class="breadcrumb">{% call u::name(target_user) %}</a>
+{% endblock %}

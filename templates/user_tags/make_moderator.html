@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "users/fragments/card.html" as user_card -%}
+
+{% block title %}make {% call u::name(target_user) %} a moderator - axismundi{% endblock %}
+
+{% block content %}
+<h1>make moderator</h1>
+
+{% call u::top_level_error() %}
+
+<div class="context-cards">
+<span class="context-label">for user</span>
+    <div class="context-card">
+        <ul class="standalone-card">
+            {% call user_card::render(&target_user) %}
+        </ul>
+    </div>
+</div>
+
+<div class="warning">
+    are you sure you want to grant {% call u::name(target_user) %} the <code>moderator</code> tag?
+</div>
+
+<form class="default" method="post" action="/admin/users/{{ target_user.username }}/make-moderator">
+    <button type="submit">Make moderator</button>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/users/{{ target_user.username }}" class="breadcrumb">{% call u::name(target_user) %}</a>
+{% endblock %}

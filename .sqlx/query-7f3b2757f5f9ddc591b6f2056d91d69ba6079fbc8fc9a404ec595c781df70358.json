@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE totd_queue\n                SET scheduled_date = CURRENT_DATE,\n                    is_auto = true,\n                    assigned_at = now()\n                WHERE id = (\n                    SELECT id FROM totd_queue\n                    WHERE scheduled_date IS NULL\n                    ORDER BY sort_key\n                    LIMIT 1\n                )\n                RETURNING translatable_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "translatable_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7f3b2757f5f9ddc591b6f2056d91d69ba6079fbc8fc9a404ec595c781df70358"
+}

@@ -1,0 +1,45 @@
+{%- import "translatables/fragments/card.html" as tc -%}
+
+{% macro render(row, today) %}
+<li class="totd-upcoming-row">
+    <div class="totd-upcoming-date">
+        <div class="left">
+            <time datetime="{{ row.date }}" data-non-relative>
+                {{ row.date.format("%B %-d, %Y") }}
+            </time>
+            {% match row.kind %}
+                {% when crate::model::translatable_of_the_day::PeekKind::Scheduled %}
+                    <span class="pill yellow">scheduled</span>
+                {% when crate::model::translatable_of_the_day::PeekKind::AutoLockedIn %}
+                    <span class="pill green">auto (today)</span>
+                {% when crate::model::translatable_of_the_day::PeekKind::AutoPredicted %}
+                    <span class="pill blue">auto (predicted)</span>
+                {% when crate::model::translatable_of_the_day::PeekKind::Empty %}
+                    <span class="pill red">no draft</span>
+            {% endmatch %}
+        </div>
+        {% if let Some(entry) = row.entry %}
+            {% if row.can_unschedule(today) %}
+                <a href="/translatable/{{ &entry.translatable.translatable.slug }}/unschedule">unschedule</a>
+            {% else if row.can_schedule(today) %}
+                <a href="/translatable/{{ &entry.translatable.translatable.slug }}/schedule?date={{ row.date }}">schedule</a>
+            {% endif %}
+        {% endif %}
+    </div>
+    <ul class="card-list">
+        {% if let Some(entry) = row.entry %}
+            {% call tc::render(&entry.translatable) %}
+        {% else %}
+            <li class="preview-card">
+                <a href="/new-translatable?as_draft=1&date={{ row.date }}">
+                    <span class="left">
+                        <span class="title">no draft</span>
+                        <span class="summary">create a new draft for this date</span>
+                    </span>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+        
+</li>
+{% endmacro %}

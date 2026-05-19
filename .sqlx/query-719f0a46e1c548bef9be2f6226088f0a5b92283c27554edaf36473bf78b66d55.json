@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    t.id, t.slug, t.title, t.english, t.source_name, t.source_url,\n                    t.source_content, t.source_language, t.created_at, t.updated_at,\n                    t.created_by, t.updated_by, t.like_count, t.description, t.published_at,\n                    (\n                        SELECT COUNT(*)\n                        FROM translation\n                        WHERE translation.translatable = t.id\n                    ) AS \"translations_count!\"\n                FROM totd_queue q\n                JOIN translatable t ON t.id = q.translatable_id\n                WHERE q.scheduled_date IS NULL\n                ORDER BY q.sort_key\n                LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "english",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "source_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_language",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "translations_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "719f0a46e1c548bef9be2f6226088f0a5b92283c27554edaf36473bf78b66d55"
+}
