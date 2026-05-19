@@ -22,6 +22,7 @@ use crate::{
         language_permissions::LanguagePermissionRepository,
         languages::{Language, LanguageRepository},
         quotations::{QuotationPossiblyNew, QuotationRepository, QuotationWithWordInfo},
+        sound_change_sets::{SoundChangeSet, SoundChangeSetRepository},
         translatable::{Translatable, TranslatableRepository},
         translations::{
             CreateTranslation, Translation, TranslationRepository, TranslationSearch,
@@ -125,6 +126,99 @@ fn build_text_segments(text: &str, quotations: &[QuotationWithWordInfo]) -> Vec<
 
     segments
 }
+
+/// Splits text into runs of non-whitespace, returning the tokens alongside
+/// their byte (start, end) offsets in `text`. Lets us run lexurgy on tokens
+/// and stitch the results back into the original surrounding whitespace.
+fn tokenize_preserving_whitespace(text: &str) -> (Vec<String>, Vec<(usize, usize)>) {
+    let mut tokens = Vec::new();
+    let mut ranges = Vec::new();
+    let mut start: Option<usize> = None;
+    for (i, c) in text.char_indices() {
+        if c.is_whitespace() {
+            if let Some(s) = start.take() {
+                tokens.push(text[s..i].to_string());
+                ranges.push((s, i));
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+    }
+    if let Some(s) = start {
+        tokens.push(text[s..].to_string());
+        ranges.push((s, text.len()));
+    }
+    (tokens, ranges)
+}
+
+fn reassemble_with_outputs(
+    original: &str,
+    ranges: &[(usize, usize)],
+    outputs: &[String],
+) -> String {
+    let mut out = String::with_capacity(original.len());
+    let mut cursor = 0;
+    for ((s, e), output) in ranges.iter().zip(outputs.iter()) {
+        out.push_str(&original[cursor..*s]);
+        out.push_str(output);
+        cursor = *e;
+    }
+    out.push_str(&original[cursor..]);
+    out
+}
+
+/// Runs the language's IPA estimator over `text`, preserving whitespace.
+/// Errors are packaged as validation errors on the `"ipa"` field, mirroring
+/// `crate::controller::html::words::estimate_ipa`.
+async fn estimate_ipa_text(
+    sets: SoundChangeSetRepository,
+    estimator: &Uuid,
+    text: &str,
+) -> crate::err::AppResult<String> {
+    let (tokens, ranges) = tokenize_preserving_whitespace(text);
+    if tokens.is_empty() {
+        return Ok(text.to_string());
+    }
+
+    let package_err = |e: AppError| {
+        let mut validation_errors = validator::ValidationErrors::new();
+        validation_errors.add(
+            "ipa",
+            validator::ValidationError {
+                code: "custom".into(),
+                message: Some(e.message.into()),
+                params: std::collections::HashMap::new(),
+            },
+        );
+        AppError {
+            message: "Failed to estimate IPA".into(),
+            status_code: e.status_code,
+            validation_errors: Some(validation_errors),
+            extra: None,
+        }
+    };
+
+    let response = sets
+        .run_from_db(estimator, tokens)
+        .await
+        .map_err(package_err)?;
+
+    if let Some(errors) = response.errors.as_ref()
+        && !errors.is_empty()
+    {
+        return Err(package_err(bad_request(format!(
+            "IPA estimation failed: {}",
+            errors
+                .iter()
+                .map(|e| e.message.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))));
+    }
+
+    Ok(reassemble_with_outputs(text, &ranges, &response.output_words))
+}
+
 use axum::extract::State;
 
 pub fn create_router() -> (Router<AppState>, Router<AppState>) {
@@ -138,8 +232,16 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             post(new_translation_step_2_submit),
         )
         .route(
+            "/translatable/{slug}/new-translation-2/estimate-ipa",
+            post(estimate_ipa_new_translation_2),
+        )
+        .route(
             "/translatable/{slug}/edit-translation",
             post(edit_translation_submit),
+        )
+        .route(
+            "/translatable/{slug}/edit-translation/estimate-ipa",
+            post(estimate_ipa_edit_translation),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -462,6 +564,7 @@ struct NewTranslationStep2Template {
     can_edit_language: bool,
     will_create_audit_log: bool,
     rendered_description: Option<String>,
+    ipa_estimator: Option<SoundChangeSet>,
 }
 
 #[derive(Deserialize)]
@@ -539,6 +642,8 @@ async fn new_translation_step_1_submit(
         translatables.materialize(translatable, Some(&user)).await
     );
 
+    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
+
     let template = NewTranslationStep2Template {
         current_user: Some(user),
         error: None,
@@ -554,6 +659,7 @@ async fn new_translation_step_1_submit(
         can_edit_language,
         will_create_audit_log,
         rendered_description,
+        ipa_estimator,
     };
 
     okay(render_template(template))
@@ -608,6 +714,8 @@ async fn new_translation_step_2_submit(
             .await
     );
     let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
+
+    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
 
     let create = CreateTranslation {
         translated_text: form.translated_text.clone(),
@@ -667,11 +775,105 @@ async fn new_translation_step_2_submit(
                 can_edit_language,
                 will_create_audit_log,
                 rendered_description,
+                ipa_estimator,
             };
 
             (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn estimate_ipa_new_translation_2(
+    s: Session,
+    State(state): State<AppState>,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    contribution_stats: ContributionStatsRepository,
+    sets: SoundChangeSetRepository,
+    Path(slug): Path<String>,
+    Form(form): Form<NewTranslationStep2Form>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let can_edit_translatable = translatable.created_by == user.id;
+
+    let language = attempt!(s, languages.find_by_id(form.language_id).await);
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
+    let top_contributors = attempt!(
+        s,
+        contribution_stats
+            .get_top_contributors(&language.id, 5)
+            .await
+    );
+    let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
+    let language_with_contributors = LanguagesWithContributors {
+        language: language.clone(),
+        top_contributors,
+        is_liked,
+    };
+
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
+
+    let translatable_with_meta = attempt!(
+        s,
+        translatables.materialize(translatable, Some(&user)).await
+    );
+
+    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
+
+    let (error, new_ipa) = match &ipa_estimator {
+        Some(scs) => match estimate_ipa_text(sets, &scs.id, &form.translated_text).await {
+            Ok(ipa) => (None, ipa),
+            Err(e) => (Some(e), form.ipa.clone().unwrap_or_default()),
+        },
+        None => (None, form.ipa.clone().unwrap_or_default()),
+    };
+
+    let status = if error.is_some() {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::OK
+    };
+
+    let template = NewTranslationStep2Template {
+        current_user: Some(user),
+        error,
+        translatable_with_meta,
+        language,
+        language_with_contributors,
+        previous_translated_text: form.translated_text,
+        previous_translated_title: form.translated_title.unwrap_or_default(),
+        previous_ipa: new_ipa,
+        previous_gloss: form.gloss.unwrap_or_default(),
+        previous_notes: form.notes.unwrap_or_default(),
+        can_edit_translatable,
+        can_edit_language,
+        will_create_audit_log,
+        rendered_description,
+        ipa_estimator,
+    };
+
+    (status, render_template(template))
 }
 
 // View translation
@@ -897,6 +1099,7 @@ struct EditTranslationTemplate {
     will_create_audit_log: bool,
     rendered_description: Option<String>,
     previous_quotations: Vec<QuotationPossiblyNew>,
+    ipa_estimator: Option<SoundChangeSet>,
 }
 
 async fn edit_translation_form(
@@ -982,6 +1185,8 @@ async fn edit_translation_form(
             .await
     );
 
+    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error: None,
@@ -1004,6 +1209,7 @@ async fn edit_translation_form(
             .into_iter()
             .map(QuotationPossiblyNew::from)
             .collect(),
+        ipa_estimator,
     };
 
     okay(render_template(template))
@@ -1095,6 +1301,7 @@ async fn edit_translation_submit(
     } else {
         None
     };
+    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
     let redirect_slug = translatable.slug.clone();
 
     // Perform translation update + quotation sync in a single transaction
@@ -1157,8 +1364,120 @@ async fn edit_translation_submit(
                 will_create_audit_log,
                 rendered_description,
                 previous_quotations: form.quotations.clone(),
+                ipa_estimator,
             };
             (StatusCode::BAD_REQUEST, render_template(template))
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn estimate_ipa_edit_translation(
+    s: Session,
+    State(state): State<AppState>,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    translations: TranslationRepository,
+    permissions: LanguagePermissionRepository,
+    sets: SoundChangeSetRepository,
+    Path(slug): Path<String>,
+    Form(form): Form<EditTranslationFormData>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let language = attempt!(s, languages.find_by_id(form.language_id).await);
+
+    let can_edit_translatable = translatable.created_by == user.id;
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
+
+    let can_edit_translation = is_admin_or_mod
+        || permissions
+            .find_by_user_and_language(user.id, language.id)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
+    let existing_translation = attempt!(
+        s,
+        translations
+            .find_by_translatable_and_language(translatable.id, language.id)
+            .await
+    );
+
+    let top_contributors = attempt!(
+        s,
+        ContributionStatsRepository::new(state.clone())
+            .get_top_contributors(&language.id, 5)
+            .await
+    );
+    let is_liked = attempt!(s, languages.is_liked(&language.id, &user.id).await);
+    let language_with_contributors = LanguagesWithContributors {
+        language: language.clone(),
+        top_contributors,
+        is_liked,
+    };
+
+    let rendered_description = if !translatable.description.is_empty() {
+        crate::md::render_md(&translatable.description).ok()
+    } else {
+        None
+    };
+
+    let translatable_with_meta = attempt!(
+        s,
+        translatables.materialize(translatable, Some(&user)).await
+    );
+
+    let ipa_estimator = attempt!(s, languages.get_ipa_estimator(language.id).await);
+
+    let (error, new_ipa) = match &ipa_estimator {
+        Some(scs) => match estimate_ipa_text(sets, &scs.id, &form.translated_text).await {
+            Ok(ipa) => (None, ipa),
+            Err(e) => (Some(e), form.ipa.clone().unwrap_or_default()),
+        },
+        None => (None, form.ipa.clone().unwrap_or_default()),
+    };
+
+    let status = if error.is_some() {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::OK
+    };
+
+    let template = EditTranslationTemplate {
+        current_user: Some(user),
+        error,
+        translatable_with_meta,
+        language,
+        language_with_contributors,
+        translation: existing_translation,
+        previous_translated_text: form.translated_text,
+        previous_translated_title: form.translated_title.unwrap_or_default(),
+        previous_ipa: new_ipa,
+        previous_gloss: form.gloss.unwrap_or_default(),
+        previous_notes: form.notes.unwrap_or_default(),
+        can_edit_translatable,
+        can_edit_language,
+        can_edit_translation,
+        will_create_audit_log,
+        rendered_description,
+        previous_quotations: form.quotations,
+        ipa_estimator,
+    };
+
+    (status, render_template(template))
 }

@@ -10,6 +10,16 @@ function findScene(svg: SVGSVGElement): SVGGraphicsElement | null {
   return null;
 }
 
+function computeFitScale(
+  svg: SVGSVGElement,
+  scene: SVGGraphicsElement,
+): number {
+  const bbox = scene.getBBox();
+  const rect = svg.getBoundingClientRect();
+  if (bbox.height === 0 || rect.height === 0) return 1;
+  return rect.height / bbox.height;
+}
+
 function fitToContainer(
   svg: SVGSVGElement,
   scene: SVGGraphicsElement,
@@ -18,9 +28,9 @@ function fitToContainer(
   const bbox = scene.getBBox();
   const rect = svg.getBoundingClientRect();
   if (bbox.width === 0 || bbox.height === 0 || rect.width === 0) return;
-  const scale = Math.min(rect.width / bbox.width, rect.height / bbox.height, 1);
+  const scale = rect.height / bbox.height;
   const x = (rect.width - bbox.width * scale) / 2 - bbox.x * scale;
-  const y = (rect.height - bbox.height * scale) / 2 - bbox.y * scale;
+  const y = -bbox.y * scale;
   instance.zoomAbs(0, 0, scale);
   instance.moveTo(x, y);
 }
@@ -29,16 +39,17 @@ function focusOn(
   svg: SVGSVGElement,
   target: SVGGraphicsElement,
   instance: PanZoom,
+  fitScale: number,
 ) {
   const bbox = target.getBBox();
   const rect = svg.getBoundingClientRect();
   if (bbox.width === 0 || bbox.height === 0 || rect.width === 0) return;
-  // size the target to roughly a quarter of the container
-  const scale = Math.min(
+  // size the target to roughly a quarter of the container, clamped to the panzoom bounds
+  const desired = Math.min(
     rect.width / (bbox.width * 5),
     rect.height / (bbox.height * 5),
-    2,
   );
+  const scale = Math.max(fitScale * 0.5, Math.min(desired, fitScale * 8));
   const cx = bbox.x + bbox.width / 2;
   const cy = bbox.y + bbox.height / 2;
   const x = rect.width / 2 - cx * scale;
@@ -67,6 +78,7 @@ function makeControls(
   scene: SVGGraphicsElement,
   instance: PanZoom,
   focusTarget: SVGGraphicsElement | null,
+  fitScale: number,
 ): HTMLDivElement {
   const wrap = document.createElement('div');
   wrap.className = 'panzoom-controls';
@@ -85,7 +97,7 @@ function makeControls(
   const reset = makeButton('reset view', 'refresh');
   reset.addEventListener('click', () => {
     if (focusTarget) {
-      focusOn(svg, focusTarget, instance);
+      focusOn(svg, focusTarget, instance, fitScale);
     } else {
       fitToContainer(svg, scene, instance);
     }
@@ -142,12 +154,13 @@ function enhance(container: HTMLElement): PanZoom | null {
     true,
   );
 
+  const fitScale = computeFitScale(svg, scene);
   const instance = createPanZoom(scene, {
     smoothScroll: false,
     bounds: true,
     boundsPadding: 0.1,
-    minZoom: 0.2,
-    maxZoom: 8,
+    minZoom: fitScale * 0.5,
+    maxZoom: fitScale * 8,
     zoomDoubleClickSpeed: 1,
     beforeWheel: (e) => !e.ctrlKey && !e.metaKey,
   });
@@ -157,7 +170,7 @@ function enhance(container: HTMLElement): PanZoom | null {
     ? svg.querySelector<SVGGraphicsElement>(focusSelector)
     : null;
   if (focusTarget) {
-    focusOn(svg, focusTarget, instance);
+    focusOn(svg, focusTarget, instance, fitScale);
   } else {
     fitToContainer(svg, scene, instance);
   }
@@ -169,7 +182,7 @@ function enhance(container: HTMLElement): PanZoom | null {
     }
   });
 
-  container.appendChild(makeControls(svg, scene, instance, focusTarget));
+  container.appendChild(makeControls(svg, scene, instance, focusTarget, fitScale));
 
   return instance;
 }

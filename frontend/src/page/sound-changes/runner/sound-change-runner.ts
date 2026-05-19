@@ -103,8 +103,7 @@ export const theme = EditorView.theme({
         height: "1rem",
         backgroundImage: "var(--icon-keyword)",
         backgroundSize: "contain",
-    }
-
+    },
 });
 
 const completeWithTab: KeyBinding = {

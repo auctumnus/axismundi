@@ -40,24 +40,24 @@
 
 <form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/add-relation">
     <section>
-        <label for="kind">Relation Type</label>
+        <label for="kind">Relation type</label>
         {% call u::field_error(name="kind") %}
         <div class="select-container">
             <select id="kind" name="kind" required>
-                <option value="borrowed">Borrowed - Borrowed from another language</option>
-                <option value="derived">Derived - Derived from another word</option>
-                <option value="descendant">Descendant - Historical descendant</option>
-                <option value="compound">Compound - Compound word formation</option>
-                <option value="calque">Calque - Loan translation</option>
-                <option value="related">Related - Related word (no etymological connection)</option>
-                <option value="see_also">See Also - See also (reference)</option>
+                <option value="borrowed">Borrowed (borrowed from another language)</option>
+                <option value="derived">Derived (derived from another word)</option>
+                <option value="descendant">Descendant (historical descendant)</option>
+                <option value="compound">Compound (compound word formation)</option>
+                <option value="calque">Calque (loan translation)</option>
+                <option value="related">Related (related word, no etymological connection)</option>
+                <option value="see_also">See Also (see also, reference)</option>
             </select>
             {% call u::icon("chevron-down") %}
         </div>
     </section>
 
     <section>
-        <label for="target_bookmark">Target Word</label>
+        <label for="target_bookmark">Derives into</label>
         {% call u::field_error(name="target_bookmark") %}
         <div id="word-combobox-container">
             <input
@@ -72,9 +72,8 @@
         </div>
         <span class="hint">
             <noscript>
-                Enter the 15-character bookmark of the target word. You can find this in the URL of the word's page.
-                For example, if the URL is <code>/languages/eng/words/example/1</code>, you can find the bookmark
-                by visiting that page and looking for it in the page details.
+                Enter the 15-character bookmark of the target word. This is listed in the sidebar
+                of the word's page as its bookmark link.
             </noscript>
             <span class="js-only-help" style="display: none;">
                 Start typing to search for words across languages you can edit.
@@ -95,64 +94,6 @@
         </ol>
     </div>
 </noscript>
-
-<style>
-.context-cards {
-    margin-bottom: 2rem;
-}
-
-.context-card {
-    border: var(--border);
-    border-radius: var(--rounding);
-    background-color: var(--background-panel);
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
-}
-
-.context-card-content {
-    display: flex;
-    flex-direction: column;
-    gap: .25rem;
-}
-
-.context-card .word-text {
-    font-weight: 600;
-    color: var(--foreground-primary);
-    font-size: 1.125rem;
-}
-
-.context-card .word-ipa {
-    font-style: italic;
-    color: var(--foreground-secondary);
-    font-size: .875rem;
-}
-
-.context-card .word-language {
-    color: var(--foreground-tertiary);
-    font-size: .875rem;
-}
-
-.help-section {
-    margin-top: 3rem;
-    padding-top: 2rem;
-    border-top: 1px solid light-dark(var(--color-slate-300), var(--color-slate-700));
-}
-
-.help-section h3 {
-    font-size: 1.1rem;
-    margin-bottom: 1rem;
-}
-
-.help-section ol {
-    padding-left: 1.5rem;
-}
-
-.help-section li {
-    margin-bottom: 0.5rem;
-}
-</style>
 
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {

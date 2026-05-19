@@ -75,6 +75,10 @@
     }
 }
 
+.undefined-name {
+    text-decoration: wavy underline;
+    text-decoration-color: var(--color-red-500);
+}
 
 @keyframes grid-expand {
   0% {

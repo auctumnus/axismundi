@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE contribution_stats SET word_count = 0 WHERE language_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d99e7b8724fa5c6d9402f764c9e8c89b510cd59a45643275db752c342bfff59c"
+}

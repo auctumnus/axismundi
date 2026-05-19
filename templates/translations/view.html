@@ -33,7 +33,7 @@
         {% if !translation.translated_title.is_empty() %}
             <h1>{{ translation.translated_title }}</h1>
         {% else %}
-            <h1><a href="/languages/{{ &language.code }}">{{ &language.name }}</a></h1>
+            <h1>{{ &language.name }}</h1>
         {% endif %}
         <ul class="icons">
             {% if can_edit_translation %}

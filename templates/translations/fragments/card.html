@@ -6,11 +6,11 @@
         <span class="left">
             <span class="translation-title title">
                 {% if kind.to_string() == "language".to_string() %}
-                    {{ translation_with_meta.translation.language_name }}
+                    {{ translation_with_meta.translation.translatable_title }}
                 {% else if !translation_with_meta.translation.translated_title.is_empty() %}
                     {{ translation_with_meta.translation.translated_title }}
                 {% else %}
-                    {{ translation_with_meta.translation.translatable_title }}
+                    {{ translation_with_meta.translation.language_name }}
                 {% endif %}
             </span>
             <span class="summary ellipse">{{ crate::util::first_sentence(&translation_with_meta.translation.translated_text) }}</span>

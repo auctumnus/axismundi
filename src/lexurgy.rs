@@ -62,6 +62,7 @@ pub enum Error {
         message: String,
         rule: String,
         expression: String,
+        #[serde(rename = "expressionNumber")]
         expression_number: u32,
     },
     AnalysisError {
@@ -129,12 +130,16 @@ pub async fn send_scv1(request: &Request) -> AppResult<Result<Response, Error>> 
 
     match response {
         Ok(response) => {
-            if !response.status().is_success() {
-                let error = response.json::<Error>().await?;
-                Ok(Err(error))
-            } else {
+            if response.status().is_success() {
                 let response = response.json::<Response>().await?;
                 Ok(Ok(response))
+            } else {
+                let content = response.text().await?;
+                println!("{content}");
+                let error = serde_json::from_str::<Error>(&content).unwrap_or_else(|_| Error::RuntimeError {
+                    message: format!("Unexpected response from lexurgy: {}", content),
+                });
+                Ok(Err(error))
             }
         }
         Err(e) => {

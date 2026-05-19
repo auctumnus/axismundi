@@ -1,4 +1,7 @@
+use std::sync::LazyLock;
+
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -8,8 +11,14 @@ use crate::{
     err::{AppResult, bad_request, not_found},
     model::{language_invites::PermissionLevel, users::User},
     pagination::{PaginatedRequest, PaginatedResponse},
-    util::{AppState, ensure_verified},
+    util::{AppState, ensure_verified, re},
 };
+
+/// Allowed in word category and word class abbreviations. Permissive enough
+/// for glossing conventions (ADJ, 1SG, v.t., DEF.ART) but strict enough to
+/// avoid characters that break URL parsing (/, ?, #, %, \) or are otherwise
+/// unsafe in path segments.
+pub static ABBREVIATION_REGEX: LazyLock<Regex> = re!(r"^[A-Za-z0-9][A-Za-z0-9._-]*$");
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct WordCategory {
@@ -30,7 +39,7 @@ pub struct CreateWordCategory {
     #[validate(length(min = 1, max = 50))]
     pub name: String,
 
-    #[validate(length(min = 1, max = 10))]
+    #[validate(length(min = 1, max = 10), regex(path = ABBREVIATION_REGEX))]
     pub abbreviation: String,
 
     #[validate(length(max = 10000))]
@@ -42,7 +51,7 @@ pub struct UpdateWordCategory {
     #[validate(length(min = 1, max = 50))]
     pub name: Option<String>,
 
-    #[validate(length(min = 1, max = 10))]
+    #[validate(length(min = 1, max = 10), regex(path = ABBREVIATION_REGEX))]
     pub abbreviation: Option<String>,
 
     #[validate(length(max = 10000))]

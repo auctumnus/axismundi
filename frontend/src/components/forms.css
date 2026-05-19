@@ -290,6 +290,7 @@ div.error {
   color: var(--error-foreground);
   border: 1px solid var(--error-border);
   padding: 1rem;
+  margin-top: 1rem;
   margin-bottom: 1rem;
   border-radius: var(--rounding);
 
@@ -309,6 +310,7 @@ div.info-banner {
   color: var(--info-foreground);
   border: 1px solid var(--info-border);
   padding: 1rem;
+  margin-top: 1rem;
   margin-bottom: 1rem;
   border-radius: var(--rounding);
 
@@ -328,6 +330,7 @@ div.warning {
   color: var(--warning-foreground);
   border: 1px solid var(--warning-border);
   padding: 1rem;
+  margin-top: 1rem;
   margin-bottom: 1rem;
   border-radius: var(--rounding);
 

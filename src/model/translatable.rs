@@ -423,7 +423,7 @@ impl TranslatableRepository {
                         COALESCE(similarity(source_name, $4), 0.0) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, id
+                ) DESC, id DESC
                 LIMIT $5
                 OFFSET $6
             "#,

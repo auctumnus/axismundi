@@ -6,7 +6,9 @@ use validator::Validate;
 
 use crate::{
     err::{AppResult, bad_request, not_found},
-    model::{language_invites::PermissionLevel, users::User},
+    model::{
+        language_invites::PermissionLevel, users::User, word_categories::ABBREVIATION_REGEX,
+    },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::{AppState, ensure_verified},
 };
@@ -30,7 +32,7 @@ pub struct CreateWordClass {
     #[validate(length(min = 1, max = 50))]
     pub name: String,
 
-    #[validate(length(min = 1, max = 10))]
+    #[validate(length(min = 1, max = 10), regex(path = ABBREVIATION_REGEX))]
     pub abbreviation: String,
 
     #[validate(length(max = 10000))]
@@ -42,7 +44,7 @@ pub struct UpdateWordClass {
     #[validate(length(min = 1, max = 50))]
     pub name: Option<String>,
 
-    #[validate(length(min = 1, max = 10))]
+    #[validate(length(min = 1, max = 10), regex(path = ABBREVIATION_REGEX))]
     pub abbreviation: Option<String>,
 
     #[validate(length(max = 10000))]

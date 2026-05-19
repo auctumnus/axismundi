@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}purge dictionary - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>purge dictionary</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/purge-dictionary">
+    <section>
+        <p>Are you sure you want to delete every word in <strong>{{ language.name }}</strong>?</p>
+        {% if word_count == 1 %}
+            <p>This will permanently delete <strong>1 word</strong>, along with all its definitions, translations, and relations.</p>
+        {% else %}
+            <p>This will permanently delete <strong>{{ word_count }} words</strong>, along with all their definitions, translations, and relations.</p>
+        {% endif %}
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Purge dictionary</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_edit_language) %}
+{% endblock %}

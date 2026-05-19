@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM words WHERE language = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e351b12c5cc7ff5fe31e01999cf58636d8af61a2b43b0ee695539ba1bc62c06"
+}

@@ -111,6 +111,24 @@ services:
 
       # quality
       IMAGOR_AUTO_WEBP: 1
+
+      # http loader (proxying external images embedded in user markdown).
+      # SSRF protection: block private/loopback/link-local networks at the
+      # IP-resolution level (URL-string filtering is not enough — DNS rebinding
+      # and alternate IP encodings defeat it). these checks fire on the
+      # *resolved* address, including redirect targets.
+      HTTP_LOADER_BLOCK_LOOPBACK_NETWORKS: 1
+      HTTP_LOADER_BLOCK_PRIVATE_NETWORKS: 1
+      HTTP_LOADER_BLOCK_LINK_LOCAL_NETWORKS: 1
+      # cloud metadata endpoints (aws/gcp) — belt and braces, BLOCK_LINK_LOCAL
+      # already covers 169.254.0.0/16 but explicit is nice.
+      HTTP_LOADER_BLOCK_NETWORKS: "169.254.169.254/32"
+      # force https; rejects http:// urls and prevents downgrade
+      HTTP_LOADER_HTTPS_ONLY: 1
+      # 10 MiB cap on fetched image size
+      HTTP_LOADER_MAX_ALLOWED_SIZE: 10485760
+      # only accept image/* responses
+      HTTP_LOADER_ACCEPT: "image/*"
     depends_on:
       - minio
       - createbuckets

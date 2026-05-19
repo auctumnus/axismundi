@@ -10,6 +10,7 @@
 <script src="/static/components/time.js" type="module" defer></script>
 
 <script src="/static/components/like-button.js" type="module" defer></script>
+<script defer src="/static/page/translations/estimate-ipa.js"></script>
 <link rel="stylesheet" href="/static/components/cards/translatable-full-card.css">
 {% endblock %}
 
@@ -55,7 +56,27 @@
     </section>
 
     <section>
-        <label for="ipa">IPA transcription</label>
+        {% if let Some(sound_change_set) = ipa_estimator %}
+        <div class="label-with-action">
+            <label for="ipa">IPA transcription</label>
+            <ul>
+                <li>
+                    <button
+                        id="estimate-ipa-button"
+                        type="submit"
+                        class="icon gray"
+                        formaction="/translatable/{{ translatable_with_meta.translatable.slug }}/new-translation-2/estimate-ipa"
+                        formmethod="post"
+                        data-sound-change-set="{{ sound_change_set.id }}"
+                    >
+                        <svg><use href="#icon-refresh"></use></svg>
+                    </button>
+                </li>
+            </ul>
+        </div>
+        {% else %}
+            <label for="ipa">IPA transcription</label>
+        {% endif %}
         {% call u::field_error(name="ipa") %}
         <textarea id="ipa" name="ipa">{{ previous_ipa }}</textarea>
     </section>

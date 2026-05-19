@@ -115,6 +115,20 @@ fn nfkc(input: &str) -> String {
     input.nfkc().collect()
 }
 
+/// Reject slug characters that break URL parsing. NFKC compatibility
+/// decomposition can turn things like U+FF0F into '/', so this runs on the
+/// post-normalization slug rather than on the raw input.
+fn validate_slug(slug: &str) -> AppResult<()> {
+    if let Some(c) = slug.chars().find(|c| {
+        matches!(c, '/' | '?' | '#' | '%' | '\\') || c.is_control()
+    }) {
+        return Err(bad_request(format!(
+            "word contains a character that is not allowed in URLs: {c:?}"
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct WordWithMeta {
     pub word: Word,
@@ -140,8 +154,10 @@ impl WordRepository {
     }
 
     #[allow(dead_code)]
-    pub fn make_slug(word: &str) -> String {
-        nfkc(word)
+    pub fn make_slug(word: &str) -> AppResult<String> {
+        let slug = nfkc(word);
+        validate_slug(&slug)?;
+        Ok(slug)
     }
 
     pub async fn materialize(
@@ -190,6 +206,7 @@ impl WordRepository {
         word: &str,
     ) -> AppResult<(String, i32)> {
         let slug = nfkc(word);
+        validate_slug(&slug)?;
         let number_slugs = sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*) FROM words
@@ -723,6 +740,80 @@ impl WordRepository {
         tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
+    }
+
+    /// Delete every word in a language. Used to undo a bad bulk import.
+    /// Returns the number of words deleted. Cascades remove definitions,
+    /// word relations, likes, and bookmarks; activity rows are removed by
+    /// the per-word delete trigger.
+    pub async fn purge_dictionary(
+        &self,
+        requestor: &User,
+        language: Uuid,
+    ) -> AppResult<u64> {
+        ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let word_count = self.count_by_language(language).await?;
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let permissions = crate::model::language_permissions::LanguagePermissionRepository::new(
+            self.state.clone(),
+        );
+        let perm_check = permissions
+            .check_permission_with_audit(
+                crate::model::language_permissions::CheckPermissionReq {
+                    user: requestor.id,
+                    language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: crate::model::audit_log::AuditActionType::Deleted,
+                    resource_type: crate::model::audit_log::AuditableResource::Language,
+                    resource_id: language,
+                    context: Some(serde_json::json!({
+                        "language_id": language,
+                        "action": "purge_dictionary",
+                        "word_count": word_count,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if perm_check == crate::model::audit_log::PermissionCheck::NoPermission {
+            return Err(bad_request("you don't have permission to purge this dictionary"));
+        }
+
+        let result = sqlx::query!("DELETE FROM words WHERE language = $1", language)
+            .execute(&mut *tx)
+            .await?;
+
+        // Reset everyone's word contribution stats for this language. Cheaper
+        // and more accurate than decrementing per row.
+        sqlx::query!(
+            "UPDATE contribution_stats SET word_count = 0 WHERE language_id = $1",
+            language
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(result.rows_affected())
+    }
+
+    pub async fn count_by_language(&self, language: Uuid) -> AppResult<i64> {
+        let count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM words WHERE language = $1",
+            language
+        )
+        .fetch_one(&self.state.pool)
+        .await?;
+
+        Ok(count.unwrap_or(0))
     }
 
     #[allow(clippy::too_many_lines)]

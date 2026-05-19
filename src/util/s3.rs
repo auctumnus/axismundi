@@ -70,7 +70,7 @@ pub static S3: LazyLock<S3Config> = LazyLock::new(|| {
     }
 });
 
-fn sign_imagor_path(path: &str, secret: &str) -> String {
+pub fn sign_imagor_path(path: &str, secret: &str) -> String {
     let hash = hmacsha1::hmac_sha1(secret.as_bytes(), path.as_bytes());
     URL_SAFE.encode(hash)
 }
@@ -163,6 +163,20 @@ impl S3Config {
 
     pub fn get_banner_url(&self, filename: &str) -> String {
         self.get_image_url_smart(filename, 800, 200)
+    }
+
+    /// generates a signed imagor url that proxies an arbitrary external image.
+    /// caller is responsible for validating the URL (see `sanitize_external_url`).
+    /// imagor enforces ssrf protection at fetch time via HTTP_LOADER_BLOCK_* flags.
+    pub fn get_external_url(&self, url: &str) -> String {
+        let path = format!("fit-in/2000x2000/{}", url);
+        let hash = sign_imagor_path(&path, &self.imagor_secret);
+        format!(
+            "{}/{}/{}",
+            self.imagor_base_url.trim_end_matches('/'),
+            hash,
+            path
+        )
     }
 
     pub async fn upload_banner(

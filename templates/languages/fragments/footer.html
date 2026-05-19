@@ -40,6 +40,9 @@
             {% call u::icon("group") %}
             <span>contributors</span>
         </a></li>
+        {% if can_edit_language %}
+        <li><a href="/languages/{{ language.code }}/purge-dictionary">purge dictionary</a></li>
+        {% endif %}
         <li><a href="/report/new?resource_type=language&resource_id={{ language.id }}">report</a></li>
     </ul>
 </li>

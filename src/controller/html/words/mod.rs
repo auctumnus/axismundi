@@ -6,6 +6,7 @@ mod edit;
 mod fragments;
 mod import;
 mod loan;
+mod purge;
 mod search;
 mod view;
 
@@ -108,6 +109,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
             "/languages/{language}/import-words",
             get(import::import_form),
         )
+        .route(
+            "/languages/{language}/purge-dictionary",
+            post(purge::purge_dictionary_submit),
+        )
         .merge(
             Router::<AppState>::new()
                 .route(
@@ -150,6 +155,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/languages/{language}/words/{slug}/{lemma}/derive-or-loan",
             get(derive_or_loan::derive_or_loan_form),
+        )
+        .route(
+            "/languages/{language}/purge-dictionary",
+            get(purge::purge_dictionary_form),
         );
 
     (secure_routes, normal_routes)
