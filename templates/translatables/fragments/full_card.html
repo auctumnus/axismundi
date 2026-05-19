@@ -61,13 +61,13 @@
                         <div class="source-content">
                             {% if !translatable_with_meta.translatable.source_name.is_empty() %}
                                 {% if !translatable_with_meta.translatable.source_url.is_empty() %}
-                                    <h2><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener">{{ translatable_with_meta.translatable.source_name }}</a></h2>
+                                    <h2><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener noreferrer ugc">{{ translatable_with_meta.translatable.source_name }}</a></h2>
                                 {% else %}
                                     <h2>{{ translatable_with_meta.translatable.source_name }}</h2>
                                 {% endif %}
                             {% else %}
                                 {% if !translatable_with_meta.translatable.source_url.is_empty() %}
-                                    <h2><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener">Source</a></h2>
+                                    <h2><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener noreferrer ugc">Source</a></h2>
                                 {% endif %}
                             {% endif %}
                             <p class="preserve-breaks">{{ translatable_with_meta.translatable.source_content }}</p>
@@ -99,6 +99,24 @@
         </tr>
         {% call u::meta_creator_row(&translatable_with_meta.creator) %}
         {% call u::meta_updated_row(&translatable_with_meta.translatable.updated_at, translatable_with_meta.updater.as_ref()) %}
+        {% if !translatable_with_meta.translatable.source_url.is_empty() && translatable_with_meta.translatable.source_content.is_empty() %}
+        <tr>
+            <th>source</th>
+            <td><a href="{{ translatable_with_meta.translatable.source_url }}" target="_blank" rel="noopener noreferrer ugc">
+                {% if !translatable_with_meta.translatable.source_name.is_empty() %}
+                    {{ translatable_with_meta.translatable.source_name }}
+                {% else %}
+                    link
+                {% endif %}
+            </a></td>
+        </tr>
+        {% endif %}
+        {% if !translatable_with_meta.translatable.source_language.is_empty() %}
+        <tr>
+            <th>source language</th>
+            <td>{{ translatable_with_meta.translatable.source_language }}</td>
+        </tr>
+        {% endif %}
     </table>
 </div>
 <script defer>

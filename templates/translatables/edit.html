@@ -19,10 +19,12 @@
     </div>
 {% endif %}
 
-<p>
-To edit information about the source text, such as the original title, language, or content,
-go to the <a href="/translatable/{{ translatable.slug }}/edit-source">edit source</a> page.
-</p>
+<div class="prose">
+    <p>
+    To edit information about the source text, such as the original title, language, or content,
+    go to the <a href="/translatable/{{ translatable.slug }}/edit-source">edit source</a> page.
+    </p>
+</div>
 
 <form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit">
     <section>
@@ -46,23 +48,11 @@ go to the <a href="/translatable/{{ translatable.slug }}/edit-source">edit sourc
     <button type="submit">Save changes</button>
 </form>
 
-{% if is_staff %}
-    <section class="staff-only-actions">
-        <h2>staff actions</h2>
-        {% if translatable.is_draft() %}
-            <form method="post" action="/translatable/{{ translatable.slug }}/publish">
-                <p class="hint">this translatable is currently a <strong>draft</strong> — invisible to non-staff users.</p>
-                <button type="submit" class="button primary-button">publish now</button>
-            </form>
-        {% else %}
-            <form method="post" action="/translatable/{{ translatable.slug }}/unpublish">
-                {% if let Some(published_at) = translatable.published_at.as_ref() %}
-                    <p class="hint">published {% call u::relative(published_at) %}.</p>
-                {% endif %}
-                <button type="submit" class="button secondary">unpublish (revert to draft)</button>
-            </form>
-        {% endif %}
-    </section>
+{% if is_staff && translatable.is_draft() %}
+    <form method="post" action="/translatable/{{ translatable.slug }}/publish">
+        <p class="hint">this translatable is currently a <strong>draft</strong> — invisible to non-staff users.</p>
+        <button type="submit" class="button primary-button">remove from queue</button>
+    </form>
 {% endif %}
 <script type="module">
   window.addEventListener('DOMContentLoaded', () => {
