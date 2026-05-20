@@ -37,7 +37,8 @@
                 "update_language",
                 "create_language_family",
                 "update_language_family",
-                "user_joined"
+                "user_joined",
+                "publish_news"
               ]
             }
           }

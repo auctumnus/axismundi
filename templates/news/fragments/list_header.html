@@ -1,0 +1,19 @@
+{% if let Some(user) = current_user.as_ref() %}
+    {% if user.is_admin() || user.is_moderator() %}
+<div class="header-with-actions">
+    <h1>news</h1>
+    <ul>
+        <li>
+            <a class="with-icon" href="/new-news">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new article</span>
+            </a>
+        </li>
+    </ul>
+</div>
+    {% else %}
+<h1>news</h1>
+    {% endif %}
+{% else %}
+<h1>news</h1>
+{% endif %}

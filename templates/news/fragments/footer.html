@@ -1,0 +1,33 @@
+{%- import "util.html" as u -%}
+{% macro news_section(news, is_admin_or_mod) %}
+{% if is_admin_or_mod %}
+<li>
+    <h2>news article</h2>
+    <ul>
+        <li><a href="/news/{{ news.slug }}">
+            {% call u::icon("article") %}
+            <span>view</span>
+        </a></li>
+        <li><a href="/news/{{ news.slug }}/edit">
+            {% call u::icon("edit") %}
+            <span>edit</span>
+        </a></li>
+        {% if news.is_published() %}
+            <li><a href="/news/{{ news.slug }}/unpublish">
+                {% call u::icon("unpublish") %}
+                <span>unpublish</span>
+            </a></li>
+        {% else %}
+            <li><a href="/news/{{ news.slug }}/publish">
+                {% call u::icon("publish") %}
+                <span>publish</span>
+            </a></li>
+        {% endif %}
+        <li><a href="/news/{{ news.slug }}/delete">
+            {% call u::icon("delete") %}
+            <span>delete</span>
+        </a></li>
+    </ul>
+</li>
+{% endif %}
+{% endmacro %}

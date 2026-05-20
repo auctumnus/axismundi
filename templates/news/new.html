@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+
+{% block title %}new article - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
+<script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1>new article</h1>
+
+{% if let Some(error) = error %}
+    <div class="error">
+        <h2>Error</h2>
+        <p class="error">{{ error.message }}</p>
+    </div>
+{% endif %}
+
+<form class="default" method="post" action="/new-news">
+    <section>
+        <label for="title">Title</label>
+        {% call u::field_error(name="title") %}
+        <input type="text" id="title" name="title" required value="{{previous_title}}">
+    </section>
+
+    <section>
+        <label for="content" id="content-label">Body (markdown)</label>
+        {% call u::field_error(name="content") %}
+        <textarea id="content" name="content" required rows="14">{{previous_content}}</textarea>
+    </section>
+
+    <section>
+        <label class="checkbox-label">
+            <input type="checkbox" name="as_draft" value="on"{% if previous_as_draft %} checked{% endif %}>
+            <span>save as draft (not visible to non-staff)</span>
+        </label>
+    </section>
+
+    <button type="submit">Save article</button>
+</form>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.mountMarkdownEditor) {
+      window.mountMarkdownEditor('#content', 'content-label');
+    }
+  });
+</script>
+{% endblock %}

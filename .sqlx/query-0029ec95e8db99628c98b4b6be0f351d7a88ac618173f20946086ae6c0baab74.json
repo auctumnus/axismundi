@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    id,\n                    slug,\n                    title,\n                    content,\n                    published_at,\n                    created_at,\n                    updated_at,\n                    created_by,\n                    updated_by\n                FROM news\n                WHERE (\n                    ($3::bool AND published_at IS NOT NULL)\n                    OR ($4::bool AND published_at IS NULL)\n                )\n                AND (\n                    $5::TEXT IS NULL\n                    OR title ILIKE '%' || $5 || '%'\n                    OR content ILIKE '%' || $5 || '%'\n                )\n                ORDER BY\n                    COALESCE(published_at, created_at) DESC,\n                    id DESC\n                LIMIT $1\n                OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0029ec95e8db99628c98b4b6be0f351d7a88ac618173f20946086ae6c0baab74"
+}

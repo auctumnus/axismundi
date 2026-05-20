@@ -7,8 +7,9 @@ use crate::{
     controller::html::LanguagesWithContributors,
     err::{AppResult, bad_request, forbidden, not_found},
     model::{
-        language_families::FamilyWithContributors, translatable::TranslatableWithMeta,
-        translations::TranslationWithLanguageAndContributor, users::User, words::WordWithMeta,
+        language_families::FamilyWithContributors, news::NewsWithCreator,
+        translatable::TranslatableWithMeta, translations::TranslationWithLanguageAndContributor,
+        users::User, words::WordWithMeta,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
     util::AppState,
@@ -28,6 +29,7 @@ pub enum ActivityType {
     CreateLanguageFamily,
     UpdateLanguageFamily,
     UserJoined,
+    PublishNews,
 }
 
 impl ActivityType {
@@ -44,6 +46,7 @@ impl ActivityType {
             | ActivityType::UpdateTranslation
             | ActivityType::UpdateLanguageFamily => "updated",
             ActivityType::UserJoined => "joined",
+            ActivityType::PublishNews => "published",
         }
     }
 }
@@ -57,6 +60,7 @@ pub enum ActivityEntity {
     Translatable(TranslatableWithMeta),
     Translation(Box<TranslationWithLanguageAndContributor>, String),
     LanguageFamily(FamilyWithContributors),
+    News(NewsWithCreator),
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -765,6 +769,11 @@ impl UserActivityRepository {
                         continue;
                     }
                 }
+                if let ActivityEntity::News(ref n) = entity {
+                    if n.news.is_draft() {
+                        continue;
+                    }
+                }
             }
 
             activities.push(UserActivity {
@@ -885,6 +894,18 @@ impl UserActivityRepository {
                         Box::new(translation),
                         lang.code,
                     ))
+                } else {
+                    Err(bad_request(format!(
+                        "unable to resolve entity with id '{}'",
+                        entity_id
+                    )))
+                }
+            }
+            "news" => {
+                let news_repo = crate::model::news::NewsRepository::new(self.state.clone());
+                if let Ok(article) = news_repo.find_by_id(entity_id).await {
+                    let materialized = news_repo.materialize(article).await?;
+                    Ok(ActivityEntity::News(materialized))
                 } else {
                     Err(bad_request(format!(
                         "unable to resolve entity with id '{}'",

@@ -24,5 +24,6 @@
 @import "./components/cards/context.css";
 @import "./components/markdown.css";
 @import "./components/pill.css";
+@import "./components/metadata-table.css";
 
 @import "./utilities.css";

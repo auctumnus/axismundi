@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 {%- import "activity.html" as activity -%}
 {%- import "translatable_of_the_day/fragments/featured_card.html" as totd_card -%}
+{%- import "news/fragments/home_section.html" as news_section -%}
 
 {% block title %}Axismundi{% endblock %}
 
@@ -9,6 +10,7 @@
 <link rel="stylesheet" href="/static/page/translatable_of_the_day.css">
 <link rel="stylesheet" href="/static/components/activity.css">
 <link rel="stylesheet" href="/static/components/cards/word.css">
+<link rel="stylesheet" href="/static/components/cards/news.css">
 <script src="/static/components/time.js" defer></script>
 <script src="/static/components/like-button.js" type="module" defer></script>
 {% endblock %}
@@ -34,6 +36,8 @@
 {% if let Some(entry) = totd %}
     {% call totd_card::render(entry) %}
 {% endif %}
+
+{% call news_section::render(news, false) %}
 
 {% if !activities.is_empty() %}
 <h2>recent activity</h2>

@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{%- import "news/fragments/footer.html" as news_f -%}
+
+{% block title %}delete {{ news.title }}? - axismundi{% endblock %}
+
+{% block content %}
+
+<h1>delete article</h1>
+
+<form class="default" method="post" action="/news/{{ news.slug }}/delete">
+    <section>
+        <p>Are you sure you want to delete the article <strong>{{ news.title }}</strong>?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete article</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block footer %}
+{% call news_f::news_section(news, true) %}
+{% endblock %}

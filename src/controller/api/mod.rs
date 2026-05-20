@@ -19,6 +19,7 @@ mod language_family_permissions;
 mod language_invites;
 mod language_permissions;
 mod languages;
+mod news;
 mod phonology_tables;
 mod quotation_suggestions;
 mod quotations;
@@ -69,6 +70,7 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(word_relations::create_router())
         .merge(definitions::create_router())
         .merge(translatable::create_router())
+        .merge(news::create_router())
         .merge(translations::create_router())
         .merge(quotations::create_router())
         .merge(quotation_suggestions::create_router())

@@ -8,6 +8,7 @@ use crate::{
         contribution_stats::ContributionStatsRepository,
         language_families::{FamilyWithContributors, LanguageFamilyRepository},
         languages::{Language, LanguageRepository},
+        news::{NewsRepository, NewsWithCreator},
         translatable::{TranslatableRepository, TranslatableSearch, TranslatableWithMeta},
         translatable_of_the_day::{TotdEntry, TranslatableOfTheDayRepository},
         user_activities::{UserActivity, UserActivityRepository},
@@ -40,6 +41,7 @@ mod language_family_permissions;
 mod language_invites;
 mod language_permissions;
 mod languages;
+mod news;
 mod phonology_tables;
 mod reports;
 mod sound_change_sets;
@@ -87,6 +89,7 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_word_category_routes, normal_word_category_routes) =
         word_categories::create_router();
     let (secure_translatable_routes, normal_translatable_routes) = translatables::create_router();
+    let (secure_news_routes, normal_news_routes) = news::create_router();
     let (secure_totd_routes, normal_totd_routes) = translatable_of_the_day::create_router();
     let (secure_translation_routes, normal_translation_routes) = translations::create_router();
     let (secure_bookmark_routes, normal_bookmark_routes) = bookmarks::create_router();
@@ -113,6 +116,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_word_class_routes)
         .merge(secure_word_category_routes)
         .merge(secure_translatable_routes)
+        .merge(secure_news_routes)
         .merge(secure_totd_routes)
         .merge(secure_translation_routes)
         .merge(secure_bookmark_routes)
@@ -144,6 +148,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_word_class_routes)
         .merge(normal_word_category_routes)
         .merge(normal_translatable_routes)
+        .merge(normal_news_routes)
         .merge(normal_totd_routes)
         .merge(normal_translation_routes)
         .merge(normal_bookmark_routes)
@@ -179,11 +184,13 @@ struct LandingTemplate {
     current_user: Option<User>,
     activities: Vec<UserActivity>,
     totd: Option<TotdEntry>,
+    news: Vec<NewsWithCreator>,
 }
 
 async fn landing(
     activities_repo: UserActivityRepository,
     totd_repo: TranslatableOfTheDayRepository,
+    news_repo: NewsRepository,
     s: Session,
 ) -> (StatusCode, Response) {
     if let Some(_user) = s.user() {
@@ -198,10 +205,18 @@ async fn landing(
         return render_generic_error(s, internal_error("Failed to load translatable of the day"))
             .await;
     };
+    let Ok(news_articles) = news_repo.list_recent(3).await else {
+        return render_generic_error(s, internal_error("Failed to load news")).await;
+    };
+    let mut news = Vec::with_capacity(news_articles.len());
+    for article in news_articles {
+        news.push(attempt!(s, news_repo.materialize(article).await));
+    }
     let body = render_template(LandingTemplate {
         current_user,
         activities,
         totd,
+        news,
     });
     (StatusCode::OK, body)
 }
@@ -225,6 +240,7 @@ struct HomeTemplate {
     activities: Vec<UserActivity>,
     translatables: Vec<TranslatableWithMeta>,
     totd: Option<TotdEntry>,
+    news: Vec<NewsWithCreator>,
 }
 
 async fn home(
@@ -235,6 +251,7 @@ async fn home(
     activities_repo: UserActivityRepository,
     contribution_stats: ContributionStatsRepository,
     totd_repo: TranslatableOfTheDayRepository,
+    news_repo: NewsRepository,
     s: Session,
 ) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
@@ -301,6 +318,14 @@ async fn home(
             .await;
     };
 
+    let Ok(news_articles) = news_repo.list_recent(3).await else {
+        return render_generic_error(s, internal_error("Failed to load news")).await;
+    };
+    let mut news = Vec::with_capacity(news_articles.len());
+    for article in news_articles {
+        news.push(attempt!(s, news_repo.materialize(article).await));
+    }
+
     let template = HomeTemplate {
         current_user: Some(user),
         languages,
@@ -308,6 +333,7 @@ async fn home(
         activities,
         translatables: translatables_with_liked,
         totd,
+        news,
         error: None,
     };
 

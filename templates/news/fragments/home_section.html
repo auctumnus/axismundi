@@ -1,0 +1,35 @@
+{%- import "news/fragments/card.html" as news_card -%}
+{%- import "util.html" as u -%}
+
+{# news section for /home and /landing.
+   - `articles`: Vec<NewsWithCreator>
+   - `is_staff`: bool (true for admins/moderators only; false for anon/regular users)
+#}
+{% macro render(articles, is_staff) %}
+    {% if !articles.is_empty() || is_staff %}
+        <div class="header-with-actions">
+            <h2 class="with-action">news</h2>
+            <ul>
+                {% if is_staff %}
+                    <li><a class="with-icon" href="/new-news">
+                        <svg class="icon"><use href="#icon-plus"></use></svg>
+                        <span>new article</span>
+                    </a></li>
+                {% endif %}
+                <li><a class="with-icon" href="/news">
+                    {% call u::icon("list") %}
+                    <span>view all</span>
+                </a></li>
+            </ul>
+        </div>
+        {% if articles.is_empty() %}
+            <p class="empty-description">no news yet.</p>
+        {% else %}
+            <ul class="card-list news-list">
+                {% for article in articles %}
+                    {% call news_card::render(article) %}
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endif %}
+{% endmacro %}

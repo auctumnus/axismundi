@@ -1,0 +1,27 @@
+{%- import "util.html" as u -%}
+
+{% macro render(news_with_creator, back="") %}
+<li class="preview-card news-card">
+    <a href="/news/{{ news_with_creator.news.slug }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
+        <span class="left">
+            <span class="title">
+                {{ news_with_creator.news.title }}
+                {% if news_with_creator.news.is_draft() %}
+                    <span class="pill gray">draft</span>
+                {% endif %}
+            </span>
+            <span class="summary ellipse">{{ crate::util::first_sentence(news_with_creator.news.content) }}</span>
+            <ul class="card-meta">
+                <li>{% call u::user_display(&news_with_creator.creator, "small") %}</li>
+                {% if let Some(published_at) = news_with_creator.news.published_at %}
+                    <li>{% call u::relative(&published_at) %}</li>
+                {% else %}
+                    <li>{% call u::relative(&news_with_creator.news.created_at) %}</li>
+                {% endif %}
+            </ul>
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% call render(news_with_creator, back_url) %}

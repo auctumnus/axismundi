@@ -5,6 +5,7 @@
 {%- import "translations/fragments/card.html" as translation_card -%}
 {%- import "words/fragments/card.html" as word_card -%}
 {%- import "users/fragments/card.html" as user_card -%}
+{%- import "news/fragments/card.html" as news_card -%}
 
 {% macro entity_link(entity) %}
     {% match entity %}
@@ -19,6 +20,8 @@
             <a href="/translatable/{{ translation.translatable.slug }}/translation/{{ lang_code }}">translation for {{ translation.translatable.title }}</a>
         {% when crate::model::user_activities::ActivityEntity::LanguageFamily(family) %}
             <a href="/language-families/{{ family.family.code }}">{{ family.family.name }}</a>
+        {% when crate::model::user_activities::ActivityEntity::News(news) %}
+            <a href="/news/{{ news.news.slug }}">{{ news.news.title }}</a>
         {% else %}
             <span>something unknown</span>
     {% endmatch %}
@@ -36,6 +39,8 @@
                 {% call translation_card::render(translation, lang_code) %}
             {% when crate::model::user_activities::ActivityEntity::LanguageFamily(family) %}
                 {% call family_card::render(family) %}
+            {% when crate::model::user_activities::ActivityEntity::News(news) %}
+                {% call news_card::render(news) %}
             {% else %}
                 <li><div class="preview-card">Details not available.</div></li>
         {% endmatch %}

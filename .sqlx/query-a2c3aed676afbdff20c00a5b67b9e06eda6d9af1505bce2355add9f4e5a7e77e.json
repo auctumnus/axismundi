@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*)\n                FROM news\n                WHERE (\n                    ($1::bool AND published_at IS NOT NULL)\n                    OR ($2::bool AND published_at IS NULL)\n                )\n                AND (\n                    $3::TEXT IS NULL\n                    OR title ILIKE '%' || $3 || '%'\n                    OR content ILIKE '%' || $3 || '%'\n                )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a2c3aed676afbdff20c00a5b67b9e06eda6d9af1505bce2355add9f4e5a7e77e"
+}
