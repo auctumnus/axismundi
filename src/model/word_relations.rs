@@ -401,6 +401,17 @@ impl WordRelationRepository {
             )?;
 
             match (antecedent_cognacy, consequent_cognacy) {
+                (Some(antecedent_cognacy), Some(consequent_cognacy))
+                    if antecedent_cognacy.id == consequent_cognacy.id =>
+                {
+                    // Both words already live in the same cognacy graph (e.g. a new
+                    // edge between two nodes connected through a transitive path).
+                    // Treat as a single cognacy so merge() doesn't fold the schema
+                    // into itself and double every edge.
+                    let id = antecedent_cognacy.id;
+                    let CognacyInner::V1(schema) = antecedent_cognacy.inner;
+                    self.merge_v1(tx, (id, schema), None, edge).await?;
+                }
                 (Some(antecedent_cognacy), Some(consequent_cognacy)) => {
                     let antecedent_id = antecedent_cognacy.id;
                     let consequent_id = consequent_cognacy.id;

@@ -12,7 +12,10 @@ use uuid::Uuid;
 
 use crate::{
     attempt,
-    controller::html::{LanguagesWithContributors, TranslatableWithMeta, okay, render_template},
+    controller::html::{
+        LanguagesWithContributors, TranslatableWithMeta, okay, render_generic_error,
+        render_template,
+    },
     embed::{EmbedTarget, GenericEmbed, render_embed, truncate_description},
     err::{AppError, bad_request},
     get_user,
@@ -242,6 +245,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/translatable/{slug}/edit-translation/estimate-ipa",
             post(estimate_ipa_edit_translation),
+        )
+        .route(
+            "/translatable/{slug}/delete-translation/{code}",
+            post(delete_translation_submit),
         );
 
     let normal_routes = Router::<AppState>::new()
@@ -261,6 +268,10 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route(
             "/translatable/{slug}/edit-translation/{code}",
             get(edit_translation_form),
+        )
+        .route(
+            "/translatable/{slug}/delete-translation/{code}",
+            get(delete_translation_form),
         );
 
     (secure_routes, normal_routes)
@@ -1476,4 +1487,93 @@ async fn estimate_ipa_edit_translation(
     };
 
     (status, render_template(template))
+}
+
+// Delete translation
+#[derive(Template)]
+#[template(path = "translations/delete.html")]
+#[allow(dead_code)]
+struct DeleteTranslationTemplate {
+    current_user: Option<User>,
+    translatable: Translatable,
+    language: Language,
+    translation: Translation,
+    can_edit_translatable: bool,
+    can_edit_language: bool,
+    will_create_audit_log: bool,
+}
+
+async fn delete_translation_form(
+    s: Session,
+    State(state): State<AppState>,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    translations: TranslationRepository,
+    permissions: LanguagePermissionRepository,
+    Path((slug, code)): Path<(String, String)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let translation = attempt!(
+        s,
+        translations
+            .find_by_translatable_and_language(translatable.id, language.id)
+            .await
+    );
+
+    let can_edit_translatable = translatable.created_by == user.id;
+
+    let is_admin_or_mod = crate::util::is_admin_or_mod(&state, user.id)
+        .await
+        .unwrap_or(false);
+
+    let can_edit_language = is_admin_or_mod
+        || permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+            .unwrap_or(false);
+
+    let will_create_audit_log =
+        crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+
+    let template = DeleteTranslationTemplate {
+        current_user: Some(user),
+        translatable,
+        language,
+        translation,
+        can_edit_translatable,
+        can_edit_language,
+        will_create_audit_log,
+    };
+
+    okay(render_template(template))
+}
+
+async fn delete_translation_submit(
+    s: Session,
+    translatables: TranslatableRepository,
+    languages: LanguageRepository,
+    translations: TranslationRepository,
+    Path((slug, code)): Path<(String, String)>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+
+    let translatable = attempt!(s, translatables.find_by_slug(&slug).await);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let translation = attempt!(
+        s,
+        translations
+            .find_by_translatable_and_language(translatable.id, language.id)
+            .await
+    );
+
+    match translations.delete(&user, translation.id).await {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            Redirect::to(&format!("/translatable/{}", translatable.slug)).into_response(),
+        ),
+        Err(e) => render_generic_error(s, e).await,
+    }
 }

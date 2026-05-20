@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "translations/fragments/footer.html" as translation_footer -%}
+
+{% block title %}delete {{ language.name }} translation of '{{ translatable.title }}'? - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>delete translation</h1>
+
+<form class="default" method="post" action="/translatable/{{ translatable.slug }}/delete-translation/{{ language.code }}">
+    <section>
+        <p>Are you sure you want to delete the <strong>{{ language.name }}</strong> translation of <strong>{{ translatable.title }}</strong>?</p>
+        <p>This action cannot be undone.</p>
+    </section>
+
+    <section class="button-row">
+        <button type="submit" class="danger">Delete translation</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/translatable/{{ translatable.slug }}" class="breadcrumb">{{ translatable.title }}</a>
+<span class="separator">/</span>
+<a href="/translatable/{{ translatable.slug }}/translation/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call translation_footer::translation_section(&translatable, &language, &translation, can_edit_language, can_edit_translatable) %}
+{% endblock %}

@@ -10,6 +10,10 @@
                 {% call u::icon("edit") %}
                 <span>edit translatable</span>
             </a></li>
+            <li><a href="/translatable/{{ translatable.slug }}/delete">
+                {% call u::icon("delete") %}
+                <span>delete translatable</span>
+            </a></li>
         {% endif %}
         <li><a href="/translatable/{{ translatable.slug }}/new-translation">new translation</a></li>
         <li><a href="/report/new?resource_type=translatable&resource_id={{ translatable.id }}">report</a></li>
