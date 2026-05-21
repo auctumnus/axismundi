@@ -1,0 +1,35 @@
+// dev variant: targets the host-side app (the `just dev` workflow runs
+// `cargo run` outside docker). if you switch to `just up` and the app
+// runs in the compose network, change this address to "app:".
+// the port comes from $AXISMUNDI_METRICS_PORT - keep it in sync with
+// metrics_port in config.json
+
+prometheus.scrape "axismundi_app" {
+  targets    = [{ "__address__" = "host.docker.internal:" + sys.env("AXISMUNDI_METRICS_PORT") }]
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "30s"
+}
+
+prometheus.scrape "minio" {
+  targets    = [{ "__address__" = "minio:9000" }]
+  metrics_path = "/minio/v2/metrics/cluster"
+  bearer_token = sys.env("MINIO_PROM_TOKEN")
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "60s"
+}
+
+prometheus.scrape "cadvisor" {
+  targets    = [{ "__address__" = "cadvisor:8080" }]
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "30s"
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROM_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROM_USER")
+      password = sys.env("GRAFANA_CLOUD_PROM_TOKEN")
+    }
+  }
+}

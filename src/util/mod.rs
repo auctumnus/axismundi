@@ -13,6 +13,7 @@ use argon2::{
 pub mod extract_session;
 pub mod graph_svg;
 mod images;
+pub mod metrics;
 pub mod s3;
 pub mod search_template;
 use askama::Template;

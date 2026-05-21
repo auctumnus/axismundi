@@ -28,6 +28,10 @@ const fn default_port() -> u16 {
     3000
 }
 
+const fn default_metrics_port() -> u16 {
+    9091
+}
+
 fn default_public_url_base() -> String {
     format!("http://localhost:{}", default_port())
 }
@@ -109,6 +113,8 @@ pub struct AppConfig {
     pub file_upload_limit_bytes: usize,
     #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default = "default_metrics_port")]
+    pub metrics_port: u16,
     #[serde(default = "default_public_url_base")]
     pub public_url_base: String,
     #[serde(default = "default_environment")]
@@ -154,6 +160,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
             email: EmailConfig::Mock,
             file_upload_limit_bytes: default_file_upload_limit(),
             port: 3001,
+            metrics_port: default_metrics_port(),
             public_url_base: "http://localhost:3001".to_string(),
             banner: BannerConfig {
                 message: "This is a test banner".to_string(),

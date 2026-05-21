@@ -48,6 +48,7 @@ let
 
   configBase = {
     port = cfg.config.port;
+    metrics_port = cfg.config.metricsPort;
     public_url_base = cfg.config.publicUrlBase;
     environment = cfg.config.environment;
     file_upload_limit_bytes = cfg.config.fileUploadLimitBytes;

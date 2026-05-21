@@ -139,6 +139,51 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # opt-in: activate with `docker compose --profile metrics up`. requires
+  # GRAFANA_CLOUD_* and MINIO_PROM_TOKEN env vars (see .env.example).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: axismundi-cadvisor
+    profiles: ["metrics"]
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: axismundi-alloy
+    profiles: ["metrics"]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./alloy/dev.config.alloy:/etc/alloy/config.alloy:ro
+    environment:
+      GRAFANA_CLOUD_PROM_URL: ${GRAFANA_CLOUD_PROM_URL}
+      GRAFANA_CLOUD_PROM_USER: ${GRAFANA_CLOUD_PROM_USER}
+      GRAFANA_CLOUD_PROM_TOKEN: ${GRAFANA_CLOUD_PROM_TOKEN}
+      MINIO_PROM_TOKEN: ${MINIO_PROM_TOKEN}
+      # alloy's scrape target — must match metrics_port in config.json
+      AXISMUNDI_METRICS_PORT: ${AXISMUNDI_METRICS_PORT}
+    # host.docker.internal needs an explicit add-host on linux so alloy
+    # can scrape the host-side `just dev` app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - minio
+      - cadvisor
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:

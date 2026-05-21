@@ -7,6 +7,7 @@ use axum::{
     Router,
     http::{HeaderMap, StatusCode},
 };
+use axum_prometheus::{EndpointLabel, PrometheusMetricLayerBuilder};
 use sqlx::PgPool;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
@@ -60,7 +61,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         email_service,
     };
 
-    let app = create_router(app_state);
+    // axum's MatchedPath extension can be unavailable inside nested routers
+    // in edge cases (e.g. a request that 404s on the inner router). default
+    // to a stable "unmatched" label so a flood of weird URLs can't blow up
+    // cardinality on the prometheus side.
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayerBuilder::new()
+        .with_endpoint_label_type(EndpointLabel::MatchedPathWithFallbackFn(|_| {
+            "unmatched".to_string()
+        }))
+        .with_default_metrics()
+        .build_pair();
+
+    let app = create_router(app_state).layer(prometheus_layer);
+
+    util::metrics::serve_metrics(metric_handle, CONFIG.metrics_port);
 
     // bind all interfaces — when containerized, the host-side port mapping
     // is `127.0.0.1:<port>:<port>` (loopback-only), so external exposure is

@@ -26,6 +26,7 @@ in
     ./app.nix
     ./backup.nix
     ./caddy.nix
+    ./metrics.nix
   ];
 
   options.services.axismundi = {
