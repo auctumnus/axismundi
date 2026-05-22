@@ -75,7 +75,10 @@ RUN cargo build --release
 # on the axismundi podman network — the prod db (`axismundi-postgres`)
 # only resolves there, not from the host. native-tls only (no rustls) to
 # avoid the ring crate's dep tree.
-RUN cargo install --locked sqlx-cli \
+# Pin to ~0.8 to match the sqlx crate version in Cargo.toml. Without this,
+# cargo picks the latest (0.9.x), which requires rustc >= 1.94 and breaks
+# the build on rust:1.88.
+RUN cargo install --locked sqlx-cli --version "^0.8" \
         --no-default-features \
         --features postgres,native-tls \
     && cp /usr/local/cargo/bin/sqlx /app/sqlx
