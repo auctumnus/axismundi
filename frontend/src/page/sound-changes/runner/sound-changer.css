@@ -192,7 +192,7 @@ details.advanced-options {
     }
 }
 
-table {
+table:not(.metadata-table) {
     border-spacing: 0;
     border-collapse: separate;
     border: var(--border);

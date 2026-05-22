@@ -32,6 +32,10 @@ fn render_metrics(handle: &PrometheusHandle) -> String {
 }
 
 pub fn serve_metrics(handle: PrometheusHandle, port: u16) {
+    if port == 0 {
+        tracing::debug!("metrics_port = 0, /metrics endpoint disabled");
+        return;
+    }
     tokio::spawn(async move {
         let router = Router::new().route(
             "/metrics",
