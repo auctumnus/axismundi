@@ -428,6 +428,40 @@ impl TranslatableRepository {
             other => other.into(),
         })?;
 
+        // scheduling for today means the translatable is live now — publish
+        // it so it isn't shown as a draft on its own day, and log the
+        // deferred CreateTranslatable activity against the creator.
+        let result = if scheduled_date == today {
+            let published = sqlx::query_as!(
+                Translatable,
+                r#"
+                    UPDATE translatable
+                    SET published_at = CURRENT_TIMESTAMP
+                    WHERE id = $1
+                    RETURNING id, slug, title, english, source_name, source_url, source_content, source_language, created_at, updated_at, created_by, updated_by, like_count, description, published_at, 0 AS "translations_count!"
+                "#,
+                result.id,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            sqlx::query!(
+                r#"
+                    INSERT INTO user_activities
+                        (user_id, activity, entity_id, entity_type)
+                    VALUES ($1, 'create_translatable', $2, 'translatable')
+                "#,
+                published.created_by,
+                published.id,
+            )
+            .execute(&mut *tx)
+            .await?;
+
+            published
+        } else {
+            result
+        };
+
         let audit = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
         audit
             .create_internal_tx(

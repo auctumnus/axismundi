@@ -76,6 +76,44 @@ fn is_staff(user: &User) -> bool {
     user.is_admin() || user.is_moderator()
 }
 
+/// Publishes a translatable currently sitting in the totd queue, and logs
+/// the deferred `CreateTranslatable` activity against its creator. No-op
+/// if already published. Used by both the auto-pick path and the
+/// manual-schedule paths so a featured translatable always loses its draft
+/// state on its scheduled day.
+async fn publish_translatable_for_totd_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    translatable_id: Uuid,
+) -> AppResult<()> {
+    let published = sqlx::query!(
+        r#"
+            UPDATE translatable
+            SET published_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND published_at IS NULL
+            RETURNING created_by
+        "#,
+        translatable_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    if let Some(row) = published {
+        sqlx::query!(
+            r#"
+                INSERT INTO user_activities
+                    (user_id, activity, entity_id, entity_type)
+                VALUES ($1, 'create_translatable', $2, 'translatable')
+            "#,
+            row.created_by,
+            translatable_id,
+        )
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
+}
+
 impl TranslatableOfTheDayRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
@@ -141,6 +179,8 @@ impl TranslatableOfTheDayRepository {
             return Err(bad_request("cannot schedule TotD for a past date"));
         }
 
+        let mut tx = self.state.pool.begin().await?;
+
         let row = sqlx::query!(
             r#"
                 UPDATE totd_queue
@@ -156,7 +196,7 @@ impl TranslatableOfTheDayRepository {
             admin.id,
             translatable_id,
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| match e {
             sqlx::Error::Database(ref db_err) if db_err.is_unique_violation() => {
@@ -171,19 +211,30 @@ impl TranslatableOfTheDayRepository {
             ));
         };
 
+        // scheduling for today means the translatable is live now — publish
+        // it so it doesn't appear as a draft on its own day.
+        if date == today {
+            publish_translatable_for_totd_tx(&mut tx, translatable_id).await?;
+        }
+
         let audit = crate::model::audit_log::AuditLogRepository::new(self.state.clone());
         audit
-            .create_internal(crate::model::audit_log::CreateAuditLog {
-                user_id: Some(admin.id),
-                action: crate::model::audit_log::AuditActionType::Created,
-                resource_type: crate::model::audit_log::AuditableResource::Translatable,
-                resource_id: translatable_id,
-                details: serde_json::json!({
-                    "kind": "totd_schedule",
-                    "date": date.to_string(),
-                }),
-            })
+            .create_internal_tx(
+                &mut tx,
+                crate::model::audit_log::CreateAuditLog {
+                    user_id: Some(admin.id),
+                    action: crate::model::audit_log::AuditActionType::Created,
+                    resource_type: crate::model::audit_log::AuditableResource::Translatable,
+                    resource_id: translatable_id,
+                    details: serde_json::json!({
+                        "kind": "totd_schedule",
+                        "date": date.to_string(),
+                    }),
+                },
+            )
             .await?;
+
+        tx.commit().await?;
 
         Ok(TranslatableOfTheDay {
             date: row.scheduled_date,
@@ -513,6 +564,10 @@ impl TranslatableOfTheDayRepository {
         .await?;
 
         if let Some(id) = existing {
+            // pre-scheduled rows skipped the auto-pick publish; if the
+            // translatable is still a draft, publish it now so the
+            // featured-on-its-day translatable isn't shown as a draft.
+            publish_translatable_for_totd_tx(&mut tx, id).await?;
             tx.commit().await?;
             return Ok(Some(id));
         }
@@ -536,44 +591,12 @@ impl TranslatableOfTheDayRepository {
         .fetch_optional(&mut *tx)
         .await?;
 
-        let final_pick = claimed;
-
-        if let Some(id) = final_pick {
-            // publish the chosen translatable if still a draft
-            sqlx::query!(
-                r#"
-                    UPDATE translatable
-                    SET published_at = CURRENT_TIMESTAMP
-                    WHERE id = $1 AND published_at IS NULL
-                "#,
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-
-            // log the (deferred) CreateTranslatable activity against the creator
-            let creator_id = sqlx::query_scalar!(
-                r#"SELECT created_by FROM translatable WHERE id = $1"#,
-                id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
-
-            sqlx::query!(
-                r#"
-                    INSERT INTO user_activities
-                        (user_id, activity, entity_id, entity_type)
-                    VALUES ($1, 'create_translatable', $2, 'translatable')
-                "#,
-                creator_id,
-                id,
-            )
-            .execute(&mut *tx)
-            .await?;
+        if let Some(id) = claimed {
+            publish_translatable_for_totd_tx(&mut tx, id).await?;
         }
 
         tx.commit().await?;
-        Ok(final_pick)
+        Ok(claimed)
     }
 
     async fn materialize_entry(
