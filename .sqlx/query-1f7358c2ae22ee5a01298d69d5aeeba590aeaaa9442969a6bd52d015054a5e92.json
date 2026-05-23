@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT created_by FROM translatable WHERE id = $1",
+  "query": "\n            UPDATE translatable\n            SET published_at = CURRENT_TIMESTAMP\n            WHERE id = $1 AND published_at IS NULL\n            RETURNING created_by\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "25855c77c3f42a11dbbd966f43e80da8f0f30b80c0cf0042d358f2f15e7e4da2"
+  "hash": "1f7358c2ae22ee5a01298d69d5aeeba590aeaaa9442969a6bd52d015054a5e92"
 }
