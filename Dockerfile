@@ -26,6 +26,15 @@ RUN apt-get update && apt-get install -y \
     libltdl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Build sqlx-cli early so it caches across source changes — it only needs
+# rust + ssl/pkg-config from the apt step above. Pin to ~0.8 to match the
+# sqlx crate in Cargo.toml (0.9 needs rustc >= 1.94). native-tls only (no
+# rustls) to avoid the ring crate's dep tree.
+RUN cargo install --locked sqlx-cli --version "^0.8" \
+        --no-default-features \
+        --features postgres,native-tls \
+    && cp /usr/local/cargo/bin/sqlx /sqlx
+
 # Build graphviz 12.x from source. Debian's libgraphviz-dev is stuck at
 # 2.42.x, which has the pre-const-correct `agattr(... char *value)`
 # signature; vizoxide v1.0.5 expects the modern `const char *value` and
@@ -71,18 +80,6 @@ COPY .sqlx ./.sqlx
 ENV SQLX_OFFLINE=true
 RUN cargo build --release
 
-# Bake sqlx-cli into the image so scripts/deploy.sh can run migrations
-# on the axismundi podman network — the prod db (`axismundi-postgres`)
-# only resolves there, not from the host. native-tls only (no rustls) to
-# avoid the ring crate's dep tree.
-# Pin to ~0.8 to match the sqlx crate version in Cargo.toml. Without this,
-# cargo picks the latest (0.9.x), which requires rustc >= 1.94 and breaks
-# the build on rust:1.88.
-RUN cargo install --locked sqlx-cli --version "^0.8" \
-        --no-default-features \
-        --features postgres,native-tls \
-    && cp /usr/local/cargo/bin/sqlx /app/sqlx
-
 # Runtime stage. trixie matches the build stage's libc abi. graphviz is
 # copied from the builder (where we built it from source) — apt's
 # graphviz is too old to provide a matching SONAME for the binary.
@@ -109,7 +106,7 @@ WORKDIR /app
 
 # Copy the binary + sqlx-cli from builder stage
 COPY --from=builder /app/target/release/axismundi ./
-COPY --from=builder /app/sqlx ./
+COPY --from=builder /sqlx ./
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/frontend/dist ./frontend/dist
