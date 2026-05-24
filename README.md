@@ -10,10 +10,9 @@
 </p>
 
 ## Screenshots
-
-<img width="32%" alt="a screenshot of the axismundi homepage, featuring recent activity" src="https://github.com/user-attachments/assets/3c175619-cb88-4888-8bb4-42e630f47eb0" />
-<img width="32%" alt="a screenshot of a language's page in axismundi, showing recently-added words and translations" src="https://github.com/user-attachments/assets/36c9fd85-d3fb-4069-a0ac-d23d92d514cf" />
-<img width="32%" alt="a screenshot of a user's profile in axismundi, showing their languages and translatables" src="https://github.com/user-attachments/assets/17a657fb-8eac-4391-bfbd-11f5ec351f57" />
+<img width="32%" alt="a screenshot of the axismundi homepage, featuring recent activity" src="https://github.com/user-attachments/assets/1434268a-fb32-4cde-94e9-ae3d934c6208" />
+<img width="32%" alt="a screenshot of a language's page in axismundi, showing recently-added words and translations" src="https://github.com/user-attachments/assets/f9528cca-00c8-479a-a373-3399849a38f4" />
+<img width="32%" alt="a screenshot of a user's profile in axismundi, showing their languages and translatables" src="https://github.com/user-attachments/assets/65937521-ffa1-47e1-8301-cf4594343141" />
 
 ## Features
 
@@ -21,7 +20,7 @@
 - collaboration between you and your friends
 - modern, responsive design
 
-to participate in beta tests for our official instance, join [our discord](https://discord.gg/VGzdwcdKzu)
+We have an official instance at [https://axismundi.app](https://axismundi.app). You can join [our discord](https://discord.gg/VGzdwcdKzu) as well.
 
 ## Development
 
