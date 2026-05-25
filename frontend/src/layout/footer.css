@@ -1,3 +1,7 @@
+html:not(.js-mobile-nav) footer ul.sections {
+  flex-wrap: wrap;
+}
+
 footer {
   margin-top: 3rem;
   margin-bottom: 3rem;
@@ -13,7 +17,6 @@ footer {
   ul.sections {
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
     gap: 1rem;
     list-style: none;
     padding: 0;

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     err::{AppError, AppResult, bad_request},
     model::{
-        definitions::Definition, language_invites::PermissionLevel,
+        language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository, users::User, words::Word,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
@@ -248,7 +248,7 @@ pub struct WordRelationSearchResult {
     pub direction: RelationDirection,
     pub creator: User,
     pub created_at: DateTime<Utc>,
-    pub first_definition: Option<Definition>,
+    pub preview_definitions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1066,14 +1066,7 @@ impl WordRelationRepository {
                         WHEN word_relations.antecedent = $2 THEN 'consequent'
                         ELSE 'antecedent'
                     END) as "direction!: String",
-                    first_def.id as "def_id: Option<Uuid>",
-                    first_def.definition as "def_definition: Option<String>",
-                    first_def.context as "def_context: Option<String>",
-                    first_def.position as "def_position: Option<i32>",
-                    first_def.created_at as "def_created_at: Option<DateTime<Utc>>",
-                    first_def.updated_at as "def_updated_at: Option<DateTime<Utc>>",
-                    first_def.created_by as "def_created_by: Option<Uuid>",
-                    first_def.updated_by as "def_updated_by: Option<Uuid>"
+                    COALESCE(preview_defs.definitions, ARRAY[]::text[]) as "preview_definitions!: Vec<String>"
                 FROM word_relations
                 JOIN words ON
                     (CASE
@@ -1089,12 +1082,15 @@ impl WordRelationRepository {
                 LEFT JOIN users AS word_created ON word_created.id = words.created_by
                 LEFT JOIN users AS word_updated ON word_updated.id = words.updated_by
                 LEFT JOIN LATERAL (
-                    SELECT id, word, definition, context, position, created_at, updated_at, created_by, updated_by
-                    FROM definitions
-                    WHERE definitions.word = words.id
-                    ORDER BY position ASC
-                    LIMIT 1
-                ) AS first_def ON true
+                    SELECT array_agg(d.definition ORDER BY d.position) AS definitions
+                    FROM (
+                        SELECT definition, position
+                        FROM definitions
+                        WHERE definitions.word = words.id
+                        ORDER BY position ASC
+                        LIMIT 5
+                    ) AS d
+                ) AS preview_defs ON true
                 WHERE
                     (CASE
                         WHEN $1 = 'antecedent' THEN word_relations.antecedent = $2
@@ -1199,18 +1195,6 @@ impl WordRelationRepository {
                 let direction = RelationDirection::from_str(&record.direction).unwrap();
                 let into_other_language = related_word.language != word.language;
 
-                let first_definition = record.def_id.map(|id| Definition {
-                    id,
-                    word: related_word.id,
-                    definition: record.def_definition.unwrap_or_default(),
-                    context: record.def_context.unwrap_or_default(),
-                    position: record.def_position.unwrap_or(0),
-                    created_at: record.def_created_at.unwrap_or_else(Utc::now),
-                    updated_at: record.def_updated_at.unwrap_or_else(Utc::now),
-                    created_by: record.def_created_by.unwrap_or_default(),
-                    updated_by: record.def_updated_by.unwrap_or_default(),
-                });
-
                 WordRelationSearchResult {
                     word: related_word,
                     language: record.word_language_code.clone(),
@@ -1220,7 +1204,7 @@ impl WordRelationRepository {
                     direction,
                     creator,
                     created_at: record.relation_created_at,
-                    first_definition,
+                    preview_definitions: record.preview_definitions,
                 }
             })
             .collect();

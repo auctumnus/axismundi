@@ -403,28 +403,23 @@ impl DefinitionRepository {
         })
     }
 
-    pub async fn get_first_by_word(&self, word_id: &Uuid) -> AppResult<Option<Definition>> {
-        let result = sqlx::query_as!(
-            Definition,
+    pub async fn list_first_n_texts_by_word(
+        &self,
+        word_id: &Uuid,
+        limit: i64,
+    ) -> AppResult<Vec<String>> {
+        let result = sqlx::query_scalar!(
             r#"
-                SELECT
-                    id,
-                    word,
-                    definition,
-                    context,
-                    position,
-                    created_at,
-                    updated_at,
-                    created_by,
-                    updated_by
+                SELECT definition
                 FROM definitions
                 WHERE word = $1
                 ORDER BY position ASC
-                LIMIT 1
+                LIMIT $2
             "#,
-            word_id
+            word_id,
+            limit
         )
-        .fetch_optional(&self.state.pool)
+        .fetch_all(&self.state.pool)
         .await?;
 
         Ok(result)

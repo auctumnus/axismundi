@@ -15,10 +15,10 @@
                 <span class="relation-language-code" data-tooltip="Language for this word" aria-label="This word is in the language with code '{{ relation.language_code }}.'">{{ relation.language_code }}</span>
                 {% endif %}
             </span>
-            {% if let Some(definition) = &relation.first_definition %}
-                <span class="word-definition">{{ definition.definition }}</span>
-            {% else %}
+            {% if relation.preview_definitions.is_empty() %}
                 <span class="word-definition no-definition">no definition</span>
+            {% else %}
+                <span class="word-definition">{{ relation.preview_definitions|join(", ") }}</span>
             {% endif %}
             <ul class="card-meta">
                 <li>{{ relation.relation.kind.text(relation.direction) }}</li>

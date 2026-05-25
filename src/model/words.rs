@@ -9,7 +9,7 @@ use crate::{
     embed::{GenericEmbed, truncate_description},
     err::{AppResult, bad_request, internal_error, not_found},
     model::{
-        definitions::{Definition, DefinitionRepository},
+        definitions::DefinitionRepository,
         language_invites::PermissionLevel,
         languages::LanguageRepository,
         users::{User, UserRepository},
@@ -132,7 +132,7 @@ fn validate_slug(slug: &str) -> AppResult<()> {
 #[derive(Debug, Clone, Serialize)]
 pub struct WordWithMeta {
     pub word: Word,
-    pub first_definition: Option<Definition>,
+    pub preview_definitions: Vec<String>,
     pub creator: User,
     pub is_liked: bool,
 }
@@ -167,8 +167,8 @@ impl WordRepository {
     ) -> AppResult<WordWithMeta> {
         let creator = self.find_creator(&word.id).await?;
 
-        let first_definition = DefinitionRepository::new(self.state.clone())
-            .get_first_by_word(&word.id)
+        let preview_definitions = DefinitionRepository::new(self.state.clone())
+            .list_first_n_texts_by_word(&word.id, 5)
             .await?;
 
         let is_liked = if let Some(user) = requestor {
@@ -179,7 +179,7 @@ impl WordRepository {
 
         Ok(WordWithMeta {
             word,
-            first_definition,
+            preview_definitions,
             creator,
             is_liked,
         })

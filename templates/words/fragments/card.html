@@ -12,10 +12,10 @@
                     </span>
                 {% endif %}
             </span>
-            {% if let Some(definition) = &word_with_meta.first_definition %}
-                <span class="word-definition">{{ definition.definition }}</span>
-            {% else %}
+            {% if word_with_meta.preview_definitions.is_empty() %}
                 <span class="word-definition no-definition">no definition</span>
+            {% else %}
+                <span class="word-definition">{{ word_with_meta.preview_definitions|join(", ") }}</span>
             {% endif %}
             <ul class="card-meta">
                 <li>{% call u::user_display(&word_with_meta.creator, "small") %}</li>
