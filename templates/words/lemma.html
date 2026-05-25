@@ -40,7 +40,11 @@
             </h1>
         {% if !word.ipa.is_empty() %}
             <div class="subtitle">
-                <span class="ipa">/{{ word.ipa }}/</span>
+                {% if word.ipa.starts_with('[') && word.ipa.ends_with(']') %}
+                    <span class="ipa">{{ word.ipa }}</span>
+                {% else %}
+                    <span class="ipa">/{{ word.ipa }}/</span>
+                {% endif %}
             </div>
         </div>
         {% endif %}

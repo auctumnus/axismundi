@@ -1314,7 +1314,7 @@ const QuotationsEditor = (props: QuotationsEditorProps) => {
             className="quotation-editor"
           />
         </Slate>
-        <input
+        <textarea
           id="translated_text"
           name="translated_text"
           required

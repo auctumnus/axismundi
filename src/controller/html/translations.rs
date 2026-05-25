@@ -1226,13 +1226,15 @@ async fn edit_translation_form(
     okay(render_template(template))
 }
 
-fn deserialize_json_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+fn deserialize_optional_json_str<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: serde::de::DeserializeOwned,
 {
     let s = String::deserialize(deserializer)?;
-    serde_json::from_str(&s).map_err(serde::de::Error::custom)
+    serde_json::from_str(&s)
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 #[derive(Deserialize)]
@@ -1243,8 +1245,8 @@ struct EditTranslationFormData {
     gloss: Option<String>,
     notes: Option<String>,
     language_id: Uuid,
-    #[serde(deserialize_with = "deserialize_json_str")]
-    quotations: Vec<QuotationPossiblyNew>,
+    #[serde(default, deserialize_with = "deserialize_optional_json_str")]
+    quotations: Option<Vec<QuotationPossiblyNew>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1325,13 +1327,51 @@ async fn edit_translation_submit(
     };
 
     let result: crate::err::AppResult<Translation> = async {
+        // If the text changed but the form didn't include a quotations payload
+        // (e.g. javascript is disabled), refuse to save when this translation
+        // has quotations — their span offsets are anchored to the old text and
+        // would silently point at the wrong characters (or fall off the end).
+        if form.quotations.is_none()
+            && form.translated_text != existing_translation.translated_text
+        {
+            let existing_count = sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM quotation WHERE translation = $1",
+                existing_translation.id,
+            )
+            .fetch_one(&state.pool)
+            .await?
+            .unwrap_or(0);
+            if existing_count > 0 {
+                let mut validation_errors = validator::ValidationErrors::new();
+                validation_errors.add(
+                    "translated_text",
+                    validator::ValidationError {
+                        code: "quotations_require_editor".into(),
+                        message: Some(
+                            "this translation has quotations attached to it, so changing the text requires the quotations editor — please enable javascript and reload."
+                                .into(),
+                        ),
+                        params: std::collections::HashMap::new(),
+                    },
+                );
+                return Err(AppError {
+                    message: "can't change translated text while quotations exist without the quotations editor".into(),
+                    status_code: StatusCode::BAD_REQUEST,
+                    validation_errors: Some(validation_errors),
+                    extra: None,
+                });
+            }
+        }
+
         let mut tx = state.pool.begin().await?;
         let updated = translations
             .update_in_tx(&mut tx, &user, &existing_translation, updates)
             .await?;
-        quotations
-            .sync_for_translation_in_tx(&mut tx, &user, existing_translation.id, &form.quotations)
-            .await?;
+        if let Some(qs) = &form.quotations {
+            quotations
+                .sync_for_translation_in_tx(&mut tx, &user, existing_translation.id, qs)
+                .await?;
+        }
         tx.commit().await?;
         Ok(updated)
     }
@@ -1353,6 +1393,28 @@ async fn edit_translation_submit(
                 s,
                 translatables.materialize(translatable, Some(&user)).await
             );
+            let previous_quotations = match form.quotations.clone() {
+                Some(qs) => qs,
+                None => {
+                    let existing = attempt!(
+                        s,
+                        quotations
+                            .list_by_translation_with_word_info(
+                                existing_translation.id,
+                                PaginatedRequest {
+                                    limit: 500,
+                                    offset: 0,
+                                },
+                            )
+                            .await
+                    );
+                    existing
+                        .items
+                        .into_iter()
+                        .map(QuotationPossiblyNew::from)
+                        .collect()
+                }
+            };
             let template = EditTranslationTemplate {
                 current_user: Some(user),
                 error: Some(e),
@@ -1370,7 +1432,7 @@ async fn edit_translation_submit(
                 can_edit_translation,
                 will_create_audit_log,
                 rendered_description,
-                previous_quotations: form.quotations.clone(),
+                previous_quotations,
                 ipa_estimator,
             };
             (StatusCode::BAD_REQUEST, render_template(template))
@@ -1386,6 +1448,7 @@ async fn estimate_ipa_edit_translation(
     languages: LanguageRepository,
     translations: TranslationRepository,
     permissions: LanguagePermissionRepository,
+    quotations: QuotationRepository,
     sets: SoundChangeSetRepository,
     Path(slug): Path<String>,
     Form(form): Form<EditTranslationFormData>,
@@ -1465,6 +1528,29 @@ async fn estimate_ipa_edit_translation(
         StatusCode::OK
     };
 
+    let previous_quotations = match form.quotations {
+        Some(qs) => qs,
+        None => {
+            let existing = attempt!(
+                s,
+                quotations
+                    .list_by_translation_with_word_info(
+                        existing_translation.id,
+                        PaginatedRequest {
+                            limit: 500,
+                            offset: 0,
+                        },
+                    )
+                    .await
+            );
+            existing
+                .items
+                .into_iter()
+                .map(QuotationPossiblyNew::from)
+                .collect()
+        }
+    };
+
     let template = EditTranslationTemplate {
         current_user: Some(user),
         error,
@@ -1482,7 +1568,7 @@ async fn estimate_ipa_edit_translation(
         can_edit_translation,
         will_create_audit_log,
         rendered_description,
-        previous_quotations: form.quotations,
+        previous_quotations,
         ipa_estimator,
     };
 

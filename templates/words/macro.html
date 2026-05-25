@@ -1,6 +1,10 @@
 {% macro make_lemma(word, definitions, language_code, user_has_permission, rendered_notes) %}
 {% if !word.ipa.is_empty() %}
-    <p class="ipa">/{{ word.ipa }}/</p>
+    {% if word.ipa.starts_with('[') && word.ipa.ends_with(']') %}
+        <p class="ipa">{{ word.ipa }}</p>
+    {% else %}
+        <p class="ipa">/{{ word.ipa }}/</p>
+    {% endif %}
 {% endif %}
 
 {% if !definitions.is_empty() %}

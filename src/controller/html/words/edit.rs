@@ -100,8 +100,10 @@ pub(super) struct EditWordFormData {
     pub(super) definition_ids: Vec<String>,
     #[serde(default, rename = "categories[]")]
     pub(super) categories: Vec<String>,
-    pub(super) ipa: Option<String>,
-    pub(super) notes: Option<String>,
+    #[serde(default)]
+    pub(super) ipa: String,
+    #[serde(default)]
+    pub(super) notes: String,
 }
 
 #[allow(dead_code)]
@@ -293,8 +295,8 @@ pub(super) async fn edit_word_submit(
             previous_contexts: form.contexts.clone(),
             previous_definition_ids: form.definition_ids.clone(),
             definitions_json,
-            previous_ipa: form.ipa.clone().unwrap_or_default(),
-            previous_notes: form.notes.clone().unwrap_or_default(),
+            previous_ipa: form.ipa.clone(),
+            previous_notes: form.notes.clone(),
             user_has_permission,
             will_create_audit_log,
             ipa_estimator,
@@ -330,8 +332,8 @@ pub(super) async fn edit_word_submit(
     let update_word = crate::model::words::UpdateWord {
         word: Some(form.word.clone()),
         word_class: Some(form.word_class.clone()),
-        ipa: form.ipa.clone(),
-        notes: form.notes.clone(),
+        ipa: Some(form.ipa.clone()),
+        notes: Some(form.notes.clone()),
         extra: None,
         categories: Some(form.categories.clone()),
     };
@@ -488,8 +490,8 @@ pub(super) async fn estimate_ipa_submit(
                     previous_contexts: form.contexts.clone(),
                     previous_definition_ids: form.definition_ids.clone(),
                     definitions_json,
-                    previous_ipa: form.ipa.clone().unwrap_or_default(),
-                    previous_notes: form.notes.clone().unwrap_or_default(),
+                    previous_ipa: form.ipa.clone(),
+                    previous_notes: form.notes.clone(),
                     user_has_permission,
                     will_create_audit_log,
                     ipa_estimator,
@@ -500,7 +502,7 @@ pub(super) async fn estimate_ipa_submit(
                 return (status, body);
             }
         },
-        None => form.ipa.clone().unwrap_or_default(),
+        None => form.ipa.clone(),
     };
 
     let template = EditWordTemplate {
@@ -519,7 +521,7 @@ pub(super) async fn estimate_ipa_submit(
         previous_definition_ids: form.definition_ids.clone(),
         definitions_json,
         previous_ipa: estimated_ipa,
-        previous_notes: form.notes.clone().unwrap_or_default(),
+        previous_notes: form.notes.clone(),
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,

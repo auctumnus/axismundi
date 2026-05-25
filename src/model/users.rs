@@ -146,7 +146,7 @@ pub struct CreateUser {
     #[validate(length(max = 1000))]
     pub description: Option<String>,
 
-    #[validate(length(min = 2, max = 15))]
+    #[validate(length(min = 2, max = 30))]
     pub pronouns: Option<String>,
 
     #[validate(regex(path = GENDER_REGEX))]
@@ -164,7 +164,7 @@ pub struct UpdateUser {
     pub display_name: Option<String>,
     #[validate(length(max = 1000))]
     pub description: Option<String>,
-    #[validate(length(max = 15))]
+    #[validate(length(max = 30))]
     pub pronouns: Option<String>,
     #[validate(regex(path = GENDER_REGEX))]
     pub gender: Option<String>,
