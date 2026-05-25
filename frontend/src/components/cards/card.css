@@ -123,6 +123,10 @@
     align-items: center;
   }
 
+  .summary.ellipse {
+    max-width: calc(var(--width-page) - 2rem - 2rem - 2rem - 1rem);
+  }
+
   .creator {
     display: flex;
     flex-direction: row;
@@ -132,7 +136,6 @@
     color: var(--foreground-secondary);
   }
 }
-
 .card-meta {
   list-style-type: none;
   margin: 0;

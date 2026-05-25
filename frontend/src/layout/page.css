@@ -21,7 +21,8 @@ body {
 
   > * {
     max-width: var(--width-page);
-    margin: 0 auto;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   &:has(#sitewide-banner) {
