@@ -258,9 +258,8 @@ async fn home(
         return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
-    let Ok(l) = users.top_languages(user.id, 5).await else {
-        return render_generic_error(s, internal_error("Failed to load top languages")).await;
-    };
+    let l = attempt!(s, users.top_languages(user.id, 5).await);
+
     let mut languages_with_contributors = Vec::with_capacity(l.len());
     for lang in &l {
         let top_contributors = attempt!(
@@ -277,9 +276,8 @@ async fn home(
     }
     let languages = languages_with_contributors;
 
-    let Ok(f) = families_repo.top_families(user.id, 3).await else {
-        return render_generic_error(s, internal_error("Failed to load top families")).await;
-    };
+    let f = attempt!(s, families_repo.top_families(user.id, 3).await);
+
     let mut families = Vec::with_capacity(f.len());
     for family in &f {
         let materialized = attempt!(
@@ -309,18 +307,10 @@ async fn home(
         vec
     };
 
-    let Ok(activities) = activities_repo.list_site_wide(s.user()).await else {
-        return render_generic_error(s, internal_error("Failed to load user activities")).await;
-    };
+    let activities = attempt!(s, activities_repo.list_site_wide(Some(&user)).await);
+    let totd = attempt!(s, totd_repo.today(Some(&user)).await);
+    let news_articles = attempt!(s, news_repo.list_recent(3).await);
 
-    let Ok(totd) = totd_repo.today(Some(&user)).await else {
-        return render_generic_error(s, internal_error("Failed to load translatable of the day"))
-            .await;
-    };
-
-    let Ok(news_articles) = news_repo.list_recent(3).await else {
-        return render_generic_error(s, internal_error("Failed to load news")).await;
-    };
     let mut news = Vec::with_capacity(news_articles.len());
     for article in news_articles {
         news.push(attempt!(s, news_repo.materialize(article).await));

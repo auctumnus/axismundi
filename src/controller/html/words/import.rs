@@ -1080,9 +1080,12 @@ mod tests {
                 .unwrap();
         assert_eq!(summary.imported, 3);
 
-        // No activities for admin either.
+        // No word- or definition-shaped activities from the import. (The
+        // user verification in `make_authed_user` writes a single
+        // `user_joined` activity, which we ignore here.)
         let activity_count: i64 = sqlx::query_scalar!(
-            "select count(*) from user_activities where user_id = $1",
+            "select count(*) from user_activities
+             where user_id = $1 and entity_type in ('word', 'definition')",
             admin.id
         )
         .fetch_one(&pool)
@@ -1091,7 +1094,7 @@ mod tests {
         .unwrap_or(0);
         assert_eq!(
             activity_count, 0,
-            "import must not create user_activities, got {activity_count}"
+            "import must not create word/definition activities, got {activity_count}"
         );
 
         // Exactly one audit log entry, of action `imported` against the language.
