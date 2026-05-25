@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     controller::html::LanguagesWithContributors,
-    err::{AppResult, bad_request, forbidden, not_found},
+    err::{AppResult, forbidden, not_found},
     model::{
         language_families::FamilyWithContributors, news::NewsWithCreator,
         translatable::TranslatableWithMeta, translations::TranslationWithLanguageAndContributor,
@@ -148,6 +148,10 @@ impl UserActivityRepository {
         .fetch_optional(&self.state.pool)
         .await?
         {
+            let entity = self
+                .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
+                .await?
+                .ok_or_else(|| not_found(format!("user activity with id '{id}'")))?;
             Ok(UserActivity {
                 id: record.id,
                 user_id: record.user_id,
@@ -173,9 +177,7 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
-                    .await?,
+                entity,
                 related_entity: if let Some(related_id) = record.related_entity_id {
                     self.resolve_related(
                         related_id,
@@ -491,6 +493,21 @@ impl UserActivityRepository {
         let mut items = Vec::new();
 
         for record in records {
+            let Some(entity) = self
+                .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
+                .await?
+            else {
+                continue;
+            };
+            let related_entity = if let Some(related_id) = record.related_entity_id {
+                self.resolve_related(
+                    related_id,
+                    record.related_entity_type.as_deref().unwrap_or(""),
+                )
+                .await?
+            } else {
+                None
+            };
             items.push(UserActivity {
                 id: record.id,
                 user_id: record.user_id,
@@ -516,18 +533,8 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
-                    .await?,
-                related_entity: if let Some(related_id) = record.related_entity_id {
-                    self.resolve_related(
-                        related_id,
-                        record.related_entity_type.as_deref().unwrap_or(""),
-                    )
-                    .await?
-                } else {
-                    None
-                },
+                entity,
+                related_entity,
                 entity_type: record.entity_type,
                 related_entity_type: record.related_entity_type,
             });
@@ -648,6 +655,21 @@ impl UserActivityRepository {
         let mut items = Vec::new();
 
         for record in records {
+            let Some(entity) = self
+                .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
+                .await?
+            else {
+                continue;
+            };
+            let related_entity = if let Some(related_id) = record.related_entity_id {
+                self.resolve_related(
+                    related_id,
+                    record.related_entity_type.as_deref().unwrap_or(""),
+                )
+                .await?
+            } else {
+                None
+            };
             items.push(UserActivity {
                 id: record.id,
                 user_id: record.user_id,
@@ -673,18 +695,8 @@ impl UserActivityRepository {
                     verified_at: record.u_verified_at,
                     bookmark: record.u_bookmark,
                 },
-                entity: self
-                    .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
-                    .await?,
-                related_entity: if let Some(related_id) = record.related_entity_id {
-                    self.resolve_related(
-                        related_id,
-                        record.related_entity_type.as_deref().unwrap_or(""),
-                    )
-                    .await?
-                } else {
-                    None
-                },
+                entity,
+                related_entity,
                 entity_type: record.entity_type,
                 related_entity_type: record.related_entity_type,
             });
@@ -754,9 +766,12 @@ impl UserActivityRepository {
             requestor.is_some_and(|u| u.is_admin() || u.is_moderator());
 
         for record in records {
-            let entity = self
+            let Some(entity) = self
                 .resolve_entity(record.entity_id, record.entity_type.as_str(), requestor)
-                .await?;
+                .await?
+            else {
+                continue;
+            };
 
             // hide draft translatables from non-staff in the activity feed.
             // a translatable can become a draft after its CreateTranslatable
@@ -775,6 +790,16 @@ impl UserActivityRepository {
                     }
                 }
             }
+
+            let related_entity = if let Some(related_id) = record.related_entity_id {
+                self.resolve_related(
+                    related_id,
+                    record.related_entity_type.as_deref().unwrap_or(""),
+                )
+                .await?
+            } else {
+                None
+            };
 
             activities.push(UserActivity {
                 id: record.id,
@@ -802,15 +827,7 @@ impl UserActivityRepository {
                     bookmark: record.u_bookmark,
                 },
                 entity,
-                related_entity: if let Some(related_id) = record.related_entity_id {
-                    self.resolve_related(
-                        related_id,
-                        record.related_entity_type.as_deref().unwrap_or(""),
-                    )
-                    .await?
-                } else {
-                    None
-                },
+                related_entity,
                 entity_type: record.entity_type,
                 related_entity_type: record.related_entity_type,
             });
@@ -819,118 +836,97 @@ impl UserActivityRepository {
         Ok(activities)
     }
 
+    /// Materialize the activity's primary entity. Returns `Ok(None)` when the
+    /// entity (or a required relation like a word's language) has been deleted
+    /// since the activity was logged — callers should skip such activities in
+    /// list views rather than failing the whole feed.
     pub async fn resolve_entity(
         &self,
         entity_id: Uuid,
         kind: &str,
         requestor: Option<&User>,
-    ) -> AppResult<ActivityEntity> {
+    ) -> AppResult<Option<ActivityEntity>> {
         match kind {
             "word" => {
                 let words_repo = crate::model::words::WordRepository::new(self.state.clone());
-                if let Ok(word) = words_repo.find_by_id(entity_id).await {
-                    let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
-                        .find_by_id(word.language)
-                        .await?;
-                    let word = words_repo.materialize(word, requestor).await?;
-                    Ok(ActivityEntity::Word(Box::new(word), lang.code))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(word) = words_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                let Ok(lang) = crate::model::languages::LanguageRepository::new(self.state.clone())
+                    .find_by_id(word.language)
+                    .await
+                else {
+                    return Ok(None);
+                };
+                let word = words_repo.materialize(word, requestor).await?;
+                Ok(Some(ActivityEntity::Word(Box::new(word), lang.code)))
             }
             "language" => {
                 let languages_repo =
                     crate::model::languages::LanguageRepository::new(self.state.clone());
-                if let Ok(language) = languages_repo.find_by_id(entity_id).await {
-                    let language = languages_repo.materialize(language, requestor).await?;
-                    Ok(ActivityEntity::Language(language))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(language) = languages_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                let language = languages_repo.materialize(language, requestor).await?;
+                Ok(Some(ActivityEntity::Language(language)))
             }
             "user" => {
                 let users_repo = crate::model::users::UserRepository::new(self.state.clone());
-                if let Ok(user) = users_repo.find_by_id(entity_id).await {
-                    Ok(ActivityEntity::User(user))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(user) = users_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                Ok(Some(ActivityEntity::User(user)))
             }
             "translatable" => {
                 let translatables_repo =
                     crate::model::translatable::TranslatableRepository::new(self.state.clone());
-                if let Ok(translatable) = translatables_repo.find_by_id(entity_id).await {
-                    let translatable = translatables_repo
-                        .materialize(translatable, requestor)
-                        .await?;
-                    Ok(ActivityEntity::Translatable(translatable))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(translatable) = translatables_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                let translatable = translatables_repo
+                    .materialize(translatable, requestor)
+                    .await?;
+                Ok(Some(ActivityEntity::Translatable(translatable)))
             }
             "translation" => {
                 let translations_repo =
                     crate::model::translations::TranslationRepository::new(self.state.clone());
-                if let Ok(translation) = translations_repo.find_by_id(entity_id).await {
-                    let lang = crate::model::languages::LanguageRepository::new(self.state.clone())
-                        .find_by_id(translation.language)
-                        .await?;
-                    let translation = translations_repo
-                        .materialize(translation, requestor)
-                        .await?;
-                    Ok(ActivityEntity::Translation(
-                        Box::new(translation),
-                        lang.code,
-                    ))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(translation) = translations_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                let Ok(lang) = crate::model::languages::LanguageRepository::new(self.state.clone())
+                    .find_by_id(translation.language)
+                    .await
+                else {
+                    return Ok(None);
+                };
+                let translation = translations_repo
+                    .materialize(translation, requestor)
+                    .await?;
+                Ok(Some(ActivityEntity::Translation(
+                    Box::new(translation),
+                    lang.code,
+                )))
             }
             "news" => {
                 let news_repo = crate::model::news::NewsRepository::new(self.state.clone());
-                if let Ok(article) = news_repo.find_by_id(entity_id).await {
-                    let materialized = news_repo.materialize(article).await?;
-                    Ok(ActivityEntity::News(materialized))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(article) = news_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                let materialized = news_repo.materialize(article).await?;
+                Ok(Some(ActivityEntity::News(materialized)))
             }
             "language_family" => {
                 let families_repo = crate::model::language_families::LanguageFamilyRepository::new(
                     self.state.clone(),
                 );
-                if let Ok(family) = families_repo.find_by_id(entity_id).await {
-                    let family = families_repo.materialize(family, requestor).await?;
-                    Ok(ActivityEntity::LanguageFamily(family))
-                } else {
-                    Err(bad_request(format!(
-                        "unable to resolve entity with id '{}'",
-                        entity_id
-                    )))
-                }
+                let Ok(family) = families_repo.find_by_id(entity_id).await else {
+                    return Ok(None);
+                };
+                let family = families_repo.materialize(family, requestor).await?;
+                Ok(Some(ActivityEntity::LanguageFamily(family)))
             }
-            _ => Err(bad_request(format!(
-                "unable to resolve entity with id '{}'",
-                entity_id
-            ))),
+            _ => Ok(None),
         }
     }
 
