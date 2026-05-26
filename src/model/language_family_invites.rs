@@ -35,9 +35,25 @@ pub struct CreateLanguageFamilyInvite {
 pub struct FamilyInviteSearch {
     pub sender: Option<String>,
     pub recipient: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub accepted_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub accepted_after: Option<DateTime<Utc>>,
 }
 

@@ -739,7 +739,15 @@ impl WordCategoryRepository {
 #[derive(Debug, Deserialize)]
 pub struct WordCategorySearch {
     pub text_query: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
     pub created_by: Option<String>,
     pub updated_by: Option<String>,

@@ -577,22 +577,26 @@ impl WordRepository {
         // if slug is the same, we don't need to update the lemma
         // buuut if the slug is changing, we need to change the lemmata of all words with the same slug
         let (slug, lemma) = if let Some(w) = updates.word.as_ref() {
-            let original_lemma = word.lemma;
-            let (new_slug, lemma) = self.make_slug_and_lemma(word.language, w).await?;
-            sqlx::query!(
-                r#"
-                    UPDATE words
-                    SET lemma = lemma - 1
-                    WHERE language = $1 AND slug = $2 AND lemma > $3
-                "#,
-                word.language,
-                word.slug,
-                original_lemma
-            )
-            .execute(&mut *tx)
-            .await?;
+            let (new_slug, new_lemma) = self.make_slug_and_lemma(word.language, w).await?;
+            if new_slug == word.slug {
+                (None, None)
+            } else {
+                let original_lemma = word.lemma;
+                sqlx::query!(
+                    r#"
+                        UPDATE words
+                        SET lemma = lemma - 1
+                        WHERE language = $1 AND slug = $2 AND lemma > $3
+                    "#,
+                    word.language,
+                    word.slug,
+                    original_lemma
+                )
+                .execute(&mut *tx)
+                .await?;
 
-            (Some(new_slug), Some(lemma))
+                (Some(new_slug), Some(new_lemma))
+            }
         } else {
             (None, None)
         };
@@ -1338,7 +1342,15 @@ pub struct WordSearch {
     pub q: Option<String>,
     pub exact_slug: Option<String>,
     pub word_class: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
     #[serde(default, rename = "categories[]")]
     pub categories: Vec<String>,

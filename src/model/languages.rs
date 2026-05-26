@@ -1062,7 +1062,15 @@ pub struct LanguageSearch {
     pub owned_by: Option<String>,
     #[allow(dead_code)]
     pub edited_by: Option<Vec<String>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
     pub in_family: Option<String>,
 }

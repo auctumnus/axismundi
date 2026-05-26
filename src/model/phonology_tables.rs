@@ -462,7 +462,15 @@ pub struct UpdatePhonologyTable {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchPhonologyTable {
     pub q: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
 }
 

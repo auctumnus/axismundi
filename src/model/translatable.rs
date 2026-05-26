@@ -972,7 +972,15 @@ pub struct TranslatableSearch {
     pub q: Option<String>,
     pub source_language: Option<String>,
     pub created_by: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
     #[serde(default)]
     pub draft_status: DraftFilter,

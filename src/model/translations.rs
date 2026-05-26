@@ -910,7 +910,15 @@ impl TranslationRepository {
 #[derive(Default, Debug, Deserialize, Clone, Serialize)]
 pub struct TranslationSearch {
     pub q: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
 }
 

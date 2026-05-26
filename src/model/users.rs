@@ -184,7 +184,15 @@ pub struct UpdateUser {
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct UserSearch {
     pub q: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_before: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_datetime"
+    )]
     pub created_after: Option<DateTime<Utc>>,
     pub verified: Option<bool>,
 }

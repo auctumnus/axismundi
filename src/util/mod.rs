@@ -226,6 +226,31 @@ pub fn relative_time(timestamp: &chrono::DateTime<Utc>) -> String {
     chrono_humanize::HumanTime::from(dt).to_string()
 }
 
+/// Deserialize an optional UTC datetime from a query string, treating an empty
+/// string as `None` and accepting either `YYYY-MM-DD` (from `<input type="date">`)
+/// or RFC 3339. Without this, an empty `created_after=` from a GET form is
+/// passed to the `DateTime` parser and fails with "premature end of input".
+pub fn deserialize_optional_form_datetime<'de, D>(
+    deserializer: D,
+) -> Result<Option<chrono::DateTime<Utc>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    let Some(s) = opt.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        let dt = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| serde::de::Error::custom("invalid date"))?;
+        return Ok(Some(chrono::DateTime::from_naive_utc_and_offset(dt, Utc)));
+    }
+    chrono::DateTime::parse_from_rfc3339(s)
+        .map(|d| Some(d.with_timezone(&Utc)))
+        .map_err(serde::de::Error::custom)
+}
+
 pub fn strip(text: &str) -> String {
     ammonia::Builder::empty().clean(text).to_string()
 }

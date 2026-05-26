@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE words\n                        SET lemma = lemma - 1\n                        WHERE language = $1 AND slug = $2 AND lemma > $3\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "543aa33a54c70a79276a4132beb652626859ae21b7236e11ba3beb976a49c304"
+}
