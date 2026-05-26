@@ -14,12 +14,16 @@ use crate::{
 };
 
 fn validate_external_url(url: &str) -> Result<(), validator::ValidationError> {
+    if url.is_empty() {
+        return Ok(());
+    }
     sanitize_external_url(url)?;
     Ok(())
 }
 
 fn sanitize_source_url(url: Option<String>) -> AppResult<Option<String>> {
-    url.map(|u| sanitize_external_url(&u).map_err(|e| bad_request(e.to_string())))
+    url.filter(|u| !u.is_empty())
+        .map(|u| sanitize_external_url(&u).map_err(|e| bad_request(e.to_string())))
         .transpose()
 }
 
