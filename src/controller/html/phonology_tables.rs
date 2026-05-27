@@ -682,23 +682,11 @@ async fn edit_meta_submit(
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     let updates = UpdatePhonologyTable {
-        name: if form.name == table.name {
-            None
-        } else {
-            Some(form.name.clone())
-        },
-        description: if description.as_deref().unwrap_or("") == table.description {
-            None
-        } else {
-            description
-        },
+        name: Some(form.name.clone()),
+        description: Some(description),
         body: None,
     };
 
@@ -718,7 +706,7 @@ async fn edit_meta_submit(
                 table,
                 error: Some(e),
                 previous_name: form.name.clone(),
-                previous_description: form.description.clone(),
+                previous_description: form.description.trim().to_string(),
                 will_create_audit_log,
                 can_delete_language,
             };
