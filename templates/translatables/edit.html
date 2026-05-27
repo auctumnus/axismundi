@@ -19,11 +19,14 @@
     </div>
 {% endif %}
 
-<div class="markdown">
+<div class="info-banner">
     <p>
     To edit information about the source text, such as the original title, language, or content,
     go to the <a href="/translatable/{{ translatable.slug }}/edit-source">edit source</a> page.
     </p>
+    <div class="actions">
+        <a href="/translatable/{{ translatable.slug }}/edit-source" class="button">edit source</a>
+    </div>
 </div>
 
 <form class="default" method="post" action="/translatable/{{ translatable.slug }}/edit">

@@ -329,6 +329,23 @@ div.info-banner {
   p {
     margin: 0;
   }
+
+  div.actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    margin-top: 1rem;
+
+    form.default {
+      margin: 0;
+      display: inline;
+    }
+
+    a.button,
+    button {
+      margin-bottom: 0;
+    }
+  }
 }
 
 div.warning {
@@ -702,5 +719,19 @@ div.permission-level-helptext-container {
     &.no-img {
       display: none;
     }
+  }
+}
+
+.action-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+
+  flex-wrap: wrap;
+
+  a.button {
+    margin-bottom: 0;
   }
 }

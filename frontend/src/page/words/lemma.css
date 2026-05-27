@@ -97,6 +97,19 @@ ul.quotations {
 }
 
 .cognacy-card {
+  .cognacy-error {
+    background-color: var(--background-page);
+    border: var(--border);
+    border-radius: var(--rounding);
+    padding: 1em;
+    color: var(--foreground-secondary);
+
+    .cognacy-error-detail {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+  }
+
   .cognacy-svg {
     overflow: auto;
     margin-top: 0px;

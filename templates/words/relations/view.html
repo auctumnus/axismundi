@@ -1,0 +1,88 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "words/fragments/card.html" as word_card -%}
+{%- import "words/fragments/footer.html" as word_f -%}
+
+{% block title %}{{ consequent_word.word }} {{ relation_phrasing }} {{ antecedent_word.word }} - axismundi{% endblock %}
+
+{% block head %}
+<script src="/static/components/like-button.js" type="module" defer></script>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+    <div class="header-with-actions">
+        <h2>relation</h2>
+        {% if user_has_permission && user_has_permission_on_related %}
+        <ul class="icons">
+            <li>
+                <a class="icon button gray" href="{{ action_base_url }}/edit" data-tooltip="Edit relation" aria-label="Edit relation">
+                    {% call u::icon("edit") %}
+                </a>
+            </li>
+            <li>
+                <a class="icon button gray" href="{{ action_base_url }}/flip" data-tooltip="Flip relation direction" aria-label="Flip relation direction">
+                    {% call u::icon("swap-horizontal") %}
+                </a>
+            </li>
+            <li>
+                <a class="icon button gray" href="{{ action_base_url }}/delete" data-tooltip="Delete relation" aria-label="Delete relation">
+                    {% call u::icon("delete") %}
+                </a>
+            </li>
+        </ul>
+        {% endif %}
+    </div>
+
+    <table class="metadata-table">
+        <tr>
+            <th>created</th>
+            <td>{% call u::relative(&relation.created_at) %}</td>
+        </tr>
+        {% call u::meta_creator_row(&creator) %}
+        <tr>
+            <th>relation type</th>
+            <td>{{ relation.kind }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="action-row">
+    <a class="button" href="{{ action_base_url }}/edit">
+        edit relation
+    </a>
+    <a class="button" href="{{ action_base_url }}/flip">
+        flip relation
+    </a>
+    <a class="button" href="{{ action_base_url }}/delete">
+        delete relation
+    </a>
+</div>
+
+<h2>antecedent (from)</h2>
+<ul class="card-list">
+    {% call word_card::render(&word_with_meta) %}
+    
+</ul>
+<h2>consequent (to)</h2>
+<ul class="card-list">
+    {% call word_card::render(&related_word_with_meta) %}
+</ul>
+
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations" class="breadcrumb">relations</a>
+{% endblock %}
+
+{% block footer %}
+{% call word_f::word_section(&word, &language, user_has_permission, false) %}
+{% call word_f::word_section(&related_word, &related_language, user_has_permission_on_related, false) %}
+{% endblock %}

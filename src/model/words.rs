@@ -711,6 +711,16 @@ impl WordRepository {
             return Err(bad_request("you don't have permission to delete words"));
         }
 
+        // The word_relations FK cascade cleans up rows referencing this word, but
+        // the cognacy json tree is separate state. Strip dangling edges before the
+        // delete so graph rendering doesn't break for other words in the cognacy.
+        if let Some(cognacy_id) = word.cognacy {
+            crate::model::word_relations::WordRelationRepository::remove_word_from_cognacy(
+                &mut tx, word.id, cognacy_id,
+            )
+            .await?;
+        }
+
         let result = sqlx::query!("DELETE FROM words WHERE id = $1", word.id)
             .execute(&mut *tx)
             .await?;

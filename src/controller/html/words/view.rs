@@ -56,7 +56,7 @@ struct LemmaTemplate {
     is_liked: bool,
     recent_relations: Vec<WordRelationSearchResult>,
     total_relations: i64,
-    cognacy: Option<String>,
+    cognacy: Option<Result<String, String>>,
     non_cognacy_relations: Vec<WordRelationSearchResult>,
 }
 
@@ -300,12 +300,16 @@ pub(super) async fn view_lemma(
     };
 
     let cognacy = attempt!(s, word_relations.get_leveled_cognacy(&word).await);
-    let cognacy = attempt!(
-        s,
-        cognacy
-            .map(|c| cognacy_to_svg(&c, Some(word.id)))
-            .transpose()
-    );
+    let cognacy = cognacy.map(|c| {
+        cognacy_to_svg(&c, Some(word.id)).map_err(|e| {
+            tracing::error!(
+                word_id = %word.id,
+                error = %e.message,
+                "failed to render cognacy graph",
+            );
+            e.message
+        })
+    });
 
     // Fetch recent word relations (3 most recent, with cognacy relations first)
     let (recent_relations, total_relations) = attempt!(

@@ -179,9 +179,18 @@
                 </a></li>
             </ul>
         </div>
-        <div class="cognacy-svg" data-panzoom data-panzoom-focus=".current-word">
-            {{ cognacy | safe }}
-        </div>
+        {% match cognacy %}
+            {% when Ok(svg) %}
+                <div class="cognacy-svg" data-panzoom data-panzoom-focus=".current-word">
+                    {{ svg|safe }}
+                </div>
+            {% when Err(err) %}
+                <div class="cognacy-error">
+                    <p>couldn't render the cognacy graph for this word.</p>
+                    <p class="cognacy-error-detail"><code>{{ err }}</code></p>
+                    <p>this is a bug — please report it so it can be fixed.</p>
+                </div>
+        {% endmatch %}
     </div>
 
     {% if !non_cognacy_relations.is_empty() %}
@@ -189,7 +198,7 @@
 
         <ul class="card-list">
             {% for relation in non_cognacy_relations %}
-                {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
+                {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma) %}
             {% endfor %}
         </ul>
     {% endif %}
@@ -223,7 +232,7 @@
 </div>
 <ul class="card-list">
     {% for relation in recent_relations %}
-        {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma, user_has_permission) %}
+        {% call relation_card::render(&relation, &language.code, &word.slug, word.lemma) %}
     {% endfor %}
 </ul>
 {% endif %}

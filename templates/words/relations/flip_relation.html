@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "words/fragments/footer.html" as word_f -%}
+
+{% block title %}flip relation? - {{ word.word }} - {{ language.name }} - axismundi{% endblock %}
+
+{% block content %}
+
+{% if will_create_audit_log %}
+    {% call u::audit_log_banner() %}
+{% endif %}
+
+<h1>flip relation</h1>
+
+<form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/relations/{{ related_word_language_code }}/{{ related_word.slug }}/{{ related_word.lemma }}/flip">
+    <section>
+        <p>
+            Are you sure you want to flip the direction of this relation
+            between <strong>{{ word.word }}</strong> and <strong>{{ related_word.word }}</strong>?
+        </p>
+
+        {% if is_symmetric %}
+            <p>
+                This is a symmetric relation, so flipping won't change how it
+                appears, but it will swap which word is recorded as the antecedent.
+            </p>
+        {% else %}
+            <p>
+                Currently: <strong>{{ related_word.word }}</strong>
+                {{ relation_phrasing }}
+                <strong>{{ word.word }}</strong>.
+            </p>
+            <p>
+                After flipping: <strong>{{ word.word }}</strong>
+                {{ relation_phrasing }}
+                <strong>{{ related_word.word }}</strong>.
+            </p>
+        {% endif %}
+
+        {% if is_etymological %}
+            <p>
+                Because this is an etymological relation, the cognacy graph will
+                be updated. Flipping will fail if it would create a cycle.
+            </p>
+        {% endif %}
+    </section>
+
+    <section class="button-row">
+        <button type="submit">Flip relation</button>
+    </section>
+</form>
+
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}" class="breadcrumb">{{ word.word }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call word_f::word_section(&word, &language, user_has_permission, false) %}
+{% call word_f::word_section(&related_word, &related_language, user_has_permission_on_related, false) %}
+{% endblock %}

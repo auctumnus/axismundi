@@ -665,134 +665,134 @@ impl WordRelationRepository {
 
         // if this was an etymological relation, we need to update the cognacy graph
         if CognacyRelationKindV1::try_from(relation.kind).is_ok() {
-            // get the cognacy for the antecedent
             if let Some(cognacy) = self.find_cognacy(antecedent.cognacy).await? {
                 let CognacyInner::V1(mut schema) = cognacy.inner;
-
-                // remove the edge from the schema
                 schema.edges.retain(|e| e.id != relation.id);
-
-                // check if the graph is still connected or if it split into components
-                let components = Self::find_connected_components(&schema);
-
-                if components.len() == 1 {
-                    // graph is still connected, just update the cognacy
-                    sqlx::query!(
-                        r#"
-                            UPDATE cognacies
-                            SET tree = $1
-                            WHERE id = $2
-                        "#,
-                        serde_json::to_value(&schema).map_err(|e| bad_request(format!(
-                            "failed to serialize cognacy schema: {e}"
-                        )))?,
-                        cognacy.id,
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-
-                    // Find all words that should be in this cognacy
-                    let word_ids_in_graph: Vec<Uuid> = schema
-                        .edges
-                        .iter()
-                        .flat_map(|e| vec![e.antecedent, e.consequent])
-                        .collect::<std::collections::HashSet<_>>()
-                        .into_iter()
-                        .collect();
-
-                    // Clear cognacy for words that were in the old cognacy but are no longer in the graph
-                    sqlx::query!(
-                        r#"
-                            UPDATE words
-                            SET cognacy = NULL
-                            WHERE cognacy = $1 AND id <> ALL($2)
-                        "#,
-                        cognacy.id,
-                        &word_ids_in_graph,
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-                } else if components.is_empty() {
-                    // no edges left, delete the cognacy and clear word references
-                    sqlx::query!(
-                        r#"
-                            DELETE FROM cognacies
-                            WHERE id = $1
-                        "#,
-                        cognacy.id,
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-
-                    sqlx::query!(
-                        r#"
-                            UPDATE words
-                            SET cognacy = NULL
-                            WHERE cognacy = $1
-                        "#,
-                        cognacy.id,
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-                } else {
-                    // graph split into multiple components, create new cognacies
-                    for component_edges in components {
-                        let new_schema = CognacySchemaV1 {
-                            edges: component_edges.clone(),
-                            schema_version: 1,
-                        };
-
-                        let new_cognacy_id = sqlx::query_scalar!(
-                            r#"
-                                INSERT INTO cognacies (tree, schema_version)
-                                VALUES ($1, $2)
-                                RETURNING id
-                            "#,
-                            serde_json::to_value(&new_schema).map_err(|e| bad_request(format!(
-                                "failed to serialize cognacy schema: {e}"
-                            )))?,
-                            new_schema.schema_version,
-                        )
-                        .fetch_one(&mut *tx)
-                        .await?;
-
-                        // collect all word IDs in this component
-                        let word_ids: Vec<Uuid> = component_edges
-                            .iter()
-                            .flat_map(|e| vec![e.antecedent, e.consequent])
-                            .collect::<std::collections::HashSet<_>>()
-                            .into_iter()
-                            .collect();
-
-                        // update words in this component to point to the new cognacy
-                        sqlx::query!(
-                            r#"
-                                UPDATE words
-                                SET cognacy = $1
-                                WHERE id = ANY($2)
-                            "#,
-                            new_cognacy_id,
-                            &word_ids,
-                        )
-                        .execute(&mut *tx)
-                        .await?;
-                    }
-
-                    // delete the old cognacy
-                    sqlx::query!(
-                        r#"
-                            DELETE FROM cognacies
-                            WHERE id = $1
-                        "#,
-                        cognacy.id,
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-                }
+                Self::persist_cognacy_after_edit(&mut tx, cognacy.id, schema).await?;
             }
         }
 
         tx.commit().await?;
+        Ok(())
+    }
+
+    /// Remove every cognacy edge referencing `word_id` from the cognacy graph and
+    /// persist the resulting schema. Splits, shrinks, or deletes the cognacy as
+    /// needed. Called when a word is deleted, since the `word_relations` FK
+    /// cascade does not touch the cognacy json tree.
+    pub async fn remove_word_from_cognacy(
+        tx: &mut Transaction<'_, Postgres>,
+        word_id: Uuid,
+        cognacy_id: Uuid,
+    ) -> AppResult<()> {
+        let cognacy = sqlx::query_as::<_, DBCognacy>("SELECT * FROM cognacies WHERE id = $1")
+            .bind(cognacy_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+
+        let Some(cognacy) = cognacy else {
+            return Ok(());
+        };
+
+        if cognacy.schema_version != 1 {
+            return Err(bad_request("unsupported cognacy schema version"));
+        }
+
+        let mut schema: CognacySchemaV1 = serde_json::from_value(cognacy.tree)
+            .map_err(|e| bad_request(format!("failed to parse cognacy schema: {e}")))?;
+
+        schema
+            .edges
+            .retain(|e| e.antecedent != word_id && e.consequent != word_id);
+
+        Self::persist_cognacy_after_edit(tx, cognacy.id, schema).await
+    }
+
+    /// Persist a cognacy schema after some edges have been removed. Handles three
+    /// cases: graph remains connected (update), graph empty (delete), graph split
+    /// into multiple components (create new cognacies, delete original). In every
+    /// case, words no longer in any edge get their `cognacy` pointer cleared.
+    async fn persist_cognacy_after_edit(
+        tx: &mut Transaction<'_, Postgres>,
+        cognacy_id: Uuid,
+        schema: CognacySchemaV1,
+    ) -> AppResult<()> {
+        let components = Self::find_connected_components(&schema);
+
+        if components.is_empty() {
+            sqlx::query!("DELETE FROM cognacies WHERE id = $1", cognacy_id)
+                .execute(&mut **tx)
+                .await?;
+
+            sqlx::query!(
+                "UPDATE words SET cognacy = NULL WHERE cognacy = $1",
+                cognacy_id,
+            )
+            .execute(&mut **tx)
+            .await?;
+        } else if components.len() == 1 {
+            sqlx::query!(
+                "UPDATE cognacies SET tree = $1 WHERE id = $2",
+                serde_json::to_value(&schema)
+                    .map_err(|e| bad_request(format!("failed to serialize cognacy schema: {e}")))?,
+                cognacy_id,
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            let word_ids_in_graph: Vec<Uuid> = schema
+                .edges
+                .iter()
+                .flat_map(|e| [e.antecedent, e.consequent])
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            sqlx::query!(
+                "UPDATE words SET cognacy = NULL WHERE cognacy = $1 AND id <> ALL($2)",
+                cognacy_id,
+                &word_ids_in_graph,
+            )
+            .execute(&mut **tx)
+            .await?;
+        } else {
+            for component_edges in components {
+                let new_schema = CognacySchemaV1 {
+                    edges: component_edges.clone(),
+                    schema_version: 1,
+                };
+
+                let new_cognacy_id = sqlx::query_scalar!(
+                    "INSERT INTO cognacies (tree, schema_version) VALUES ($1, $2) RETURNING id",
+                    serde_json::to_value(&new_schema).map_err(|e| bad_request(format!(
+                        "failed to serialize cognacy schema: {e}"
+                    )))?,
+                    new_schema.schema_version,
+                )
+                .fetch_one(&mut **tx)
+                .await?;
+
+                let word_ids: Vec<Uuid> = component_edges
+                    .iter()
+                    .flat_map(|e| [e.antecedent, e.consequent])
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
+
+                sqlx::query!(
+                    "UPDATE words SET cognacy = $1 WHERE id = ANY($2)",
+                    new_cognacy_id,
+                    &word_ids,
+                )
+                .execute(&mut **tx)
+                .await?;
+            }
+
+            sqlx::query!("DELETE FROM cognacies WHERE id = $1", cognacy_id)
+                .execute(&mut **tx)
+                .await?;
+        }
+
         Ok(())
     }
 
@@ -1008,6 +1008,159 @@ impl WordRelationRepository {
                 .await?;
             }
         }
+
+        tx.commit().await?;
+
+        Ok(updated_relation)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub async fn flip(
+        &self,
+        requestor: &User,
+        antecedent: &Word,
+        consequent: &Word,
+    ) -> AppResult<WordRelation> {
+        use crate::model::audit_log::{AuditActionType, AuditableResource, PermissionCheck};
+        use crate::model::language_permissions::CheckPermissionReq;
+
+        ensure_verified(requestor)?;
+
+        crate::model::user_bans::UserBanRepository::new(self.state.clone())
+            .ensure_not_banned(requestor.id)
+            .await?;
+
+        let existing_relation = self.find_relation(antecedent, consequent).await?;
+
+        let mut tx = self.state.pool.begin().await?;
+
+        let permissions = LanguagePermissionRepository::new(self.state.clone());
+
+        let ante_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: antecedent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: existing_relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "antecedent",
+                        "word_id": antecedent.id,
+                        "language_id": antecedent.language,
+                        "flipped": true,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        let cons_perm = permissions
+            .check_permission_with_audit(
+                CheckPermissionReq {
+                    user: requestor.id,
+                    language: consequent.language,
+                    required_level: PermissionLevel::Editor,
+                    action_type: AuditActionType::Updated,
+                    resource_type: AuditableResource::WordRelation,
+                    resource_id: existing_relation.id,
+                    context: Some(serde_json::json!({
+                        "role": "consequent",
+                        "word_id": consequent.id,
+                        "language_id": consequent.language,
+                        "flipped": true,
+                    })),
+                },
+                &mut tx,
+            )
+            .await?;
+
+        if ante_perm == PermissionCheck::NoPermission || cons_perm == PermissionCheck::NoPermission
+        {
+            return Err(bad_request(
+                "you don't have permission to edit word relations for this language",
+            ));
+        }
+
+        if let Ok(cognacy_kind) = CognacyRelationKindV1::try_from(existing_relation.kind) {
+            if let Some(cognacy) = self.find_cognacy(antecedent.cognacy).await? {
+                let CognacyInner::V1(mut schema) = cognacy.inner;
+
+                schema.edges.retain(|e| e.id != existing_relation.id);
+
+                // ensure the flipped edge (consequent -> antecedent) doesn't introduce
+                // a cycle: starting from the new edge's consequent (antecedent.id) we
+                // must not be able to reach the new edge's antecedent (consequent.id).
+                let mut adjacency_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+                for e in &schema.edges {
+                    adjacency_list
+                        .entry(e.antecedent)
+                        .or_default()
+                        .push(e.consequent);
+                }
+                adjacency_list
+                    .entry(consequent.id)
+                    .or_default()
+                    .push(antecedent.id);
+
+                let mut visited = HashMap::new();
+                if crate::util::dfs(
+                    &adjacency_list,
+                    antecedent.id,
+                    consequent.id,
+                    &mut visited,
+                ) {
+                    return Err(bad_request(
+                        "flipping this relation would create a cycle in the cognacy graph",
+                    ));
+                }
+
+                schema.edges.push(CognacyEdgeV1 {
+                    id: existing_relation.id,
+                    antecedent: consequent.id,
+                    consequent: antecedent.id,
+                    kind: cognacy_kind,
+                });
+
+                sqlx::query!(
+                    r#"
+                        UPDATE cognacies
+                        SET tree = $1
+                        WHERE id = $2
+                    "#,
+                    serde_json::to_value(&schema).map_err(|e| bad_request(format!(
+                        "failed to serialize cognacy schema: {e}"
+                    )))?,
+                    cognacy.id,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+
+        let updated_relation = sqlx::query_as!(
+            WordRelation,
+            r#"
+                UPDATE word_relations
+                SET antecedent = $2, consequent = $1, updated_by = $3, updated_at = CURRENT_TIMESTAMP
+                WHERE antecedent = $1 AND consequent = $2
+                RETURNING id, antecedent, consequent, kind as "kind: WordRelationType", created_at, updated_at, created_by, updated_by
+            "#,
+            antecedent.id,
+            consequent.id,
+            requestor.id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            if let sqlx::Error::Database(db_err) = &e {
+                if db_err.constraint() == Some("word_relations_antecedent_consequent_unique") {
+                    return bad_request("a relation in the flipped direction already exists");
+                }
+            }
+            e.into()
+        })?;
 
         tx.commit().await?;
 
