@@ -178,7 +178,7 @@ in
         }
         // optionalAttrs cfg.lexurgy.enable {
           axismundi-lexurgy = {
-            image = "ghcr.io/auctumnus/lexurgy-services:latest";
+            image = "ghcr.io/auctumnus/lauturgie:latest";
             autoStart = true;
             environment = {
               SINGLE_STEP_TIMEOUT = "1";
