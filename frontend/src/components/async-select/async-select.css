@@ -101,7 +101,10 @@
 }
 
 .async-select__menu-portal {
-  z-index: 100;
+  /* the menu portals to <body>, so it must outrank modal stacking contexts
+     (.modal-container is z-index 150, --z-modal is 200) or it paints behind
+     the modal when used inside one (e.g. the quotations editor) */
+  z-index: calc(var(--z-modal) + 50);
 }
 
 .async-select__menu {
