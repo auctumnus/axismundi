@@ -143,18 +143,14 @@ pub async fn swap_definitions(
 
 pub async fn delete_definition(
     s: Session,
-    Path((code, slug, lemma, _id)): Path<(String, String, i32, Uuid)>,
-    languages: LanguageRepository,
-    words: WordRepository,
+    Path((_code, _slug, _lemma, id)): Path<(String, String, i32, Uuid)>,
+    definitions: DefinitionRepository,
 ) -> ApiResponse<StatusCode> {
     let Some(requestor) = s.user() else {
         return Err(unauthorized_no_session());
     };
 
-    let language = languages.find_by_code(&code).await?;
-    words
-        .delete_by_lemma(requestor, language.id, &slug, lemma)
-        .await?;
+    definitions.delete(requestor, id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -501,37 +497,61 @@ mod tests {
             word,
         } = ctx;
 
-        let body = json!({
-            "definition": "A test definition",
-            "context": "Used in testing scenarios",
-        });
-
         let code = language["code"].as_str().unwrap();
         let slug = word.get("slug").unwrap().as_str().unwrap();
         let lemma = word.get("lemma").unwrap().as_i64().unwrap();
 
+        // Create two definitions so we can verify deleting one leaves the word
+        // (and its other definition) intact.
         let request = post(
             &token,
             &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
-            body,
+            json!({ "definition": "first definition" }),
+        )
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let first = crate::tests::response_to_value(response.into_body()).await;
+        let first_id = first["id"].as_str().unwrap().to_string();
+
+        let request = post(
+            &token,
+            &format!("languages/{}/words/{}/{}/definitions", code, slug, lemma),
+            json!({ "definition": "second definition" }),
         )
         .await;
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = crate::tests::response_to_value(response.into_body()).await;
-
-        let definition_id = body["id"].as_str().unwrap();
-
+        // Delete only the first definition.
         let request = delete(
             &token,
             &format!(
                 "languages/{}/words/{}/{}/definitions/{}",
-                code, slug, lemma, definition_id
+                code, slug, lemma, first_id
             ),
         );
         let response = app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // The word must still exist (regression: deleting a definition used to
+        // delete the whole word).
+        let request = get(&format!("languages/{}/words/{}/{}", code, slug, lemma)).await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Exactly the second definition should remain.
+        let request = get(&format!(
+            "languages/{}/words/{}/{}/definitions",
+            code, slug, lemma
+        ))
+        .await;
+        let response = app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["definition"], "second definition");
     }
 
     #[tokio::test]

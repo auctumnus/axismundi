@@ -460,6 +460,7 @@ pub(super) async fn new_word_submit(
         notes: form.notes.clone(),
         extra: None,
         categories: Some(form.categories.clone()),
+        definitions: None,
     };
 
     let result = create_word_and_definitions(

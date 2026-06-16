@@ -298,6 +298,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_word_with_inline_definitions() {
+        let mut ctx = create_test_context().await;
+        let lang_code = ctx.language["code"].as_str().unwrap().to_string();
+
+        let body = json!({
+            "word_class": "n",
+            "word": "inlinedefs",
+            "definitions": [
+                { "definition": "first gloss" },
+                { "definition": "second gloss", "context": "formal" },
+            ],
+        });
+
+        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+        let response = ctx.app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // The definitions should have been created in order, in the same request.
+        let request = get(&format!(
+            "languages/{lang_code}/words/inlinedefs/1/definitions"
+        ))
+        .await;
+        let response = ctx.app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["definition"], "first gloss");
+        assert_eq!(items[0]["position"], 0);
+        assert_eq!(items[1]["definition"], "second gloss");
+        assert_eq!(items[1]["context"], "formal");
+        assert_eq!(items[1]["position"], 1);
+    }
+
+    #[tokio::test]
     async fn test_create_word_unauthorized() {
         let mut app = crate::tests::test_app().await.unwrap();
 

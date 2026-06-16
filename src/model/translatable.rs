@@ -970,7 +970,15 @@ impl TranslatableRepository {
 #[template(path = "translatables/fragments/query.html")]
 pub struct TranslatableSearch {
     pub q: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_string"
+    )]
     pub source_language: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_string"
+    )]
     pub created_by: Option<String>,
     #[serde(
         default,

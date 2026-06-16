@@ -1056,6 +1056,7 @@ mod tests {
                     notes: Some("test notes".to_string()),
                     extra: None,
                     categories: None,
+                    definitions: None,
                 },
             )
             .await
@@ -1220,6 +1221,7 @@ mod tests {
                     notes: Some("test notes".to_string()),
                     extra: None,
                     categories: None,
+                    definitions: None,
                 },
             )
             .await
@@ -1403,6 +1405,7 @@ mod tests {
                     notes: Some("test notes".to_string()),
                     extra: None,
                     categories: None,
+                    definitions: None,
                 },
             )
             .await

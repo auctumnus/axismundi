@@ -810,7 +810,8 @@ impl LanguageFamilyMemberRepository {
                 LEFT JOIN languages pl ON pl.id = pmpl.language_id
                 WHERE
                 ($1::TEXT IS NULL OR lf.code = $1)
-                AND (($2::TEXT IS NULL OR pl.code = $2) OR ($3::TEXT IS NULL OR l.code = $3))
+                AND ($2::TEXT IS NULL OR pl.code = $2)
+                AND ($3::TEXT IS NULL OR l.code = $3)
                 AND ($4::language_family_relation_type IS NULL OR lfm.relation_type = $4)
                 AND ($8::UUID IS NULL OR lfm.parent_member_id = $8)
                 ORDER BY (
@@ -855,13 +856,16 @@ impl LanguageFamilyMemberRepository {
                 LEFT JOIN languages pl ON pl.id = pmpl.language_id
                 WHERE
                 ($1::TEXT IS NULL OR lf.code = $1)
-                AND (($2::TEXT IS NULL OR pl.code = $2) OR ($3::TEXT IS NULL OR l.code = $3))
+                AND ($2::TEXT IS NULL OR pl.code = $2)
+                AND ($3::TEXT IS NULL OR l.code = $3)
                 AND ($4::language_family_relation_type IS NULL OR lfm.relation_type = $4)
+                AND ($5::UUID IS NULL OR lfm.parent_member_id = $5)
             "#,
             query.family_code,
             query.parent_language_code,
             query.language_code,
             query.relation_type as Option<LanguageFamilyRelationType>,
+            query.parent_member_id,
         )
         .fetch_one(&self.state.pool);
 

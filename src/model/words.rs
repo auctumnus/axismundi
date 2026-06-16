@@ -70,6 +70,12 @@ pub struct CreateWord {
 
     #[serde(default)]
     pub categories: Option<Vec<String>>,
+
+    /// Optional definitions to create alongside the word, in order. Lets a word
+    /// and its glosses be created in a single request (and a single
+    /// transaction) instead of one call per definition.
+    #[serde(default)]
+    pub definitions: Option<Vec<crate::model::definitions::CreateDefinition>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -406,6 +412,19 @@ impl WordRepository {
         crate::model::contribution_stats::ContributionStatsRepository::new(self.state.clone())
             .increment_word_count(&language, &requestor.id, tx)
             .await?;
+
+        // Create any inline definitions in the same transaction, in order. We
+        // use the silent variant because the word creation above already
+        // verified permission and (when not silent) emitted the audit entry.
+        if let Some(definitions) = word.definitions {
+            let definition_repo =
+                crate::model::definitions::DefinitionRepository::new(self.state.clone());
+            for definition in definitions {
+                definition_repo
+                    .create_with_tx_silent(requestor, word_result.id, language, definition, tx)
+                    .await?;
+            }
+        }
 
         Ok(word_result.id)
     }
@@ -1504,6 +1523,7 @@ mod tests {
                     notes: Some("test notes".to_string()),
                     extra: None,
                     categories: None,
+                    definitions: None,
                 },
             )
             .await
@@ -1601,6 +1621,7 @@ mod tests {
                     notes: Some("test notes".to_string()),
                     extra: None,
                     categories: None,
+                    definitions: None,
                 },
             )
             .await
@@ -1720,6 +1741,7 @@ mod tests {
                     notes: Some("test notes".to_string()),
                     extra: None,
                     categories: None,
+                    definitions: None,
                 },
             )
             .await

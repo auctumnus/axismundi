@@ -251,6 +251,20 @@ where
         .map_err(serde::de::Error::custom)
 }
 
+/// Deserialize an optional form string, treating empty/whitespace-only values
+/// as `None`. HTML forms submit unset text fields as `""` rather than omitting
+/// them, so a plain `Option<String>` ends up as `Some("")` which is rarely what
+/// a filter wants.
+pub fn deserialize_optional_form_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    Ok(opt
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty()))
+}
+
 pub fn strip(text: &str) -> String {
     ammonia::Builder::empty().clean(text).to_string()
 }

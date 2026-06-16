@@ -645,6 +645,7 @@ async fn process_row(
         notes: parsed.notes,
         extra: None,
         categories: Some(categories),
+        definitions: None,
     };
 
     // Silent variants: the import emits a single summary audit log entry after
