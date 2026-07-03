@@ -272,7 +272,11 @@ pub fn strip(text: &str) -> String {
 pub fn first_sentence(text: &str) -> String {
     let text = render_md(text).unwrap_or_default();
     let text = strip(&text);
-    text.split_at(200.min(text.len())).0.to_string()
+    let mut end = 200.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_string()
 }
 
 pub fn serialize_search<T: Serialize>(pagination: &PaginatedRequest, query: T) -> String {
