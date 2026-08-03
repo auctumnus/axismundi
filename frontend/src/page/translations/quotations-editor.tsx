@@ -1094,19 +1094,53 @@ const getQuotations = (editor: Editor): QuotationPossiblyNew[] => {
 };
 
 const getTextValue = (editor: Editor): string => {
-  const getText = (children: Descendant[]): string =>
-    children.reduce((text, node) => {
-      if (node.type === "paragraph") {
-        return text + getText(node.children) + "\n\n";
-      }
-      return text + node.text;
-    }, "");
+  const getText = (node: Descendant): string =>
+    node.type === "paragraph" ? node.children.map(getText).join("") : node.text;
 
-  return getText(editor.children);
+  // the document is kept to a single paragraph (see withSingleParagraph), so
+  // line breaks are plain newlines inside the text
+  return editor.children.map(getText).join("\n");
+};
+
+// the translated text is a plain string, so the editor keeps everything in one
+// paragraph and stores line breaks as newlines in the text itself. this keeps
+// the text we submit identical to what was loaded, and keeps quotation offsets
+// lined up with it.
+const withSingleParagraph = (editor: Editor): Editor => {
+  const { normalizeNode } = editor;
+
+  editor.insertBreak = () => {
+    editor.insertText("\n");
+  };
+
+  editor.normalizeNode = (entry, options) => {
+    const [node] = entry;
+
+    // pasting multiline text splits the paragraph; stitch it back together with
+    // a newline where the split was
+    if (Editor.isEditor(node) && node.children.length > 1) {
+      const first = node.children[0];
+      if (first && Element.isElement(first)) {
+        Transforms.insertNodes(
+          editor,
+          { type: "text", text: "\n" },
+          { at: [0, first.children.length] },
+        );
+        Transforms.mergeNodes(editor, { at: [1] });
+        return;
+      }
+    }
+
+    normalizeNode(entry, options);
+  };
+
+  return editor;
 };
 
 const QuotationsEditor = (props: QuotationsEditorProps) => {
-  const [editor] = useState(() => withHistory(withReact(createEditor())));
+  const [editor] = useState(() =>
+    withSingleParagraph(withHistory(withReact(createEditor()))),
+  );
   const [editorState, dispatch] = useReducer(applyAction, editorInitialState);
   const initial = initialValue(props);
   const [quotations, sq] = useState<QuotationPossiblyNew[]>(props.quotations);
