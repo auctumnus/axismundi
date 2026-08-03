@@ -3,9 +3,10 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::Cookie;
 
 use crate::model::{
-    sessions::{SessionObj, SessionRepository},
+    sessions::{SESSION_LENGTH, SessionObj, SessionRepository},
     users::User,
 };
 
@@ -29,6 +30,18 @@ impl Session {
 }
 
 pub const SESSION_COOKIE_NAME: &str = "session_token";
+
+/// Builds the session cookie. `max_age` matters: without it the browser treats
+/// this as a session cookie and drops it when the browser closes, no matter how
+/// long the server-side session is good for.
+pub fn session_cookie(token: String) -> Cookie<'static> {
+    Cookie::build((SESSION_COOKIE_NAME, token))
+        .path("/")
+        .http_only(true)
+        .secure(true)
+        .max_age(time::Duration::seconds(SESSION_LENGTH.num_seconds()))
+        .build()
+}
 
 fn token_from_header(parts: &Parts) -> Option<String> {
     parts

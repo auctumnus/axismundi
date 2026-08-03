@@ -35,7 +35,7 @@ use crate::{
     pagination::PaginatedRequest,
     util::{
         AppState, BackQuery, EmptyTemplate,
-        extract_session::{SESSION_COOKIE_NAME, Session},
+        extract_session::{SESSION_COOKIE_NAME, Session, session_cookie},
         is_discord,
         s3::{MAX_UPLOAD_SIZE, S3, multipart_read_error},
         search_template::{SearchTemplateArgs, make_search_layout},
@@ -122,12 +122,7 @@ async fn login_submit(
 ) -> (CookieJar, (StatusCode, Response)) {
     match sessions.login(&form.email, &form.password).await {
         Ok((token, _)) => {
-            let jar = jar.add(
-                Cookie::build((SESSION_COOKIE_NAME, token.clone()))
-                    .path("/")
-                    .http_only(true)
-                    .secure(true),
-            );
+            let jar = jar.add(session_cookie(token.clone()));
 
             let redirect = if ALLOWED_REDIRECTS.contains(&query.redirect.as_deref().unwrap_or("")) {
                 Redirect::to(&format!("/{}", query.redirect.as_deref().unwrap()))

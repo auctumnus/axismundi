@@ -1,10 +1,10 @@
 use crate::{
     err::{AppResult, unauthorized_no_session},
     model::sessions::{SessionObj, SessionRepository},
-    util::extract_session::{SESSION_COOKIE_NAME, Session},
+    util::extract_session::{Session, session_cookie},
 };
 use axum::Json;
-use axum_extra::extract::{CookieJar, cookie::Cookie};
+use axum_extra::extract::CookieJar;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -37,12 +37,7 @@ pub async fn login(
         .login(&credentials.email, &credentials.password)
         .await
         .map(|(token, session)| {
-            let jar = jar.add(
-                Cookie::build((SESSION_COOKIE_NAME, token.clone()))
-                    .path("/")
-                    .http_only(true)
-                    .secure(true),
-            );
+            let jar = jar.add(session_cookie(token.clone()));
             let response = Json(LoginResponse {
                 token,
                 expires_at: session.expires_at,

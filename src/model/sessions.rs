@@ -24,7 +24,7 @@ pub struct SessionRepository {
     state: AppState,
 }
 
-const SESSION_LENGTH: Duration = Duration::days(30);
+pub const SESSION_LENGTH: Duration = Duration::days(90);
 
 const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$jQqBDrgAdo78QFToYmez0w$X30JfwfGVY+VfGN2xgJvUMLY4oXuXoHiC3+AXJBLg7w";
 
