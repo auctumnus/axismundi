@@ -180,12 +180,7 @@ async fn new_word_class_submit(
         .await
         .unwrap_or(false);
 
-    // Treat empty notes as None
-    let notes = if form.notes.trim().is_empty() {
-        None
-    } else {
-        Some(form.notes.clone())
-    };
+    let notes = form.notes.trim().to_string();
 
     match word_classes
         .create(
@@ -194,7 +189,7 @@ async fn new_word_class_submit(
             CreateWordClass {
                 name: form.name.clone(),
                 abbreviation: form.abbreviation.clone(),
-                notes,
+                notes: Some(notes),
             },
         )
         .await
@@ -400,12 +395,9 @@ async fn edit_word_class_submit(
         .await
         .unwrap_or(false);
 
-    // Treat empty notes as None for comparison
-    let form_notes = if form.notes.trim().is_empty() {
-        None
-    } else {
-        Some(form.notes.clone())
-    };
+    // An empty textarea is the empty string, not None: None means "leave unchanged",
+    // so folding empty to None would make clearing the notes impossible.
+    let form_notes = form.notes.trim().to_string();
 
     let updates = UpdateWordClass {
         name: if form.name == word_class.name {
@@ -418,10 +410,10 @@ async fn edit_word_class_submit(
         } else {
             Some(form.abbreviation.clone())
         },
-        notes: if form_notes.as_deref().unwrap_or("") == word_class.notes {
+        notes: if form_notes == word_class.notes {
             None
         } else {
-            form_notes
+            Some(form_notes)
         },
     };
 

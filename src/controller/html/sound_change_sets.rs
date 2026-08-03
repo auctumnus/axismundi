@@ -582,11 +582,7 @@ async fn new_submit(
         return (StatusCode::BAD_REQUEST, render_template(template));
     }
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     match sets
         .create_for_language(
@@ -594,7 +590,7 @@ async fn new_submit(
             &language,
             NewSoundChangeSet {
                 name: form.name.clone(),
-                description,
+                description: Some(description),
                 changes: String::new(),
             },
         )
@@ -691,11 +687,7 @@ async fn edit_meta_submit(
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     let updates = UpdateSoundChangeSet {
         name: if form.name == set.name {
@@ -703,10 +695,10 @@ async fn edit_meta_submit(
         } else {
             Some(form.name.clone())
         },
-        description: if description.as_deref().unwrap_or("") == set.description {
+        description: if description == set.description {
             None
         } else {
-            description
+            Some(description)
         },
         changes: None,
     };
@@ -1172,15 +1164,11 @@ async fn save_to_new_submit(
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     let new_set = NewSoundChangeSet {
         name: form.name.clone(),
-        description,
+        description: Some(description),
         changes: form.changes.clone(),
     };
 
@@ -1654,11 +1642,7 @@ async fn new_for_member_submit(
         return (StatusCode::BAD_REQUEST, render_template(template));
     }
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     match sets
         .create_for_member(
@@ -1666,7 +1650,7 @@ async fn new_for_member_submit(
             &member.member,
             NewSoundChangeSet {
                 name: form.name.clone(),
-                description,
+                description: Some(description),
                 changes: String::new(),
             },
         )
@@ -1754,11 +1738,7 @@ async fn edit_meta_for_member_submit(
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_family(&state, &user, member.family.id).await;
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     let updates = UpdateSoundChangeSet {
         name: if form.name == set.name {
@@ -1766,10 +1746,10 @@ async fn edit_meta_for_member_submit(
         } else {
             Some(form.name.clone())
         },
-        description: if description.as_deref().unwrap_or("") == set.description {
+        description: if description == set.description {
             None
         } else {
-            description
+            Some(description)
         },
         changes: None,
     };

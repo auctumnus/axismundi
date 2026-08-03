@@ -493,11 +493,7 @@ async fn new_phonology_table_submit(
         }
     };
 
-    let description = if form.description.trim().is_empty() {
-        None
-    } else {
-        Some(form.description.clone())
-    };
+    let description = form.description.trim().to_string();
 
     match phonology_tables
         .create(
@@ -505,7 +501,7 @@ async fn new_phonology_table_submit(
             CreatePhonologyTable {
                 language_id: language.id,
                 name: form.name.clone(),
-                description,
+                description: Some(description),
                 body: body.clone(),
             },
         )

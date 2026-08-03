@@ -21,10 +21,18 @@ fn validate_external_url(url: &str) -> Result<(), validator::ValidationError> {
     Ok(())
 }
 
+/// `source_url` is `not null default ''`, so the empty string — not None — is the
+/// "no source url" state. Keep `Some("")` intact: folding it to None would mean
+/// "leave unchanged" to the COALESCE in `update`, making the field impossible to clear.
 fn sanitize_source_url(url: Option<String>) -> AppResult<Option<String>> {
-    url.filter(|u| !u.is_empty())
-        .map(|u| sanitize_external_url(&u).map_err(|e| bad_request(e.to_string())))
-        .transpose()
+    url.map(|u| {
+        if u.is_empty() {
+            Ok(u)
+        } else {
+            sanitize_external_url(&u).map_err(|e| bad_request(e.to_string()))
+        }
+    })
+    .transpose()
 }
 
 fn is_staff(user: Option<&User>) -> bool {

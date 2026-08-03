@@ -190,11 +190,7 @@ async fn new_word_category_submit(
         .await
         .unwrap_or(false);
 
-    let notes = if form.notes.trim().is_empty() {
-        None
-    } else {
-        Some(form.notes.clone())
-    };
+    let notes = form.notes.trim().to_string();
 
     match word_categories
         .create(
@@ -203,7 +199,7 @@ async fn new_word_category_submit(
             CreateWordCategory {
                 name: form.name.clone(),
                 abbreviation: form.abbreviation.clone(),
-                notes,
+                notes: Some(notes),
             },
         )
         .await
@@ -433,11 +429,9 @@ async fn edit_word_category_submit(
         .await
         .unwrap_or(false);
 
-    let form_notes = if form.notes.trim().is_empty() {
-        None
-    } else {
-        Some(form.notes.clone())
-    };
+    // An empty textarea is the empty string, not None: None means "leave unchanged",
+    // so folding empty to None would make clearing the notes impossible.
+    let form_notes = form.notes.trim().to_string();
 
     let updates = UpdateWordCategory {
         name: if form.name == word_category.name {
@@ -450,10 +444,10 @@ async fn edit_word_category_submit(
         } else {
             Some(form.abbreviation.clone())
         },
-        notes: if form_notes.as_deref().unwrap_or("") == word_category.notes {
+        notes: if form_notes == word_category.notes {
             None
         } else {
-            form_notes
+            Some(form_notes)
         },
     };
 
