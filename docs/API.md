@@ -1,985 +1,222 @@
-# API Documentation
+# Axis Mundi API
 
-all endpoints are prefixed with `/api/`
+All endpoints are served below `/api`. This reference is generated from the
+routes registered in `src/controller/api`.
 
-## Pagination
+## Conventions
 
-pagination is offset-based. your query params should look like:
+### Authentication
 
-```typescript
-{
-    "limit": 100,
-    "offset": 0
-}
-```
+Use either `Authorization: Bearer <token>` or the `session` cookie created by
+`POST /sessions`. “Auth” in the tables requires a valid session; the server
+also enforces the stated ownership, editor, moderator, or administrator role.
+Some writes also require a verified email address.
 
-responses include:
+### Pagination and errors
+
+List endpoints use `limit` and `offset`. The default limit is 10; it must be
+1–100, and offset must be non-negative.
 
 ```json
-{
-  "items": [...],
-  "total": 123,
-  "offset": 0,
-  "limit": 100,
-  "has_more": true
-}
-```
-
-## Search
-
-search will usually take a `q` query param for text search over text fields
-
-## Users
-
-### Get User
-```
-GET /api/users/{username}
-```
-
-retrieves a user by username. public endpoint.
-
-**Response**
-```json
-{
-  "username": "example",
-  "display_name": "Example User",
-  "description": "...",
-  "pronouns": "they/them",
-  "gender": "ff00ff",
-  "profile_picture_url": "https://...",
-  "bookmark": "slug-here",
-  "created_at": "2025-10-20T12:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z"
-}
-```
-
-note: sensitive fields like `id`, `email`, and `password_hash` are not exposed
-
-### List/Search Users
-```
-GET /api/users
-```
-
-lists all users with optional search filters. supports offset-based pagination. public endpoint.
-
-**Query Parameters**
-- `q` (optional): search text for fuzzy matching on username and description
-- `limit` (optional): number of results per page (default 100)
-- `offset` (optional): pagination offset (default 0)
-
-**Response**
-```json
-{
-  "items": [
-    {
-      "username": "example",
-      "display_name": "Example User",
-      "description": "...",
-      "pronouns": "they/them",
-      "gender": "ff00ff",
-      "profile_picture_url": "https://...",
-      "bookmark": "slug-here",
-      "created_at": "2025-10-20T12:00:00Z",
-      "updated_at": "2025-10-21T12:00:00Z"
-    }
-  ],
-  "total": 123,
-  "offset": 0,
-  "limit": 100,
-  "has_more": true
-}
-```
-
-### Create User
-```
-POST /api/users
-```
-
-creates a new user account. rate limited.
-
-**Request Body**
-```json
-{
-  "username": "example",
-  "email": "user@example.com",
-  "password": "MyVerySecureAndUniquePassword2024!",
-  "display_name": "Example User (optional)",
-  "description": "This is a test user account (optional)",
-  "pronouns": "they/them (optional)",
-  "gender": "abc123 (optional)"
-}
-```
-
-**Response**
-```json
-{
-  "username": "example",
-  "display_name": "Example User",
-  "description": "...",
-  "pronouns": "they/them",
-  "gender": "abc123",
-  "profile_picture_url": null,
-  "bookmark": "slug-here",
-  "created_at": "2025-10-20T12:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z"
-}
-```
-
-**Validation**
-- username: lowercase letters, numbers, underscores, hyphens only
-- password: must be strong (minimum length, complexity requirements)
-- email: must be valid email format
-- username and email must be unique
-
-### Update User
-```
-PUT /api/users/{username}
-```
-
-updates user profile information. authenticated users only. users can only update their own profile.
-
-**Authentication**: Required
-
-**Request Body**
-```json
-{
-  "display_name": "New Display Name (optional)",
-  "description": "New description (optional)",
-  "pronouns": "new/pronouns (optional)",
-  "gender": "newcolor (optional)"
-}
-```
-
-**Response**
-```json
-{
-  "username": "example",
-  "display_name": "New Display Name",
-  "description": "New description",
-  "pronouns": "new/pronouns",
-  "gender": "newcolor",
-  "profile_picture_url": "https://...",
-  "bookmark": "slug-here",
-  "created_at": "2025-10-20T12:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z"
-}
-```
-
-### Verify User
-```
-POST /api/users/{id}/verify
-```
-
-verifies a user's email address. rate limited.
-
-**Request Body**
-```json
-{
-  "token": "verification_token",
-  "email": "user@example.com"
-}
-```
-
-**Response**
-```
-200 OK
-```
-
-### Upload Profile Picture
-```
-PUT /api/users/{username}/profile-picture
-```
-
-uploads a profile picture for the authenticated user. users can only upload their own profile picture. public endpoint (but requires authentication).
-
-**Authentication**: Required
-
-**Request**: `multipart/form-data`
-- `image`: image file (max 5MB)
-
-**Response**
-```json
-{
-  "profile_picture_url": "https://..."
-}
-```
-
-### Start Password Reset
-```
-POST /api/reset-password/start
-```
-
-initiates a password reset flow. sends an email with a reset token. rate limited.
-
-**Request Body**
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response**
-```
-200 OK
-```
-
-note: always returns 200 OK regardless of whether the email exists (security measure)
-
-### Complete Password Reset
-```
-POST /api/reset-password/complete
-```
-
-completes the password reset using the token from the email. invalidates all existing sessions. rate limited.
-
-**Request Body**
-```json
-{
-  "uuid": "user-uuid-from-email",
-  "token": "reset-token-from-email",
-  "new_password": "NewSecurePassword123!"
-}
-```
-
-**Response**
-```
-200 OK
-```
-
-## Sessions
-
-### Login
-```
-POST /api/sessions
-```
-
-creates a new session. rate limited.
-
-**Request Body**
-```json
-{
-  "email": "user@example.com",
-  "password": "MyVerySecureAndUniquePassword2024!"
-}
-```
-
-**Response**
-```json
-{
-  "token": "session_token",
-  "expires_at": "2025-10-21T12:00:00Z"
-}
-```
-
-also sets `session` cookie
-
-### Get Sessions
-```
-GET /api/sessions
-```
-
-retrieves all sessions for the authenticated user
-
-**Authentication**: Required
-
-**Response**
-```json
-[
-  {
-    "id": "session_id",
-    "expires_at": "2025-10-21T12:00:00Z",
-    "created_at": "2025-10-20T12:00:00Z"
-  }
-]
-```
-
-## Bookmarks
-
-bookmarks are permanent identifiers for resources that can change their slug/username/code. they allow stable linking even when the resource is renamed.
-
-### Resolve Bookmark
-```
-GET /api/bookmarks/{slug}
-```
-
-resolves a bookmark to the current resource URL. public endpoint.
-
-**Response**: `307 Temporary Redirect` to the actual resource
-
-bookmarks work for:
-- users
-- languages
-- words
-- word classes
-
-## Languages
-
-### Create Language
-
-```
-POST /api/languages
-```
-
-creates a new language. authenticated users only. the creating user becomes the owner.
-
-**Authentication**: Required
-
-**Validation**: cannot use `search` as the language code
-
-**Request Body**
-```json
-{
-  "code": "tlh",
-  "name": "Klingon",
-  "description": "warrior language from star trek (optional)"
-}
-```
-
-**Response**
-```json
-{
-  "code": "tlh",
-  "name": "Klingon",
-  "description": "warrior language from star trek",
-  "owner_username": "marc_okrand",
-  "bookmark": "slug-here",
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z"
-}
-```
-
-### Get Language by Code
-
-```
-GET /api/languages/{code}
-```
-
-retrieves details about a specific language. public endpoint.
-
-**Response**
-```json
-{
-  "code": "tlh",
-  "name": "Klingon",
-  "description": "warrior language from star trek",
-  "owner_username": "marc_okrand",
-  "bookmark": "slug-here",
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z"
-}
-```
-
-### List/Search Languages
-
-```
-GET /api/languages
-```
-
-lists all languages with optional search filters. supports offset-based pagination. public endpoint.
-
-**Query Parameters**
-- `owned_by` (optional): filter to languages owned by this username
-- `edited_by` (optional): filter to languages where this user has editor/admin/owner permissions
-- `q` (optional): search text for fuzzy matching on language name and description
-- `limit` (optional): number of results per page (default 100)
-- `offset` (optional): pagination offset (default 0)
-
-**Response**
-```json
-{
-  "items": [
-    {
-      "code": "tlh",
-      "name": "Klingon",
-      "description": "warrior language from star trek",
-      "owner_username": "marc_okrand",
-      "bookmark": "slug-here",
-      "created_at": "2025-01-01T00:00:00Z",
-      "updated_at": "2025-10-21T12:00:00Z"
-    }
-  ],
-  "total": 123,
-  "offset": 0,
-  "limit": 100,
-  "has_more": true
-}
-```
-
-### Delete Language
-
-```
-DELETE /api/languages/{code}
-```
-
-deletes a language. only the owner can delete a language.
-
-**Authentication**: Required (must be owner)
-
-**Response**: `204 No Content`
-
-### Edit Language
-
-```
-PUT /api/languages/{code}
-```
-
-updates language metadata. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Request Body**
-```json
-{
-  "code": "new-code (optional)",
-  "name": "Updated Name (optional)",
-  "description": "updated description (optional)"
-}
-```
-
-**Response**
-```json
-{
-  "code": "new-code",
-  "name": "Updated Name",
-  "description": "updated description",
-  "owner_username": "marc_okrand",
-  "bookmark": "slug-here",
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z"
-}
-```
-
-### Get Owner of Language
-
-```
-GET /api/languages/{code}/owner
-```
-
-redirects to `/api/users/{username}` for the language owner. public endpoint.
-
-**Response**: `302 Redirect`
-
-### Get Editors of Language
-
-```
-GET /api/languages/{code}/editors
-```
-
-lists all users with editor, admin, or owner permissions for this language. supports offset-based pagination. public endpoint.
-
-**Query Parameters**
-- `q` (optional): search text for fuzzy matching on username
-- `limit` (optional): number of results per page (default 100)
-- `offset` (optional): pagination offset (default 0)
-
-**Response**
-```json
-{
-  "items": [
-    {
-      "username": "editor_user",
-      "permission_level": "editor"
-    }
-  ],
-  "total": 5,
-  "offset": 0,
-  "limit": 100,
-  "has_more": false
-}
-```
-
-### Get Language Permissions
-
-```
-GET /api/languages/{code}/permissions
-```
-
-lists all permission assignments for a language. requires editor or higher permissions.
-
-**Authentication**: Required (must be at least editor)
-
-**Response**
-```json
-[
-  {
-    "username": "editor_user",
-    "permission_level": "editor",
-    "granted_at": "2025-10-01T00:00:00Z"
-  }
-]
-```
-
-### Get Permissions for User
-
-```
-GET /api/languages/{code}/permissions/{username}
-```
-
-retrieves the permission level for a specific user on this language. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Response**
-```json
-{
-  "username": "editor_user",
-  "permission_level": "editor",
-  "granted_at": "2025-10-01T00:00:00Z"
-}
-```
-
-### Edit User Permissions
-
-```
-PUT /api/languages/{code}/permissions/{username}
-```
-
-modifies the permission level of a user who already has permissions.
-
-**Authentication**: Required (must be admin or owner)
-
-**Permission Rules**:
-- owners can modify admin and editor permissions
-- admins can modify editor permissions
-- editors cannot modify permissions
-
-**Request Body**
-```json
-{
-  "permission_level": "admin"
-}
-```
-
-**Response**
-```json
-{
-  "username": "editor_user",
-  "permission_level": "admin",
-  "granted_at": "2025-10-01T00:00:00Z"
-}
-```
-
-### Delete User Permissions
-
-```
-DELETE /api/languages/{code}/permissions/{username}
-```
-
-removes a user's permissions for a language.
-
-**Authentication**: Required
-
-**Permission Rules**:
-- owners can remove admin and editor permissions
-- admins can remove editor permissions and their own permissions
-- editors can only remove their own permissions
-- owners cannot remove their own permissions
-
-**Response**: `204 No Content`
-
-### Invite User to Language
-
-```
-POST /api/languages/{code}/invites/{username}
-```
-
-creates an invitation for a user to join the language with specified permissions. owners can invite anyone, admins can invite editors.
-
-**Authentication**: Required (owner to invite admin/editor, admin to invite editor)
-
-**Validation**: denies if an invite already exists for this user or if they already have permissions
-
-**Request Body**
-```json
-{
-  "permission_level": "editor"
-}
-```
-
-**Response**
-```json
-{
-  "recipient": "invitee_username",
-  "sender": "sender_username",
-  "permissions": "editor",
-  "sent_at": "2025-10-01T00:00:00Z",
-  "accepted_at": null
-}
-```
-
-### Search Language Invites
-
-```
-GET /api/languages/{code}/invites
-```
-
-lists all invites for a language. requires editor or higher permissions.
-
-**Authentication**: Required (must be at least editor)
-
-**Query Parameters**
-- `recipient` (optional): filter by recipient username
-- `sender` (optional): filter by sender username
-- `limit` (optional): number of results per page (default 100)
-- `offset` (optional): pagination offset (default 0)
-
-**Response**
-```json
-{
-  "items": [
-    {
-      "recipient": "invitee_username",
-      "sender": "sender_username",
-      "permissions": "editor",
-      "sent_at": "2025-10-01T00:00:00Z",
-      "accepted_at": null
-    }
-  ],
-  "total": 5,
-  "offset": 0,
-  "limit": 100,
-  "has_more": false
-}
-```
-
-### View Language Invite
-
-```
-GET /api/languages/{code}/invites/{username}
-```
-
-retrieves a specific invite. only the sender, recipient, or language editors can view.
-
-**Authentication**: Required
-
-**Response**
-```json
-{
-  "recipient": "invitee_username",
-  "sender": "sender_username",
-  "permissions": "editor",
-  "sent_at": "2025-10-01T00:00:00Z",
-  "accepted_at": null
-}
-```
-
-### Delete Language Invite
-
-```
-DELETE /api/languages/{code}/invites/{username}
-```
-
-deletes/rejects an invitation. owners can delete any invite, admins can delete invites except those from the owner, recipients can reject their own invites.
-
-**Authentication**: Required
-
-**Response**: `204 No Content`
-
-### Accept Language Invite
-
-```
-POST /api/languages/{code}/accept-invite
-```
-
-accepts an invitation to join a language. only the invited user can accept.
-
-**Authentication**: Required (must be the invited user)
-
-**Response**: `200 OK` (grants the appropriate permissions and deletes the invite)
-
-### Create Word Class
-
-```
-POST /api/languages/{code}/word-classes
-```
-
-creates a new word class (part of speech) for the language. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Validation**: cannot use `search` as the abbreviation
-
-**Request Body**
-```json
-{
-  "abbreviation": "n",
-  "name": "noun",
-  "description": "person, place, thing, or idea (optional)"
-}
-```
-
-**Response**
-```json
-{
-  "abbreviation": "n",
-  "name": "noun",
-  "description": "person, place, thing, or idea",
-  "bookmark": "slug-here",
-  "created_at": "2025-10-01T00:00:00Z"
-}
-```
-
-### List/Search Word Classes
-
-```
-GET /api/languages/{code}/word-classes
-```
-
-lists all word classes for a language with optional search filters. supports offset-based pagination. public endpoint.
-
-**Query Parameters**
-- `q` (optional): search text for fuzzy matching on word class name and description
-- `limit` (optional): number of results per page (default 100)
-- `offset` (optional): pagination offset (default 0)
-
-**Response**
-```json
-{
-  "items": [
-    {
-      "abbreviation": "n",
-      "name": "noun",
-      "description": "person, place, thing, or idea",
-      "bookmark": "slug-here",
-      "created_at": "2025-10-01T00:00:00Z"
-    }
-  ],
-  "total": 10,
-  "offset": 0,
-  "limit": 100,
-  "has_more": false
-}
-```
-
-### View Word Class
-
-```
-GET /api/languages/{code}/word-classes/{abbreviation}
-```
-
-retrieves details about a specific word class. public endpoint.
-
-**Response**
-```json
-{
-  "abbreviation": "n",
-  "name": "noun",
-  "description": "person, place, thing, or idea",
-  "bookmark": "slug-here",
-  "created_at": "2025-10-01T00:00:00Z"
-}
-```
-
-### Edit Word Class
-```
-PUT /api/languages/{code}/word-classes/{abbreviation}
-```
-
-updates word class metadata. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Request Body**
-```json
-{
-  "abbreviation": "new-abbr (optional)",
-  "name": "Updated Name (optional)",
-  "description": "updated description (optional)"
-}
-```
-
-**Response**
-```json
-{
-  "abbreviation": "new-abbr",
-  "name": "Updated Name",
-  "description": "updated description",
-  "bookmark": "slug-here",
-  "created_at": "2025-10-01T00:00:00Z"
-}
-```
-
-### Delete Word Class
-
-```
-DELETE /api/languages/{code}/word-classes/{abbreviation}
-```
-
-deletes a word class. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Response**: `204 No Content`
-
-### Create Word
-
-```
-POST /api/languages/{code}/words
-```
-
-creates a new word in the language. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Request Body**
-```json
-{
-  "word": "example",
-  "word_class": "n",
-  "definition": "an illustrative instance",
-  "ipa": "/ɪɡˈzæmpəl/ (optional)",
-  "notes": "optional notes (optional)",
-  "extra": {} // optional json for custom fields
-}
-```
-
-**Response**
-```json
-{
-  "id": "uuid",
-  "language": "language-uuid",
-  "word_class": "word-class-uuid",
-  "word": "example",
-  "slug": "example",
-  "lemma": 1,
-  "definition": "an illustrative instance",
-  "ipa": "/ɪɡˈzæmpəl/",
-  "notes": "optional notes",
-  "extra": {},
-  "bookmark": "slug-here",
-  "created_at": "2025-10-01T00:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z",
-  "created_by": "user-uuid",
-  "updated_by": "user-uuid"
-}
-```
-
-note: `slug` is automatically generated from `word` using NFKC normalization. `lemma` is an auto-incrementing number per slug to handle homonyms.
-
-### Get Word
-
-```
-GET /api/languages/{code}/words/{slug}/{lemma}
-```
-
-retrieves a specific word by slug and lemma. public endpoint.
-
-**Response**
-```json
-{
-  "id": "uuid",
-  "language": "language-uuid",
-  "word_class": "word-class-uuid",
-  "word": "example",
-  "slug": "example",
-  "lemma": 1,
-  "definition": "an illustrative instance",
-  "ipa": "/ɪɡˈzæmpəl/",
-  "notes": "optional notes",
-  "extra": {},
-  "bookmark": "slug-here",
-  "created_at": "2025-10-01T00:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z",
-  "created_by": "user-uuid",
-  "updated_by": "user-uuid"
-}
-```
-
-### List/Search Words
-
-```
-GET /api/languages/{code}/words
-```
-
-lists/searches words in a language with optional filters. supports offset-based pagination. public endpoint.
-
-**Query Parameters**
-- `text_query` (optional): search text for fuzzy matching on word fields
-- `exact_slug` (optional): filter by exact slug match
-- `word_class` (optional): filter by word class abbreviation
-- `limit` (optional): number of results per page (default 100)
-- `offset` (optional): pagination offset (default 0)
-
-**Response**
-```json
-{
-  "items": [
-    {
-      "id": "uuid",
-      "language": "language-uuid",
-      "word_class": "word-class-uuid",
-      "word": "example",
-      "slug": "example",
-      "lemma": 1,
-      "definition": "an illustrative instance",
-      "ipa": "/ɪɡˈzæmpəl/",
-      "notes": "optional notes",
-      "extra": {},
-      "bookmark": "slug-here",
-      "created_at": "2025-10-01T00:00:00Z",
-      "updated_at": "2025-10-21T12:00:00Z",
-      "created_by": "user-uuid",
-      "updated_by": "user-uuid"
-    }
-  ],
-  "total": 100,
-  "offset": 0,
-  "limit": 100,
-  "has_more": true
-}
-```
-
-### Edit Word
-
-```
-PUT /api/languages/{code}/words/{slug}/{lemma}
-```
-
-updates word metadata. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Request Body**
-```json
-{
-  "word": "updated (optional)",
-  "word_class": "v (optional)",
-  "definition": "updated definition (optional)",
-  "ipa": "/ʌpˈdeɪtɪd/ (optional)",
-  "notes": "updated notes (optional)",
-  "extra": {} // optional
-}
-```
-
-**Response**
-```json
-{
-  "id": "uuid",
-  "language": "language-uuid",
-  "word_class": "word-class-uuid",
-  "word": "updated",
-  "slug": "updated",
-  "lemma": 1,
-  "definition": "updated definition",
-  "ipa": "/ʌpˈdeɪtɪd/",
-  "notes": "updated notes",
-  "extra": {},
-  "bookmark": "slug-here",
-  "created_at": "2025-10-01T00:00:00Z",
-  "updated_at": "2025-10-21T12:00:00Z",
-  "created_by": "user-uuid",
-  "updated_by": "user-uuid"
-}
-```
-
-### Delete Word
-
-```
-DELETE /api/languages/{code}/words/{slug}/{lemma}
-```
-
-deletes a word. requires editor permissions or higher.
-
-**Authentication**: Required (must be at least editor)
-
-**Response**: `204 No Content`
+{ "items": [], "total": 0, "offset": 0, "limit": 10, "has_more": false }
+```
+
+Timestamps are RFC 3339 UTC strings and IDs are UUIDs unless noted. Errors have
+plain-text bodies, not JSON envelopes. Deletes return `204 No Content` unless
+noted; `DELETE /reports/{id}` is the exception and returns `200` with JSON
+`null`.
+
+## Request bodies
+
+Fields marked optional may be omitted. Update requests change only supplied
+fields.
+
+| Resource | Create | Update |
+| --- | --- | --- |
+| User | `username`, `email`, `password`, optional `display_name`, `description`, `pronouns`, `gender` | optional `username`, `email`, `display_name`, `description`, `pronouns`, `gender`, `current_password`, `new_password` |
+| Language | `code`, `name`, optional `private` (false by default), `description` (empty by default) | optional `code`, `name`, `private`, `description` |
+| Word class/category | `name`, `abbreviation`, optional `notes` | optional `name`, `abbreviation`, `notes` |
+| Word | `word`, `word_class`, optional `ipa`, `notes`, `extra`, `categories`, `definitions` | optional `word`, `word_class`, `ipa`, `notes`, `extra`, `categories` |
+| Definition | `definition`, optional `context` | optional `definition`, `context` |
+| Translatable | `title`, `english`, optional `source_name`, `source_url`, `source_content`, `source_language`, `description`, `as_draft` | optional `title`, `english`, `source_name`, `source_url`, `source_content`, `source_language`, `description` |
+| Translation | `translated_text`, optional `translated_title`, `ipa`, `gloss`, `notes` | optional `translated_text`, `translated_title`, `ipa`, `gloss`, `notes` |
+| Quotation | `definition`, `span_start`, `span_end`, optional `highlight_start`, `highlight_end`, `notes` | optional `span_start`, `span_end`, `highlight_start`, `highlight_end`, `notes` |
+| Language family | `code`, `name`, `description` | No update route |
+| Family member | required `relation_type`; optional `language_code`, `title`, `notes` | No update route |
+| Phonology table | `name`, optional `description`, required `body` | optional `name`, `description`, `body` |
+| Sound-change set | `name`, `description`, `changes` | optional `name`, `description`, `changes` |
+| News | `title`, `content`, optional `as_draft` | optional `title`, `content` |
+| Report | `resource_type`, `resource_id`, `reason` | moderator-only: optional `priority`, `resolution_status`, `resolution_note`, `resolution_status_hidden`, `resolution_note_hidden` |
+
+A word's optional `definitions` is an ordered array of definition-create
+bodies. Word responses include its category references along with fields such
+as `word`, `slug`, `lemma`, `ipa`, `notes`, `extra`, `like_count`,
+`bookmark`, `language_code`, and `word_class_abbreviation`.
+
+## Health, sessions, and users
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/health` | No | Health check; not rate limited. |
+| POST | `/sessions` | No | Body: `email`, `password`. Returns `token`, `expires_at`, and sets a cookie. |
+| GET | `/sessions` | Yes | Lists the current user's sessions. |
+| POST | `/users` | No | Creates a user. Returns `user` and `resend_token`. |
+| GET | `/users` | No | Paginated search: `q`, `created_before`, `created_after`, `verified`. |
+| GET | `/users/{username}` | No | Gets a public profile. |
+| PUT | `/users/{username}` | Yes | Updates that user. |
+| PUT | `/users/{username}/profile-picture` | Yes | `multipart/form-data` with an `image` part. |
+| POST | `/verify/{id}` | No | Body: `token`, `email`. |
+| POST | `/resend-verification/{id}` | No | Resends a verification email. |
+| POST | `/reset-password/start` | No | Body: `email`. |
+| POST | `/reset-password/complete` | No | Body: `uuid`, `token`, `new_password`. |
+| GET | `/users/{username}/activities` | No | Paginated activity history. |
+| DELETE | `/activities/{id}` | Auth | Deletes an activity when the caller has permission. |
+| GET / POST | `/users/{username}/tags` | No / moderator-admin | List tags; create body is `tag`, optional `hidden`. |
+| DELETE | `/users/{username}/tags/{tag}` | Moderator/admin | Deletes a tag. |
+
+A public user exposes `username`, `display_name`, `description`,
+`pronouns`, `gender`, `bookmark`, `profile_picture_url`, `banner_url`,
+`tags`, `created_at`, and `updated_at`; it does not expose IDs, email
+addresses, password hashes, or verification state.
+
+## Bookmarks and moderation
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/bookmarks/{slug}` | No | Redirects to the current resource URL. |
+| GET / POST | `/bans` | No / moderator-admin | Paginated search: `text_query`, `banned_by`; create body: `user_id`, `reason`. |
+| GET / DELETE | `/bans/{username}` | No / moderator-admin | Gets or removes a ban. |
+| GET / POST | `/reports` | Moderator/admin / Auth | Search supports `text_query`, `resource_type`, `resource_id`, `reporter`, `resolution_status`, `priority`; POST creates a report. |
+| GET | `/reports/own` | Yes | Paginated reports created by the caller. |
+| GET / PATCH / DELETE | `/reports/{id}` | Yes / moderator-admin / admin | Gets, moderates, or deletes a report. |
+| GET | `/audit_logs` | Moderator/admin | Paginated search: `user_id`, `action`, `resource_type`, `resource_id`. |
+| GET | `/audit_logs/{id}` | Moderator/admin | Gets an audit entry. |
+
+## Languages and invitations
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET / POST | `/languages` | No / Auth | List query: `q`, `owned_by`, `edited_by`, `created_before`, `created_after`, `in_family`; creates a language. |
+| GET / PUT / DELETE | `/languages/{code}` | No / language editor / language owner | Gets, updates, or deletes a language. |
+| GET | `/languages/{code}/owner` | No | Redirects to `/users/{username}`. |
+| GET | `/languages/{code}/editors` | No | Paginated editors. |
+| POST | `/languages/{code}/like` | Auth | Likes a language; returns `like_count`. |
+| POST | `/languages/{code}/unlike` | Auth | Removes the like; returns `like_count`. |
+| GET | `/languages/{code}/activities` | No | Paginated activity history. |
+| GET | `/languages/{code}/permissions` | Language editor | Lists permission assignments. |
+| GET | `/languages/{code}/permissions/{username}` | Language editor | Gets one assignment. |
+| GET | `/languages/{code}/invites` | Language editor | Paginated search: `sender`, `recipient`, `created_before`, `created_after`, `accepted_before`, `accepted_after`. |
+| POST | `/languages/{code}/invites/{username}` | Language admin/owner | Body: `permission_level`. |
+| GET / DELETE | `/languages/{code}/invites/{username}` | Participant/editor / participant-admin-owner | Gets, deletes, or rejects an invite. |
+| POST | `/languages/{code}/accept-invite` | Yes | Accepts the caller's invite. |
+
+Language-permission routes are currently read-only: there is no registered
+`PUT` or `DELETE /languages/{code}/permissions/{username}` endpoint.
+
+## Vocabulary
+
+Word-class and word-category list searches accept `text_query`,
+`created_before`, `created_after`, `created_by`, and `updated_by`, plus
+pagination.
+
+| Method | Path | Auth |
+| --- | --- | --- |
+| GET / POST | `/languages/{code}/word-classes` | No / language editor |
+| GET / PUT / DELETE | `/languages/{code}/word-classes/{abbreviation}` | No / language editor / language editor |
+| GET / POST | `/languages/{code}/word-categories` | No / language editor |
+| GET / PUT / DELETE | `/languages/{code}/word-categories/{abbreviation}` | No / language editor / language editor |
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/words/search` | Auth | Cross-language search: required `q`, optional `exclude_id`, `limit`. |
+| GET / POST | `/languages/{code}/words` | No / language editor | Search: `q`, `exact_slug`, `word_class`, `created_before`, `created_after`, `categories[]`; create accepts categories and definitions. |
+| GET / PUT / DELETE | `/languages/{code}/words/{slug}/{lemma}` | No / language editor / language editor | Gets, updates, or deletes a word. |
+| POST | `/languages/{code}/words/{slug}/{lemma}/like` | Auth | Returns updated `like_count`. |
+| POST | `/languages/{code}/words/{slug}/{lemma}/unlike` | Auth | Returns updated `like_count`. |
+| GET / POST | `/languages/{code}/words/{slug}/{lemma}/definitions` | No / language editor | Lists or creates definitions. |
+| POST | `/languages/{code}/words/{slug}/{lemma}/definitions/swap` | Language editor | Body: `id1`, `id2`; swaps positions. |
+| GET / PUT / DELETE | `/languages/{code}/words/{slug}/{lemma}/definitions/{id}` | No / language editor / language editor | Gets, updates, or deletes a definition. |
+| GET / POST | `/languages/{code}/words/{slug}/{lemma}/relations` | No / language editor | Search: `direction`, `kind`; create body: `kind`, `language`, `slug`, `lemma`. |
+| DELETE | `/languages/{code}/words/{slug}/{lemma}/relations/{related_code}/{related_slug}/{related_lemma}` | Language editor | Deletes a relation. |
+| GET | `/languages/{code}/words/{slug}/{lemma}/etymology` | No | Returns etymology/cognacy data. |
+| GET | `/languages/{code}/words/{slug}/{lemma}/etymology.svg` | No | Returns an SVG graph. |
+
+## Translatables, translations, and quotations
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET / POST | `/translatable` | No / Auth | Paginated search: `q`, `draft_status`; any verified, unbanned user can create a translatable. |
+| GET / PUT / DELETE | `/translatable/{slug}` | No / creator / creator | Gets, updates, or deletes a translatable. |
+| POST | `/translatable/{slug}/like` | Auth | Returns `like_count`. |
+| POST | `/translatable/{slug}/unlike` | Auth | Returns `like_count`. |
+| GET | `/translatable/{translatable_slug}/translations` | No | Paginated translations for a translatable. |
+| POST | `/translatable/{translatable_slug}/translations/{code}` | Language editor | Creates a translation. |
+| GET | `/languages/{code}/translations` | No | Paginated translations in a language. |
+| GET / PUT / DELETE | `/translatable/{translatable_slug}/translations/{code}` | No / language editor / language editor | Gets, updates, or deletes a translation. |
+| POST | `/translatable/{translatable_slug}/translations/{code}/like` | Auth | Returns `like_count`. |
+| POST | `/translatable/{translatable_slug}/translations/{code}/unlike` | Auth | Returns `like_count`. |
+| GET / POST | `/translatable/{translatable_slug}/translations/{language_code}/quotations` | No / language editor | Lists or creates quotations. |
+| GET / PUT / DELETE | `/translatable/{translatable_slug}/translations/{language_code}/quotations/{id}` | No / language editor / language editor | Gets, updates, or deletes a quotation. |
+| GET | `/languages/{language_code}/words/{word_slug}/definitions/{definition_id}/quotations` | No | Paginated quotations for a definition. This route uses only word slug, not lemma. |
+| GET / POST | `/languages/{code}/quotation-suggestions` | No / Auth | List query requires `content`; create body is `span_content`, `definition`. |
+| DELETE | `/languages/{code}/quotation-suggestions/{id}` | Auth | Deletes a suggestion. |
+
+## Language families
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET / POST | `/language-families` | No / Auth | Search: `q`, `owner`, `has_language`; creates a family. |
+| GET | `/language-families/{code}` | No | Gets a family. |
+| POST | `/language-families/{code}/like` | Auth | Returns `like_count`. |
+| POST | `/language-families/{code}/unlike` | Auth | Returns `like_count`. |
+| GET | `/language-families/{code}/tree.svg` | No | Returns an SVG family tree. |
+| GET | `/language-families/{code}/contributors` | No | Paginated contributors. |
+| GET | `/language-families/{code}/permissions` | Family editor | Lists family permissions. |
+| GET | `/language-families/{code}/permissions/{username}` | Family editor | Gets one assignment. |
+| GET | `/language-families/{code}/invites` | Family editor | Paginated invitation search. |
+| POST | `/language-families/{code}/invites/{username}` | Family admin/owner | Body: `permission_level`. |
+| GET / DELETE | `/language-families/{code}/invites/{username}` | Participant/editor / participant-admin-owner | Gets or removes an invite. |
+| POST | `/language-families/{code}/accept-invite` | Yes | Accepts the caller's invite. |
+
+Family-permission routes are read-only: no family-permission mutation endpoints
+are currently registered.
+
+### Family members
+
+These endpoints intentionally use singular `/language-family` paths. Member
+searches accept `family_code`, `parent_language_code`, `parent_member_id`,
+`language_code`, `relation_type`, and `q`, plus pagination.
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/language-family-members` | No | Global paginated search. |
+| GET / POST | `/language-family/{code}/members` | No / family editor | Lists or creates a root-level member. |
+| GET | `/language-family/{code}/root` | No | Gets the root member. |
+| GET / DELETE | `/language-family/{code}/members/by-id/{id}` | No / family editor | Gets or deletes a member. |
+| GET / POST | `/language-family/{code}/members/by-id/{id}/children` | No / family editor | Lists or creates child members. |
+| GET / DELETE | `/language-family/{code}/members/by-code/{code}` | No / family editor | Gets or deletes a language's member; the second `{code}` is the language code. |
+| GET / POST | `/language-family/{code}/members/by-code/{code}/children` | No / family editor | Lists or creates child members; the second `{code}` is the language code. |
+
+## Phonology tables and sound changes
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET / POST | `/languages/{code}/phonology-tables` | No / language editor | Search: `q`, `created_before`, `created_after`; lists or creates tables. |
+| POST | `/languages/{code}/phonology-tables/swap` | Language editor | Body: `id1`, `id2`; swaps table positions. |
+| GET / PUT / DELETE | `/languages/{code}/phonology-tables/{id}` | No / language editor / language editor | Gets, updates, or deletes a table. |
+| GET / POST | `/languages/{code}/sound-change-sets` | No / language editor | Search: `q`, `author`; lists or creates sets. |
+| GET / PUT / DELETE | `/languages/{code}/sound-change-sets/{id}` | No / language editor / language editor | Gets, updates, or deletes a set. |
+| POST | `/sound-change-sets/run` | No | Runs a supplied Lexurgy set: `changes`, `inputWords`, optional `traceWords`, `startAt`, `stopBefore`, `allowPolling`. |
+| POST | `/sound-change-sets/{id}/run` | No | Runs a stored set. Body: `input_words` (array of strings). |
+
+The direct run endpoint uses camelCase names because it forwards the Lexurgy
+request payload; it is not a sound-change-set creation payload.
+
+## News
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET / POST | `/news` | No / moderator-admin | Paginated search: `q`, `draft_status`; creates an article or draft. |
+| GET / PUT / DELETE | `/news/{slug}` | No / moderator-admin / moderator-admin | Gets, updates, or deletes an article. Draft visibility requires staff access. |
+| POST | `/news/{slug}/publish` | Moderator/admin | Publishes an article. |
+| POST | `/news/{slug}/unpublish` | Moderator/admin | Returns an article to draft status. |
