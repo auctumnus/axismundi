@@ -21,9 +21,31 @@ pub struct Phoneme {
     pub annotations: Vec<u32>,
 }
 
+fn span_default() -> u32 {
+    1
+}
+
+fn span_is_default(span: &u32) -> bool {
+    *span == 1
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cell {
     pub phonemes: Vec<Phoneme>,
+    #[serde(default = "span_default", skip_serializing_if = "span_is_default")]
+    pub rowspan: u32,
+    #[serde(default = "span_default", skip_serializing_if = "span_is_default")]
+    pub colspan: u32,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self {
+            phonemes: vec![],
+            rowspan: 1,
+            colspan: 1,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +95,8 @@ impl Body {
         // - the number of cells in each row must match the number of individual columns
         // - all phonemes must be non-empty strings
         // - all references to annotations must be valid indices into the annotations array
+        // - rowspan/colspan must be >= 1, merged regions must fit in the grid and
+        //   not overlap, and cells hidden under a merged region must be empty
 
         fn count_individual_columns(columns: &[Column]) -> usize {
             let mut count = 0;
@@ -139,9 +163,69 @@ impl Body {
             Ok(())
         }
 
+        fn collect_leaf_cells<'a>(rows: &'a [Row], out: &mut Vec<&'a [Cell]>) {
+            for row in rows {
+                match row {
+                    Row::Group { rows, .. } => collect_leaf_cells(rows, out),
+                    Row::Individual { cells, .. } => out.push(cells),
+                }
+            }
+        }
+
+        fn validate_spans(rows: &[Row], num_columns: usize) -> AppResult<()> {
+            let mut leaf_rows = Vec::new();
+            collect_leaf_cells(rows, &mut leaf_rows);
+            let num_rows = leaf_rows.len();
+
+            // row-major sweep; each merged region claims its covered cells, and any
+            // cell we reach that's already claimed must be an empty 1x1 cell
+            let mut occupied = vec![vec![false; num_columns]; num_rows];
+            for (r, cells) in leaf_rows.iter().enumerate() {
+                for (c, cell) in cells.iter().enumerate() {
+                    if cell.rowspan < 1 || cell.colspan < 1 {
+                        return Err(bad_request(
+                            "Cell rowspan and colspan must be at least 1.".to_owned(),
+                        ));
+                    }
+                    if occupied[r][c] {
+                        if !cell.phonemes.is_empty() {
+                            return Err(bad_request(
+                                "Cells covered by a merged cell must be empty.".to_owned(),
+                            ));
+                        }
+                        if cell.rowspan != 1 || cell.colspan != 1 {
+                            return Err(bad_request(
+                                "Merged cells cannot overlap each other.".to_owned(),
+                            ));
+                        }
+                        continue;
+                    }
+                    let rowspan = cell.rowspan as usize;
+                    let colspan = cell.colspan as usize;
+                    if r + rowspan > num_rows || c + colspan > num_columns {
+                        return Err(bad_request(
+                            "Merged cells cannot extend past the edge of the table.".to_owned(),
+                        ));
+                    }
+                    for row_slots in occupied.iter_mut().skip(r).take(rowspan) {
+                        for slot in row_slots.iter_mut().skip(c).take(colspan) {
+                            if *slot {
+                                return Err(bad_request(
+                                    "Merged cells cannot overlap each other.".to_owned(),
+                                ));
+                            }
+                            *slot = true;
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
         let num_columns = count_individual_columns(&self.columns);
         validate_num_cells_in_rows(&self.rows, num_columns)?;
         validate_phonemes_in_rows(&self.rows, self.annotations.len())?;
+        validate_spans(&self.rows, num_columns)?;
 
         Ok(())
     }
@@ -228,6 +312,37 @@ impl PhonologyTable {
             count
         }
 
+        // positions (leaf row index, column index) hidden underneath a merged cell;
+        // these are skipped when emitting <td>s
+        fn compute_covered_cells(rows: &[Row]) -> std::collections::HashSet<(usize, usize)> {
+            fn collect_leaf_cells<'a>(rows: &'a [Row], out: &mut Vec<&'a [Cell]>) {
+                for row in rows {
+                    match row {
+                        Row::Group { rows, .. } => collect_leaf_cells(rows, out),
+                        Row::Individual { cells, .. } => out.push(cells),
+                    }
+                }
+            }
+            let mut leaf_rows = Vec::new();
+            collect_leaf_cells(rows, &mut leaf_rows);
+            let mut covered = std::collections::HashSet::new();
+            for (r, cells) in leaf_rows.iter().enumerate() {
+                for (c, cell) in cells.iter().enumerate() {
+                    if covered.contains(&(r, c)) {
+                        continue;
+                    }
+                    for dr in 0..cell.rowspan as usize {
+                        for dc in 0..cell.colspan as usize {
+                            if (dr, dc) != (0, 0) {
+                                covered.insert((r + dr, c + dc));
+                            }
+                        }
+                    }
+                }
+            }
+            covered
+        }
+
         // pending_groups: group headings from ancestor Row::Groups that haven't been
         // emitted yet — they get attached to the first <tr> they contain
         fn write_rows(
@@ -236,6 +351,8 @@ impl PhonologyTable {
             pending_groups: &mut Vec<(String, usize)>, // (heading, rowspan)
             max_row_group_depth: usize,
             current_depth: usize,
+            leaf_row: &mut usize,
+            covered: &std::collections::HashSet<(usize, usize)>,
         ) {
             for row in rows {
                 match row {
@@ -248,6 +365,8 @@ impl PhonologyTable {
                             pending_groups,
                             max_row_group_depth,
                             current_depth + 1,
+                            leaf_row,
+                            covered,
                         );
                     }
                     Row::Individual { heading, cells, .. } => {
@@ -270,8 +389,18 @@ impl PhonologyTable {
                         }
                         write!(html, ">{}</th>", esc(heading)).unwrap();
 
-                        for cell in cells {
-                            html.push_str("<td>");
+                        for (ci, cell) in cells.iter().enumerate() {
+                            if covered.contains(&(*leaf_row, ci)) {
+                                continue;
+                            }
+                            html.push_str("<td");
+                            if cell.rowspan > 1 {
+                                write!(html, " rowspan=\"{}\"", cell.rowspan).unwrap();
+                            }
+                            if cell.colspan > 1 {
+                                write!(html, " colspan=\"{}\"", cell.colspan).unwrap();
+                            }
+                            html.push('>');
                             for (i, phoneme) in cell.phonemes.iter().enumerate() {
                                 if i > 0 {
                                     html.push_str(", ");
@@ -287,6 +416,7 @@ impl PhonologyTable {
                             html.push_str("</td>");
                         }
                         html.push_str("</tr>");
+                        *leaf_row += 1;
                     }
                 }
             }
@@ -419,12 +549,16 @@ impl PhonologyTable {
         // --- tbody: data rows ---
         html.push_str("<tbody>");
         let mut pending_groups: Vec<(String, usize)> = Vec::new();
+        let covered = compute_covered_cells(&body.rows);
+        let mut leaf_row = 0;
         write_rows(
             &mut html,
             &body.rows,
             &mut pending_groups,
             max_row_depth + 1,
             1,
+            &mut leaf_row,
+            &covered,
         );
         html.push_str("</tbody>");
 
@@ -769,3 +903,189 @@ impl PhonologyTableRepository {
 }
 
 crate::util::repo_from_parts!(PhonologyTableRepository);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cell(texts: &[&str]) -> Cell {
+        Cell {
+            phonemes: texts
+                .iter()
+                .map(|t| Phoneme {
+                    text: (*t).to_string(),
+                    annotations: vec![],
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn spanned(texts: &[&str], rowspan: u32, colspan: u32) -> Cell {
+        Cell {
+            rowspan,
+            colspan,
+            ..cell(texts)
+        }
+    }
+
+    fn individual_row(heading: &str, cells: Vec<Cell>) -> Row {
+        Row::Individual {
+            heading: heading.to_string(),
+            autogenerated: false,
+            cells,
+        }
+    }
+
+    fn individual_column(heading: &str) -> Column {
+        Column::Individual {
+            heading: heading.to_string(),
+            autogenerated: false,
+        }
+    }
+
+    // 2x3 grid
+    fn simple_body(rows: Vec<Row>) -> Body {
+        Body {
+            rows,
+            columns: vec![
+                individual_column("C1"),
+                individual_column("C2"),
+                individual_column("C3"),
+            ],
+            annotations: vec![],
+        }
+    }
+
+    #[test]
+    fn spans_default_to_one_when_absent_in_json() {
+        let cell: Cell = serde_json::from_str(r#"{"phonemes": []}"#).unwrap();
+        assert_eq!(cell.rowspan, 1);
+        assert_eq!(cell.colspan, 1);
+    }
+
+    #[test]
+    fn default_spans_are_not_serialized() {
+        let json = serde_json::to_value(cell(&["a"])).unwrap();
+        assert!(json.get("rowspan").is_none());
+        assert!(json.get("colspan").is_none());
+        let json = serde_json::to_value(spanned(&["a"], 2, 1)).unwrap();
+        assert_eq!(json["rowspan"], 2);
+        assert!(json.get("colspan").is_none());
+    }
+
+    #[test]
+    fn validate_accepts_merged_region() {
+        let body = simple_body(vec![
+            individual_row(
+                "R1",
+                vec![spanned(&["a"], 2, 2), cell(&[]), cell(&["b"])],
+            ),
+            individual_row("R2", vec![cell(&[]), cell(&[]), cell(&["c"])]),
+        ]);
+        assert!(body.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_zero_span() {
+        let body = simple_body(vec![individual_row(
+            "R1",
+            vec![spanned(&["a"], 0, 1), cell(&[]), cell(&[])],
+        )]);
+        assert!(body.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_out_of_bounds_span() {
+        let body = simple_body(vec![
+            individual_row("R1", vec![cell(&[]), cell(&[]), spanned(&["a"], 1, 2)]),
+            individual_row("R2", vec![cell(&[]), cell(&[]), cell(&[])]),
+        ]);
+        assert!(body.validate().is_err());
+
+        let body = simple_body(vec![
+            individual_row("R1", vec![cell(&[]), cell(&[]), cell(&[])]),
+            individual_row("R2", vec![spanned(&["a"], 2, 1), cell(&[]), cell(&[])]),
+        ]);
+        assert!(body.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_overlapping_spans() {
+        // b is anchored at (0,1), which a's colspan already covers
+        let body = simple_body(vec![individual_row(
+            "R1",
+            vec![spanned(&["a"], 1, 2), spanned(&["b"], 1, 2), cell(&[])],
+        )]);
+        assert!(body.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_covered_cell_with_phonemes() {
+        let body = simple_body(vec![individual_row(
+            "R1",
+            vec![spanned(&["a"], 1, 2), cell(&["hidden"]), cell(&[])],
+        )]);
+        assert!(body.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_span_crossing_into_occupied_cell() {
+        // rowspan from R1 collides with a colspan anchored in R2
+        let body = simple_body(vec![
+            individual_row("R1", vec![cell(&[]), spanned(&["a"], 2, 1), cell(&[])]),
+            individual_row("R2", vec![spanned(&["b"], 1, 2), cell(&[]), cell(&[])]),
+        ]);
+        assert!(body.validate().is_err());
+    }
+
+    #[test]
+    fn to_html_skips_covered_cells_and_emits_span_attrs() {
+        let body = simple_body(vec![
+            individual_row(
+                "R1",
+                vec![spanned(&["w"], 2, 2), cell(&[]), cell(&["k"])],
+            ),
+            individual_row("R2", vec![cell(&[]), cell(&[]), cell(&["g"])]),
+        ]);
+        body.validate().unwrap();
+        let table = PhonologyTable {
+            id: Uuid::nil(),
+            language_id: Uuid::nil(),
+            name: "test".to_string(),
+            description: String::new(),
+            position: 0,
+            body: serde_json::to_value(&body).unwrap(),
+            schema_version: 1,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let html = table
+            .to_html(&TableRenderOptions {
+                standalone_link: None,
+                edit_links: None,
+                header_el: "h2".to_string(),
+            })
+            .unwrap();
+        assert!(html.contains(r#"<td rowspan="2" colspan="2">"#));
+        // 6 grid positions, 3 covered -> 3 <td>s
+        assert_eq!(html.matches("<td").count(), 3);
+    }
+
+    #[test]
+    fn validate_allows_span_crossing_row_group_boundary() {
+        // spanning across a group boundary is allowed as long as it stays in bounds
+        let body = simple_body(vec![
+            individual_row("R1", vec![spanned(&["a"], 2, 1), cell(&[]), cell(&[])]),
+            Row::Group {
+                heading: "G".to_string(),
+                autogenerated: false,
+                rows: vec![individual_row(
+                    "R2",
+                    vec![cell(&[]), cell(&["b"]), cell(&[])],
+                )],
+            },
+        ]);
+        assert!(body.validate().is_ok());
+    }
+}

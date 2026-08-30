@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{FromRow, Row};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -423,6 +423,49 @@ impl DefinitionRepository {
         .await?;
 
         Ok(result)
+    }
+
+    /// Load up to `limit_per_word` definitions for each word, retaining the input order.
+    pub async fn list_first_n_texts_by_words(
+        &self,
+        word_ids: &[Uuid],
+        limit_per_word: i64,
+    ) -> AppResult<Vec<Vec<String>>> {
+        if word_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            r#"
+                WITH ranked AS (
+                    SELECT
+                        word,
+                        definition,
+                        row_number() OVER (PARTITION BY word ORDER BY position) AS rank
+                    FROM definitions
+                    WHERE word = ANY($1)
+                )
+                SELECT word, definition
+                FROM ranked
+                WHERE rank <= $2
+                ORDER BY word, rank
+            "#,
+        )
+        .bind(word_ids)
+        .bind(limit_per_word)
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        let mut definitions_by_word = std::collections::HashMap::<Uuid, Vec<String>>::new();
+        for row in rows {
+            definitions_by_word
+                .entry(row.try_get("word")?)
+                .or_default()
+                .push(row.try_get("definition")?);
+        }
+        Ok(word_ids
+            .iter()
+            .map(|id| definitions_by_word.remove(id).unwrap_or_default())
+            .collect())
     }
 
     pub async fn swap(

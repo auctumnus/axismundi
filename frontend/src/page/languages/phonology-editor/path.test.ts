@@ -1580,3 +1580,109 @@ test("movement: end to last cell in row", () => {
   const result = move(table, path, movement);
   expect(result).toEqual({ type: "Cell", rowPath: [0], colPath: 2 });
 });
+
+// --- movement over merged cells ---
+
+import { withSpan } from "./spans";
+
+// 3x3 grid with a 2x2 merge anchored at (0,0):
+//   [ A A b ]
+//   [ A A c ]
+//   [ d e f ]
+const mergedTable = (): Body => ({
+  rows: [
+    {
+      type: "Individual",
+      heading: "R1",
+      cells: [withSpan(cell("A"), 2, 2), cell(), cell("b")],
+    },
+    {
+      type: "Individual",
+      heading: "R2",
+      cells: [cell(), cell(), cell("c")],
+    },
+    {
+      type: "Individual",
+      heading: "R3",
+      cells: [cell("d"), cell("e"), cell("f")],
+    },
+  ],
+  columns: [
+    { type: "Individual", heading: "C1" },
+    { type: "Individual", heading: "C2" },
+    { type: "Individual", heading: "C3" },
+  ],
+  annotations: [],
+});
+
+test("movement: right from a merged cell skips its own covered columns", () => {
+  const result = move(
+    mergedTable(),
+    { type: "Cell", rowPath: 0, colPath: 0 },
+    "Right",
+  );
+  expect(result).toEqual({ type: "Cell", rowPath: 0, colPath: 2 });
+});
+
+test("movement: down from a merged cell skips its own covered rows", () => {
+  const result = move(
+    mergedTable(),
+    { type: "Cell", rowPath: 0, colPath: 0 },
+    "Down",
+  );
+  expect(result).toEqual({ type: "Cell", rowPath: 2, colPath: 0 });
+});
+
+test("movement: left into a merged region lands on the anchor", () => {
+  const result = move(
+    mergedTable(),
+    { type: "Cell", rowPath: 0, colPath: 2 },
+    "Left",
+  );
+  expect(result).toEqual({ type: "Cell", rowPath: 0, colPath: 0 });
+});
+
+test("movement: up into a merged region lands on the anchor", () => {
+  const result = move(
+    mergedTable(),
+    { type: "Cell", rowPath: 2, colPath: 1 },
+    "Up",
+  );
+  expect(result).toEqual({ type: "Cell", rowPath: 0, colPath: 0 });
+});
+
+test("movement: tab from a merged cell goes past the covered columns", () => {
+  const result = move(
+    mergedTable(),
+    { type: "Cell", rowPath: 0, colPath: 0 },
+    "Tab",
+  );
+  expect(result).toEqual({ type: "Cell", rowPath: 0, colPath: 2 });
+});
+
+test("movement: down from a column heading over a merge lands on the anchor", () => {
+  // C2's first cell (0,1) is covered by the merge anchored at (0,0)
+  const result = move(
+    mergedTable(),
+    { type: "ColumnHeading", path: [1] },
+    "Down",
+  );
+  expect(result).toEqual({ type: "Cell", rowPath: 0, colPath: 0 });
+});
+
+test("movement: down/right at the table edge respects the merge extent", () => {
+  // the merge touches neither edge, but a merge reaching the last row/col
+  // means down/right from its anchor stays put
+  const table = mergedTable();
+  // extend merge to cover all three rows
+  const rows = table.rows;
+  (rows[0] as Extract<Row, { type: "Individual" }>).cells[0] = withSpan(
+    cell("A"),
+    3,
+    2,
+  );
+  (rows[2] as Extract<Row, { type: "Individual" }>).cells[0] = cell();
+  (rows[2] as Extract<Row, { type: "Individual" }>).cells[1] = cell();
+  const path: TablePath = { type: "Cell", rowPath: 0, colPath: 0 };
+  expect(move(table, path, "Down")).toEqual(path);
+});

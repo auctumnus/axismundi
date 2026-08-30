@@ -19,10 +19,25 @@ use axum::{
 use validator::Validate;
 
 const CATEGORY_LIMIT: i64 = 5;
+const DEFINITION_PREVIEW_LIMIT: i64 = 5;
 
 async fn wrap_with_categories(words: &WordRepository, word: Word) -> AppResult<WordWithCategories> {
-    let categories = words.load_categories(word.id, CATEGORY_LIMIT).await?;
-    Ok(WordWithCategories { word, categories })
+    let word_id = word.id;
+    let word_language = word.language;
+    let word_slug = word.slug.clone();
+    let word_ids = [word_id];
+    let word_slugs = [word_slug];
+    let (categories, preview_definitions, lemma_counts) = tokio::try_join!(
+        words.load_categories(word_id, CATEGORY_LIMIT),
+        words.load_preview_definitions_batch(&word_ids, DEFINITION_PREVIEW_LIMIT),
+        words.load_lemma_counts_by_slug(word_language, &word_slugs),
+    )?;
+    Ok(WordWithCategories {
+        word,
+        categories,
+        preview_definitions: preview_definitions.into_iter().next().unwrap_or_default(),
+        lemma_count: lemma_counts.into_iter().next().unwrap_or(0),
+    })
 }
 
 async fn wrap_listing_with_categories(
@@ -30,11 +45,34 @@ async fn wrap_listing_with_categories(
     items: Vec<Word>,
 ) -> AppResult<Vec<WordWithCategories>> {
     let ids: Vec<uuid::Uuid> = items.iter().map(|w| w.id).collect();
-    let category_lists = words.load_categories_batch(&ids, CATEGORY_LIMIT).await?;
+    let slugs: Vec<String> = items.iter().map(|word| word.slug.clone()).collect();
+    let language = items.first().map(|word| word.language);
+    let (category_lists, definition_lists, lemma_counts) = tokio::try_join!(
+        words.load_categories_batch(&ids, CATEGORY_LIMIT),
+        words.load_preview_definitions_batch(&ids, DEFINITION_PREVIEW_LIMIT),
+        async {
+            match language {
+                Some(language) => words.load_lemma_counts_by_slug(language, &slugs).await,
+                None => Ok(Vec::new()),
+            }
+        },
+    )?;
     Ok(items
         .into_iter()
-        .zip(category_lists)
-        .map(|(word, categories)| WordWithCategories { word, categories })
+        .zip(
+            category_lists
+                .into_iter()
+                .zip(definition_lists)
+                .zip(lemma_counts),
+        )
+        .map(
+            |(word, ((categories, preview_definitions), lemma_count))| WordWithCategories {
+                word,
+                categories,
+                preview_definitions,
+                lemma_count,
+            },
+        )
         .collect())
 }
 
@@ -314,6 +352,11 @@ mod tests {
         let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
         let response = ctx.app.call(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let created = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(
+            created["preview_definitions"],
+            json!(["first gloss", "second gloss"])
+        );
 
         // The definitions should have been created in order, in the same request.
         let request = get(&format!(

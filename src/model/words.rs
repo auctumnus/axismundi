@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use sqlx::FromRow;
+use sqlx::{FromRow, Row};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -110,6 +110,8 @@ pub struct WordWithCategories {
     #[serde(flatten)]
     pub word: Word,
     pub categories: Vec<CategoryRef>,
+    pub preview_definitions: Vec<String>,
+    pub lemma_count: i64,
 }
 
 pub struct WordRepository {
@@ -1275,6 +1277,49 @@ impl WordRepository {
         Ok(word_ids
             .iter()
             .map(|id| by_word.remove(id).unwrap_or_default())
+            .collect())
+    }
+
+    /// Batch-load definition previews for words, retaining the input order.
+    pub async fn load_preview_definitions_batch(
+        &self,
+        word_ids: &[Uuid],
+        limit_per_word: i64,
+    ) -> AppResult<Vec<Vec<String>>> {
+        DefinitionRepository::new(self.state.clone())
+            .list_first_n_texts_by_words(word_ids, limit_per_word)
+            .await
+    }
+
+    /// Count the lemmata sharing each slug in one language, retaining slug order.
+    pub async fn load_lemma_counts_by_slug(
+        &self,
+        language: Uuid,
+        slugs: &[String],
+    ) -> AppResult<Vec<i64>> {
+        if slugs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            r#"
+                SELECT slug, count(*)::bigint AS lemma_count
+                FROM words
+                WHERE language = $1 AND slug = ANY($2)
+                GROUP BY slug
+            "#,
+        )
+        .bind(language)
+        .bind(slugs)
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        let mut counts_by_slug = std::collections::HashMap::<String, i64>::new();
+        for row in rows {
+            counts_by_slug.insert(row.try_get("slug")?, row.try_get("lemma_count")?);
+        }
+        Ok(slugs
+            .iter()
+            .map(|slug| counts_by_slug.get(slug).copied().unwrap_or(0))
             .collect())
     }
 

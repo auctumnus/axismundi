@@ -157,6 +157,21 @@ export const Help = ({
                 </dl>
               </section>
               <section>
+                <h3>Merging cells</h3>
+                <p className="help-note">
+                  select a cell with <kbd>Space</kbd> (or a click), then move
+                  focus to another cell with the arrow keys (or shift-click)
+                  to pick the rectangle to merge
+                </p>
+                <dl className="keybind-list">
+                  <Keybind
+                    keys={["m"]}
+                    description="Merge selected cell with focused cell"
+                  />
+                  <Keybind keys={["Shift", "m"]} description="Unmerge cell" />
+                </dl>
+              </section>
+              <section>
                 <h3>Headings</h3>
                 <dl className="keybind-list">
                   <Keybind keys={["h", "e"]} description="Edit heading" />

@@ -103,11 +103,16 @@
 
       in
       {
-        devShells.default = pkgs.mkShell {
-          inherit nativeBuildInputs buildInputs;
-          stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
-          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-        };
+        # mkShell takes its stdenv through .override -- passing `stdenv = ...`
+        # in the attrset is silently ignored and you get the plain gcc stdenv.
+        devShells.default =
+          (pkgs.mkShell.override {
+            stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
+          })
+            {
+              inherit nativeBuildInputs buildInputs;
+              LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+            };
 
         packages.default = axismundi;
         packages.axismundi = axismundi;

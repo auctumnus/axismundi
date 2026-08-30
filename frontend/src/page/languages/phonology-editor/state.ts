@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import {
+  cellCoords,
   countLeaves,
   getByPath,
   headingPathToIndex,
@@ -13,7 +14,21 @@ import {
   type Movement,
   type TablePath,
 } from "./path";
-import type { Body, Cell, Column, Row } from "./table";
+import {
+  adjustSpansForColumnInsert,
+  adjustSpansForColumnRemove,
+  adjustSpansForRowInsert,
+  adjustSpansForRowRemove,
+  anchorOf,
+  cellColspan,
+  cellRowspan,
+  coveredCells,
+  leafCellRows,
+  mapLeafCells,
+  mergeRect,
+  withSpan,
+} from "./spans";
+import type { Body, Cell, Column, Phoneme, Row } from "./table";
 import { numLeaves } from "./table";
 
 export const EditorContext = createContext<
@@ -523,6 +538,10 @@ export type Action =
       newHeading: string;
     }
   | { type: "SplitHeading"; kind: "row" | "column"; path: HeadingPath }
+  // merges the bounding rectangle of the two cells (grown to swallow any
+  // partially-overlapped merges); all phonemes end up in the top-left anchor
+  | { type: "MergeCells"; a: TablePath; b: TablePath }
+  | { type: "UnmergeCell"; path: TablePath }
   | { type: "Undo" }
   | { type: "Redo" }
   | { type: "SetKeybindState"; keybindState: KeybindState }
@@ -641,6 +660,7 @@ const removeAnnotationFromAllRows = (
     return {
       ...row,
       cells: row.cells.map((cell) => ({
+        ...cell,
         phonemes: cell.phonemes.map((p) => ({
           ...p,
           annotations: p.annotations
@@ -658,7 +678,8 @@ const clampFocus = (body: Body, path: TablePath): TablePath => {
     return { type: "TopLeft" };
   };
   const newPath = inner();
-  // really gross but it works
+  // really gross but it works (the guard is for tests, where there's no dom)
+  if (typeof requestAnimationFrame === "undefined") return newPath;
   requestAnimationFrame(() => {
     const selector = `[data-path="${serializePath(body, newPath).replaceAll(/"/g, '\\"')}"]`;
     const element = document.querySelector(selector) as HTMLElement | null;
@@ -914,6 +935,18 @@ export const apply = (state: EditorState, action: Action): EditorState => {
         const insertAt = position === "before" ? lastIndex : lastIndex + 1;
 
         if (kind === "row") {
+          const rowHeading = getByPath(state.body, {
+            type: "RowHeading",
+            path,
+          });
+          if (!rowHeading) return state;
+          const leafIndex = headingPathToIndex(state.body.rows, path);
+          if (leafIndex === null) return state;
+          const insertRowIndex =
+            position === "before"
+              ? leafIndex
+              : leafIndex + countLeaves(rowHeading as Row);
+
           const newRow: Row = {
             type: "Individual",
             heading: "New Row",
@@ -924,7 +957,7 @@ export const apply = (state: EditorState, action: Action): EditorState => {
             ),
           };
           const newRows = spliceInHeadings(
-            state.body.rows,
+            adjustSpansForRowInsert(state.body.rows, insertRowIndex),
             [...parentPath, insertAt],
             0,
             newRow,
@@ -954,7 +987,10 @@ export const apply = (state: EditorState, action: Action): EditorState => {
             0,
             newCol,
           );
-          const newRows = addCellToAllRows(state.body.rows, insertColIndex);
+          const newRows = addCellToAllRows(
+            adjustSpansForColumnInsert(state.body.rows, insertColIndex),
+            insertColIndex,
+          );
 
           return {
             ...state,
@@ -967,8 +1003,21 @@ export const apply = (state: EditorState, action: Action): EditorState => {
 
         let newBody: Body;
         if (kind === "row") {
+          const rowHeading = getByPath(state.body, {
+            type: "RowHeading",
+            path,
+          });
+          if (!rowHeading) return state;
+          const leafIndex = headingPathToIndex(state.body.rows, path);
+          if (leafIndex === null) return state;
+          const leafCount = countLeaves(rowHeading as Row);
+
           const newRows = collapseRows(
-            spliceInHeadings(state.body.rows, path, 1),
+            spliceInHeadings(
+              adjustSpansForRowRemove(state.body.rows, leafIndex, leafCount),
+              path,
+              1,
+            ),
           );
           newBody = { ...state.body, rows: newRows };
         } else {
@@ -985,7 +1034,7 @@ export const apply = (state: EditorState, action: Action): EditorState => {
             spliceInHeadings(state.body.columns, path, 1),
           );
           const newRows = removeCellsFromAllRows(
-            state.body.rows,
+            adjustSpansForColumnRemove(state.body.rows, leafIndex, leafCount),
             leafIndex,
             leafCount,
           );
@@ -1017,10 +1066,26 @@ export const apply = (state: EditorState, action: Action): EditorState => {
         const { kind, path } = action;
 
         if (kind === "row") {
-          const heading = getByPath(state.body, {
+          let heading = getByPath(state.body, {
             type: "RowHeading",
             path,
           }) as Row | null;
+          if (!heading) return state;
+          const leafIndex = headingPathToIndex(state.body.rows, path);
+          if (leafIndex === null) return state;
+
+          // the new empty row lands right after this heading's leaves; stretch
+          // any merges crossing that point, then re-fetch the heading so the
+          // new group is built from the adjusted tree
+          const insertRowIndex = leafIndex + countLeaves(heading);
+          const adjustedRows = adjustSpansForRowInsert(
+            state.body.rows,
+            insertRowIndex,
+          );
+          heading = getByPath(
+            { ...state.body, rows: adjustedRows },
+            { type: "RowHeading", path },
+          ) as Row | null;
           if (!heading) return state;
 
           const emptyRow: Row = {
@@ -1055,7 +1120,7 @@ export const apply = (state: EditorState, action: Action): EditorState => {
             };
           }
 
-          const newRows = spliceInHeadings(state.body.rows, path, 1, newGroup);
+          const newRows = spliceInHeadings(adjustedRows, path, 1, newGroup);
           return { ...state, body: { ...state.body, rows: newRows } };
         } else {
           const heading = getByPath(state.body, {
@@ -1100,13 +1165,86 @@ export const apply = (state: EditorState, action: Action): EditorState => {
           );
           // add a cell for the new leaf column in every row
           const insertCellAt = leafIndex + countLeaves(heading);
-          const newRows = addCellToAllRows(state.body.rows, insertCellAt);
+          const newRows = addCellToAllRows(
+            adjustSpansForColumnInsert(state.body.rows, insertCellAt),
+            insertCellAt,
+          );
 
           return {
             ...state,
             body: { ...state.body, rows: newRows, columns: newColumns },
           };
         }
+      }
+      case "MergeCells": {
+        const { a, b } = action;
+        if (a.type !== "Cell" || b.type !== "Cell") return state;
+        const aCoords = cellCoords(state.body, a);
+        const bCoords = cellCoords(state.body, b);
+        if (aCoords === null || bCoords === null) return state;
+
+        const rect = mergeRect(state.body.rows, aCoords, bCoords);
+        if (rect.top === rect.bottom && rect.left === rect.right) return state;
+
+        // gather every phoneme in the region into the anchor, in reading order
+        const grid = leafCellRows(state.body.rows);
+        const phonemes: Phoneme[] = [];
+        for (let r = rect.top; r <= rect.bottom; r++) {
+          for (let c = rect.left; c <= rect.right; c++) {
+            phonemes.push(...(grid[r]?.[c]?.phonemes ?? []));
+          }
+        }
+
+        const newRows = mapLeafCells(state.body.rows, (cell, r, c) => {
+          if (
+            r < rect.top ||
+            r > rect.bottom ||
+            c < rect.left ||
+            c > rect.right
+          ) {
+            return cell;
+          }
+          if (r === rect.top && c === rect.left) {
+            return withSpan(
+              { phonemes },
+              rect.bottom - rect.top + 1,
+              rect.right - rect.left + 1,
+            );
+          }
+          return { phonemes: [] };
+        });
+
+        const newBody = { ...state.body, rows: newRows };
+        const anchorPath: TablePath = {
+          type: "Cell",
+          rowPath: rect.top,
+          colPath: rect.left,
+        };
+        return {
+          ...state,
+          body: newBody,
+          focus: clampFocus(newBody, anchorPath),
+          select: anchorPath,
+        };
+      }
+      case "UnmergeCell": {
+        const { path } = action;
+        if (path.type !== "Cell") return state;
+        const coords = cellCoords(state.body, path);
+        if (coords === null) return state;
+        const covered = coveredCells(state.body.rows);
+        const [ar, ac] = anchorOf(covered, coords[0], coords[1]);
+        const anchor = leafCellRows(state.body.rows)[ar]?.[ac];
+        if (
+          !anchor ||
+          (cellRowspan(anchor) === 1 && cellColspan(anchor) === 1)
+        ) {
+          return state;
+        }
+        const newRows = mapLeafCells(state.body.rows, (cell, r, c) =>
+          r === ar && c === ac ? withSpan(cell, 1, 1) : cell,
+        );
+        return { ...state, body: { ...state.body, rows: newRows } };
       }
       case "OpenModal":
         return {

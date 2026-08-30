@@ -7,6 +7,7 @@ import {
   type CellPath,
   type HeadingPath,
 } from "./path";
+import { cellColspan, cellRowspan, coveredCells, isCovered } from "./spans";
 import { isFocused, isSelected, useEditor } from "./state";
 import { maxHeadingDepth, numLeaves, type Cell, type Row } from "./table";
 
@@ -65,8 +66,12 @@ const RowCell = ({
 
   const onClick = (e: React.MouseEvent) => {
     if (!focused) {
+      // shift-click moves focus without touching the selection, so a
+      // selected cell + shift-click defines a rectangle to merge
       dispatch({ type: "SetFocus", path });
-      dispatch({ type: "SetSelect", path });
+      if (!e.shiftKey) {
+        dispatch({ type: "SetSelect", path });
+      }
     }
   };
 
@@ -105,6 +110,9 @@ const RowCell = ({
 
   const tabIndex = focused ? 0 : -1;
 
+  const rowSpan = cellRowspan(cell) > 1 ? cellRowspan(cell) : undefined;
+  const colSpan = cellColspan(cell) > 1 ? cellColspan(cell) : undefined;
+
   return (
     <td
       ref={cellRef}
@@ -112,6 +120,8 @@ const RowCell = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       tabIndex={tabIndex}
+      rowSpan={rowSpan}
+      colSpan={colSpan}
       data-path={serializePath(state.body, path)}
       onKeyDown={onKeyDown}
     >
@@ -245,6 +255,7 @@ export const TableRows = () => {
   const { rows } = state.body;
   const maxDepth = maxHeadingDepth(rows);
   const flat = flattenRows(rows, [], 1, maxDepth);
+  const covered = coveredCells(rows);
   return (
     <>
       {flat.map((flatRow, i) => {
@@ -257,14 +268,16 @@ export const TableRows = () => {
             {flatRow.thCells.map((th, j) => (
               <Th key={j} {...th} />
             ))}
-            {flatRow.leaf.cells.map((cell, j) => (
-              <RowCell
-                key={j}
-                cell={cell}
-                path={{ type: "Cell", rowPath: flatRow.path, colPath: j }}
-                rowFocused={rowFocused}
-              />
-            ))}
+            {flatRow.leaf.cells.map((cell, j) =>
+              isCovered(covered, i, j) ? null : (
+                <RowCell
+                  key={j}
+                  cell={cell}
+                  path={{ type: "Cell", rowPath: flatRow.path, colPath: j }}
+                  rowFocused={rowFocused}
+                />
+              ),
+            )}
           </tr>
         );
       })}

@@ -11,6 +11,11 @@ test("FocusEnter sets focusInsideTable to true", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -27,6 +32,11 @@ test("FocusLeave sets focusInsideTable to false", () => {
     },
     name: "Test Table",
     focusInsideTable: true,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -43,6 +53,11 @@ test("SetFocus updates the focus path", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -63,6 +78,11 @@ test("SetSelect updates the select path", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -83,6 +103,11 @@ test("SetSelect with null deselects", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: { type: "Cell", rowPath: [1], colPath: [1] },
   };
@@ -101,6 +126,11 @@ test("AddPhoneme adds a phoneme to the specified cell", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -126,6 +156,11 @@ test("AddPhoneme with invalid path does not modify state", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -159,6 +194,11 @@ test("RemovePhoneme removes the specified phoneme from the cell", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -188,6 +228,11 @@ test("RemovePhoneme with invalid path does not modify state", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -214,6 +259,11 @@ test("AddNewAnnotation adds a new annotation to the specified phoneme", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -243,6 +293,11 @@ test("LinkAnnotation links an existing annotation to the specified phoneme", () 
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -271,6 +326,11 @@ test("LinkAnnotation with invalid annotation index does not modify state", () =>
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -298,6 +358,11 @@ test("LinkAnnotation with invalid path does not modify state", () => {
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -325,6 +390,11 @@ test("RemoveAnnotation removes the specified annotation from the phoneme", () =>
     },
     name: "Test Table",
     focusInsideTable: false,
+    undoStack: [],
+    redoStack: [],
+    keybindState: "Idle",
+    pendingModal: null,
+    pendingPhonemeIndex: null,
     focus: { type: "Cell", rowPath: [0], colPath: [0] },
     select: null,
   };
@@ -336,4 +406,205 @@ test("RemoveAnnotation removes the specified annotation from the phoneme", () =>
   });
   // @ts-ignore
   expect(newState.body.rows[0]!.cells[0].phonemes[0].annotations).toEqual([]);
+});
+
+// --- merged cells ---
+
+import type { Body, Cell } from "./table";
+import { cellColspan, cellRowspan, leafCellRows } from "./spans";
+
+const mkCell = (...phonemes: string[]): Cell => ({
+  phonemes: phonemes.map((p) => ({ text: p, annotations: [] })),
+});
+
+const mkState = (body: Body): EditorState => ({
+  body,
+  name: "Test Table",
+  focusInsideTable: false,
+  focus: { type: "Cell", rowPath: 0, colPath: 0 },
+  select: null,
+  undoStack: [],
+  redoStack: [],
+  keybindState: "Idle",
+  pendingModal: null,
+  pendingPhonemeIndex: null,
+});
+
+const grid2x3 = (): Body => ({
+  rows: [
+    {
+      type: "Individual",
+      heading: "R1",
+      cells: [mkCell("a"), mkCell("b"), mkCell("c")],
+    },
+    {
+      type: "Individual",
+      heading: "R2",
+      cells: [mkCell("d"), mkCell("e"), mkCell("f")],
+    },
+  ],
+  columns: [
+    { type: "Individual", heading: "C1" },
+    { type: "Individual", heading: "C2" },
+    { type: "Individual", heading: "C3" },
+  ],
+  annotations: [],
+});
+
+test("MergeCells merges the rectangle and gathers phonemes into the anchor", () => {
+  const state = mkState(grid2x3());
+  const newState = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 1, colPath: 1 },
+  });
+  const cells = leafCellRows(newState.body.rows);
+  const anchor = cells[0]![0]!;
+  expect(cellRowspan(anchor)).toBe(2);
+  expect(cellColspan(anchor)).toBe(2);
+  expect(anchor.phonemes.map((p) => p.text)).toEqual(["a", "b", "d", "e"]);
+  // covered cells are emptied
+  expect(cells[0]![1]!.phonemes).toEqual([]);
+  expect(cells[1]![0]!.phonemes).toEqual([]);
+  expect(cells[1]![1]!.phonemes).toEqual([]);
+  // untouched cells stay
+  expect(cells[0]![2]!.phonemes.map((p) => p.text)).toEqual(["c"]);
+  // focus and select land on the anchor
+  expect(newState.focus).toEqual({ type: "Cell", rowPath: 0, colPath: 0 });
+  expect(newState.select).toEqual({ type: "Cell", rowPath: 0, colPath: 0 });
+});
+
+test("MergeCells expands over a partially overlapped merge", () => {
+  const state = mkState(grid2x3());
+  // first merge (0,1)-(1,1) vertically
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 1 },
+    b: { type: "Cell", rowPath: 1, colPath: 1 },
+  });
+  // then merge (0,0) with the merged cell; must swallow both its rows
+  const newState = apply(merged, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 0, colPath: 1 },
+  });
+  const anchor = leafCellRows(newState.body.rows)[0]![0]!;
+  expect(cellRowspan(anchor)).toBe(2);
+  expect(cellColspan(anchor)).toBe(2);
+});
+
+test("MergeCells with the same cell twice is a no-op", () => {
+  const state = mkState(grid2x3());
+  const newState = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 0, colPath: 0 },
+  });
+  expect(newState.body).toEqual(state.body);
+});
+
+test("UnmergeCell resets spans and leaves phonemes on the anchor", () => {
+  const state = mkState(grid2x3());
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 1, colPath: 1 },
+  });
+  const newState = apply(merged, {
+    type: "UnmergeCell",
+    path: { type: "Cell", rowPath: 0, colPath: 0 },
+  });
+  const cells = leafCellRows(newState.body.rows);
+  expect(cellRowspan(cells[0]![0]!)).toBe(1);
+  expect(cellColspan(cells[0]![0]!)).toBe(1);
+  expect(cells[0]![0]!.phonemes.map((p) => p.text)).toEqual([
+    "a",
+    "b",
+    "d",
+    "e",
+  ]);
+  expect(cells[1]![1]!.phonemes).toEqual([]);
+});
+
+test("MergeCells then Undo restores the original body", () => {
+  const state = mkState(grid2x3());
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 1, colPath: 1 },
+  });
+  const undone = apply(merged, { type: "Undo" });
+  expect(undone.body).toEqual(state.body);
+});
+
+test("adding a column inside a merge widens it", () => {
+  const state = mkState(grid2x3());
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 0, colPath: 1 },
+  });
+  // add a column after C1 -> lands inside the merge
+  const newState = apply(merged, {
+    type: "AddHeading",
+    kind: "column",
+    path: [0],
+    position: "after",
+  });
+  const cells = leafCellRows(newState.body.rows);
+  expect(cells[0]!.length).toBe(4);
+  expect(cellColspan(cells[0]![0]!)).toBe(3);
+});
+
+test("deleting a column inside a merge shrinks it", () => {
+  const state = mkState(grid2x3());
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 0, colPath: 1 },
+  });
+  const newState = apply(merged, {
+    type: "DeleteHeading",
+    kind: "column",
+    path: [1],
+  });
+  const cells = leafCellRows(newState.body.rows);
+  expect(cells[0]!.length).toBe(2);
+  expect(cellColspan(cells[0]![0]!)).toBe(1);
+});
+
+test("adding a row inside a vertical merge stretches it", () => {
+  const state = mkState(grid2x3());
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 1, colPath: 0 },
+  });
+  // add a row after R1 -> lands inside the merge
+  const newState = apply(merged, {
+    type: "AddHeading",
+    kind: "row",
+    path: [0],
+    position: "after",
+  });
+  const cells = leafCellRows(newState.body.rows);
+  expect(cells.length).toBe(3);
+  expect(cellRowspan(cells[0]![0]!)).toBe(3);
+});
+
+test("deleting a row spanned by a merge shrinks it", () => {
+  const state = mkState(grid2x3());
+  const merged = apply(state, {
+    type: "MergeCells",
+    a: { type: "Cell", rowPath: 0, colPath: 0 },
+    b: { type: "Cell", rowPath: 1, colPath: 0 },
+  });
+  const newState = apply(merged, {
+    type: "DeleteHeading",
+    kind: "row",
+    path: [1],
+  });
+  const cells = leafCellRows(newState.body.rows);
+  expect(cells.length).toBe(1);
+  expect(cellRowspan(cells[0]![0]!)).toBe(1);
 });

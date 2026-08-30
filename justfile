@@ -6,13 +6,76 @@ install-hooks:
     ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
     @echo "pre-commit hook installed -> scripts/pre-commit.sh"
 
-dev:
+# fail fast if the toolchain cargo will actually use isn't nix's. checking PATH
+# alone is not enough: RUSTC / RUSTC_WRAPPER / RUSTUP_TOOLCHAIN override it, and
+# a rustup-proxy cargo picks its own rustc regardless of PATH. building with the
+# system toolchain links against nix's libgvc without an rpath, so the binary
+# builds fine and then dies with "libgvc.so.6: cannot open shared object file".
+# run `just doctor` when this trips and you don't believe it.
+_nix-check:
+    #!/usr/bin/env sh
+    bad=""
+    for tool in cc rustc cargo; do
+        p=$(command -v "$tool" 2>/dev/null)
+        case "$p" in /nix/store/*) ;; *) bad="$bad $tool" ;; esac
+    done
+    [ -z "${RUSTC:-}" ] || case "$RUSTC" in /nix/store/*) ;; *) bad="$bad \$RUSTC" ;; esac
+    [ -z "${RUSTC_WRAPPER:-}" ] && [ -z "${RUSTUP_TOOLCHAIN:-}" ] || bad="$bad rustup-override"
+    cargo_v=$(cargo --version 2>/dev/null | cut -d" " -f2)
+    rustc_v=$(rustc --version 2>/dev/null | cut -d" " -f2)
+    [ "$cargo_v" = "$rustc_v" ] || bad="$bad version-skew"
+    [ -z "$bad" ] && exit 0
+    echo "!! wrong build toolchain:$bad"
+    just doctor
+    echo
+    echo "   fix: 'direnv reload', or 'nix develop --command just <recipe>'"
+    echo "   why: the system toolchain links nix's libgvc without an rpath, and the"
+    echo "        binary then dies with 'libgvc.so.6: cannot open shared object file'"
+    exit 1
+
+# dump everything that decides which toolchain a build actually uses
+doctor:
+    #!/usr/bin/env sh
+    echo "   IN_NIX_SHELL:     ${IN_NIX_SHELL:-<unset>}"
+    echo "   cc:               $(command -v cc || echo '<none>')"
+    echo "   rustc:            $(command -v rustc || echo '<none>')  ($(rustc --version 2>/dev/null))"
+    echo "   cargo:            $(command -v cargo || echo '<none>')  ($(cargo --version 2>/dev/null))"
+    echo "   RUSTC:            ${RUSTC:-<unset>}"
+    echo "   RUSTC_WRAPPER:    ${RUSTC_WRAPPER:-<unset>}"
+    echo "   RUSTUP_TOOLCHAIN: ${RUSTUP_TOOLCHAIN:-<unset>}"
+    echo "   CARGO:            ${CARGO:-<unset>}"
+    echo "   CARGO_HOME:       ${CARGO_HOME:-<unset>}"
+    echo "   PATH (first 4):"
+    echo "$PATH" | tr ":" "\n" | head -4 | sed "s/^/     /"
+
+# target/debug/axismundi is a hardlink to whichever target/debug/deps/axismundi-*
+# cargo uplifted last, and a build with nothing to do does NOT re-uplift. so one
+# cargo run from outside the devshell (an editor, an agent, a stray shell) leaves
+# the system-linked binary sitting there and every later `cargo run` in here
+# happily executes it -- "Finished in 0.27s" and then libgvc.so.6 not found.
+# deleting it makes the next build re-uplift the right one; it costs nothing when
+# the link is already good.
+_unstale:
+    #!/usr/bin/env sh
+    bin=target/debug/axismundi
+    [ -e "$bin" ] || exit 0
+    ldd "$bin" 2>/dev/null | grep -q "not found" || exit 0
+    echo "-- $bin can't resolve its libraries (built outside the devshell); dropping it"
+    ldd "$bin" 2>/dev/null | grep "not found" | sed "s/^/     /"
+    rm -f "$bin"
+
+dev: _nix-check _unstale
   just dev-full
   @echo "Starting the app..."
   concurrently --names 後,前 --prefix-colors green,blue "just dev-backend" "just dev-frontend"
 
-dev-backend:
-  CARGO_TERM_COLOR=always watchexec -w templates -w src -r cargo run
+# -n (--shell=none) is load-bearing: without it watchexec runs the command via
+# $SHELL, i.e. `fish -c cargo run`, and a nested fish re-sources config.fish ->
+# mise re-activates -> its rust (rustup 1.96) is prepended ahead of the
+# devshell's, so the rebuild silently uses the wrong toolchain and links nix's
+# libgvc with no rpath. sh is fine; fish is not. keep the -n.
+dev-backend: _nix-check _unstale
+  CARGO_TERM_COLOR=always watchexec -n -w templates -w src -r -- cargo run
 
 dev-frontend:
   cd frontend && bun run dev
@@ -83,7 +146,7 @@ test_teardown:
     @echo "Tearing down test services..."
     docker compose -f docker-compose.test.yml down -v --timeout 0 2>/dev/null >/dev/null
 
-test flags="" cov="" $RUST_BACKTRACE="0":
+test flags="" cov="" $RUST_BACKTRACE="0": _nix-check
     #!/usr/bin/env sh
     echo "Bringing up test services..."
     docker compose -f docker-compose.test.yml up -d 2>/dev/null >/dev/null
@@ -168,7 +231,7 @@ down:
     docker compose down
 
 # Run the application locally (requires database to be running)
-run:
+run: _nix-check _unstale
     cargo run
 
 # Watch frontend for changes during development
@@ -205,7 +268,7 @@ dev-down:
     docker compose down
 
 # Build the application
-build:
+build: _nix-check _unstale
     cargo build
 
 # Build frontend assets

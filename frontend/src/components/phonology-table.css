@@ -254,6 +254,11 @@ ol.annotations {
     }
   }
 
+  .help-note {
+    font-size: 0.875rem;
+    color: var(--foreground-secondary);
+  }
+
   .keybind-list {
     display: grid;
     grid-template-columns: max-content 1fr;

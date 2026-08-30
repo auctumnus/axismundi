@@ -5,6 +5,13 @@ import {
   numLeaves,
   TOP_LEFT_CELL,
 } from "./table";
+import {
+  anchorOf,
+  cellColspan,
+  cellRowspan,
+  coveredCells,
+  leafCellRows,
+} from "./spans";
 
 export type HeadingPath = number[];
 
@@ -429,6 +436,19 @@ export const setByPath = <T extends TablePath>(
   }
 };
 
+/** The leaf coordinates of a cell path, or null if the path is invalid. */
+export const cellCoords = (
+  table: Body,
+  path: CellPath,
+): [number, number] | null => {
+  const r = normalizeToIndex(table.rows, path.rowPath);
+  const c = normalizeToIndex(table.columns, path.colPath);
+  if (r === null || c === null) {
+    return null;
+  }
+  return [r, c];
+};
+
 export const serializePath = (table: Body, path: TablePath): string => {
   switch (path.type) {
     case "TopLeft":
@@ -679,6 +699,20 @@ export const move = (
     return path;
   }
 
+  // landing on a cell hidden under a merged region redirects to its anchor;
+  // uncovered landings keep the caller's preferred path form
+  const resolveCellAt = (
+    r: number,
+    c: number,
+    fallback: TablePath,
+  ): TablePath => {
+    const [ar, ac] = anchorOf(coveredCells(table.rows), r, c);
+    if (ar === r && ac === c) {
+      return fallback;
+    }
+    return { type: "Cell", rowPath: ar, colPath: ac };
+  };
+
   switch (elementKind(currentElement)) {
     case "TopLeft": {
       switch (movement) {
@@ -741,8 +775,13 @@ export const move = (
         }
       } else if (movement === "End") {
         const lastCellIndex = lastCellOfRow(row);
-        if (lastCellIndex !== null) {
-          return { type: "Cell", rowPath: rowPath, colPath: lastCellIndex };
+        const leafRowIndex = headingPathToIndex(table.rows, rowPath);
+        if (lastCellIndex !== null && leafRowIndex !== null) {
+          return resolveCellAt(leafRowIndex, lastCellIndex, {
+            type: "Cell",
+            rowPath: rowPath,
+            colPath: lastCellIndex,
+          });
         } else {
           return path;
         }
@@ -750,12 +789,13 @@ export const move = (
 
       // fast path for moving to the first cell in this row
       if (isLeaf && (movement === "Right" || movement === "Tab")) {
-        if (row.cells.length > 0) {
-          return {
+        const leafRowIndex = headingPathToIndex(table.rows, rowPath);
+        if (row.cells.length > 0 && leafRowIndex !== null) {
+          return resolveCellAt(leafRowIndex, 0, {
             type: "Cell",
             rowPath: (path as RowHeadingPath).path,
             colPath: 0,
-          };
+          });
         }
       }
 
@@ -864,12 +904,13 @@ export const move = (
 
       // fast path for moving to the first cell in this column
       if (isLeaf && movement === "Down") {
-        if (table.rows.length > 0) {
-          return {
+        const leafColIndex = headingPathToIndex(table.columns, colPath);
+        if (table.rows.length > 0 && leafColIndex !== null) {
+          return resolveCellAt(0, leafColIndex, {
             type: "Cell",
             rowPath: 0,
             colPath: (path as ColumnHeadingPath).path,
-          };
+          });
         }
       }
 
@@ -935,37 +976,53 @@ export const move = (
         (path as CellPath).colPath,
       );
 
-      const isFirstRow = rowIndex === 0;
-      const isFirstCol = colIndex === 0;
-      const isLastRow = rowIndex === numLeaves(table.rows) - 1;
-      const isLastCol = colIndex === numLeaves(table.columns) - 1;
-
       if (rowIndex === null || colIndex === null) {
         return path;
       }
 
+      // focus always sits on a merge's anchor; movements step over the whole
+      // merged region, and any landing spot hidden under another merge
+      // resolves to that merge's anchor
+      const grid = leafCellRows(table.rows);
+      const covered = coveredCells(table.rows);
+      const [anchorRow, anchorCol] = anchorOf(covered, rowIndex, colIndex);
+      const anchor = grid[anchorRow]?.[anchorCol];
+      const rowspan = anchor ? cellRowspan(anchor) : 1;
+      const colspan = anchor ? cellColspan(anchor) : 1;
+
+      const cellAt = (r: number, c: number): TablePath => {
+        const [ar, ac] = anchorOf(covered, r, c);
+        return { type: "Cell", rowPath: ar, colPath: ac };
+      };
+
+      const isFirstRow = anchorRow === 0;
+      const isFirstCol = anchorCol === 0;
+      const isLastRow = anchorRow + rowspan - 1 === numLeaves(table.rows) - 1;
+      const isLastCol =
+        anchorCol + colspan - 1 === numLeaves(table.columns) - 1;
+
       switch (movement) {
         case "Up":
           if (!isFirstRow) {
-            return { type: "Cell", rowPath: rowIndex - 1, colPath: colIndex };
+            return cellAt(anchorRow - 1, anchorCol);
           } else {
             return { type: "ColumnHeading", path: (path as CellPath).colPath };
           }
         case "Down":
           if (!isLastRow) {
-            return { type: "Cell", rowPath: rowIndex + 1, colPath: colIndex };
+            return cellAt(anchorRow + rowspan, anchorCol);
           }
           break;
         case "Left":
         case "ShiftTab":
           if (!isFirstCol) {
-            return { type: "Cell", rowPath: rowIndex, colPath: colIndex - 1 };
+            return cellAt(anchorRow, anchorCol - 1);
           } else {
             return { type: "RowHeading", path: (path as CellPath).rowPath };
           }
         case "Right":
           if (!isLastCol) {
-            return { type: "Cell", rowPath: rowIndex, colPath: colIndex + 1 };
+            return cellAt(anchorRow, anchorCol + colspan);
           }
           break;
         case "Tab":
@@ -973,7 +1030,7 @@ export const move = (
             return null;
           }
           if (!isLastCol) {
-            return { type: "Cell", rowPath: rowIndex, colPath: colIndex + 1 };
+            return cellAt(anchorRow, anchorCol + colspan);
           } else {
             // move to the next heading
             // the next heading is defined by the next heading in the depth-first traversal
@@ -1001,11 +1058,11 @@ export const move = (
           }
           const lastCellIndex = lastCellOfRow(rowHeading);
           if (lastCellIndex !== null) {
-            return {
+            return resolveCellAt(anchorRow, lastCellIndex, {
               type: "Cell",
               rowPath: (path as CellPath).rowPath,
               colPath: lastCellIndex,
-            };
+            });
           } else {
             return path;
           }

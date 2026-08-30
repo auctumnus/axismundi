@@ -1,0 +1,5 @@
+{
+  "api_url": "https://axismundi.app/api",
+  "token_file": "/path/to/axm-token",
+  "default_language": "pas"
+}

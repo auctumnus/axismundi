@@ -158,6 +158,18 @@ export const getKeybindAction = (
           return { type: "OpenModal", modal: "LinkAnnotation" };
         }
       }
+      break;
+    case "m":
+      // merge the rectangle between the selected and focused cells
+      if (state.select?.type === "Cell" && state.focus?.type === "Cell") {
+        return { type: "MergeCells", a: state.select, b: state.focus };
+      }
+      return { type: "SetKeybindState", keybindState: "Idle" };
+    case "M":
+      if (targetPath?.type === "Cell") {
+        return { type: "UnmergeCell", path: targetPath };
+      }
+      return { type: "SetKeybindState", keybindState: "Idle" };
   }
 
   return null;

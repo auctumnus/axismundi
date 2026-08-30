@@ -5,6 +5,10 @@ export interface Phoneme {
 
 export interface Cell {
   phonemes: Phoneme[];
+  // merged-cell spans; absent means 1. cells hidden under a merged region stay
+  // in the cells arrays as empty 1x1 cells so grid indexing never changes
+  rowspan?: number;
+  colspan?: number;
 }
 
 export type Row =

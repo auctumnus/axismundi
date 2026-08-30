@@ -3,6 +3,10 @@
 All endpoints are served below `/api`. This reference is generated from the
 routes registered in `src/controller/api`.
 
+For a step-by-step workflow that creates a word, derives it through sound
+changes, and links it to a daughter-language form, see the
+[API tutorials](API-tutorials.md).
+
 ## Conventions
 
 ### Authentication

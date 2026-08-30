@@ -36,6 +36,57 @@ You will need to fill out a `config.json`; an example one is provided in [`./res
 Run the backend with `just run` (or inspect the `justfile` any other time a `just` command is needed).
 This assumes a database is running, which can be started with `just db`.
 
+### API CLI
+
+The repository also builds `axm`, a resource-oriented API client. It supports
+words, languages, word classes/categories, definitions, community content, and
+language-structure resources. For example, create a dictionary entry with:
+
+```bash
+export AXISMUNDI_API_TOKEN='your-token' # preferred over --token: avoids shell history
+cargo run --bin axm -- word new --in pas --word "kok'ebe" --def 'to stink' --class v
+```
+
+Repeat `--def` for multiple ordered senses and `--category` for multiple word
+categories. The same resource supports `list`, `get` (or `read`), `edit`, and
+`delete`; for example: `axm word edit --in pas --slug kokebe --lemma 1 --ipa
+kɔ.kʼe.be`. Use `axm content --help` for translatables, translations,
+quotations, and news; use `axm structure --help` for phonology tables,
+sound-change sets, and language-family resources. `AXISMUNDI_API_URL`
+overrides the default `https://axismundi.app/api`. Interactive word searches
+render as compact, colored listings with definition previews and relative
+timestamps; other JSON responses are pretty-printed. When piped or captured,
+raw response bytes are written instead. Pass `--json` to request raw output
+explicitly. HTTP status and errors go to stderr, which makes the command
+convenient in scripts.
+Redirects are not followed unless `--follow` is passed. The client retries
+rate-limited reads with bounded backoff; write retries require the explicit
+`--retry-writes` opt-in. It will not send a token over remote plain HTTP
+without `--allow-insecure-http`.
+
+Run `cargo run --bin axm -- --help` for the complete option list and
+see [the API tutorial](docs/API-tutorials.md) for a parent-to-daughter word
+workflow.
+
+#### CLI configuration
+
+`axm` reads `$XDG_CONFIG_HOME/axm/config.json`, falling back to
+`~/.config/axm/config.json`. Copy and adapt
+[`resources/axm-config.json`](resources/axm-config.json):
+
+```json
+{
+  "api_url": "https://axismundi.app/api",
+  "token_file": "/path/to/axm-token",
+  "default_language": "pas"
+}
+```
+
+Relative `token_file` paths are relative to that configuration file.
+`--base-url`, `--token`, `--token-file`, and their existing environment
+variables override it; `--in` overrides `default_language`. Set `AXM_CONFIG`
+to use a configuration file at another path.
+
 #### Services
 
 We use:

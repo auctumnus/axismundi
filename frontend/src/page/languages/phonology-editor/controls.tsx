@@ -2,6 +2,7 @@ import { useEditor, type EditorState, PRESETS } from "./state";
 import { Tooltip } from "../../../components/tooltip/tooltip";
 import {
   getByPath,
+  isPathEqual,
   normalizeHeadingPath,
   type CellPath,
   type HeadingPath,
@@ -571,6 +572,86 @@ const PhonemeEditModal = ({
         </>
       )}
     />
+  );
+};
+
+const CellControls = ({ isCellSelected, selectTarget }: ControlState) => {
+  const [state, dispatch] = useEditor();
+
+  const cell = isCellSelected ? (selectTarget as Cell) : null;
+  const selectedIsMerged =
+    cell !== null && ((cell.rowspan ?? 1) > 1 || (cell.colspan ?? 1) > 1);
+
+  // merging works on the rectangle between the selected cell and the focused
+  // cell, so it needs both, and they have to differ
+  const canMerge =
+    isCellSelected &&
+    state.select !== null &&
+    state.focus.type === "Cell" &&
+    !isPathEqual(state.body, state.select, state.focus);
+
+  const mergeCells = () => {
+    if (!canMerge || !state.select) return;
+    dispatch({ type: "MergeCells", a: state.select, b: state.focus });
+  };
+
+  const unmergeCell = () => {
+    if (!selectedIsMerged || !state.select) return;
+    dispatch({ type: "UnmergeCell", path: state.select });
+  };
+
+  return (
+    <div className="controls cell-controls">
+      <span className="controls-header">Cells</span>
+      <ControlButton
+        onClick={mergeCells}
+        title="Merge selected cell with focused cell"
+        enabled={canMerge}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="1em"
+          height="1em"
+          viewBox="0 0 24 24"
+        >
+          <g
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 6v12h16V6z" />
+            <path d="M9 12h6M9 12l2-2m-2 2l2 2m4-2l-2-2m2 2l-2 2" />
+          </g>
+        </svg>
+      </ControlButton>
+      <ControlButton
+        onClick={unmergeCell}
+        title="Unmerge cell"
+        enabled={selectedIsMerged}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="1em"
+          height="1em"
+          viewBox="0 0 24 24"
+        >
+          <g
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 6v12h16V6z" />
+            <path d="M12 7v10" />
+            <path d="M9 12H6m0 0l1.5-1.5M6 12l1.5 1.5" />
+            <path d="M15 12h3m0 0l-1.5-1.5M18 12l-1.5 1.5" />
+          </g>
+        </svg>
+      </ControlButton>
+    </div>
   );
 };
 
@@ -1447,6 +1528,7 @@ export const Controls = () => {
       <EditorControls />
       <RowControls {...controlState} />
       <ColumnControls {...controlState} />
+      <CellControls {...controlState} />
       <PhonemeControls {...controlState} />
       <AnnotationControls {...controlState} />
       <PresetControls />
