@@ -7,7 +7,7 @@ use std::{
     io::{self, IsTerminal as _, Read as _, Write as _},
     net::IpAddr,
     path::{Path, PathBuf},
-    process::ExitCode,
+    process::{Command as ProcessCommand, ExitCode},
     time::Duration,
 };
 
@@ -42,6 +42,10 @@ struct Cli {
     /// API base URL. The default targets the public Axismundi instance.
     #[arg(long, global = true, env = "AXISMUNDI_API_URL")]
     base_url: Option<String>,
+
+    /// Website base URL for terminal hyperlinks. Defaults to the API URL without /api.
+    #[arg(long, global = true, env = "AXISMUNDI_WEB_URL")]
+    web_url: Option<String>,
 
     /// API token. Prefer AXISMUNDI_API_TOKEN or --token-file to avoid shell history.
     #[arg(
@@ -360,6 +364,7 @@ struct Header {
 #[derive(Debug)]
 struct ClientConfig {
     base_url: Url,
+    web_url: Option<Url>,
     token: Option<String>,
     timeout: Option<Duration>,
     follow_redirects: bool,
@@ -371,6 +376,8 @@ struct ClientConfig {
 struct AxmConfig {
     /// Base URL for API requests, including `/api` when appropriate.
     api_url: Option<String>,
+    /// Base URL for website links shown in interactive word listings.
+    web_url: Option<String>,
     /// File containing the API token. Relative paths are resolved from this config file.
     token_file: Option<PathBuf>,
     /// Language code supplied to `--in` when no command-line value is given.
@@ -421,13 +428,22 @@ async fn run(cli: Cli, file_config: AxmConfig) -> Result<u8> {
             .as_deref()
             .or(file_config.token_file.as_deref())
     };
+    let base_url = parse_base_url(
+        cli.base_url
+            .as_deref()
+            .or(file_config.api_url.as_deref())
+            .unwrap_or(DEFAULT_BASE_URL),
+    )?;
+    let web_url = cli
+        .web_url
+        .as_deref()
+        .or(file_config.web_url.as_deref())
+        .map(parse_web_url)
+        .transpose()?
+        .or_else(|| derive_web_url(&base_url));
     let config = ClientConfig {
-        base_url: parse_base_url(
-            cli.base_url
-                .as_deref()
-                .or(file_config.api_url.as_deref())
-                .unwrap_or(DEFAULT_BASE_URL),
-        )?,
+        base_url,
+        web_url,
         token: load_token(cli.token, token_file)?,
         timeout: (cli.timeout != 0).then(|| Duration::from_secs(cli.timeout)),
         follow_redirects: cli.follow,
@@ -493,7 +509,13 @@ async fn run(cli: Cli, file_config: AxmConfig) -> Result<u8> {
         )
         .await?;
     }
-    write_response(&response, output, &args, stdout_is_terminal)?;
+    write_response(
+        &response,
+        output,
+        &args,
+        stdout_is_terminal,
+        config.web_url.as_ref(),
+    )?;
 
     if response.status.is_success() {
         Ok(0)
@@ -837,6 +859,35 @@ fn parse_base_url(input: &str) -> Result<Url> {
     Ok(url)
 }
 
+fn parse_web_url(input: &str) -> Result<Url> {
+    let mut url = Url::parse(input).context("invalid --web-url")?;
+    if !matches!(url.scheme(), "http" | "https") {
+        bail!("--web-url must use http or https");
+    }
+    if url.host_str().is_none() {
+        bail!("--web-url must include a host");
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        bail!("--web-url must not contain credentials");
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        bail!("--web-url must not contain a query string or fragment");
+    }
+    if !url.path().ends_with('/') {
+        let path = format!("{}/", url.path());
+        url.set_path(&path);
+    }
+    Ok(url)
+}
+
+fn derive_web_url(api_url: &Url) -> Option<Url> {
+    let mut url = api_url.clone();
+    let path = url.path().trim_end_matches('/');
+    let site_path = path.strip_suffix("/api")?;
+    url.set_path(&format!("{site_path}/"));
+    Some(url)
+}
+
 fn load_axm_config() -> Result<AxmConfig> {
     let Some(path) = axm_config_path() else {
         return Ok(AxmConfig::default());
@@ -1109,6 +1160,7 @@ fn write_response(
     mode: OutputMode,
     request: &RequestArgs,
     stdout_is_terminal: bool,
+    web_url: Option<&Url>,
 ) -> Result<()> {
     let mut stdout = io::stdout().lock();
     let should_format = match mode {
@@ -1128,8 +1180,13 @@ fn write_response(
         match serde_json::from_slice::<Value>(&response.bytes) {
             Ok(json) => {
                 if mode == OutputMode::Pretty && stdout_is_terminal {
-                    if let Some(output) = render_word_list(&json, request, Utc::now(), use_color())
-                    {
+                    if let Some(output) = render_word_list(
+                        &json,
+                        request,
+                        Utc::now(),
+                        use_color(),
+                        terminal_hyperlinks_supported().then_some(web_url).flatten(),
+                    ) {
                         stdout
                             .write_all(output.as_bytes())
                             .context("failed to write word list response")?;
@@ -1159,6 +1216,7 @@ fn render_word_list(
     request: &RequestArgs,
     now: DateTime<Utc>,
     color: bool,
+    web_url: Option<&Url>,
 ) -> Option<String> {
     let language = word_list_language(request)?;
     let object = json.as_object()?;
@@ -1183,6 +1241,8 @@ fn render_word_list(
     }
     for (index, item) in items.iter().enumerate() {
         let word = item.get("word")?.as_str()?.trim();
+        let slug = item.get("slug")?.as_str()?;
+        let lemma = item.get("lemma")?.as_i64()?;
         let word_class = item
             .get("word_class_abbreviation")
             .and_then(Value::as_str)
@@ -1198,7 +1258,10 @@ fn render_word_list(
         output.push_str(&format!(
             "\n  {} {}{}{}\n",
             paint(&format!("({})", index + 1), Style::Dim, color),
-            paint(word, Style::BoldCyan, color),
+            terminal_hyperlink(
+                web_url.and_then(|url| word_page_url(url, &language, slug, lemma)),
+                &paint(word, Style::BoldCyan, color)
+            ),
             paint(&word_class, Style::Cyan, color),
             paint(&lemma_count, Style::Dim, color),
         ));
@@ -1262,6 +1325,54 @@ fn render_word_list(
 fn word_list_language(request: &RequestArgs) -> Option<String> {
     let path: Vec<_> = request.path.trim_matches('/').split('/').collect();
     (path.len() == 3 && path[0] == "languages" && path[2] == "words").then(|| path[1].to_owned())
+}
+
+fn word_page_url(web_url: &Url, language: &str, slug: &str, lemma: i64) -> Option<Url> {
+    let mut url = web_url.clone();
+    let mut segments = url.path_segments_mut().ok()?;
+    segments.pop_if_empty();
+    segments.push("languages");
+    segments.push(language);
+    segments.push("words");
+    segments.push(slug);
+    segments.push(&lemma.to_string());
+    drop(segments);
+    Some(url)
+}
+
+fn terminal_hyperlink(url: Option<Url>, text: &str) -> String {
+    let Some(url) = url else {
+        return text.to_owned();
+    };
+    format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
+}
+
+fn terminal_hyperlinks_supported() -> bool {
+    supports_hyperlinks::supports_hyperlinks() || tmux_hyperlinks_supported()
+}
+
+fn tmux_hyperlinks_supported() -> bool {
+    if env::var_os("TMUX").is_none() {
+        return false;
+    }
+    let Ok(output) = ProcessCommand::new("tmux")
+        .args(["show-options", "-gqv", "terminal-features"])
+        .output()
+    else {
+        return false;
+    };
+    output.status.success()
+        && String::from_utf8(output.stdout)
+            .is_ok_and(|features| tmux_terminal_features_enable_hyperlinks(&features))
+}
+
+fn tmux_terminal_features_enable_hyperlinks(features: &str) -> bool {
+    features.lines().any(|entry| {
+        entry
+            .split(':')
+            .skip(1)
+            .any(|feature| feature.trim() == "hyperlinks")
+    })
 }
 
 fn relative_time(then: DateTime<Utc>, now: DateTime<Utc>) -> String {
@@ -1349,6 +1460,7 @@ mod tests {
     fn config(base_url: &str) -> ClientConfig {
         ClientConfig {
             base_url: parse_base_url(base_url).unwrap(),
+            web_url: derive_web_url(&parse_base_url(base_url).unwrap()),
             token: Some("test-token".to_owned()),
             timeout: Some(Duration::from_secs(1)),
             follow_redirects: false,
@@ -1374,6 +1486,7 @@ mod tests {
             Path::new("/tmp/axm/config.json"),
             br#"{
                 "api_url": "https://example.test/api",
+                "web_url": "https://www.example.test",
                 "token_file": "token",
                 "default_language": "pas"
             }"#,
@@ -1381,6 +1494,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.api_url.as_deref(), Some("https://example.test/api"));
+        assert_eq!(config.web_url.as_deref(), Some("https://www.example.test"));
         assert_eq!(
             config.token_file.as_deref(),
             Some(Path::new("/tmp/axm/token"))
@@ -1401,6 +1515,42 @@ mod tests {
             url.as_str(),
             "https://example.test/api/languages?categories%5B%5D=noun"
         );
+    }
+
+    #[test]
+    fn derives_the_website_url_from_an_api_root() {
+        assert_eq!(
+            derive_web_url(&parse_base_url("https://example.test/api").unwrap())
+                .unwrap()
+                .as_str(),
+            "https://example.test/"
+        );
+        assert!(derive_web_url(&parse_base_url("https://example.test/v1").unwrap()).is_none());
+    }
+
+    #[test]
+    fn word_page_urls_escape_path_segments() {
+        assert_eq!(
+            word_page_url(
+                &parse_web_url("https://example.test/axis").unwrap(),
+                "pas",
+                "p'elar space",
+                2,
+            )
+            .unwrap()
+            .as_str(),
+            "https://example.test/axis/languages/pas/words/p'elar%20space/2"
+        );
+    }
+
+    #[test]
+    fn tmux_feature_detection_requires_an_enabled_hyperlink_feature() {
+        assert!(tmux_terminal_features_enable_hyperlinks("*:hyperlinks"));
+        assert!(tmux_terminal_features_enable_hyperlinks(
+            "xterm*:RGB:hyperlinks\nfoot*:hyperlinks"
+        ));
+        assert!(!tmux_terminal_features_enable_hyperlinks("*:hyperlinks@"));
+        assert!(!tmux_terminal_features_enable_hyperlinks("hyperlinks"));
     }
 
     #[test]
@@ -1463,6 +1613,8 @@ mod tests {
         let response = json!({
             "items": [{
                 "word": "p'elar",
+                "slug": "p'elar",
+                "lemma": 1,
                 "word_class_abbreviation": "n",
                 "lemma_count": 2,
                 "preview_definitions": ["blah", "foo"],
@@ -1470,6 +1622,8 @@ mod tests {
                 "created_at": "2026-08-29T12:00:00Z"
             }, {
                 "word": "asdj",
+                "slug": "asdj",
+                "lemma": 1,
                 "word_class_abbreviation": "v",
                 "preview_definitions": ["asd"]
             }],
@@ -1480,7 +1634,7 @@ mod tests {
         });
 
         assert_eq!(
-            render_word_list(&response, &request, now, false).unwrap(),
+            render_word_list(&response, &request, now, false, None).unwrap(),
             concat!(
                 "Results for searching \"a\" in `pas`:\n\n",
                 "  (1) p'elar (n.) /2\n",
@@ -1493,6 +1647,36 @@ mod tests {
                 "Next page: axm word list --in pas --q 'a' --offset 10\n",
             )
         );
+    }
+
+    #[test]
+    fn word_lists_link_word_forms_when_a_web_url_is_available() {
+        let request = request_args("languages/pas/words");
+        let response = json!({
+            "items": [{
+                "word": "p'elar",
+                "slug": "p'elar",
+                "lemma": 1,
+                "preview_definitions": []
+            }],
+            "total": 1,
+            "offset": 0,
+            "limit": 10,
+            "has_more": false
+        });
+
+        let output = render_word_list(
+            &response,
+            &request,
+            Utc::now(),
+            false,
+            Some(&parse_web_url("https://example.test").unwrap()),
+        )
+        .unwrap();
+
+        assert!(output.contains(
+            "\x1b]8;;https://example.test/languages/pas/words/p'elar/1\x1b\\p'elar\x1b]8;;\x1b\\"
+        ));
     }
 
     #[test]
@@ -1715,6 +1899,7 @@ mod tests {
         let (base_url, server) = spawn_server().await;
         let config = ClientConfig {
             base_url: parse_base_url(base_url.as_str()).unwrap(),
+            web_url: None,
             token: Some("test-token".to_owned()),
             timeout: Some(Duration::from_secs(1)),
             follow_redirects: false,
@@ -1746,6 +1931,7 @@ mod tests {
         let (base_url, server) = spawn_server().await;
         let config = ClientConfig {
             base_url: parse_base_url(base_url.as_str()).unwrap(),
+            web_url: None,
             token: None,
             timeout: Some(Duration::from_secs(1)),
             follow_redirects: false,
@@ -1778,6 +1964,7 @@ mod tests {
         let (base_url, server) = spawn_server().await;
         let config = ClientConfig {
             base_url: parse_base_url(base_url.as_str()).unwrap(),
+            web_url: None,
             token: Some("test-token".to_owned()),
             timeout: Some(Duration::from_secs(1)),
             follow_redirects: false,
@@ -1820,6 +2007,7 @@ mod tests {
         let base_url = parse_base_url(base_url.as_str()).unwrap();
         let client = build_client(&ClientConfig {
             base_url: base_url.clone(),
+            web_url: None,
             token: None,
             timeout: Some(Duration::from_secs(1)),
             follow_redirects: false,

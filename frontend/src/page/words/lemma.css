@@ -134,11 +134,25 @@ ul.quotations {
           font-size: 12px;
           fill: var(--foreground-primary);
         }
+        /* Graphviz emits each line of a node label as a separate text element.
+           The first line is the language name above a related word. */
+        &.cognacy-node-language text:first-of-type {
+          font-size: 10px;
+          fill: var(--foreground-secondary);
+        }
         path {
           transition: stroke var(--duration-very-fast) ease-in-out;
           fill: var(--background-panel);
           stroke: var(--border-color);
           stroke-width: 1px;
+        }
+      }
+
+      .cognacy-node-word-only {
+        text {
+          text-anchor: middle;
+          dominant-baseline: middle;
+          transform: translateY(.3em);
         }
       }
 

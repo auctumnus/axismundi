@@ -53,12 +53,20 @@ categories. The same resource supports `list`, `get` (or `read`), `edit`, and
 kɔ.kʼe.be`. Use `axm content --help` for translatables, translations,
 quotations, and news; use `axm structure --help` for phonology tables,
 sound-change sets, and language-family resources. `AXISMUNDI_API_URL`
-overrides the default `https://axismundi.app/api`. Interactive word searches
-render as compact, colored listings with definition previews and relative
-timestamps; other JSON responses are pretty-printed. When piped or captured,
+overrides the default `https://axismundi.app/api`; `AXISMUNDI_WEB_URL` sets the
+website base URL used by word-list links (otherwise it is inferred by removing
+`/api`). Interactive word searches render as compact, colored listings with
+definition previews, relative timestamps, and clickable word links when the
+terminal advertises OSC 8 hyperlink support; other JSON responses are
+pretty-printed. When piped or captured,
 raw response bytes are written instead. Pass `--json` to request raw output
 explicitly. HTTP status and errors go to stderr, which makes the command
 convenient in scripts.
+
+For tmux, enable forwarding in `~/.tmux.conf` with
+`set -as terminal-features ',*:hyperlinks'`. `axm` reads tmux's configured
+terminal features when its ordinary terminal detection cannot identify the
+outer terminal.
 Redirects are not followed unless `--follow` is passed. The client retries
 rate-limited reads with bounded backoff; write retries require the explicit
 `--retry-writes` opt-in. It will not send a token over remote plain HTTP
@@ -77,6 +85,7 @@ workflow.
 ```json
 {
   "api_url": "https://axismundi.app/api",
+  "web_url": "https://axismundi.app",
   "token_file": "/path/to/axm-token",
   "default_language": "pas"
 }

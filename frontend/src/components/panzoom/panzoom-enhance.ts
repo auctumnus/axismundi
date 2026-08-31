@@ -2,6 +2,9 @@ import createPanZoom, { type PanZoom } from 'panzoom';
 
 const ENHANCED = 'data-panzoom-enhanced';
 const CLICK_DRAG_THRESHOLD_PX = 5;
+const VIEW_PADDING_REM = 0.5;
+const MIN_INITIAL_FOCUS_ZOOM = 2.5;
+const MAX_INITIAL_FOCUS_SCALE = 1;
 
 function findScene(svg: SVGSVGElement): SVGGraphicsElement | null {
   for (const child of Array.from(svg.children)) {
@@ -10,51 +13,90 @@ function findScene(svg: SVGSVGElement): SVGGraphicsElement | null {
   return null;
 }
 
+function getRootFontSize(): number {
+  const fontSize = parseFloat(
+    getComputedStyle(document.documentElement).fontSize,
+  );
+  return Number.isFinite(fontSize) ? fontSize : 16;
+}
+
+function getViewPadding(rect: DOMRect): number {
+  const padding = VIEW_PADDING_REM * getRootFontSize();
+  return Math.min(padding, rect.width / 2, rect.height / 2);
+}
+
 function computeFitScale(
   svg: SVGSVGElement,
   scene: SVGGraphicsElement,
 ): number {
   const bbox = scene.getBBox();
   const rect = svg.getBoundingClientRect();
-  if (bbox.height === 0 || rect.height === 0) return 1;
-  return rect.height / bbox.height;
+  const padding = getViewPadding(rect);
+  const availableWidth = rect.width - padding * 2;
+  const availableHeight = rect.height - padding * 2;
+  if (
+    bbox.width === 0 ||
+    bbox.height === 0 ||
+    availableWidth <= 0 ||
+    availableHeight <= 0
+  ) {
+    return 1;
+  }
+  return Math.min(availableWidth / bbox.width, availableHeight / bbox.height);
 }
 
 function fitToContainer(
   svg: SVGSVGElement,
   scene: SVGGraphicsElement,
   instance: PanZoom,
+  focusTarget: SVGGraphicsElement | null = null,
 ) {
+  // Cancel an in-flight smooth zoom before restoring the initial framing.
+  instance.zoomTo(0, 0, 1);
+
   const bbox = scene.getBBox();
   const rect = svg.getBoundingClientRect();
-  if (bbox.width === 0 || bbox.height === 0 || rect.width === 0) return;
-  const scale = rect.height / bbox.height;
-  const x = (rect.width - bbox.width * scale) / 2 - bbox.x * scale;
-  const y = -bbox.y * scale;
-  instance.zoomAbs(0, 0, scale);
-  instance.moveTo(x, y);
-}
+  if (
+    bbox.width === 0 ||
+    bbox.height === 0 ||
+    rect.width === 0 ||
+    rect.height === 0
+  )
+    return;
 
-function focusOn(
-  svg: SVGSVGElement,
-  target: SVGGraphicsElement,
-  instance: PanZoom,
-  fitScale: number,
-) {
-  const bbox = target.getBBox();
-  const rect = svg.getBoundingClientRect();
-  if (bbox.width === 0 || bbox.height === 0 || rect.width === 0) return;
-  // size the target to roughly a quarter of the container, clamped to the panzoom bounds
-  const desired = Math.min(
-    rect.width / (bbox.width * 5),
-    rect.height / (bbox.height * 5),
-  );
-  const scale = Math.max(fitScale * 0.5, Math.min(desired, fitScale * 8));
-  const cx = bbox.x + bbox.width / 2;
-  const cy = bbox.y + bbox.height / 2;
-  const x = rect.width / 2 - cx * scale;
-  const y = rect.height / 2 - cy * scale;
-  instance.zoomAbs(0, 0, scale);
+  const padding = getViewPadding(rect);
+  const fitScale = computeFitScale(svg, scene);
+  const scale = focusTarget
+    ? Math.max(
+        fitScale,
+        Math.min(fitScale * MIN_INITIAL_FOCUS_ZOOM, MAX_INITIAL_FOCUS_SCALE),
+      )
+    : fitScale;
+  const minX = padding - bbox.x * scale;
+  const maxX = rect.width - padding - (bbox.x + bbox.width) * scale;
+  const minY = padding - bbox.y * scale;
+  const maxY = rect.height - padding - (bbox.y + bbox.height) * scale;
+
+  let x = (minX + maxX) / 2;
+  let y = (minY + maxY) / 2;
+  if (focusTarget) {
+    const focusBox = focusTarget.getBBox();
+    const desiredX = rect.width / 2 - (focusBox.x + focusBox.width / 2) * scale;
+    const desiredY =
+      rect.height / 2 - (focusBox.y + focusBox.height / 2) * scale;
+    if (scale > fitScale) {
+      x = desiredX;
+      y = desiredY;
+    } else {
+      x = Math.max(minX, Math.min(desiredX, maxX));
+      y = Math.max(minY, Math.min(desiredY, maxY));
+    }
+  }
+
+  // Panzoom reads Graphviz's inherited SVG transform as its initial scale and
+  // can reject programmatic zooms while settling bounds. Set its exposed model
+  // directly, then let moveTo apply the transform and enforce the bounds.
+  instance.getTransform().scale = scale;
   instance.moveTo(x, y);
 }
 
@@ -78,14 +120,17 @@ function makeControls(
   scene: SVGGraphicsElement,
   instance: PanZoom,
   focusTarget: SVGGraphicsElement | null,
-  fitScale: number,
 ): HTMLDivElement {
   const wrap = document.createElement('div');
   wrap.className = 'panzoom-controls';
 
   const zoomAt = (factor: number) => {
     const rect = svg.getBoundingClientRect();
-    instance.smoothZoom(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+    instance.smoothZoom(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+      factor,
+    );
   };
 
   const zoomIn = makeButton('zoom in', 'plus');
@@ -96,11 +141,7 @@ function makeControls(
 
   const reset = makeButton('reset view', 'refresh');
   reset.addEventListener('click', () => {
-    if (focusTarget) {
-      focusOn(svg, focusTarget, instance, fitScale);
-    } else {
-      fitToContainer(svg, scene, instance);
-    }
+    fitToContainer(svg, scene, instance, focusTarget);
   });
 
   wrap.append(zoomIn, zoomOut, reset);
@@ -155,6 +196,10 @@ function enhance(container: HTMLElement): PanZoom | null {
   );
 
   const fitScale = computeFitScale(svg, scene);
+  const focusSelector = container.dataset.panzoomFocus;
+  const focusTarget = focusSelector
+    ? svg.querySelector<SVGGraphicsElement>(focusSelector)
+    : null;
   const instance = createPanZoom(scene, {
     smoothScroll: false,
     bounds: true,
@@ -165,24 +210,16 @@ function enhance(container: HTMLElement): PanZoom | null {
     beforeWheel: (e) => !e.ctrlKey && !e.metaKey,
   });
 
-  const focusSelector = container.dataset.panzoomFocus;
-  const focusTarget = focusSelector
-    ? svg.querySelector<SVGGraphicsElement>(focusSelector)
-    : null;
-  if (focusTarget) {
-    focusOn(svg, focusTarget, instance, fitScale);
-  } else {
-    fitToContainer(svg, scene, instance);
-  }
+  fitToContainer(svg, scene, instance, focusTarget);
 
   svg.addEventListener('keydown', (e) => {
     if (e.key === '0') {
       e.preventDefault();
-      fitToContainer(svg, scene, instance);
+      fitToContainer(svg, scene, instance, focusTarget);
     }
   });
 
-  container.appendChild(makeControls(svg, scene, instance, focusTarget, fitScale));
+  container.appendChild(makeControls(svg, scene, instance, focusTarget));
 
   return instance;
 }

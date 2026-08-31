@@ -1322,6 +1322,7 @@ impl WordRelationRepository {
                     _updated_by: record._updated_by,
                     bookmark: record.bookmark,
                     language_code: Some(record.word_language_code.clone()),
+                    language_name: Some(record.word_language_name.clone()),
                     word_class_abbreviation: record.word_class_abbreviation,
                     created_by: record.word_created_by,
                     updated_by: record.word_updated_by,
@@ -1455,6 +1456,7 @@ impl WordRelationRepository {
                         words.updated_by as "_updated_by!",
                         COALESCE(bookmarks.slug, '') as "bookmark!",
                         languages.code as language_code,
+                        languages.name as "language_name!: String",
                         word_classes.abbreviation as word_class_abbreviation,
                         created.username as created_by,
                         updated.username as updated_by

@@ -47,6 +47,9 @@ pub struct Word {
     // materialized
     pub bookmark: String,
     pub language_code: Option<String>,
+    #[serde(skip_serializing)]
+    #[sqlx(default)]
+    pub language_name: Option<String>,
     pub word_class_abbreviation: Option<String>,
     pub created_by: Option<String>,
     pub updated_by: Option<String>,
@@ -453,6 +456,7 @@ impl WordRepository {
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     languages.code as "language_code: Option<String>",
+                    languages.name as "language_name!: String",
                     word_classes.abbreviation as "word_class_abbreviation: Option<String>",
                     created.username as "created_by: Option<String>",
                     updated.username as "updated_by: Option<String>"
@@ -500,6 +504,7 @@ impl WordRepository {
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     languages.code as "language_code: Option<String>",
+                    languages.name as "language_name!: String",
                     word_classes.abbreviation as "word_class_abbreviation: Option<String>",
                     created.username as "created_by: Option<String>",
                     updated.username as "updated_by: Option<String>"
@@ -654,6 +659,7 @@ impl WordRepository {
                     words.updated_by as "_updated_by!",
                     COALESCE((SELECT slug FROM bookmarks WHERE item = words.id AND resource = 'lemma'), '') as "bookmark!",
                     (SELECT code FROM languages WHERE id = words.language) as language_code,
+                    (SELECT name FROM languages WHERE id = words.language) as "language_name!: String",
                     (SELECT abbreviation FROM word_classes WHERE id = words.word_class) as word_class_abbreviation,
                     (SELECT username FROM users WHERE id = words.created_by) as created_by,
                     (SELECT username FROM users WHERE id = words.updated_by) as updated_by
@@ -887,6 +893,7 @@ impl WordRepository {
                     words.updated_by as "_updated_by!",
                     COALESCE(bookmarks.slug, '')::text as "bookmark!",
                     languages.code as "language_code: Option<String>",
+                    languages.name as "language_name!: String",
                     word_classes.abbreviation as "word_class_abbreviation: Option<String>",
                     created.username as "created_by: Option<String>",
                     updated.username as "updated_by: Option<String>"

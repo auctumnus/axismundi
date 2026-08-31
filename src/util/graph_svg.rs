@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 use vizoxide::{
     Context, Graph,
@@ -16,7 +16,8 @@ use crate::{
 
 /// Convert a `LeveledCognacy` to an SVG string.
 ///
-/// Node labels show word text only.
+/// Node labels show language names above the word text only in graphs spanning
+/// multiple languages.
 /// Edge styles indicate relation type:
 /// - Derived/Descendant: solid line
 /// - Compound: bold line
@@ -41,15 +42,26 @@ pub fn cognacy_to_svg(
 
     // Create nodes for each word
     let mut node_map: HashMap<Uuid, vizoxide::Node> = HashMap::new();
+    let graph_spans_languages = cognacy
+        .words
+        .values()
+        .map(|word| word.language)
+        .collect::<HashSet<_>>()
+        .len()
+        > 1;
 
     for word_id in cognacy.words.keys() {
         let word = &cognacy.words[word_id];
         let node_id = word_id.to_string();
 
-        let node_class = if current_word_id == Some(*word_id) {
-            "cognacy-node current-word"
-        } else {
-            "cognacy-node"
+        let is_current_word = current_word_id == Some(*word_id);
+        let language_label =
+            cognacy_language_label(word.language_name.as_deref(), graph_spans_languages);
+        let node_class = match (is_current_word, language_label.is_some()) {
+            (true, true) => "cognacy-node current-word cognacy-node-language",
+            (true, false) => "cognacy-node current-word cognacy-node-word-only",
+            (false, true) => "cognacy-node cognacy-node-language",
+            (false, false) => "cognacy-node cognacy-node-word-only",
         };
 
         let word_url = word.language_code.as_deref().map(|lang_code| {
@@ -59,9 +71,11 @@ pub fn cognacy_to_svg(
             )
         });
 
+        let label = cognacy_node_label(&word.word, language_label);
+
         let mut node_builder = g
             .create_node(&node_id)
-            .attribute(node::LABEL, &word.word)
+            .attribute(node::LABEL, &label)
             .attribute(node::SHAPE, "box")
             .attribute(node::STYLE, "rounded")
             .attribute(node::FONTNAME, "sans-serif")
@@ -113,12 +127,62 @@ pub fn cognacy_to_svg(
     Ok(svg)
 }
 
+/// Show all language labels or none: labels help distinguish a mixed-language
+/// graph, but add noise when every word belongs to the same language.
+fn cognacy_language_label<'a>(
+    language_name: Option<&'a str>,
+    graph_spans_languages: bool,
+) -> Option<&'a str> {
+    if graph_spans_languages {
+        language_name.filter(|name| !name.is_empty())
+    } else {
+        None
+    }
+}
+
+fn cognacy_node_label(word: &str, language_name: Option<&str>) -> String {
+    match language_name {
+        Some(name) => format!("{name}\n{word}"),
+        _ => word.to_string(),
+    }
+}
+
 fn edge_style_for_cognacy(kind: CognacyRelationKindV1) -> (&'static str, &'static str) {
     match kind {
         CognacyRelationKindV1::Derived | CognacyRelationKindV1::Descendant => ("solid", "1.0"),
         CognacyRelationKindV1::Compound => ("solid", "2.0"),
         CognacyRelationKindV1::Calque => ("dashed", "1.0"),
         CognacyRelationKindV1::Borrowed => ("dotted", "1.0"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cognacy_language_label, cognacy_node_label};
+
+    #[test]
+    fn cognacy_node_label_includes_language_name_above_word() {
+        assert_eq!(
+            cognacy_node_label("pater", Some("Latin")),
+            "Latin\npater"
+        );
+    }
+
+    #[test]
+    fn cognacy_node_label_shows_current_words_language_in_a_multilingual_graph() {
+        let language_label = cognacy_language_label(Some("Latin"), true);
+        assert_eq!(cognacy_node_label("pater", language_label), "Latin\npater");
+    }
+
+    #[test]
+    fn cognacy_node_label_omits_languages_in_a_single_language_graph() {
+        let language_label = cognacy_language_label(Some("Latin"), false);
+        assert_eq!(cognacy_node_label("pater", language_label), "pater");
+    }
+
+    #[test]
+    fn cognacy_node_label_omits_a_missing_language_name() {
+        assert_eq!(cognacy_node_label("pater", None), "pater");
     }
 }
 
