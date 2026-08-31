@@ -260,9 +260,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let opt: Option<String> = Option::deserialize(deserializer)?;
-    Ok(opt
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty()))
+    Ok(opt.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
 }
 
 pub fn strip(text: &str) -> String {
@@ -297,6 +295,23 @@ pub fn back_url<T: Serialize>(base: &str, pagination: &PaginatedRequest, query: 
         base.to_string()
     } else {
         format!("{}?{}", base, qs)
+    }
+}
+
+/// Use a return URL only when it remains within this site. This lets actions
+/// such as deleting an item restore the originating search without allowing an
+/// externally supplied `back` query parameter to become an open redirect.
+pub fn internal_back_or(back: Option<&str>, fallback: &str) -> String {
+    match back {
+        Some(back)
+            if back.starts_with('/')
+                && !back.starts_with("//")
+                && !back.contains('\\')
+                && !back.chars().any(char::is_control) =>
+        {
+            back.to_string()
+        }
+        _ => fallback.to_string(),
     }
 }
 
@@ -372,5 +387,26 @@ pub fn is_discord(
         ua.as_str().to_lowercase().contains("discordbot")
     } else {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::internal_back_or;
+
+    #[test]
+    fn internal_back_or_keeps_only_local_return_urls() {
+        let fallback = "/languages/test/words";
+
+        assert_eq!(
+            internal_back_or(Some("/languages/test/words?q=bird"), fallback),
+            "/languages/test/words?q=bird"
+        );
+        assert_eq!(internal_back_or(Some("//example.com"), fallback), fallback);
+        assert_eq!(
+            internal_back_or(Some("https://example.com"), fallback),
+            fallback
+        );
+        assert_eq!(internal_back_or(Some("/\\example.com"), fallback), fallback);
     }
 }

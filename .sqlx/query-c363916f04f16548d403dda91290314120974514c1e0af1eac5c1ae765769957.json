@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE definitions SET position = -position - 1 WHERE word = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c363916f04f16548d403dda91290314120974514c1e0af1eac5c1ae765769957"
+}

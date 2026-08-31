@@ -660,7 +660,7 @@ impl WordCategoryRepository {
                         COALESCE(similarity(word_categories.abbreviation, $2), 0.0) * 2.0
                     ELSE 0.0
                     END
-                ) DESC, word_categories.id
+                ) DESC, word_categories.created_at DESC, word_categories.id DESC
                 LIMIT $7
                 OFFSET $8
             "#,

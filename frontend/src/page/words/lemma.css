@@ -138,7 +138,49 @@ ul.quotations {
            The first line is the language name above a related word. */
         &.cognacy-node-language text:first-of-type {
           font-size: 10px;
-          fill: var(--foreground-secondary);
+        }
+        &.cognacy-language-red {
+          --cognacy-language-tag-bg: light-dark(var(--color-red-100), var(--color-red-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-red-800), var(--color-red-200));
+        }
+        &.cognacy-language-orange {
+          --cognacy-language-tag-bg: light-dark(var(--color-orange-100), var(--color-orange-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-orange-800), var(--color-orange-200));
+        }
+        &.cognacy-language-yellow {
+          --cognacy-language-tag-bg: light-dark(var(--color-yellow-100), var(--color-yellow-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-yellow-800), var(--color-yellow-200));
+        }
+        &.cognacy-language-green {
+          --cognacy-language-tag-bg: light-dark(var(--color-green-100), var(--color-green-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-green-800), var(--color-green-200));
+        }
+        &.cognacy-language-teal {
+          --cognacy-language-tag-bg: light-dark(var(--color-teal-100), var(--color-teal-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-teal-800), var(--color-teal-200));
+        }
+        &.cognacy-language-blue {
+          --cognacy-language-tag-bg: light-dark(var(--color-blue-100), var(--color-blue-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-blue-800), var(--color-blue-200));
+        }
+        &.cognacy-language-indigo {
+          --cognacy-language-tag-bg: light-dark(var(--color-indigo-100), var(--color-indigo-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-indigo-800), var(--color-indigo-200));
+        }
+        &.cognacy-language-violet {
+          --cognacy-language-tag-bg: light-dark(var(--color-violet-100), var(--color-violet-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-violet-800), var(--color-violet-200));
+        }
+        &.cognacy-language-pink {
+          --cognacy-language-tag-bg: light-dark(var(--color-pink-100), var(--color-pink-700));
+          --cognacy-language-tag-fg: light-dark(var(--color-pink-800), var(--color-pink-200));
+        }
+        .cognacy-language-tag-background {
+          fill: var(--cognacy-language-tag-bg);
+          pointer-events: none;
+        }
+        .cognacy-language-tag-label {
+          fill: var(--cognacy-language-tag-fg);
         }
         path {
           transition: stroke var(--duration-very-fast) ease-in-out;

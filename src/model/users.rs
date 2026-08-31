@@ -668,7 +668,7 @@ impl UserRepository {
                         COALESCE(similarity(users.description, $4), 0.0) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, users.id
+                ) DESC, users.created_at DESC, users.id DESC
                 LIMIT $5
                 OFFSET $6
             "#,

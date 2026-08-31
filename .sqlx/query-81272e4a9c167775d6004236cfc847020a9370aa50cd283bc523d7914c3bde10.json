@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    language_families.id,\n                    language_families.code,\n                    language_families.name,\n                    language_families.description,\n                    language_families.tree,\n                    language_families.like_count,\n                    language_families.banner_object_id,\n                    language_families.created_at,\n                    language_families.updated_at,\n                    language_families.created_by,\n                    language_families.updated_by\n                FROM language_families\n                JOIN users ON users.id = language_families.created_by\n                WHERE\n                ($1::TEXT IS NULL OR users.username = $1)\n                AND ($3::TEXT IS NULL OR language_families.id IN (\n                    SELECT language_family_members.family_id\n                    FROM language_family_members\n                    JOIN languages ON languages.id = language_family_members.language_id\n                    WHERE languages.code = $3\n                ))\n                ORDER BY (\n                    CASE\n                        WHEN $2::TEXT IS NOT NULL AND language_families.name ILIKE '%' || $2 || '%' THEN 100.0\n                        WHEN $2::TEXT IS NOT NULL AND language_families.code ILIKE '%' || $2 || '%' THEN 90.0\n                        WHEN $2::TEXT IS NOT NULL AND language_families.description ILIKE '%' || $2 || '%' THEN 80.0\n                        ELSE 0.0\n                    END +\n                    CASE WHEN $2::TEXT IS NOT NULL THEN\n                        similarity(language_families.name, $2) * 3.0 +\n                        similarity(language_families.code, $2) * 2.0 +\n                        similarity(language_families.description, $2) * 1.0\n                    ELSE 0.0\n                    END\n                ) DESC, language_families.created_at DESC, language_families.id DESC\n                LIMIT $4\n                OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "tree",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "like_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "banner_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "81272e4a9c167775d6004236cfc847020a9370aa50cd283bc523d7914c3bde10"
+}

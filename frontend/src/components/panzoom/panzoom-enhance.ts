@@ -5,6 +5,42 @@ const CLICK_DRAG_THRESHOLD_PX = 5;
 const VIEW_PADDING_REM = 0.5;
 const MIN_INITIAL_FOCUS_ZOOM = 2.5;
 const MAX_INITIAL_FOCUS_SCALE = 1;
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function addLanguageTagBackgrounds(svg: SVGSVGElement) {
+  for (const node of svg.querySelectorAll<SVGGElement>(
+    '.cognacy-node-language',
+  )) {
+    const tag = node.querySelector<SVGTextElement>('text');
+    const parent = tag?.parentElement;
+    if (!tag || !parent || tag.classList.contains('cognacy-language-tag-label')) {
+      continue;
+    }
+
+    const box = tag.getBBox();
+    const horizontalPadding = 4;
+    const verticalPadding = 2;
+    const naturalWidth = box.width + horizontalPadding * 2;
+    const height = box.height + verticalPadding * 2;
+    // SVG clamps a rect's corner radius to half its width. Give short labels
+    // enough extra width that their half-height radius stays capsule-shaped.
+    const width = Math.max(naturalWidth, height + 8);
+    const background = document.createElementNS(SVG_NS, 'rect');
+    background.classList.add('cognacy-language-tag-background');
+    background.setAttribute(
+      'x',
+      String(box.x - horizontalPadding - (width - naturalWidth) / 2),
+    );
+    background.setAttribute('y', String(box.y - verticalPadding));
+    background.setAttribute('width', String(width));
+    background.setAttribute('height', String(height));
+    background.setAttribute('rx', String(height / 2));
+    background.setAttribute('ry', String(height / 2));
+
+    tag.classList.add('cognacy-language-tag-label');
+    parent.insertBefore(background, tag);
+  }
+}
 
 function findScene(svg: SVGSVGElement): SVGGraphicsElement | null {
   for (const child of Array.from(svg.children)) {
@@ -155,6 +191,7 @@ function enhance(container: HTMLElement): PanZoom | null {
 
   const svg = container.querySelector('svg');
   if (!svg) return null;
+  addLanguageTagBackgrounds(svg);
   const scene = findScene(svg);
   if (!scene) return null;
 

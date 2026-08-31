@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
@@ -15,7 +15,7 @@ use crate::{
         users::User,
         words::{Word, WordRepository},
     },
-    util::{AppState, extract_session::Session},
+    util::{AppState, BackQuery, extract_session::Session},
 };
 
 #[derive(Template)]
@@ -28,6 +28,7 @@ struct DeleteWordTemplate {
     can_edit_language: bool,
     can_delete_language: bool,
     will_create_audit_log: bool,
+    back: String,
 }
 
 pub(super) async fn delete_word_form(
@@ -37,6 +38,7 @@ pub(super) async fn delete_word_form(
     words: WordRepository,
     permissions: LanguagePermissionRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -70,6 +72,7 @@ pub(super) async fn delete_word_form(
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
+        back: back_query.back.unwrap_or_default(),
     };
 
     okay(render_template(template))
@@ -80,6 +83,7 @@ pub(super) async fn delete_word_submit(
     languages: LanguageRepository,
     words: WordRepository,
     Path((language_code, slug, lemma)): Path<(String, String, i32)>,
+    Query(back_query): Query<BackQuery>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&language_code).await);
@@ -88,10 +92,14 @@ pub(super) async fn delete_word_submit(
         .delete_by_lemma(&user, language.id, &slug, lemma)
         .await
     {
-        Ok(_) => (
-            StatusCode::SEE_OTHER,
-            Redirect::to(&format!("/languages/{}/words", language_code)).into_response(),
-        ),
+        Ok(_) => {
+            let fallback = format!("/languages/{}/words", language_code);
+            let redirect = crate::util::internal_back_or(back_query.back.as_deref(), &fallback);
+            (
+                StatusCode::SEE_OTHER,
+                Redirect::to(&redirect).into_response(),
+            )
+        }
         Err(e) => render_generic_error(s, e).await,
     }
 }

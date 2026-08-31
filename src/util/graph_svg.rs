@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use uuid::Uuid;
 use vizoxide::{
     Context, Graph,
@@ -49,6 +49,8 @@ pub fn cognacy_to_svg(
         .collect::<HashSet<_>>()
         .len()
         > 1;
+    let language_colors =
+        cognacy_language_color_classes(cognacy.words.values().filter_map(cognacy_language_id));
 
     for word_id in cognacy.words.keys() {
         let word = &cognacy.words[word_id];
@@ -63,6 +65,10 @@ pub fn cognacy_to_svg(
             (false, true) => "cognacy-node cognacy-node-language",
             (false, false) => "cognacy-node cognacy-node-word-only",
         };
+        let node_class = cognacy_language_id(word)
+            .and_then(|language_id| language_colors.get(language_id))
+            .map(|color| format!("{node_class} cognacy-language-{color}"))
+            .unwrap_or_else(|| node_class.to_string());
 
         let word_url = word.language_code.as_deref().map(|lang_code| {
             format!(
@@ -79,7 +85,7 @@ pub fn cognacy_to_svg(
             .attribute(node::SHAPE, "box")
             .attribute(node::STYLE, "rounded")
             .attribute(node::FONTNAME, "sans-serif")
-            .attribute("class", node_class);
+            .attribute("class", &node_class);
 
         if let Some(url) = &word_url {
             node_builder = node_builder.attribute(graph::URL, url.as_str());
@@ -147,6 +153,84 @@ fn cognacy_node_label(word: &str, language_name: Option<&str>) -> String {
     }
 }
 
+const COGNACY_LANGUAGE_COLORS: [(&str, u16); 9] = [
+    ("red", 18),
+    ("orange", 74),
+    ("yellow", 102),
+    ("green", 156),
+    ("teal", 180),
+    ("blue", 255),
+    ("indigo", 272),
+    ("violet", 295),
+    ("pink", 342),
+];
+
+/// Use the language code where available so a renamed language retains its
+/// color. The name is a fallback for malformed or partial graph data.
+fn cognacy_language_id(word: &crate::model::words::Word) -> Option<&str> {
+    word.language_code
+        .as_deref()
+        .or(word.language_name.as_deref())
+        .filter(|id| !id.is_empty())
+}
+
+/// Assign the palette colors that maximize the closest distance between any two
+/// hues. Sorting language IDs keeps the resulting assignment deterministic.
+fn cognacy_language_color_classes<'a>(
+    language_ids: impl IntoIterator<Item = &'a str>,
+) -> HashMap<&'a str, &'static str> {
+    let language_ids = language_ids
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let colors = most_distinct_language_colors(language_ids.len());
+
+    language_ids
+        .into_iter()
+        .enumerate()
+        .map(|(index, language_id)| (language_id, colors[index % colors.len()]))
+        .collect()
+}
+
+/// Select the palette subset whose closest two hues are as far apart as
+/// possible. The palette is tiny, so testing every subset is simple and gives
+/// better results than taking colors in source order.
+fn most_distinct_language_colors(count: usize) -> Vec<&'static str> {
+    let selection_size = count.clamp(1, COGNACY_LANGUAGE_COLORS.len());
+    let mut best_colors = Vec::new();
+    let mut best_minimum_distance = 0;
+
+    for subset in 0u16..(1u16 << COGNACY_LANGUAGE_COLORS.len()) {
+        if subset.count_ones() as usize != selection_size {
+            continue;
+        }
+
+        let colors = COGNACY_LANGUAGE_COLORS
+            .iter()
+            .enumerate()
+            .filter_map(|(index, color)| (subset & (1 << index) != 0).then_some(*color))
+            .collect::<Vec<_>>();
+        let minimum_distance = colors
+            .iter()
+            .enumerate()
+            .flat_map(|(index, (_, hue))| {
+                colors[index + 1..].iter().map(move |(_, other_hue)| {
+                    hue.abs_diff(*other_hue).min(360 - hue.abs_diff(*other_hue))
+                })
+            })
+            .min()
+            .unwrap_or(u16::MAX);
+
+        if minimum_distance > best_minimum_distance {
+            best_minimum_distance = minimum_distance;
+            best_colors = colors.into_iter().map(|(class, _)| class).collect();
+        }
+    }
+
+    best_colors
+}
+
 fn edge_style_for_cognacy(kind: CognacyRelationKindV1) -> (&'static str, &'static str) {
     match kind {
         CognacyRelationKindV1::Derived | CognacyRelationKindV1::Descendant => ("solid", "1.0"),
@@ -158,14 +242,14 @@ fn edge_style_for_cognacy(kind: CognacyRelationKindV1) -> (&'static str, &'stati
 
 #[cfg(test)]
 mod tests {
-    use super::{cognacy_language_label, cognacy_node_label};
+    use super::{
+        cognacy_language_color_classes, cognacy_language_label, cognacy_node_label,
+        most_distinct_language_colors,
+    };
 
     #[test]
     fn cognacy_node_label_includes_language_name_above_word() {
-        assert_eq!(
-            cognacy_node_label("pater", Some("Latin")),
-            "Latin\npater"
-        );
+        assert_eq!(cognacy_node_label("pater", Some("Latin")), "Latin\npater");
     }
 
     #[test]
@@ -183,6 +267,25 @@ mod tests {
     #[test]
     fn cognacy_node_label_omits_a_missing_language_name() {
         assert_eq!(cognacy_node_label("pater", None), "pater");
+    }
+
+    #[test]
+    fn cognacy_language_colors_are_deterministic_and_distinct() {
+        let colors = cognacy_language_color_classes(["latin", "greek", "sanskrit"]);
+        let reordered = cognacy_language_color_classes(["sanskrit", "latin", "greek"]);
+
+        assert_eq!(colors, reordered);
+        assert_ne!(colors["latin"], colors["greek"]);
+        assert_ne!(colors["greek"], colors["sanskrit"]);
+    }
+
+    #[test]
+    fn cognacy_color_palette_favors_far_apart_hues() {
+        assert_eq!(most_distinct_language_colors(2), vec!["orange", "blue"]);
+        assert_eq!(
+            most_distinct_language_colors(3),
+            vec!["red", "green", "indigo"]
+        );
     }
 }
 

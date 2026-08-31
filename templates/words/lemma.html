@@ -53,7 +53,7 @@
                 <li><a class="icon button gray" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/edit" data-tooltip="Edit word">
                     {% call u::icon("edit") %}
                 </a></li>
-                <li><a class="icon button red" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete" data-tooltip="Delete word">
+                <li><a class="icon button red" href="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete{% if !back.is_empty() %}?back={{ back | urlencode }}{% endif %}" data-tooltip="Delete word">
                     {% call u::icon("delete") %}
                 </a></li>
             {% endif %}

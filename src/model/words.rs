@@ -909,6 +909,13 @@ impl WordRepository {
                 AND ($3::TIMESTAMPTZ IS NULL OR words.created_at < $3)
                 AND ($4::TIMESTAMPTZ IS NULL OR words.created_at > $4)
                 AND ($5::TEXT IS NULL OR words.slug = $5)
+                AND (
+                    $6::TEXT IS NULL
+                    OR words.word ILIKE '%' || $6 || '%'
+                    OR words.notes ILIKE '%' || $6 || '%'
+                    OR similarity(words.word, $6) > 0.3
+                    OR COALESCE(similarity(words.notes, $6), 0.0) > 0.3
+                )
                 AND ($9::UUID[] IS NULL OR (
                     SELECT COUNT(DISTINCT category)
                     FROM word_word_categories
@@ -925,7 +932,7 @@ impl WordRepository {
                         COALESCE(similarity(words.notes, $6), 0.0) * 1.0
                     ELSE 0.0
                     END
-                ) DESC, words.id DESC
+                ) DESC, words.created_at DESC, words.id DESC
                 LIMIT $7
                 OFFSET $8
             "#,
@@ -952,17 +959,25 @@ impl WordRepository {
                 AND ($3::TIMESTAMPTZ IS NULL OR created_at < $3)
                 AND ($4::TIMESTAMPTZ IS NULL OR created_at > $4)
                 AND ($5::TEXT IS NULL OR slug = $5)
-                AND ($6::UUID[] IS NULL OR (
+                AND (
+                    $6::TEXT IS NULL
+                    OR words.word ILIKE '%' || $6 || '%'
+                    OR words.notes ILIKE '%' || $6 || '%'
+                    OR similarity(words.word, $6) > 0.3
+                    OR COALESCE(similarity(words.notes, $6), 0.0) > 0.3
+                )
+                AND ($7::UUID[] IS NULL OR (
                     SELECT COUNT(DISTINCT category)
                     FROM word_word_categories
-                    WHERE word = words.id AND category = ANY($6)
-                ) = $7)
+                    WHERE word = words.id AND category = ANY($7)
+                ) = $8)
             "#,
             language,
             word_class,
             search.created_before,
             search.created_after,
             search.exact_slug,
+            search.q,
             category_ids.as_deref(),
             category_count,
         )

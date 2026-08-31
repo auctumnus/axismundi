@@ -12,7 +12,7 @@
 
 <h1>delete word</h1>
 
-<form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete">
+<form class="default" method="post" action="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/delete{% if !back.is_empty() %}?back={{ back | urlencode }}{% endif %}">
     <section>
         <p>Are you sure you want to delete the word <strong>{{ word.word }}</strong>{% if let Some(abbreviation) = word.word_class_abbreviation %} ({{ abbreviation }}.){% endif %}?</p>
         <p>This action cannot be undone.</p>

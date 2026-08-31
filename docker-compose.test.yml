@@ -1,5 +1,7 @@
 # edits made here should be reflected in the justfile and src/config.rs
 
+name: axismundi-test
+
 services:
   postgres:
     image: postgres:18

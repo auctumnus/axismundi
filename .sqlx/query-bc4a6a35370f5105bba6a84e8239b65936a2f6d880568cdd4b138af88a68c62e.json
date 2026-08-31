@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    users.id,\n                    users.username,\n                    users.email,\n                    users.password_hash,\n                    users.display_name,\n                    users.description,\n                    users.pronouns,\n                    users.gender,\n                    users.profile_picture_object_id,\n                    users.banner_object_id,\n                    users.verified_at,\n                    users.tags,\n                    users.created_at,\n                    users.updated_at,\n                    COALESCE(bookmarks.slug, '')::text as \"bookmark!\"\n                FROM users\n                LEFT JOIN bookmarks ON bookmarks.item = users.id AND bookmarks.resource = 'user'\n                WHERE\n                ($1::BOOL IS NULL OR (users.verified_at IS NOT NULL) = $1)\n                AND ($2::TIMESTAMPTZ IS NULL OR users.created_at < $2)\n                AND ($3::TIMESTAMPTZ IS NULL OR users.created_at > $3)\n                ORDER BY (\n                    CASE\n                        WHEN $4::TEXT IS NOT NULL AND users.username ILIKE '%' || $4 || '%' THEN 100.0\n                        WHEN $4::TEXT IS NOT NULL AND users.display_name ILIKE '%' || $4 || '%' THEN 90.0\n                        WHEN $4::TEXT IS NOT NULL AND users.description ILIKE '%' || $4 || '%' THEN 80.0\n                        ELSE 0.0\n                    END +\n                    CASE WHEN $4::TEXT IS NOT NULL THEN\n                        similarity(users.username, $4) * 3.0 +\n                        COALESCE(similarity(users.display_name, $4), 0.0) * 2.0 +\n                        COALESCE(similarity(users.description, $4), 0.0) * 1.0\n                    ELSE 0.0\n                    END\n                ) DESC, users.created_at DESC, users.id DESC\n                LIMIT $5\n                OFFSET $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "password_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "pronouns",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "gender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "profile_picture_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "banner_object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "bookmark!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "bc4a6a35370f5105bba6a84e8239b65936a2f6d880568cdd4b138af88a68c62e"
+}

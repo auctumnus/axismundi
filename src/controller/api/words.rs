@@ -424,23 +424,27 @@ mod tests {
         let mut ctx = create_test_context().await;
         let lang_code = ctx.language["code"].as_str().unwrap();
 
-        // create words
-        let body = json!({
-            "slug": "unique",
-            "word_class": "n",
-            "word": "unique",
-        });
+        for (slug, word) in [("unique", "unique"), ("unrelated", "unrelated")] {
+            let body = json!({
+                "slug": slug,
+                "word_class": "n",
+                "word": word,
+            });
 
-        let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
-        let response = ctx.app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+            let request = post(&ctx.token, &format!("languages/{lang_code}/words"), body).await;
+            let response = ctx.app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
 
-        let request = get(&format!("languages/{lang_code}/words?q=unique")).await;
-        let response = ctx.app.call(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        for query in ["unique", "uniquee"] {
+            let request = get(&format!("languages/{lang_code}/words?q={query}")).await;
+            let response = ctx.app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
 
-        let body = crate::tests::response_to_value(response.into_body()).await;
-        assert!(body["items"].is_array());
+            let body = crate::tests::response_to_value(response.into_body()).await;
+            assert_eq!(body["total"], 1);
+            assert_eq!(body["items"][0]["word"], "unique");
+        }
     }
 
     #[tokio::test]

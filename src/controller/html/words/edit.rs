@@ -306,23 +306,39 @@ pub(super) async fn edit_word_submit(
         (StatusCode::BAD_REQUEST, body)
     };
 
-    // Filter out empty definitions and limit to MAX_DEFINITIONS
-    let definitions_text: Vec<String> = form
+    // Keep every field for a definition together. The editor submits each
+    // definition, context, and ID in display order, and filtering just the
+    // definitions would desynchronise those parallel lists.
+    let submitted_definitions: Vec<(String, String, Option<Uuid>)> = form
         .definitions
         .iter()
-        .filter_map(|d| {
+        .enumerate()
+        .filter_map(|(i, d)| {
             let trimmed = d.trim();
             if trimmed.is_empty() {
                 None
             } else {
-                Some(trimmed.to_string())
+                Some((
+                    trimmed.to_string(),
+                    form.contexts
+                        .get(i)
+                        .map(|c| c.trim().to_string())
+                        .unwrap_or_default(),
+                    form.definition_ids.get(i).and_then(|id| {
+                        if id.is_empty() {
+                            None
+                        } else {
+                            id.parse::<Uuid>().ok()
+                        }
+                    }),
+                ))
             }
         })
         .take(super::MAX_DEFINITIONS)
         .collect();
 
     // Require at least one definition
-    if definitions_text.is_empty() {
+    if submitted_definitions.is_empty() {
         return render_err(crate::err::bad_request(
             "At least one definition is required",
         ));
@@ -355,50 +371,35 @@ pub(super) async fn edit_word_submit(
             .await?
             .items;
 
-        // Parse definition IDs
-        let definition_ids: Vec<Option<Uuid>> = form
-            .definition_ids
-            .iter()
-            .map(|id| {
-                if id.is_empty() {
-                    None
-                } else {
-                    id.parse::<Uuid>().ok()
-                }
-            })
-            .collect();
-
         // Track which existing definitions are being kept
         let mut kept_ids = std::collections::HashSet::new();
+        let mut ordered_ids = Vec::with_capacity(submitted_definitions.len());
 
-        // Update or create definitions
-        for (i, def_text) in definitions_text.iter().enumerate() {
-            let context = Some(
-                form.contexts
-                    .get(i)
-                    .map(|c| c.trim().to_string())
-                    .unwrap_or_default(),
-            );
-
-            if let Some(Some(def_id)) = definition_ids.get(i) {
+        // Update or create definitions, then assign positions together below.
+        // A new definition is created at the end by default, so assigning its
+        // final position here is what preserves a move made in the same edit.
+        for (def_text, context, definition_id) in &submitted_definitions {
+            if let Some(def_id) = definition_id {
                 // Update existing definition
                 kept_ids.insert(*def_id);
                 let update = UpdateDefinition {
                     definition: Some(def_text.clone()),
-                    context: context.clone(),
+                    context: Some(context.clone()),
                 };
                 definitions_repo
-                    .update(&current_user, *def_id, update, Some(i as i32))
+                    .update(&current_user, *def_id, update, None)
                     .await?;
+                ordered_ids.push(*def_id);
             } else {
                 // Create new definition
                 let create_def = CreateDefinition {
                     definition: def_text.clone(),
-                    context,
+                    context: Some(context.clone()),
                 };
-                definitions_repo
+                let created = definitions_repo
                     .create(&current_user, word_result.id, create_def)
                     .await?;
+                ordered_ids.push(created.id);
             }
         }
 
@@ -410,6 +411,10 @@ pub(super) async fn edit_word_submit(
                     .await?;
             }
         }
+
+        definitions_repo
+            .set_positions(word_result.id, &ordered_ids)
+            .await?;
 
         Ok::<_, crate::err::AppError>(word_result)
     }
@@ -530,4 +535,109 @@ pub(super) async fn estimate_ipa_submit(
 
     let body = render_template(template);
     okay(body)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use serde_json::json;
+    use std::sync::Arc;
+    use tower::Service;
+
+    use crate::{
+        controller::api::tests::{
+            create_test_language, create_test_word, get, make_authed_user, post,
+        },
+        email::MockEmailService,
+    };
+
+    #[tokio::test]
+    async fn new_definition_keeps_its_position_when_reordered_before_saving() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+        let token = make_authed_user(&crate::tests::random_name(), &app, email_service).await;
+
+        let language = create_test_language(&token, &mut app).await;
+        let code = language["code"].as_str().unwrap();
+        let word = create_test_word(&token, &mut app, code).await;
+        let slug = word["slug"].as_str().unwrap();
+        let lemma = word["lemma"].as_i64().unwrap();
+
+        let mut original_ids = Vec::new();
+        for definition in ["first definition", "second definition"] {
+            let response = app
+                .call(
+                    post(
+                        &token,
+                        &format!("languages/{code}/words/{slug}/{lemma}/definitions"),
+                        json!({ "definition": definition }),
+                    )
+                    .await,
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            original_ids.push(
+                crate::tests::response_to_value(response.into_body()).await["id"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+
+        let mut form = url::form_urlencoded::Serializer::new(String::new());
+        form.append_pair("word", word["word"].as_str().unwrap());
+        form.append_pair("word_class", "n");
+        for (id, definition) in [
+            ("", "new definition"),
+            (original_ids[0].as_str(), "first definition"),
+            (original_ids[1].as_str(), "second definition"),
+        ] {
+            form.append_pair("definition_ids[]", id);
+            form.append_pair("definitions[]", definition);
+            form.append_pair("contexts[]", "");
+        }
+
+        let response = app
+            .call(
+                Request::builder()
+                    .uri(format!("/languages/{code}/words/{slug}/{lemma}/edit"))
+                    .method("POST")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(form.finish()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+
+        let response = app
+            .call(
+                get(&format!(
+                    "languages/{code}/words/{slug}/{lemma}/definitions"
+                ))
+                .await,
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = crate::tests::response_to_value(response.into_body()).await;
+        let definitions = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|definition| definition["definition"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            definitions,
+            ["new definition", "first definition", "second definition"]
+        );
+    }
 }

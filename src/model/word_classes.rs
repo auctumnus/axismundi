@@ -584,7 +584,7 @@ impl WordClassRepository {
                         COALESCE(similarity(word_classes.abbreviation, $2), 0.0) * 2.0
                     ELSE 0.0
                     END
-                ) DESC, word_classes.id
+                ) DESC, word_classes.created_at DESC, word_classes.id DESC
                 LIMIT $7
                 OFFSET $8
             "#,

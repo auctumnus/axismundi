@@ -468,6 +468,52 @@ impl DefinitionRepository {
             .collect())
     }
 
+    /// Set the complete order of a word's definitions.
+    ///
+    /// This is used when saving the word editor, where new and existing
+    /// definitions may be interleaved. Moving every position out of the way
+    /// first keeps the operation valid even if a unique position constraint is
+    /// added later.
+    pub async fn set_positions(&self, word_id: Uuid, definition_ids: &[Uuid]) -> AppResult<()> {
+        let mut tx = self.state.pool.begin().await?;
+
+        let existing_ids =
+            sqlx::query_scalar!("SELECT id FROM definitions WHERE word = $1", word_id)
+                .fetch_all(&mut *tx)
+                .await?;
+
+        let existing_ids: std::collections::HashSet<Uuid> = existing_ids.into_iter().collect();
+        let submitted_ids: std::collections::HashSet<Uuid> =
+            definition_ids.iter().copied().collect();
+
+        if existing_ids.len() != definition_ids.len() || existing_ids != submitted_ids {
+            return Err(bad_request(
+                "the submitted definitions do not match the word's definitions",
+            ));
+        }
+
+        sqlx::query!(
+            "UPDATE definitions SET position = -position - 1 WHERE word = $1",
+            word_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        for (position, id) in definition_ids.iter().enumerate() {
+            sqlx::query!(
+                "UPDATE definitions SET position = $1 WHERE id = $2",
+                i32::try_from(position).unwrap_or(i32::MAX),
+                id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
     pub async fn swap(
         &self,
         requestor: &User,
