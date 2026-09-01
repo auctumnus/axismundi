@@ -640,6 +640,7 @@ async fn new_translation_step_1_submit(
         language: language.clone(),
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     let rendered_description = if !translatable.description.is_empty() {
@@ -764,6 +765,7 @@ async fn new_translation_step_2_submit(
                 language: language.clone(),
                 top_contributors,
                 is_liked,
+                is_pinned: false,
             };
 
             let translatable_with_meta = attempt!(
@@ -837,6 +839,7 @@ async fn estimate_ipa_new_translation_2(
         language: language.clone(),
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     let rendered_description = if !translatable.description.is_empty() {
@@ -1170,6 +1173,7 @@ async fn edit_translation_form(
         language: language.clone(),
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     let rendered_description = if !translatable.description.is_empty() {
@@ -1308,6 +1312,7 @@ async fn edit_translation_submit(
         language: language.clone(),
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
     let rendered_description = if !translatable.description.is_empty() {
         crate::md::render_md(&translatable.description).ok()
@@ -1499,6 +1504,7 @@ async fn estimate_ipa_edit_translation(
         language: language.clone(),
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     let rendered_description = if !translatable.description.is_empty() {

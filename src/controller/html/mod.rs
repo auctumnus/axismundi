@@ -29,6 +29,7 @@ use axum::{
 };
 use governor::middleware::NoOpMiddleware;
 use serde::Serialize;
+use std::collections::HashSet;
 use tower_governor::governor::GovernorConfig;
 use tower_http::services::ServeDir;
 
@@ -227,6 +228,8 @@ pub struct LanguagesWithContributors {
     pub top_contributors: Vec<User>,
     #[allow(dead_code)]
     pub is_liked: bool,
+    #[allow(dead_code)]
+    pub is_pinned: bool,
 }
 
 #[derive(Template)]
@@ -252,13 +255,26 @@ async fn home(
     contribution_stats: ContributionStatsRepository,
     totd_repo: TranslatableOfTheDayRepository,
     news_repo: NewsRepository,
+    language_pins: crate::model::language_pins::LanguagePinRepository,
     s: Session,
 ) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
         return (StatusCode::SEE_OTHER, Redirect::to("/").into_response());
     };
 
-    let l = attempt!(s, users.top_languages(user.id, 5).await);
+    let pinned = attempt!(s, language_pins.list_by_user(user.id).await);
+    let pinned_ids: HashSet<_> = pinned.iter().map(|language| language.id).collect();
+    let remaining_slots = 5usize.saturating_sub(pinned.len());
+    let recent = if remaining_slots == 0 {
+        Vec::new()
+    } else {
+        attempt!(s, users.top_languages(user.id, 5).await)
+            .into_iter()
+            .filter(|language| !pinned_ids.contains(&language.id))
+            .take(remaining_slots)
+            .collect()
+    };
+    let l = pinned.into_iter().chain(recent).collect::<Vec<_>>();
 
     let mut languages_with_contributors = Vec::with_capacity(l.len());
     for lang in &l {
@@ -271,6 +287,7 @@ async fn home(
             language: lang.clone(),
             top_contributors,
             is_liked,
+            is_pinned: pinned_ids.contains(&lang.id),
         };
         languages_with_contributors.push(l);
     }

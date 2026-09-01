@@ -162,6 +162,7 @@ async fn search_phonology_tables(
         language,
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     let lang_code = language_with_contributors.language.code.clone();
@@ -602,6 +603,7 @@ async fn view_phonology_table(
         language,
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     let rendered_description = if !table.description.is_empty() {

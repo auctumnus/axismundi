@@ -353,6 +353,7 @@ async fn build_language_context(
         language,
         top_contributors,
         is_liked,
+        is_pinned: false,
     };
 
     Ok((lwc, can_edit_language, can_delete_language))
@@ -1341,6 +1342,7 @@ async fn view_global(
             language: lang,
             top_contributors,
             is_liked,
+            is_pinned: false,
         })
     } else {
         None

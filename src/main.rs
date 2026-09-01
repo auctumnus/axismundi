@@ -34,11 +34,15 @@ mod util;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let log_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "axismundi=debug,tower_http=debug,sqlx::query=warn".into())
+        // html5ever logs every parser state transition at debug level, which
+        // drowns out application logs when `RUST_LOG=debug` is set.
+        .add_directive("html5ever::tokenizer=off".parse().expect("valid log directive"))
+        .add_directive("html5ever::tree_builder=off".parse().expect("valid log directive"));
+
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "axismundi=debug,tower_http=debug,sqlx::query=warn".into()),
-        )
+        .with(log_filter)
         .with(tracing_subscriber::fmt::layer())
         .init();
 

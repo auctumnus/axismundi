@@ -9,7 +9,7 @@
     {% endif %}
 {% endmacro %}
 
-{% macro render(language_with_contributors, back="") %}
+{% macro render(language_with_contributors, back="", show_home_pin=false) %}
     <li class="language-card preview-card">
         <a href="/languages/{{ language_with_contributors.language.code }}{% if !back.is_empty() %}?back={{ back|urlencode }}{% endif %}">
             <span class="left">
@@ -34,6 +34,15 @@
             </span>
             {% call u::like_button("/api/languages/" ~ language_with_contributors.language.code, language_with_contributors.language.like_count, language_with_contributors.is_liked, "Like this language") %}
         </a>
+        {% if show_home_pin %}
+        <form class="pin-language-form {% if language_with_contributors.is_pinned %}pinned{% endif %}" method="post" action="/languages/{{ language_with_contributors.language.code }}/{% if language_with_contributors.is_pinned %}unpin{% else %}pin{% endif %}?back=%2Fhome" data-pinned="{{ language_with_contributors.is_pinned }}" data-language-name="{{ language_with_contributors.language.name }}">
+            <button class="icon button gray" type="submit" aria-label="{% if language_with_contributors.is_pinned %}Unpin {{ language_with_contributors.language.name }} from home{% else %}Pin {{ language_with_contributors.language.name }} to home{% endif %}" data-tooltip="{% if language_with_contributors.is_pinned %}Unpin from home{% else %}Pin to home{% endif %}">
+                <span class="pin-outline">{% call u::icon("pin-outline") %}</span>
+                <span class="pin-default">{% call u::icon("pin-filled") %}</span>
+                <span class="pin-unpin">{% call u::icon("pin-off") %}</span>
+            </button>
+        </form>
+        {% endif %}
     </li>
 {% endmacro %}
 

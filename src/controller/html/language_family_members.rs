@@ -195,6 +195,7 @@ async fn view_member(
             language: language.clone(),
             top_contributors,
             is_liked,
+            is_pinned: false,
         };
 
         Some(language_with_contributors)

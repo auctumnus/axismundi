@@ -49,6 +49,14 @@
     <button type="submit">Save changes</button>
 </form>
 
+{% if can_edit_language %}
+<h2>pin language</h2>
+<p>You can pin this language to keep it at the top of your homepage. It is currently {% if is_pinned %}pinned{% else %}unpinned{% endif %}.</p>
+<form class="default" method="post" action="/languages/{{ language.code }}/{% if is_pinned %}unpin{% else %}pin{% endif %}?back=%2Flanguages%2F{{ language.code }}%2Fedit">
+    <button class="secondary" type="submit">{% if is_pinned %}Unpin from home{% else %}Pin to home{% endif %}</button>
+</form>
+{% endif %}
+
 <h2>change banner</h2>
 <form class="default" method="post" action="/languages/{{ language.code }}/change-banner" enctype="multipart/form-data">
     <div class="banner-input-container" data-tooltip="Upload new banner image">

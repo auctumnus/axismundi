@@ -9,6 +9,7 @@ pub mod language_family_members;
 pub mod language_family_permissions;
 pub mod language_invites;
 pub mod language_permissions;
+pub mod language_pins;
 pub mod languages;
 pub mod news;
 pub mod password_reset_tokens;

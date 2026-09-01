@@ -24,6 +24,7 @@ use crate::{
         },
         language_invites::PermissionLevel,
         language_permissions::LanguagePermissionRepository,
+        language_pins::LanguagePinRepository,
         languages::{CreateLanguage, Language, LanguageRepository, LanguageSearch},
         phonology_tables::{PhonologyTableRepository, SearchPhonologyTable, TableRenderOptions},
         translatable::TranslatableRepository,
@@ -45,6 +46,8 @@ pub fn create_router() -> (Router<AppState>, Router<AppState>) {
         .route("/new-language", post(new_language_submit))
         .route("/languages/{code}/edit", post(edit_language_submit))
         .route("/languages/{code}/delete", post(delete_language_submit))
+        .route("/languages/{code}/pin", post(pin_language))
+        .route("/languages/{code}/unpin", post(unpin_language))
         .route(
             "/languages/{code}/change-banner",
             post(change_language_banner),
@@ -131,6 +134,7 @@ async fn search_languages(
                     language,
                     top_contributors,
                     is_liked,
+                    is_pinned: false,
                 });
             }
             Ok(crate::pagination::PaginatedResponse {
@@ -549,6 +553,7 @@ struct EditLanguageFormTemplate {
     can_edit_language: bool,
     can_delete_language: bool,
     will_create_audit_log: bool,
+    is_pinned: bool,
 }
 
 async fn edit_language_form(
@@ -556,6 +561,7 @@ async fn edit_language_form(
     State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
+    language_pins: LanguagePinRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
@@ -579,6 +585,10 @@ async fn edit_language_form(
 
     let will_create_audit_log =
         crate::util::will_create_audit_log_for_language(&state, &user, language.id).await;
+    let is_pinned = language_pins
+        .is_pinned(user.id, language.id)
+        .await
+        .unwrap_or(false);
 
     let template = EditLanguageFormTemplate {
         current_user: Some(user),
@@ -590,6 +600,7 @@ async fn edit_language_form(
         can_edit_language,
         can_delete_language,
         will_create_audit_log,
+        is_pinned,
     };
 
     okay(render_template(template))
@@ -607,6 +618,7 @@ async fn edit_language_submit(
     State(state): State<AppState>,
     languages: LanguageRepository,
     permissions: LanguagePermissionRepository,
+    language_pins: LanguagePinRepository,
     axum::extract::Path(code): axum::extract::Path<String>,
     form: axum::Form<EditLanguageFormData>,
 ) -> (StatusCode, Response) {
@@ -656,6 +668,10 @@ async fn edit_language_submit(
                     .has_permission(user.id, language.id, PermissionLevel::Owner)
                     .await
                     .unwrap_or(false);
+            let is_pinned = language_pins
+                .is_pinned(user.id, language.id)
+                .await
+                .unwrap_or(false);
 
             let template = EditLanguageFormTemplate {
                 can_delete_language,
@@ -667,12 +683,79 @@ async fn edit_language_submit(
                 previous_description: form.description.clone(),
                 can_edit_language,
                 will_create_audit_log,
+                is_pinned,
             };
 
             let body = render_template(template);
             (StatusCode::BAD_REQUEST, body)
         }
     }
+}
+
+async fn pin_language(
+    s: Session,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    pins: LanguagePinRepository,
+    Path(code): Path<String>,
+    Query(back_query): Query<BackQuery>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let can_edit = attempt!(
+        s,
+        permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+
+    if !can_edit {
+        return render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to pin this language"),
+        )
+        .await;
+    }
+
+    attempt!(s, pins.pin(user.id, language.id).await);
+    let redirect = crate::util::internal_back_or(back_query.back.as_deref(), "/home");
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&redirect).into_response(),
+    )
+}
+
+async fn unpin_language(
+    s: Session,
+    languages: LanguageRepository,
+    permissions: LanguagePermissionRepository,
+    pins: LanguagePinRepository,
+    Path(code): Path<String>,
+    Query(back_query): Query<BackQuery>,
+) -> (StatusCode, Response) {
+    let user = get_user!(s);
+    let language = attempt!(s, languages.find_by_code(&code).await);
+    let can_edit = attempt!(
+        s,
+        permissions
+            .has_permission(user.id, language.id, PermissionLevel::Editor)
+            .await
+    );
+
+    if !can_edit {
+        return render_generic_error(
+            s,
+            crate::err::forbidden("you don't have permission to unpin this language"),
+        )
+        .await;
+    }
+
+    attempt!(s, pins.unpin(user.id, language.id).await);
+    let redirect = crate::util::internal_back_or(back_query.back.as_deref(), "/home");
+    (
+        StatusCode::SEE_OTHER,
+        Redirect::to(&redirect).into_response(),
+    )
 }
 
 // Delete language handlers

@@ -57,7 +57,7 @@
 </div>
 <ul class="card-list">
     {% for language_with_contributors in languages %}
-        {% call lang_card::render(&language_with_contributors) %}
+        {% call lang_card::render(&language_with_contributors, show_home_pin=true) %}
     {% endfor %}
 </ul>
 

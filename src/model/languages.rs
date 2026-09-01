@@ -115,6 +115,7 @@ impl LanguageRepository {
             language,
             top_contributors,
             is_liked,
+            is_pinned: false,
         })
     }
 

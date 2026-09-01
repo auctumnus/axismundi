@@ -136,6 +136,46 @@
     color: var(--foreground-secondary);
   }
 }
+
+.language-card:has(.pin-language-form) {
+  position: relative;
+
+  .pin-language-form {
+    position: absolute;
+    top: 1rem;
+    right: 4rem;
+    margin: 0;
+  }
+
+  .left {
+    width: calc(100% - 64px - 2.5rem) !important;
+  }
+
+  .pin-default,
+  .pin-unpin {
+    display: none;
+  }
+
+  .pin-language-form.pinned {
+    .pin-outline {
+      display: none;
+    }
+
+    .pin-default {
+      display: inline;
+    }
+  }
+
+  .pin-language-form.pinned:is(:hover, :focus-within) {
+    .pin-default {
+      display: none;
+    }
+
+    .pin-unpin {
+      display: inline;
+    }
+  }
+}
 .card-meta {
   list-style-type: none;
   margin: 0;

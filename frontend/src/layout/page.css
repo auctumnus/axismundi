@@ -1,4 +1,4 @@
-#icon-store {
+o#icon-store {
   display: none;
 }
 
@@ -119,4 +119,12 @@ svg.icon {
 a {
   color: var(--foreground-primary);
   text-decoration: underline;
+}
+
+p + a.button {
+  margin-top: 1rem;
+}
+
+p + form.default {
+  padding-top: 1rem;
 }
