@@ -7,6 +7,24 @@ const MIN_INITIAL_FOCUS_ZOOM = 2.5;
 const MAX_INITIAL_FOCUS_SCALE = 1;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+function centerWordOnlyLabels(svg: SVGSVGElement) {
+  for (const node of svg.querySelectorAll<SVGGElement>(
+    '.cognacy-node-word-only',
+  )) {
+    const outline = node.querySelector<SVGPathElement>('path');
+    const label = node.querySelector<SVGTextElement>('text');
+    const labelY = Number(label?.getAttribute('y') ?? Number.NaN);
+    if (!outline || !label || !Number.isFinite(labelY)) continue;
+
+    const outlineBox = outline.getBBox();
+    const labelBox = label.getBBox();
+    const outlineCenterY = outlineBox.y + outlineBox.height / 2;
+    const labelCenterY = labelBox.y + labelBox.height / 2;
+
+    label.setAttribute('y', String(labelY + outlineCenterY - labelCenterY));
+  }
+}
+
 function addLanguageTagBackgrounds(svg: SVGSVGElement) {
   for (const node of svg.querySelectorAll<SVGGElement>(
     '.cognacy-node-language',
@@ -191,6 +209,7 @@ function enhance(container: HTMLElement): PanZoom | null {
 
   const svg = container.querySelector('svg');
   if (!svg) return null;
+  centerWordOnlyLabels(svg);
   addLanguageTagBackgrounds(svg);
   const scene = findScene(svg);
   if (!scene) return null;

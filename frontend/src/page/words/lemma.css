@@ -190,14 +190,6 @@ ul.quotations {
         }
       }
 
-      .cognacy-node-word-only {
-        text {
-          text-anchor: middle;
-          dominant-baseline: middle;
-          transform: translateY(.3em);
-        }
-      }
-
       .current-word {
         path {
           stroke: var(--foreground-secondary);
