@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}grammar tables - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/components/phonology-table.css">
+{% endblock %}
+
+{% block content %}
+<div class="header-with-actions">
+    <h1>grammar tables</h1>
+    {% if can_edit_language %}
+    <ul><li><a class="with-icon" href="/languages/{{ language.code }}/grammar-tables/new">{% call u::icon("plus") %}<span>new grammar table</span></a></li></ul>
+    {% endif %}
+</div>
+
+{% if rendered_tables.is_empty() %}
+<p>no grammar tables yet</p>
+{% else %}
+{% for table in rendered_tables %}
+    {% if can_edit_language %}
+    <div class="grammar-table-order-controls" aria-label="reorder grammar table">
+        {% match table.previous_id %}
+        {% when Some with (previous_id) %}
+        <form method="post" action="/languages/{{ language.code }}/grammar-tables/swap">
+            <input type="hidden" name="id1" value="{{ table.id }}">
+            <input type="hidden" name="id2" value="{{ previous_id }}">
+            <button type="submit">move up</button>
+        </form>
+        {% when None %}
+        {% endmatch %}
+        {% match table.next_id %}
+        {% when Some with (next_id) %}
+        <form method="post" action="/languages/{{ language.code }}/grammar-tables/swap">
+            <input type="hidden" name="id1" value="{{ table.id }}">
+            <input type="hidden" name="id2" value="{{ next_id }}">
+            <button type="submit">move down</button>
+        </form>
+        {% when None %}
+        {% endmatch %}
+    </div>
+    {% endif %}
+    {{ table.html | safe }}
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_delete_language) %}
+{% endblock %}

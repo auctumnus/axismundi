@@ -5,7 +5,7 @@ import {
   defaultHighlightStyle,
 } from "@codemirror/language";
 import { lexurgy } from "./runner/lexurgy-language";
-import { theme } from "./runner/sound-change-runner";
+import { theme } from "./runner/editor-theme";
 
 window.addEventListener("DOMContentLoaded", () => {
   const pre = document.querySelector(".sound-change-set pre");

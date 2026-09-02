@@ -65,7 +65,8 @@
                 "language_family_member",
                 "language_family_invite",
                 "language_family_permission",
-                "word_category"
+                "word_category",
+                "grammar_table"
               ]
             }
           }
@@ -125,7 +126,8 @@
                 "language_family_member",
                 "language_family_invite",
                 "language_family_permission",
-                "word_category"
+                "word_category",
+                "grammar_table"
               ]
             }
           }

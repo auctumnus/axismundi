@@ -147,8 +147,9 @@ form.default,
     }
   }
 
-  h2 + label:has(input[type="checkbox"]), h2 + label:has(input[type="radio"]) {
-    margin-top: -.5rem;
+  h2 + label:has(input[type="checkbox"]),
+  h2 + label:has(input[type="radio"]) {
+    margin-top: -0.5rem;
   }
 
   input[type="search"] {
@@ -189,7 +190,6 @@ form.default,
       background-color: var(--background-panel);
     }
   }
-
 
   label:has(input[type="checkbox"], input[type="radio"]) {
     display: flex;

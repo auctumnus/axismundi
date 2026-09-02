@@ -25,12 +25,16 @@ use axum::routing::{get, post};
 
 pub const MAX_DEFINITIONS: usize = 10;
 
+/// `values` is the word data the estimator's own `%%{...}` directives can
+/// reach.  A word form knows less than a saved word does, so an estimator that
+/// reaches for something the form cannot supply fails loudly here.
 async fn estimate_ipa(
     sets: SoundChangeSetRepository,
     ipa_estimator: &Uuid,
     word: &str,
+    values: &crate::placeholders::Placeholders<'_>,
 ) -> AppResult<String> {
-    sets.run_from_db(ipa_estimator, vec![word.to_string()])
+    sets.run_estimator(ipa_estimator, vec![word.to_string()], values)
         .await
         .and_then(|results| {
             if let Some(errors) = results.errors {

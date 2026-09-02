@@ -23,9 +23,11 @@ const Keybind = ({
 export const Help = ({
   open,
   setOpen,
+  editor = "phonology",
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
+  editor?: "phonology" | "grammar";
 }) => {
   return (
     <>
@@ -68,11 +70,11 @@ export const Help = ({
                 <dl className="keybind-list">
                   <Keybind
                     keys={["Tab"]}
-                    description="Move focus to the next cell"
+                    description="Move focus to the next table item"
                   />
                   <Keybind
                     keys={["Shift", "Tab"]}
-                    description="Move focus to the previous cell"
+                    description="Move focus to the previous table item"
                   />
                   <Keybind
                     keys={["Space"]}
@@ -140,29 +142,7 @@ export const Help = ({
                 </dl>
               </section>
               <section>
-                <h3>Phonemes</h3>
-                <dl className="keybind-list">
-                  <Keybind keys={["p", "a"]} description="Add phoneme" />
-                  <Keybind keys={["p", "e"]} description="Edit phoneme" />
-                  <Keybind keys={["p", "d"]} description="Delete phoneme" />
-                </dl>
-              </section>
-              <section>
-                <h3>Annotations</h3>
-                <dl className="keybind-list">
-                  <Keybind keys={["a", "a"]} description="Add annotation" />
-                  <Keybind keys={["a", "e"]} description="Edit annotation" />
-                  <Keybind keys={["a", "d"]} description="Delete annotation" />
-                  <Keybind keys={["a", "l"]} description="Link annotation" />
-                </dl>
-              </section>
-              <section>
                 <h3>Merging cells</h3>
-                <p className="help-note">
-                  select a cell with <kbd>Space</kbd> (or a click), then move
-                  focus to another cell with the arrow keys (or shift-click)
-                  to pick the rectangle to merge
-                </p>
                 <dl className="keybind-list">
                   <Keybind
                     keys={["m"]}
@@ -171,16 +151,95 @@ export const Help = ({
                   <Keybind keys={["Shift", "m"]} description="Unmerge cell" />
                 </dl>
               </section>
-              <section>
-                <h3>Headings</h3>
-                <dl className="keybind-list">
-                  <Keybind keys={["h", "e"]} description="Edit heading" />
-                  <Keybind keys={["h", "a"]} description="Add heading before" />
-                  <Keybind keys={["h", "A"]} description="Add heading after" />
-                  <Keybind keys={["h", "s"]} description="Split heading" />
-                  <Keybind keys={["h", "d"]} description="Delete heading" />
-                </dl>
-              </section>
+              {editor === "phonology" && (
+                <section>
+                  <h3>Headings</h3>
+                  <dl className="keybind-list">
+                    <Keybind keys={["h", "e"]} description="Edit heading" />
+                    <Keybind
+                      keys={["h", "a"]}
+                      description="Add heading before"
+                    />
+                    <Keybind
+                      keys={["h", "A"]}
+                      description="Add heading after"
+                    />
+                    <Keybind keys={["h", "s"]} description="Split heading" />
+                    <Keybind keys={["h", "d"]} description="Delete heading" />
+                  </dl>
+                </section>
+              )}
+              {editor === "phonology" ? (
+                <>
+                  <section>
+                    <h3>Phonemes</h3>
+                    <dl className="keybind-list">
+                      <Keybind keys={["p", "a"]} description="Add phoneme" />
+                      <Keybind keys={["p", "e"]} description="Edit phoneme" />
+                      <Keybind keys={["p", "d"]} description="Delete phoneme" />
+                    </dl>
+                  </section>
+                  <section>
+                    <h3>Annotations</h3>
+                    <dl className="keybind-list">
+                      <Keybind keys={["a", "a"]} description="Add annotation" />
+                      <Keybind
+                        keys={["a", "e"]}
+                        description="Edit annotation"
+                      />
+                      <Keybind
+                        keys={["a", "d"]}
+                        description="Delete annotation"
+                      />
+                      <Keybind
+                        keys={["a", "l"]}
+                        description="Link annotation"
+                      />
+                    </dl>
+                  </section>
+                </>
+              ) : (
+                <>
+                  <section>
+                    <h3>Sound changes</h3>
+                    <dl className="keybind-list">
+                      <Keybind
+                        keys={["Enter"]}
+                        description="Edit the focused cell’s sound changes"
+                      />
+                    </dl>
+                  </section>
+                  <section>
+                    <h3>Word templates</h3>
+                    <p>
+                      These are replaced before Lexurgy runs, in shared and cell
+                      sound changes.
+                    </p>
+                    <dl className="keybind-list">
+                      <dt>
+                        <code>{"%%{word}"}</code>
+                      </dt>
+                      <dd>The current word’s spelling.</dd>
+                      <dt>
+                        <code>{"%%{ipa}"}</code>
+                      </dt>
+                      <dd>The current word’s stored IPA.</dd>
+                      <dt>
+                        <code>{"%%{extra.path}"}</code>
+                      </dt>
+                      <dd>
+                        A value from the word’s extra data; use dots for object
+                        keys and numeric array indices, such as{" "}
+                        <code>{"%%{extra.stems.0}"}</code>.
+                      </dd>
+                    </dl>
+                    <p className="hint">
+                      Previews only know the example word, so only{" "}
+                      <code>{"%%{word}"}</code> works there.
+                    </p>
+                  </section>
+                </>
+              )}
             </div>
             <div className="button-row">
               <button type="button" className="normal" onClick={close}>

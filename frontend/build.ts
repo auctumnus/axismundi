@@ -120,15 +120,18 @@ async function processJS(inputPath: string, outputPath: string) {
 const BUNDLE_ENTRY_POINTS = [
   'src/components/combobox/word-combobox.tsx',
   'src/components/combobox/word-categories-multiselect.tsx',
+  'src/components/combobox/grammar-table-scope-multiselect.tsx',
   'src/components/combobox/user-combobox.tsx',
   'src/components/markdown-editor/markdown-editor.ts',
   'src/components/panzoom/panzoom-enhance.ts',
   'src/components/tooltip/tooltip.ts',
   'src/page/languages/phonology-editor.tsx',
+  'src/page/languages/grammar-table-editor.tsx',
   'src/page/sound-changes/runner/sound-change-runner.ts',
   'src/page/sound-changes/view.ts',
   'src/page/translations/quotations-editor.tsx',
   'src/page/words/definitions-editor.tsx',
+  'src/page/words/grammar-tables.ts',
   'src/main.ts'
 ];
 

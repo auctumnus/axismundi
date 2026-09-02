@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}{% if editing %}edit grammar table metadata{% else %}new grammar table{% endif %} - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/components/async-select/async-select.css">
+{% endblock %}
+
+{% block content %}
+<h1>{% if editing %}edit grammar table metadata{% else %}new grammar table{% endif %}</h1>
+
+{% if let Some(error) = error %}
+<div class="error"><h2>Error</h2><p>{{ error.message }}</p></div>
+{% endif %}
+
+<form class="default" method="post" action="{{ action }}">
+    <section>
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required value="{{ previous_name }}">
+    </section>
+    <section>
+        <label for="description">Description (optional)</label>
+        <textarea id="description" name="description" rows="4">{{ previous_description }}</textarea>
+    </section>
+    <section>
+        <label for="word-class-ids">Required word classes</label>
+        <div id="word-class-ids-mount" class="async-multi-select-mount">
+            <select class="grammar-table-scope-select" id="word-class-ids" name="word_class_ids[]" multiple required>
+                {% for class in word_classes %}
+                <option value="{{ class.id }}"{% if selected_word_class_ids.contains(&class.id) %} selected{% endif %}>{{ class.name }} ({{ class.abbreviation }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <span class="hint">A table applies only to words in one of these classes.</span>
+    </section>
+    <section>
+        <label for="category-ids">Required categories (optional)</label>
+        <div id="category-ids-mount" class="async-multi-select-mount">
+            <select class="grammar-table-scope-select" id="category-ids" name="category_ids[]" multiple>
+                {% for category in word_categories %}
+                <option value="{{ category.id }}"{% if selected_category_ids.contains(&category.id) %} selected{% endif %}>{{ category.name }} ({{ category.abbreviation }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <span class="hint">A word needs every selected category for this table to apply.</span>
+    </section>
+    <section class="button-row"><button type="submit">{% if editing %}save metadata{% else %}next{% endif %}</button></section>
+</form>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span><a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span><a href="/languages/{{ language.code }}/grammar-tables" class="breadcrumb">grammar tables</a>
+{% endblock %}
+
+{% block footer %}{% call lang_f::language_section(&language, can_delete_language) %}{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/components/combobox/grammar-table-scope-multiselect.js"></script>
+<script type="module">
+window.addEventListener('DOMContentLoaded', () => {
+    if (!window.mountGrammarTableScopeMultiselect) return;
+
+    window.mountGrammarTableScopeMultiselect('word-class-ids-mount', {
+        inputId: 'word-class-ids',
+        inputName: 'word_class_ids[]',
+        allOptions: JSON.parse(document.getElementById('word-class-options').textContent),
+        initialSelectedIds: JSON.parse(document.getElementById('selected-word-class-ids').textContent),
+        placeholder: '-- select word classes --',
+        required: true,
+    });
+    window.mountGrammarTableScopeMultiselect('category-ids-mount', {
+        inputId: 'category-ids',
+        inputName: 'category_ids[]',
+        allOptions: JSON.parse(document.getElementById('category-options').textContent),
+        initialSelectedIds: JSON.parse(document.getElementById('selected-category-ids').textContent),
+        placeholder: '-- select categories --',
+        required: false,
+    });
+});
+</script>
+<script type="application/json" id="word-class-options">{{ word_class_options_json | safe }}</script>
+<script type="application/json" id="category-options">{{ word_category_options_json | safe }}</script>
+<script type="application/json" id="selected-word-class-ids">{{ selected_word_class_ids | json | safe }}</script>
+<script type="application/json" id="selected-category-ids">{{ selected_category_ids | json | safe }}</script>
+{% endblock %}

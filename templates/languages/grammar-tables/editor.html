@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{%- import "util.html" as u -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}{% if editing %}edit grammar table body{% else %}new grammar table{% endif %} - {{ language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/components/modal/modal.css">
+<link rel="stylesheet" href="/static/components/async-select/async-select.css">
+<link rel="stylesheet" href="/static/components/combobox/word-combobox.css">
+<link rel="stylesheet" href="/static/page/sound-changes/runner/sound-changer.css">
+<link rel="stylesheet" href="/static/components/phonology-table.css">
+<script type="module" src="/static/page/languages/grammar-table-editor.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1>{% if editing %}edit grammar table body{% else %}new grammar table body{% endif %}</h1>
+
+{% if let Some(error) = error %}
+<div class="error"><h2>Error</h2><p>{{ error.message }}</p></div>
+{% endif %}
+
+<form class="default" method="post" action="{{ action }}">
+    <input type="hidden" name="name" value="{{ previous_name }}">
+    <input type="hidden" name="description" value="{{ previous_description }}">
+    {% for id in selected_word_class_ids %}<input type="hidden" name="word_class_ids[]" value="{{ id }}">{% endfor %}
+    {% for id in selected_category_ids %}<input type="hidden" name="category_ids[]" value="{{ id }}">{% endfor %}
+
+    <input id="table-editor" name="body" type="hidden">
+    <noscript><p class="error">JavaScript is required to edit grammar tables.</p></noscript>
+
+    <section class="button-row">
+        <button type="submit">{% if editing %}save table body{% else %}create table{% endif %}</button>
+    </section>
+</form>
+
+<script type="application/json" id="initial-grammar-table-body">{{ previous_table_body | json | safe }}</script>
+<script type="application/json" id="initial-grammar-table-preamble">{{ previous_preamble | json | safe }}</script>
+<script type="application/json" id="grammar-table-editor-options">{"previewUrl":"/api/languages/{{ language.code }}/grammar-tables/preview","hasIpaEstimator":{{ has_ipa_estimator }},"languageCode":{{ language.code | json | safe }},"name":{{ previous_name | json | safe }}}</script>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}" class="breadcrumb">{{ language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.code }}/grammar-tables" class="breadcrumb">grammar tables</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language, can_delete_language) %}
+{% endblock %}

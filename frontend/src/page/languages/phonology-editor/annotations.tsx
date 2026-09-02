@@ -5,7 +5,7 @@ import {
 } from "../../../components/modal/stepped-modal";
 import { useEditor } from "./state";
 import { getByPath } from "./path";
-import { Tooltip } from "../../../components/tooltip/tooltip";
+import { Tooltip } from "../../../components/tooltip/tooltip.tsx";
 
 export const Annotations = () => {
   const [state, dispatch] = useEditor();

@@ -12,6 +12,7 @@ export interface WordSearchResult {
   language_code: string;
   word_class_abbreviation?: string;
   ipa?: string;
+  extra?: unknown;
 }
 
 interface LanguageWordsGroup {

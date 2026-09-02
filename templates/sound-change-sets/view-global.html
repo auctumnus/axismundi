@@ -110,7 +110,8 @@
     {% if set.is_ipa_estimator || (!language_has_ipa_estimator && can_edit) %}
     <div class="card">
         {% if set.is_ipa_estimator %}
-            <p>This set is used to estimate IPA for this language.</p>
+            <p>This set is used to estimate IPA for this language. Grammar tables run it before their own rules, so a paradigm starts from estimated IPA rather than spelling.</p>
+            <p class="hint">Its source expands <code>%%{word}</code>, the word being estimated, and — wherever the page running it knows them — <code>%%{ipa}</code> and <code>extra</code> values such as <code>%%{extra.stem}</code>.</p>
             <div class="actions">
                 <a class="button" href="/languages/{{ lang.language.code }}/sound-change-sets/{{ set.id }}/unset-ipa-estimator">
                     unset as ipa estimator

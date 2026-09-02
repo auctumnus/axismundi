@@ -1,5 +1,5 @@
 import { useEditor, type EditorState, PRESETS } from "./state";
-import { Tooltip } from "../../../components/tooltip/tooltip";
+import { Tooltip } from "../../../components/tooltip/tooltip.tsx";
 import {
   getByPath,
   isPathEqual,
@@ -51,6 +51,7 @@ export const ControlButton = ({
       <button
         type="button"
         className={`control-button ${enabled ? "" : "disabled"} ${className ?? ""}`}
+        aria-label={title}
         onClick={onClick}
         disabled={!enabled}
       >

@@ -38,6 +38,6 @@
 }
 
 .pill.orange {
---pill-bg: light-dark(var(--color-orange-100), var(--color-orange-700));
---pill-fg: light-dark(var(--color-orange-800), var(--color-orange-200));
+  --pill-bg: light-dark(var(--color-orange-100), var(--color-orange-700));
+  --pill-fg: light-dark(var(--color-orange-800), var(--color-orange-200));
 }

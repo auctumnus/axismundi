@@ -596,15 +596,16 @@ test("setByPath on column heading updates the correct column", () => {
 });
 
 test("setByPath on row heading with groups updates the correct row", () => {
+  const groupRows: Row[] = [
+    { type: "Individual", heading: "Row 1", cells: [cell("a")] },
+    { type: "Individual", heading: "Row 2", cells: [cell("b")] },
+  ];
   const table: Body = {
     rows: [
       {
         type: "Group",
         heading: "Group 1",
-        rows: [
-          { type: "Individual", heading: "Row 1", cells: [cell("a")] },
-          { type: "Individual", heading: "Row 2", cells: [cell("b")] },
-        ],
+        rows: groupRows,
       },
       { type: "Individual", heading: "Row 3", cells: [cell("c")] },
     ],
@@ -617,7 +618,7 @@ test("setByPath on row heading with groups updates the correct row", () => {
   const result = setByPath(table, path, {
     type: "Group",
     heading: "New Group 1",
-    rows: table.rows[0]!.rows,
+    rows: groupRows,
   });
   const expected: Body = {
     rows: [
@@ -1240,24 +1241,24 @@ test("movement: tab/shifttab through column headings", () => {
   ).toEqual({ type: "ColumnHeading", path: [0, 0] });
 });
 
-test("movement: tab from last column heading stays", () => {
+test("movement: tab from last column heading exits a table with no rows", () => {
   const table: Body = {
     rows: [],
     columns: [{ type: "Individual", heading: "Col 1" }],
     annotations: [],
   };
   const path: TablePath = { type: "ColumnHeading", path: [0] };
-  expect(move(table, path, "Tab")).toEqual(path);
+  expect(move(table, path, "Tab")).toBeNull();
 });
 
-test("movement: shifttab from first column heading stays", () => {
+test("movement: shifttab from first column heading goes to top-left", () => {
   const table: Body = {
     rows: [],
     columns: [{ type: "Individual", heading: "Col 1" }],
     annotations: [],
   };
   const path: TablePath = { type: "ColumnHeading", path: [0] };
-  expect(move(table, path, "ShiftTab")).toEqual(path);
+  expect(move(table, path, "ShiftTab")).toEqual({ type: "TopLeft" });
 });
 
 test("movement: right/left through column headings by depth", () => {

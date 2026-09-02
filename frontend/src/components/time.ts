@@ -45,7 +45,7 @@ export const initializeTimeElements = () => {
     const datetime = timeElement.getAttribute("datetime");
     if (datetime) {
       const date = new Date(datetime);
-      
+
       timeElement.addEventListener("click", () => {
         timeElement.classList.toggle("static-time");
         if (timeElement.classList.contains("static-time")) {

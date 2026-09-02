@@ -36,13 +36,18 @@ const updatePinButton = (form: HTMLFormElement, isPinned: boolean) => {
   form.classList.toggle("pinned", isPinned);
 
   if (button) {
-    button.setAttribute("aria-label", `${action} ${languageName} ${isPinned ? "from" : "to"} home`);
+    button.setAttribute(
+      "aria-label",
+      `${action} ${languageName} ${isPinned ? "from" : "to"} home`,
+    );
     button.setAttribute("data-tooltip", tooltip);
     button.querySelector(".tooltip")?.replaceChildren(tooltip);
   }
 };
 
-for (const form of document.querySelectorAll<HTMLFormElement>(".pin-language-form")) {
+for (const form of document.querySelectorAll<HTMLFormElement>(
+  ".pin-language-form",
+)) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 

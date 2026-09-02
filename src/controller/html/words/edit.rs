@@ -476,7 +476,16 @@ pub(super) async fn estimate_ipa_submit(
     let word_categories_json = build_categories_json(&word_categories_list);
 
     let estimated_ipa = match &ipa_estimator {
-        Some(scs) => match estimate_ipa(sets, &scs.id, &form.word).await {
+        Some(scs) => match estimate_ipa(
+            sets,
+            &scs.id,
+            &form.word,
+            &crate::placeholders::Placeholders::default()
+                .with_ipa(Some(&form.ipa))
+                .with_extra(word.extra.as_ref()),
+        )
+        .await
+        {
             Ok(response) => response,
             Err(error) => {
                 let status = error.status_code;

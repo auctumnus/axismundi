@@ -2,7 +2,7 @@ import React, { useState, useReducer, useEffect } from "react";
 import * as ReactDOM from "react-dom/client";
 import { AnimatePresence, motion } from "motion/react";
 import { ModalInner } from "../../components/modal/modal";
-import { Tooltip } from "../../components/tooltip/tooltip";
+import { Tooltip } from "../../components/tooltip/tooltip.tsx";
 
 interface DefinitionItem {
   key: string;

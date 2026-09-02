@@ -55,6 +55,20 @@ pub struct WordClassRepository {
     state: AppState,
 }
 
+fn grammar_table_reference_error(error: sqlx::Error) -> crate::err::AppError {
+    let is_grammar_table_reference = error.as_database_error().is_some_and(|database_error| {
+        database_error.code().as_deref() == Some("23503")
+            && database_error.constraint() == Some("grammar_table_word_classes_word_class_id_fkey")
+    });
+    if is_grammar_table_reference {
+        bad_request(
+            "This word class is used by one or more grammar tables. Remove it from those tables before deleting the word class.",
+        )
+    } else {
+        error.into()
+    }
+}
+
 impl WordClassRepository {
     pub fn new(state: AppState) -> Self {
         Self { state }
@@ -500,9 +514,22 @@ impl WordClassRepository {
             ));
         }
 
+        let used_by_grammar_table: bool = sqlx::query_scalar(
+            "select exists (select 1 from grammar_table_word_classes where word_class_id = $1)",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if used_by_grammar_table {
+            return Err(bad_request(
+                "This word class is used by one or more grammar tables. Remove it from those tables before deleting the word class.",
+            ));
+        }
+
         let result = sqlx::query!("DELETE FROM word_classes WHERE id = $1", id)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .map_err(grammar_table_reference_error)?;
 
         tx.commit().await?;
 

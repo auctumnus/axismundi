@@ -7,8 +7,6 @@ import type { SyntaxNode } from "@lezer/common";
 import type { Text } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 
-console.log("[lexurgy lint] module loaded");
-
 const lexurgyHighlighting = styleTags({
   Comment: t.lineComment,
   ElementKw: t.keyword,
@@ -268,12 +266,12 @@ const completions = lexurgyLanguage.data.of({
   autocomplete,
 })
 
-const lexurgyLinter = linter(view => {
+const lexurgyLinter = (externalDeclarations: Iterable<string> = []) => linter(view => {
   const diagnostics: Diagnostic[] = [];
   const tree = syntaxTree(view.state);
   const doc = view.state.doc;
 
-  const declared = new Set<string>();
+  const declared = new Set(externalDeclarations);
   const refs: {from: number, to: number, name: string}[] = [];
 
   const cursor = tree.cursor();
@@ -293,8 +291,6 @@ const lexurgyLinter = linter(view => {
     }
   } while (cursor.next());
 
-  console.log("[lexurgy lint] declared:", [...declared], "refs:", refs);
-
   for (const ref of refs) {
     if (!declared.has(ref.name)) {
       diagnostics.push({
@@ -307,10 +303,21 @@ const lexurgyLinter = linter(view => {
     }
   }
 
-  console.log("[lexurgy lint] diagnostics:", diagnostics);
   return diagnostics;
 });
 
-export const lexurgy = () => {
-  return new LanguageSupport(lexurgyLanguage, [lexurgyIndent, syntaxHighlighting(lexurgyHighlight), completions, autocompletion(), closeBrackets(), keymap.of(closeBracketsKeymap), lexurgyLinter]);
+export const declaredLexurgyNames = (source: string): string[] => {
+  const names = new Set<string>();
+  const cursor = parser.parse(source).cursor();
+  do {
+    if (cursor.name === "ClassDecl" || cursor.name === "ElementDecl") {
+      const nameNode = cursor.node.getChild("Name");
+      if (nameNode) names.add(source.slice(nameNode.from, nameNode.to));
+    }
+  } while (cursor.next());
+  return [...names];
+};
+
+export const lexurgy = ({ externalDeclarations = [] }: { externalDeclarations?: Iterable<string> } = {}) => {
+  return new LanguageSupport(lexurgyLanguage, [lexurgyIndent, syntaxHighlighting(lexurgyHighlight), completions, autocompletion(), closeBrackets(), keymap.of(closeBracketsKeymap), lexurgyLinter(externalDeclarations)]);
 }

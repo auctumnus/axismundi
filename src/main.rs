@@ -26,10 +26,12 @@ mod controller;
 mod email;
 mod embed;
 mod err;
+mod grammar;
 mod lexurgy;
 mod md;
 mod model;
 mod pagination;
+mod placeholders;
 mod util;
 
 #[tokio::main]
@@ -38,8 +40,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "axismundi=debug,tower_http=debug,sqlx::query=warn".into())
         // html5ever logs every parser state transition at debug level, which
         // drowns out application logs when `RUST_LOG=debug` is set.
-        .add_directive("html5ever::tokenizer=off".parse().expect("valid log directive"))
-        .add_directive("html5ever::tree_builder=off".parse().expect("valid log directive"));
+        .add_directive(
+            "html5ever::tokenizer=off"
+                .parse()
+                .expect("valid log directive"),
+        )
+        .add_directive(
+            "html5ever::tree_builder=off"
+                .parse()
+                .expect("valid log directive"),
+        );
 
     tracing_subscriber::registry()
         .with(log_filter)

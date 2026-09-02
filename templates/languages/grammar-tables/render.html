@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{%- import "languages/fragments/card.html" as lang_card -%}
+{%- import "languages/fragments/footer.html" as lang_f -%}
+
+{% block title %}{{ table.name }} in {{ language.language.name }} - axismundi{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/components/phonology-table.css">
+<script src="/static/components/like-button.js" type="module" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="context-cards">
+    <div class="context-card language-context">
+        <span class="context-label">in language</span>
+        <ul class="standalone-card">
+            {% call lang_card::render(&language) %}
+        </ul>
+    </div>
+</div>
+
+{{ content|safe }}
+
+<div class="markdown">
+    {{ rendered_description | safe }}
+</div>
+{% endblock %}
+
+{% block breadcrumb %}
+<span class="separator">/</span>
+<a href="/languages/{{ language.language.code }}" class="breadcrumb">{{ language.language.name }}</a>
+<span class="separator">/</span>
+<a href="/languages/{{ language.language.code }}/grammar-tables" class="breadcrumb">grammar tables</a>
+{% endblock %}
+
+{% block footer %}
+{% call lang_f::language_section(&language.language, can_delete_language) %}
+{% endblock %}

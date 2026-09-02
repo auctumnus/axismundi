@@ -7,6 +7,7 @@ use validator::Validate;
 use crate::AppState;
 use crate::err::{AppResult, forbidden, not_found};
 use crate::model::definitions::Definition;
+use crate::model::grammar_tables::GrammarTable;
 use crate::model::language_families::LanguageFamily;
 use crate::model::language_family_members::LanguageFamilyMember;
 use crate::model::language_invites::LanguageInvite;
@@ -37,6 +38,7 @@ pub enum AuditableResource {
     Word,
     WordClass,
     WordCategory,
+    GrammarTable,
     Translation,
     Translatable,
     WordRelation,
@@ -77,6 +79,7 @@ pub enum AuditableResourceResolved {
     Word(Word),
     WordClass(WordClassResolved),
     WordCategory(WordCategoryResolved),
+    GrammarTable(GrammarTable),
     Translation(Translation),
     Translatable(Translatable),
     WordRelation(WordRelation),
@@ -202,6 +205,7 @@ impl AuditLogRepository {
         resource_id: Uuid,
     ) -> Option<AuditableResourceResolved> {
         use crate::model::definitions::DefinitionRepository;
+        use crate::model::grammar_tables::GrammarTableRepository;
         use crate::model::language_family_members::LanguageFamilyMemberRepository;
         use crate::model::language_invites::LanguageInviteRepository;
         use crate::model::language_permissions::LanguagePermissionRepository;
@@ -278,6 +282,13 @@ impl AuditLogRepository {
                         language_code: language.code,
                     },
                 ))
+            }
+            AuditableResource::GrammarTable => {
+                let repo = GrammarTableRepository::new(self.state.clone());
+                repo.find_by_id(resource_id)
+                    .await
+                    .ok()
+                    .map(AuditableResourceResolved::GrammarTable)
             }
             AuditableResource::Translation => {
                 let repo = TranslationRepository::new(self.state.clone());

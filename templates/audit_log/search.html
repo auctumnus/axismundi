@@ -67,6 +67,7 @@
                                 <option value="language" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Language) %}selected{% endif %}>Language</option>
                                 <option value="language_family" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::LanguageFamily) %}selected{% endif %}>Language Family</option>
                                 <option value="word" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Word) %}selected{% endif %}>Word</option>
+                                <option value="grammar_table" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::GrammarTable) %}selected{% endif %}>Grammar Table</option>
                                 <option value="translation" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Translation) %}selected{% endif %}>Translation</option>
                                 <option value="translatable" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::Translatable) %}selected{% endif %}>Translatable</option>
                                 <option value="word_relation" {% if previous_query.resource_type == Some(crate::model::audit_log::AuditableResource::WordRelation) %}selected{% endif %}>Word Relation</option>

@@ -3,6 +3,7 @@ pub mod bookmarks;
 pub mod contribution_stats;
 pub mod definitions;
 pub mod email_verification_tokens;
+pub mod grammar_tables;
 pub mod language_families;
 pub mod language_family_invites;
 pub mod language_family_members;

@@ -542,7 +542,8 @@ pub(super) async fn estimate_ipa_new_word(
     let word_categories_json = build_categories_json(&word_categories_list);
 
     let estimated_ipa = if let Some(estimator) = &ipa_estimator {
-        match estimate_ipa(sets, &estimator.id, &form.word).await {
+        let values = crate::placeholders::Placeholders::default().with_ipa(form.ipa.as_deref());
+        match estimate_ipa(sets, &estimator.id, &form.word, &values).await {
             Ok(ipa) => Some(ipa),
             Err(error) => {
                 let template = NewWordTemplate {

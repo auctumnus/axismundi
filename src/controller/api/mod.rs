@@ -11,6 +11,7 @@ use tower_governor::governor::GovernorConfig;
 mod audit_logs;
 mod bookmarks;
 mod definitions;
+mod grammar_tables;
 mod health;
 mod language_families;
 mod language_family_invites;
@@ -80,6 +81,7 @@ pub fn create_api_controller() -> Router<AppState> {
         .merge(language_family_invites::create_router())
         .merge(language_family_permissions::create_router())
         .merge(phonology_tables::create_router())
+        .merge(grammar_tables::create_router())
         .merge(sound_change_sets::create_router());
 
     // Only apply rate limiting in non-test builds

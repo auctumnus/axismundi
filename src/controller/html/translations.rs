@@ -201,8 +201,14 @@ async fn estimate_ipa_text(
         }
     };
 
+    // Free text has no word record behind it, so `%%{word}` is the token being
+    // estimated and any other directive is an error the author will see.
     let response = sets
-        .run_from_db(estimator, tokens)
+        .run_estimator(
+            estimator,
+            tokens,
+            &crate::placeholders::Placeholders::default(),
+        )
         .await
         .map_err(package_err)?;
 
@@ -219,7 +225,11 @@ async fn estimate_ipa_text(
         ))));
     }
 
-    Ok(reassemble_with_outputs(text, &ranges, &response.output_words))
+    Ok(reassemble_with_outputs(
+        text,
+        &ranges,
+        &response.output_words,
+    ))
 }
 
 use axum::extract::State;

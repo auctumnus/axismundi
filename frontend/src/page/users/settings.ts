@@ -1,3 +1,12 @@
+declare global {
+  interface Window {
+    user: {
+      username: string;
+      display_name: string | null;
+    };
+  }
+}
+
 const hslToRgb = (
   h: number,
   s: number,

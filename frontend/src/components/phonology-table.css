@@ -1,9 +1,11 @@
-.phonology-table-scroll {
+.phonology-table-scroll,
+.grammar-table-scroll {
   width: 100%;
   overflow-x: auto;
 }
 
-table.phonology-table {
+table.phonology-table,
+table.grammar-table {
   border-spacing: 0;
   border-collapse: separate;
   border: var(--border);
@@ -47,6 +49,22 @@ table.phonology-table {
   td {
     text-align: center;
     padding: 0.5rem;
+  }
+
+  .grammar-cell-word,
+  .grammar-cell-ipa {
+    display: block;
+  }
+
+  .grammar-cell-ipa {
+    margin-top: 0.15rem;
+    color: var(--foreground-tertiary);
+    font-size: 0.875rem;
+  }
+
+  &.grammar-table td > code {
+    text-align: left;
+    white-space: pre-wrap;
   }
 
   thead tr:first-child th:first-child {
@@ -104,6 +122,18 @@ table.phonology-table {
     text-decoration: none;
     color: var(--foreground-secondary);
   }
+}
+
+.grammar-table-no-example {
+  background-color: var(--background-page);
+  color: var(--foreground-secondary);
+  text-align: center;
+}
+
+.grammar-table-example {
+  color: var(--foreground-secondary);
+  font-size: 0.875rem;
+  margin-top: -0.5rem;
 }
 
 h3.annotations-header {
@@ -225,6 +255,118 @@ ol.annotations {
   }
 }
 
+form.default .grammar-table-scope-select {
+  min-height: 7rem;
+  padding: 0.5rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--rounding);
+  background-color: var(--input-background);
+  color: var(--foreground-primary);
+  font-family: var(--font-normal);
+  font-size: 1rem;
+}
+
+.grammar-editor {
+  .grammar-editor-example {
+    display: grid;
+    grid-template-columns: minmax(12rem, 24rem);
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+
+    .hint,
+    .grammar-preview-error {
+      margin: 0;
+    }
+  }
+
+  .grammar-code-editor {
+    height: 12rem;
+    min-height: 7rem;
+    border: var(--border);
+    border-radius: var(--rounding);
+    overflow: hidden;
+    background: var(--input-background);
+    font-family: var(--font-monospace);
+
+    .cm-editor {
+      min-height: 100%;
+    }
+
+    .cm-scroller {
+      font-family: var(--font-monospace);
+    }
+
+    .cm-gutter,
+    .cm-content {
+      min-height: 7rem;
+    }
+  }
+
+  .grammar-editor-controls {
+    margin-block: 1rem;
+    justify-content: flex-start;
+  }
+
+  .grammar-editor-table td {
+    padding: 0;
+    min-width: 10rem;
+  }
+
+  .grammar-editor-cell > button {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    min-height: 4.75rem;
+    padding: 0.5rem;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .grammar-preview-value {
+    min-height: 1.5rem;
+  }
+
+  .grammar-preview-muted {
+    color: var(--foreground-tertiary);
+    font-size: 0.875rem;
+  }
+
+  .grammar-preview-running {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    color: var(--foreground-secondary);
+    font-size: 0.875rem;
+  }
+
+  .grammar-preview-spinner {
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid var(--foreground-tertiary);
+    border-top-color: var(--foreground-accent);
+    border-radius: 50%;
+    animation: grammar-preview-spin 0.7s linear infinite;
+  }
+
+  .grammar-preview-error {
+    color: var(--color-red-500);
+    font-size: 0.875rem;
+  }
+
+  .grammar-cell-preview-error {
+    margin: 0 0 0.75rem;
+    color: var(--color-red-500);
+  }
+}
+
+@keyframes grammar-preview-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 .help-content {
   display: flex;
   flex-direction: column;
@@ -252,11 +394,6 @@ ol.annotations {
     svg {
       display: inline;
     }
-  }
-
-  .help-note {
-    font-size: 0.875rem;
-    color: var(--foreground-secondary);
   }
 
   .keybind-list {

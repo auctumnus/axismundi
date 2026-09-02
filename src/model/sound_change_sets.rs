@@ -1,10 +1,14 @@
+use std::{collections::HashMap, sync::Arc};
+
 use chrono::{DateTime, Utc};
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::{
-    err::{AppError, AppResult, forbidden, not_found},
+    err::{AppError, AppResult, bad_request, forbidden, not_found},
     lexurgy,
     model::{
         language_family_members::{LanguageFamilyMember, LanguageFamilyMemberRepository},
@@ -16,8 +20,14 @@ use crate::{
         users::User,
     },
     pagination::{PaginatedRequest, PaginatedResponse},
+    placeholders::{self, Placeholders},
     util::{AppState, repo_from_parts},
 };
+
+/// A per-word estimator program is one Lexurgy request, so a long translation
+/// could otherwise fan out into hundreds of them.
+const MAX_ESTIMATOR_PROGRAMS: usize = 64;
+const ESTIMATOR_CONCURRENCY: usize = 4;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -557,20 +567,80 @@ impl SoundChangeSetRepository {
         set_id: &Uuid,
         input_words: Vec<String>,
     ) -> AppResult<lexurgy::Response> {
-        let set = self.get(*set_id).await?;
+        self.run_estimator(set_id, input_words, &Placeholders::default())
+            .await
+    }
 
-        if let Some(set) = set {
-            let response =
-                crate::lexurgy::run_sound_changes(set.changes, input_words, None, None, None)
-                    .await?;
+    /// Run a set over `input_words`, expanding the `%%{...}` directives that
+    /// grammar tables use.  `values` supplies whatever word data the caller
+    /// knows; `%%{word}` is always the input word currently being estimated.
+    ///
+    /// Only IPA estimators expand directives.  A plain sound change set is a
+    /// pipeline over arbitrary word lists, and there is no one word for
+    /// `%%{word}` to mean there.
+    pub async fn run_estimator(
+        &self,
+        set_id: &Uuid,
+        input_words: Vec<String>,
+        values: &Placeholders<'_>,
+    ) -> AppResult<lexurgy::Response> {
+        let set = self
+            .get(*set_id)
+            .await?
+            .ok_or_else(|| not_found(format!("sound change set with id {set_id}")))?;
 
-            match response {
-                Ok(response) => Ok(response),
-                Err(error) => Err(error.into()),
-            }
-        } else {
-            Err(not_found(format!("sound change set with id {set_id}")))
+        if !set.is_ipa_estimator || !placeholders::contains_directive(&set.changes) {
+            return run_lexurgy(set.changes, input_words).await;
         }
+
+        let (programs, assignment) = plan_estimator_runs(&set.changes, &input_words, values)?;
+        let responses: Vec<AppResult<lexurgy::Response>> = futures::stream::iter(
+            programs
+                .into_iter()
+                .map(|(program, words)| run_lexurgy(program, words)),
+        )
+        .buffered(ESTIMATOR_CONCURRENCY)
+        .collect()
+        .await;
+        merge_estimator_responses(
+            responses.into_iter().collect::<AppResult<Vec<_>>>()?,
+            &assignment,
+        )
+    }
+
+    /// As [`Self::run_estimator`], but acquires `permits` for every outbound
+    /// Lexurgy request. Grammar-table evaluation uses this so an estimator
+    /// with directives cannot bypass the grammar renderer's process-wide
+    /// request limit.
+    pub async fn run_estimator_bounded(
+        &self,
+        set_id: &Uuid,
+        input_words: Vec<String>,
+        values: &Placeholders<'_>,
+        permits: Arc<Semaphore>,
+    ) -> AppResult<lexurgy::Response> {
+        let set = self
+            .get(*set_id)
+            .await?
+            .ok_or_else(|| not_found(format!("sound change set with id {set_id}")))?;
+
+        if !set.is_ipa_estimator || !placeholders::contains_directive(&set.changes) {
+            return run_lexurgy_bounded(set.changes, input_words, permits).await;
+        }
+
+        let (programs, assignment) = plan_estimator_runs(&set.changes, &input_words, values)?;
+        let responses: Vec<AppResult<lexurgy::Response>> = futures::stream::iter(
+            programs
+                .into_iter()
+                .map(|(program, words)| run_lexurgy_bounded(program, words, permits.clone())),
+        )
+        .buffered(ESTIMATOR_CONCURRENCY)
+        .collect()
+        .await;
+        merge_estimator_responses(
+            responses.into_iter().collect::<AppResult<Vec<_>>>()?,
+            &assignment,
+        )
     }
 
     /// For save-to-new: find all family members in all families where `user_id` has
@@ -840,3 +910,193 @@ impl SoundChangeSetRepository {
 }
 
 repo_from_parts!(SoundChangeSetRepository);
+
+/// Where each input word's expanded program came out, as
+/// `(program index, position within that program's word list)`.
+type EstimatorAssignment = Vec<(usize, usize)>;
+
+/// Split `input_words` into the Lexurgy runs an estimator with directives
+/// needs.  `%%{word}` differs per input, so each input gets its own expansion,
+/// but identical expansions share one run: an estimator whose directives do not
+/// depend on the word is still a single request.
+fn plan_estimator_runs(
+    changes: &str,
+    input_words: &[String],
+    values: &Placeholders<'_>,
+) -> AppResult<(Vec<(String, Vec<String>)>, EstimatorAssignment)> {
+    let mut programs: Vec<(String, Vec<String>)> = Vec::new();
+    let mut program_index: HashMap<String, usize> = HashMap::new();
+    let mut assignment = EstimatorAssignment::with_capacity(input_words.len());
+    for input in input_words {
+        let program = placeholders::expand(changes, &values.with_word(input))
+            .map_err(|message| bad_request(format!("IPA estimation failed: {message}")))?;
+        let index = match program_index.get(&program) {
+            Some(index) => *index,
+            None => {
+                if programs.len() == MAX_ESTIMATOR_PROGRAMS {
+                    return Err(bad_request(format!(
+                        "This IPA estimator builds a different program for each word, so it can only estimate {MAX_ESTIMATOR_PROGRAMS} distinct words at a time."
+                    )));
+                }
+                program_index.insert(program.clone(), programs.len());
+                programs.push((program, Vec::new()));
+                programs.len() - 1
+            }
+        };
+        let words = &mut programs[index].1;
+        assignment.push((index, words.len()));
+        words.push(input.clone());
+    }
+    Ok((programs, assignment))
+}
+
+/// Put the separate runs back into one response in the caller's input order.
+fn merge_estimator_responses(
+    responses: Vec<lexurgy::Response>,
+    assignment: &[(usize, usize)],
+) -> AppResult<lexurgy::Response> {
+    let pick = |field: &[String], position: usize| -> AppResult<String> {
+        field.get(position).cloned().ok_or_else(|| {
+            crate::err::internal_error("The IPA estimator returned fewer words than it was given.")
+        })
+    };
+
+    // Every program is the same estimator with different values pasted in, so
+    // their stages line up; the first response names them for all of them.
+    let mut merged = lexurgy::Response {
+        rule_names: responses
+            .first()
+            .map(|response| response.rule_names.clone())
+            .unwrap_or_default(),
+        output_words: Vec::with_capacity(assignment.len()),
+        intermediate_words: None,
+        traces: None,
+        errors: None,
+    };
+    for &(program, position) in assignment {
+        merged
+            .output_words
+            .push(pick(&responses[program].output_words, position)?);
+    }
+
+    // An intermediate romanizer only survives reassembly if every program
+    // produced it: a stage missing from one program has no word to contribute
+    // for the inputs that ran under it.
+    let stages: Vec<String> = responses
+        .first()
+        .and_then(|response| response.intermediate_words.as_ref())
+        .map(|words| words.keys().cloned().collect())
+        .unwrap_or_default();
+    let mut intermediate = HashMap::new();
+    for stage in stages {
+        let mut words = Vec::with_capacity(assignment.len());
+        for &(program, position) in assignment {
+            let Some(stage_words) = responses[program]
+                .intermediate_words
+                .as_ref()
+                .and_then(|stages| stages.get(&stage))
+            else {
+                words.clear();
+                break;
+            };
+            words.push(pick(stage_words, position)?);
+        }
+        if !words.is_empty() {
+            intermediate.insert(stage, words);
+        }
+    }
+    if !intermediate.is_empty() {
+        merged.intermediate_words = Some(intermediate);
+    }
+
+    let errors: Vec<_> = responses
+        .into_iter()
+        .filter_map(|response| response.errors)
+        .flatten()
+        .collect();
+    if !errors.is_empty() {
+        merged.errors = Some(errors);
+    }
+    Ok(merged)
+}
+
+/// One Lexurgy request, with its transport and rule errors folded into
+/// `AppError` the way every caller here expects.
+async fn run_lexurgy(changes: String, input_words: Vec<String>) -> AppResult<lexurgy::Response> {
+    crate::lexurgy::run_sound_changes(changes, input_words, None, None, None)
+        .await?
+        .map_err(Into::into)
+}
+
+async fn run_lexurgy_bounded(
+    changes: String,
+    input_words: Vec<String>,
+    permits: Arc<Semaphore>,
+) -> AppResult<lexurgy::Response> {
+    let _permit = permits
+        .acquire_owned()
+        .await
+        .map_err(|_| crate::err::internal_error("Grammar renderer stopped accepting work."))?;
+    run_lexurgy(changes, input_words).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn response(output_words: &[&str]) -> lexurgy::Response {
+        lexurgy::Response {
+            rule_names: vec!["rule".into()],
+            output_words: output_words.iter().map(|word| (*word).into()).collect(),
+            intermediate_words: None,
+            traces: None,
+            errors: None,
+        }
+    }
+
+    #[test]
+    fn identical_expansions_share_one_run() {
+        let inputs = ["kat".to_string(), "kas".to_string(), "kat".to_string()];
+        let (programs, assignment) =
+            plan_estimator_runs("%%{word} => x", &inputs, &Placeholders::default()).unwrap();
+
+        assert_eq!(
+            programs,
+            vec![
+                (
+                    "kat => x".to_string(),
+                    vec!["kat".to_string(), "kat".to_string()]
+                ),
+                ("kas => x".to_string(), vec!["kas".to_string()]),
+            ]
+        );
+        assert_eq!(assignment, vec![(0, 0), (1, 0), (0, 1)]);
+    }
+
+    #[test]
+    fn a_directive_free_estimator_stays_one_run() {
+        let inputs = ["kat".to_string(), "kas".to_string()];
+        let (programs, _) =
+            plan_estimator_runs("a => b", &inputs, &Placeholders::default()).unwrap();
+        assert_eq!(programs.len(), 1);
+        assert_eq!(programs[0].1, inputs);
+    }
+
+    #[test]
+    fn unreachable_word_data_fails_the_run() {
+        let inputs = ["kat".to_string()];
+        assert!(
+            plan_estimator_runs("%%{extra.stem} => x", &inputs, &Placeholders::default()).is_err()
+        );
+    }
+
+    #[test]
+    fn merging_restores_the_caller_ordering() {
+        let merged = merge_estimator_responses(
+            vec![response(&["KAT", "KAT"]), response(&["KAS"])],
+            &[(0, 0), (1, 0), (0, 1)],
+        )
+        .unwrap();
+        assert_eq!(merged.output_words, vec!["KAT", "KAS", "KAT"]);
+    }
+}

@@ -100,6 +100,54 @@ pub struct LexurgyConfig {
     pub api_key: String,
 }
 
+const fn default_grammar_lexurgy_concurrency() -> usize {
+    4
+}
+const fn default_grammar_table_budget_ms() -> u64 {
+    2_000
+}
+const fn default_grammar_section_budget_ms() -> u64 {
+    4_000
+}
+const fn default_grammar_full_page_budget_ms() -> u64 {
+    20_000
+}
+const fn default_grammar_cache_ttl_seconds() -> i64 {
+    90 * 24 * 60 * 60
+}
+const fn default_grammar_runner_version() -> i32 {
+    1
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct GrammarConfig {
+    #[serde(default = "default_grammar_lexurgy_concurrency")]
+    pub lexurgy_concurrency: usize,
+    #[serde(default = "default_grammar_table_budget_ms")]
+    pub table_budget_ms: u64,
+    #[serde(default = "default_grammar_section_budget_ms")]
+    pub section_budget_ms: u64,
+    #[serde(default = "default_grammar_full_page_budget_ms")]
+    pub full_page_budget_ms: u64,
+    #[serde(default = "default_grammar_cache_ttl_seconds")]
+    pub cache_ttl_seconds: i64,
+    #[serde(default = "default_grammar_runner_version")]
+    pub runner_version: i32,
+}
+
+impl Default for GrammarConfig {
+    fn default() -> Self {
+        Self {
+            lexurgy_concurrency: default_grammar_lexurgy_concurrency(),
+            table_budget_ms: default_grammar_table_budget_ms(),
+            section_budget_ms: default_grammar_section_budget_ms(),
+            full_page_budget_ms: default_grammar_full_page_budget_ms(),
+            cache_ttl_seconds: default_grammar_cache_ttl_seconds(),
+            runner_version: default_grammar_runner_version(),
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, Debug)]
 pub struct AppConfig {
     pub database_url: String,
@@ -122,6 +170,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub banner: BannerConfig,
     pub lexurgy: LexurgyConfig,
+    #[serde(default)]
+    pub grammar: GrammarConfig,
 }
 
 impl AppConfig {
@@ -171,6 +221,7 @@ pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
                 url: "http://localhost:4000".to_string(),
                 api_key: "change-me-in-production".to_string(),
             },
+            grammar: GrammarConfig::default(),
             // TODO: seems bad!
             environment: Environment::Dev,
         }

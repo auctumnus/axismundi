@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="/static/components/cards/relation-card.css">
 <link rel="stylesheet" href="/static/components/panzoom/panzoom-enhance.css">
 <link rel="stylesheet" href="/static/components/metadata-table.css">
+<link rel="stylesheet" href="/static/components/phonology-table.css">
+<script src="/static/page/words/grammar-tables.js" type="module" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -138,6 +140,30 @@
         </table>
     </div>
 </div>
+
+<section id="grammar-tables-section">
+    <div class="header-with-actions">
+        <h2>grammar tables</h2>
+        <ul>
+            {% if user_has_permission %}
+            <li><a class="with-icon" href="/languages/{{ language.code }}/grammar-tables/new">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                <span>new grammar table</span>
+            </a></li>
+            {% endif %}
+            <li><a class="with-icon" href="/languages/{{ language.code }}/grammar-tables">
+                {% call u::icon("list") %}
+                <span>view all</span>
+            </a></li>
+        </ul>
+    </div>
+    <div id="grammar-tables"
+         data-url="/api/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/grammar-tables"
+         data-view-url-base="/languages/{{ language.code }}/words/{{ word.slug }}/{{ word.lemma }}/grammar-tables"
+         aria-live="polite">
+        <p>loading grammar tables…</p>
+    </div>
+</section>
 
 {% if user_has_permission && recent_relations.is_empty() %}
 <div class="card first-interaction-card">

@@ -35,6 +35,7 @@ use tower_http::services::ServeDir;
 
 mod audit_logs;
 mod bookmarks;
+mod grammar_tables;
 mod language_families;
 mod language_family_invites;
 mod language_family_members;
@@ -101,6 +102,8 @@ pub fn create_html_controller() -> Router<AppState> {
     let (secure_report_routes, normal_report_routes) = reports::create_router();
     let (secure_phonology_table_routes, normal_phonology_table_routes) =
         phonology_tables::create_router();
+    let (secure_grammar_table_routes, normal_grammar_table_routes) =
+        grammar_tables::create_router();
     let (secure_sound_change_set_routes, normal_sound_change_set_routes) =
         sound_change_sets::create_router();
 
@@ -127,6 +130,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(secure_user_tag_routes)
         .merge(secure_report_routes)
         .merge(secure_phonology_table_routes)
+        .merge(secure_grammar_table_routes)
         .merge(secure_sound_change_set_routes);
 
     let normal_routes = Router::<AppState>::new()
@@ -159,6 +163,7 @@ pub fn create_html_controller() -> Router<AppState> {
         .merge(normal_user_tag_routes)
         .merge(normal_report_routes)
         .merge(normal_phonology_table_routes)
+        .merge(normal_grammar_table_routes)
         .merge(normal_sound_change_set_routes);
 
     Router::<AppState>::new()
