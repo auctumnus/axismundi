@@ -31,14 +31,24 @@ podman run -d --rm \
     postgres:18 >/dev/null
 
 echo -n "waiting for postgres" >&2
+ready=0
 for _ in $(seq 1 30); do
-    if podman exec "$container" pg_isready -U dryrun -d axismundi >/dev/null 2>&1; then
+    # The image entrypoint briefly starts a socket-only server while initializing
+    # the database, then stops it before launching the final server. Checking TCP
+    # avoids mistaking that temporary server for the one pg_restore can reach.
+    if podman exec "$container" pg_isready -h 127.0.0.1 -U dryrun -d axismundi >/dev/null 2>&1; then
+        ready=1
         echo " ready" >&2
         break
     fi
     echo -n "." >&2
     sleep 1
 done
+
+if (( ready == 0 )); then
+    echo " timed out" >&2
+    exit 1
+fi
 
 ephemeral_url="postgres://dryrun:dryrun@localhost:$port/axismundi"
 
