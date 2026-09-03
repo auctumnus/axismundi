@@ -6,11 +6,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use serde::{
-    Deserialize, Deserializer,
-    de::{self, SeqAccess, Visitor},
-};
-use std::fmt;
+use serde::Deserialize;
 use tokio::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -270,55 +266,10 @@ struct GrammarTableForm {
     #[serde(default)]
     preamble: String,
     body: Option<String>,
-    #[serde(
-        default,
-        rename = "word_class_ids[]",
-        deserialize_with = "deserialize_uuid_vec"
-    )]
+    #[serde(default, rename = "word_class_ids[]")]
     word_class_ids: Vec<Uuid>,
-    #[serde(
-        default,
-        rename = "category_ids[]",
-        deserialize_with = "deserialize_uuid_vec"
-    )]
+    #[serde(default, rename = "category_ids[]")]
     category_ids: Vec<Uuid>,
-}
-
-/// HTML form parsers represent a field submitted once as a scalar, rather
-/// than a one-item sequence. Accept both shapes for our multi-select fields.
-fn deserialize_uuid_vec<'de, D>(deserializer: D) -> Result<Vec<Uuid>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct UuidVecVisitor;
-
-    impl<'de> Visitor<'de> for UuidVecVisitor {
-        type Value = Vec<Uuid>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a UUID or a sequence of UUIDs")
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Uuid::parse_str(value).map(|id| vec![id]).map_err(E::custom)
-        }
-
-        fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
-        where
-            A: SeqAccess<'de>,
-        {
-            let mut ids = Vec::new();
-            while let Some(id) = sequence.next_element()? {
-                ids.push(id);
-            }
-            Ok(ids)
-        }
-    }
-
-    deserializer.deserialize_any(UuidVecVisitor)
 }
 
 async fn metadata_template(
@@ -533,7 +484,7 @@ async fn new_submit(
     permissions: LanguagePermissionRepository,
     tables: GrammarTableRepository,
     Path(code): Path<String>,
-    axum::Form(form): axum::Form<GrammarTableForm>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<GrammarTableForm>,
 ) -> (StatusCode, Response) {
     if form.body.is_none() {
         if form.name.trim().is_empty() {
@@ -658,7 +609,7 @@ async fn edit_meta_submit(
     permissions: LanguagePermissionRepository,
     tables: GrammarTableRepository,
     Path((code, id)): Path<(String, Uuid)>,
-    axum::Form(form): axum::Form<GrammarTableForm>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<GrammarTableForm>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -704,7 +655,7 @@ async fn edit_body_submit(
     permissions: LanguagePermissionRepository,
     tables: GrammarTableRepository,
     Path((code, id)): Path<(String, Uuid)>,
-    axum::Form(form): axum::Form<GrammarTableForm>,
+    axum_extra::extract::Form(form): axum_extra::extract::Form<GrammarTableForm>,
 ) -> (StatusCode, Response) {
     let user = get_user!(s);
     let language = attempt!(s, languages.find_by_code(&code).await);
@@ -869,4 +820,25 @@ async fn render_for_word(
         can_delete_language,
     });
     okay(body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GrammarTableForm;
+    use uuid::Uuid;
+
+    #[test]
+    fn grammar_table_form_accepts_multiple_scope_values() {
+        let class_ids = [Uuid::new_v4(), Uuid::new_v4()];
+        let category_ids = [Uuid::new_v4(), Uuid::new_v4()];
+        let encoded = format!(
+            "name=verbs&word_class_ids%5B%5D={}&word_class_ids%5B%5D={}&category_ids%5B%5D={}&category_ids%5B%5D={}",
+            class_ids[0], class_ids[1], category_ids[0], category_ids[1]
+        );
+
+        let form: GrammarTableForm = serde_html_form::from_str(&encoded).unwrap();
+
+        assert_eq!(form.word_class_ids, class_ids);
+        assert_eq!(form.category_ids, category_ids);
+    }
 }
