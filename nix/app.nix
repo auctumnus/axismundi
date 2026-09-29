@@ -17,7 +17,7 @@ let
   inherit (rt)
     isPackageSource
     appPackage
-    minioHostPort
+    garageHostPort
     lexurgyHostPort
     ;
   inherit (lib)
@@ -30,8 +30,8 @@ in
   config = mkIf cfg.enable {
     # in package mode the app talks to the supporting containers over
     # 127.0.0.1, not the podman network
-    services.axismundi.config.s3.endpoint = mkIf (isPackageSource && cfg.minio.enable) (
-      mkDefault "http://127.0.0.1:${toString minioHostPort}"
+    services.axismundi.config.s3.endpoint = mkIf (isPackageSource && cfg.garage.enable) (
+      mkDefault "http://127.0.0.1:${toString garageHostPort}"
     );
     services.axismundi.config.lexurgy.url = mkIf (isPackageSource && cfg.lexurgy.enable) (
       mkDefault "http://127.0.0.1:${toString lexurgyHostPort}"
@@ -90,14 +90,14 @@ in
         ]
         ++ optional cfg.postgres.enable "podman-axismundi-postgres.service"
         ++ optional cfg.postgres.enable "axismundi-migrate.service"
-        ++ optional cfg.minio.enable "podman-axismundi-minio.service"
+        ++ optional cfg.garage.enable "podman-axismundi-garage.service"
         ++ optional cfg.lexurgy.enable "podman-axismundi-lexurgy.service";
       requires =
         [ "axismundi-config.service" ]
         ++ optional cfg.postgres.enable "axismundi-migrate.service";
       wants =
         optional cfg.postgres.enable "podman-axismundi-postgres.service"
-        ++ optional cfg.minio.enable "podman-axismundi-minio.service"
+        ++ optional cfg.garage.enable "podman-axismundi-garage.service"
         ++ optional cfg.lexurgy.enable "podman-axismundi-lexurgy.service";
       restartTriggers = [ appPackage ];
       serviceConfig = {

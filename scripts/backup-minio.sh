@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# mirror the minio bucket to b2 under a "minio/" prefix.
-# uses rclone copy (additive only) — accidental deletes on minio do NOT propagate to b2.
+# mirror the object storage bucket (garage; minio before 2026-09) to b2 under a
+# "minio/" prefix. the prefix predates the switch and is kept so existing b2
+# data and lifecycle rules keep lining up.
+# uses rclone copy (additive only) — accidental deletes on garage do NOT propagate to b2.
 # server-side b2 lifecycle rules are responsible for eventual pruning.
 # excludes results/ since that's the regenerable imagor cache.
 #
@@ -13,7 +15,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 require jq
 
-# source: local minio (creds in config.json).
+# source: local garage (creds in config.json). the rclone remote is still named
+# "minio" to keep the env var names below stable.
 # assignment is split from export so config_get failures aren't masked
 # (export always returns 0, defeating set -e on a failed substitution).
 RCLONE_CONFIG_MINIO_ACCESS_KEY_ID="$(config_get '.s3.access_key')"
@@ -21,7 +24,9 @@ RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY="$(config_get '.s3.secret_key')"
 RCLONE_CONFIG_MINIO_ENDPOINT="$(config_get '.s3.endpoint')"
 src_bucket="$(config_get '.s3.bucket')"
 export RCLONE_CONFIG_MINIO_TYPE=s3
-export RCLONE_CONFIG_MINIO_PROVIDER=Minio
+export RCLONE_CONFIG_MINIO_PROVIDER=Other
+RCLONE_CONFIG_MINIO_REGION="$(config_get '.s3.region')"
+export RCLONE_CONFIG_MINIO_REGION
 export RCLONE_CONFIG_MINIO_ACCESS_KEY_ID RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY RCLONE_CONFIG_MINIO_ENDPOINT
 
 # dest: b2 (creds in backup.json) — same s3-via-other config as backup-offsite.sh
@@ -53,6 +58,7 @@ if needs_podman_for "$RCLONE_CONFIG_MINIO_ENDPOINT"; then
         --env RCLONE_CONFIG_MINIO_ACCESS_KEY_ID \
         --env RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY \
         --env RCLONE_CONFIG_MINIO_ENDPOINT \
+        --env RCLONE_CONFIG_MINIO_REGION \
         --env RCLONE_CONFIG_B2_TYPE \
         --env RCLONE_CONFIG_B2_PROVIDER \
         --env RCLONE_CONFIG_B2_NO_CHECK_BUCKET \

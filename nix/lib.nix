@@ -17,7 +17,7 @@ rec {
   scriptsSrc = ../scripts;
 
   default-postgres-port = 5432;
-  default-minio-port = 9000;
+  default-garage-port = 3900;
   default-lexurgy-port = 8080;
 
   resolveSecret =
@@ -94,11 +94,11 @@ rec {
           default-postgres-port
         else
           null;
-      minioHostPort =
-        if cfg.minio.hostPort != null then
-          cfg.minio.hostPort
+      garageHostPort =
+        if cfg.garage.hostPort != null then
+          cfg.garage.hostPort
         else if isPackageSource then
-          default-minio-port
+          default-garage-port
         else
           null;
       lexurgyHostPort =

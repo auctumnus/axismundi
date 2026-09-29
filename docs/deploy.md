@@ -3,7 +3,7 @@
 We distribute a number of OCI containers via our Nix flake for deployment. The
 canonical deployment happens on a NixOS box, with backups going to Backblaze.
 
-The Nix module bundles the app, postgres, minio, imagor, and lexurgy into one
+The Nix module bundles the app, postgres, garage (s3 storage), imagor, and lexurgy into one
 unit, plus optional caddy + automated backups. supporting services run as
 podman containers regardless of how the app itself is deployed.
 
@@ -12,7 +12,7 @@ graph LR
     Caddy[caddy<br/>:443]
     App[axismundi<br/>:3000]
     PG[(postgres)]
-    Minio[(minio)]
+    Garage[(garage)]
     Imagor[imagor<br/>:8888]
     Lex[lexurgy<br/>:8080]
 
@@ -20,9 +20,9 @@ graph LR
     Caddy -->|axismundi.app| App
     Caddy -->|media.axismundi.app| Imagor
     App --> PG
-    App --> Minio
+    App --> Garage
     App --> Lex
-    Imagor --> Minio
+    Imagor --> Garage
 ```
 
 Services other than Axismundi itself are always run and built as Podman
@@ -127,6 +127,14 @@ management solution like [`agenix`](https://github.com/ryantm/agenix) or
 sudo install -d -m 0700 /etc/axismundi
 sudo install -m 0400 /dev/stdin /etc/axismundi/pg-password    # paste, ctrl-d
 sudo install -m 0400 /dev/stdin /etc/axismundi/s3-access-key  # ...etc
+```
+
+the s3 keys must be in garage's format, or `axismundi-config` refuses to
+start:
+
+```bash
+echo -n GK$(openssl rand -hex 12) | sudo install -m 0400 /dev/stdin /etc/axismundi/s3-access-key
+openssl rand -hex 32 | tr -d '\n' | sudo install -m 0400 /dev/stdin /etc/axismundi/s3-secret-key
 ```
 
 ### 4. First activation
@@ -277,8 +285,9 @@ else stays the same.
   with `IMAGOR_UNSAFE=1`, which lets anyone request arbitrary transforms
   on arbitrary URLs. fine for dev. **never deploy prod without the secret
   set.**
-- **bucket lifecycle.** the module creates the minio bucket if missing
-  but doesn't manage retention. for offsite (b2) backups, set lifecycle
+- **bucket lifecycle.** garage creates the bucket and grants the s3 key on
+  it at boot (`--single-node --default-bucket`), but nothing manages
+  retention. for offsite (b2) backups, set lifecycle
   rules in the b2 web UI — see `docs/backups.md` "b2 key capabilities".
 - **journal noise.** every container logs to journald with 30-day
   retention / 2G cap (`services.journald.extraConfig`). bump it via
@@ -287,6 +296,47 @@ else stays the same.
   build` rebuilds rust + the frontend from scratch in a fresh container.
   this takes minutes. nothing to do about it short of switching to the
   `package` source, which gets nix's incremental + cached builds.
+
+## Migrating from minio to garage (2026-09)
+
+minio deleted its images from docker hub on 2026-09-11, and quay now needs
+auth, so the module runs garage instead. a host that was on minio keeps
+running only as long as the image stays in podman's store. **don't run
+`podman image prune` / `podman system prune` until this is done**: the
+migration boots the old data once from that cached image.
+
+on the host, from a clone of this repo:
+
+```bash
+# 0. confirm the old image is still around
+sudo podman image exists docker.io/minio/minio:latest && echo ok
+
+# 1. keep the old keys; they're minio's root creds and the migration needs them
+sudo install -d -m 0700 /etc/axismundi/minio-legacy
+sudo cp -p /etc/axismundi/s3-access-key /etc/axismundi/s3-secret-key /etc/axismundi/minio-legacy/
+
+# 2. new keys in garage's format (right before the switch)
+echo -n GK$(openssl rand -hex 12) | sudo install -m 0400 /dev/stdin /etc/axismundi/s3-access-key
+openssl rand -hex 32 | tr -d '\n' | sudo install -m 0400 /dev/stdin /etc/axismundi/s3-secret-key
+
+# 3. in the system flake: bump the axismundi input, rename
+#    metrics.minioToken -> metrics.garageToken (the old name still works but
+#    warns; the existing token file is fine to reuse), then switch.
+#    minio goes away and garage comes up with an empty bucket. images 404
+#    from here until step 5 finishes.
+sudo nixos-rebuild switch
+
+# 4. the app container's unit didn't change, so the switch doesn't restart
+#    it and it still holds the old endpoint + keys
+sudo systemctl restart podman-axismundi.service
+
+# 5. copy everything over (re-runnable; verifies hashes at the end)
+sudo ./scripts/migrate-minio-to-garage.sh <stateDir>/minio /etc/axismundi/minio-legacy
+```
+
+then check `/api/health` reports `"s3": "ok"`, a page with images renders,
+and `just backup-minio` still mirrors to b2. once you're happy, delete
+`<stateDir>/minio` and `/etc/axismundi/minio-legacy`.
 
 ## Healthchecks
 

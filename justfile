@@ -6,6 +6,12 @@ install-hooks:
     ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
     @echo "pre-commit hook installed -> scripts/pre-commit.sh"
 
+# Starts one durable Cargo command for agent work. It intentionally uses the
+# normal target directory, so a foreground dev server and the agent share the
+# same incremental cache and Cargo lock instead of compiling in parallel.
+cargo-agent *args:
+    scripts/cargo-agent {{args}}
+
 # fail fast if the toolchain cargo will actually use isn't nix's. checking PATH
 # alone is not enough: RUSTC / RUSTC_WRAPPER / RUSTUP_TOOLCHAIN override it, and
 # a rustup-proxy cargo picks its own rustc regardless of PATH. building with the
@@ -149,7 +155,9 @@ test_teardown:
 test flags="" cov="" $RUST_BACKTRACE="0": _nix-check
     #!/usr/bin/env sh
     echo "Bringing up test services..."
-    docker compose -f docker-compose.test.yml up -d 2>/dev/null >/dev/null
+    # stderr stays visible: when a pull fails (e.g. an image vanishing from
+    # docker hub) that's the only place the reason shows up
+    docker compose -f docker-compose.test.yml up -d >/dev/null
     if [ $? -ne 0 ]; then \
         echo "Failed to start test services"; \
         exit 1; \
@@ -160,6 +168,12 @@ test flags="" cov="" $RUST_BACKTRACE="0": _nix-check
         sleep .5; \
     done
     echo " Database is ready!"
+    echo -n "Waiting for Garage to be ready..."
+    while ! curl -sf http://localhost:7001/health >/dev/null 2>&1; do \
+        echo -n {{ if flags == "-q" { "" } else { "." } }}; \
+        sleep .5; \
+    done
+    echo " Garage is ready!"
     echo -n "Waiting for Thumbor to be ready..."
     while ! curl -sf http://localhost:7888/healthcheck >/dev/null 2>&1; do \
         echo -n {{ if flags == "-q" { "" } else { "." } }}; \
@@ -238,17 +252,17 @@ run: _nix-check _unstale
 watch-frontend:
     cd frontend && bun run dev
 
-# Start all services except the app (db, minio, imagor, imagor proxy)
+# Start all services except the app (db, garage, imagor, lexurgy)
 dev-full:
     @echo "Starting all development services..."
-    docker compose up -d postgres minio createbuckets imagor lexurgy
+    docker compose up -d postgres garage seedbucket imagor lexurgy
     @echo "Waiting for services to be ready..."
     @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
         echo "Database is unavailable - sleeping"; \
         sleep 1; \
     done
-    @until curl -f http://localhost:9000/minio/health/live >/dev/null 2>&1; do \
-        echo "Minio is unavailable - sleeping"; \
+    @until curl -sf http://localhost:9003/health >/dev/null 2>&1; do \
+        echo "Garage is unavailable - sleeping"; \
         sleep 1; \
     done
     @until curl -f http://localhost:8888 >/dev/null 2>&1; do \
@@ -257,8 +271,7 @@ dev-full:
     done
     @echo "All services ready!"
     @echo "PostgreSQL: postgres://user:password@localhost:5432/axismundi"
-    @echo "Minio Web UI: http://localhost:9001 (minioadmin/minioadmin123)"
-    @echo "Minio S3 API: http://localhost:9000"
+    @echo "Garage S3 API: http://localhost:9000 (keys in resources/config.json)"
     @echo "Imagor: http://localhost:8888"
     @echo ""
     @echo "Now you can run: just run"
@@ -305,22 +318,21 @@ db-reset:
     sqlx database create
     just db-migrate
 
-# Start Minio S3 storage
-minio:
-    @echo "Starting Minio S3 storage..."
-    docker compose up minio createbuckets imagor -d
-    @echo "Waiting for Minio to be ready..."
-    @until curl -f http://localhost:9000/minio/health/live >/dev/null 2>&1; do \
-        echo "Minio is unavailable - sleeping"; \
+# Start Garage S3 storage
+garage:
+    @echo "Starting Garage S3 storage..."
+    docker compose up garage seedbucket imagor -d
+    @echo "Waiting for Garage to be ready..."
+    @until curl -sf http://localhost:9003/health >/dev/null 2>&1; do \
+        echo "Garage is unavailable - sleeping"; \
         sleep 1; \
     done
-    @echo "Minio is ready!"
-    @echo "Web UI: http://localhost:9001 (minioadmin/minioadmin123)"
+    @echo "Garage is ready!"
     @echo "S3 API: http://localhost:9000"
 
-# Stop Minio
-minio-stop:
-    docker compose down minio createbuckets imagor
+# Stop Garage
+garage-stop:
+    docker compose down garage seedbucket imagor
 
 export postgres_url := "postgres://user:password@localhost:5432/axismundi"
 

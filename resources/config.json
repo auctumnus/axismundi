@@ -3,8 +3,8 @@
   "s3": {
     "bucket": "axismundi",
     "region": "us-east-1",
-    "access_key": "minioadmin",
-    "secret_key": "minioadmin123",
+    "access_key": "GK000000000000000000000000",
+    "secret_key": "0000000000000000000000000000000000000000000000000000000000000000",
     "endpoint": "http://localhost:9000",
     "public_url_base": "http://localhost:8888",
     "thumbor_url_base": "http://localhost:8888",

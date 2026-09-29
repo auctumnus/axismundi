@@ -41,6 +41,11 @@ let
         resolveSecret "resend-api-key" cfg.config.email.resend.apiKey
       else
         null;
+    garageMetricsToken =
+      if cfg.garage.enable && cfg.metrics.enable then
+        resolveSecret "garage-metrics-token" cfg.metrics.garageToken
+      else
+        null;
   };
 
   # placeholder will be replaced with actual secrets at activation
@@ -179,11 +184,38 @@ let
         printf 'POSTGRES_PASSWORD=%s\n' "$postgres_password" > ${runtimeDir}/postgres.env
       ''}
 
-      ${optionalString cfg.minio.enable ''
+      ${optionalString cfg.garage.enable ''
+        # garage rejects keys that aren't in its own format, and the failure
+        # shows up much later as every s3 request 403ing. catch it here.
+        if ! [[ "$s3_access" =~ ^GK[0-9a-f]{24}$ ]]; then
+          echo "config.s3.accessKey must be GK + 24 lowercase hex chars for garage" >&2
+          echo "generate one with: echo GK\$(openssl rand -hex 12)" >&2
+          exit 1
+        fi
+        if ! [[ "$s3_secret" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "config.s3.secretKey must be 64 lowercase hex chars for garage" >&2
+          echo "generate one with: openssl rand -hex 32" >&2
+          exit 1
+        fi
+
+        # internal to the one-node cluster, so it's generated rather than
+        # configured. it has to stay stable across restarts, so it lives
+        # next to garage's data instead of in the runtime dir.
+        install -d -m 0750 ${cfg.stateDir}/garage
+        rpc_secret_file=${cfg.stateDir}/garage/rpc-secret
+        if [ ! -s "$rpc_secret_file" ]; then
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$rpc_secret_file"
+        fi
+
         {
-          printf 'MINIO_ROOT_USER=%s\n' "$s3_access"
-          printf 'MINIO_ROOT_PASSWORD=%s\n' "$s3_secret"
-        } > ${runtimeDir}/minio.env
+          printf 'GARAGE_RPC_SECRET=%s\n' "$(cat "$rpc_secret_file")"
+          printf 'GARAGE_DEFAULT_ACCESS_KEY=%s\n' "$s3_access"
+          printf 'GARAGE_DEFAULT_SECRET_KEY=%s\n' "$s3_secret"
+          printf 'GARAGE_DEFAULT_BUCKET=%s\n' "${cfg.garage.bucket}"
+          ${optionalString (secrets.garageMetricsToken != null) ''
+            printf 'GARAGE_METRICS_TOKEN=%s\n' "$(cat ${secrets.garageMetricsToken})"
+          ''}
+        } > ${runtimeDir}/garage.env
       ''}
 
       ${optionalString cfg.imagor.enable ''
@@ -221,7 +253,7 @@ in
         optional (!isPackageSource) "podman-axismundi.service"
         ++ optional isPackageSource "axismundi.service"
         ++ optional cfg.postgres.enable "podman-axismundi-postgres.service"
-        ++ optional cfg.minio.enable "podman-axismundi-minio.service"
+        ++ optional cfg.garage.enable "podman-axismundi-garage.service"
         ++ optional cfg.imagor.enable "podman-axismundi-imagor.service"
         ++ optional cfg.lexurgy.enable "podman-axismundi-lexurgy.service";
       restartTriggers = [

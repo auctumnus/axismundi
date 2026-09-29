@@ -17,51 +17,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  minio:
-    image: minio/minio:latest
-    container_name: axismundi-minio-test
+  garage:
+    image: dxflrs/garage:v2.4.1
+    container_name: axismundi-garage-test
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:
-      MINIO_ROOT_USER: minioadmin_test
-      MINIO_ROOT_PASSWORD: minioadmin123_test
-    ports:
-      - "7000:9000"
-      - "7001:9001"
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    container_name: axismundi-nginx-test
-    ports:
-      - "6060:80"
+      GARAGE_DEFAULT_ACCESS_KEY: GK000000000000000000000000
+      GARAGE_DEFAULT_SECRET_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      GARAGE_DEFAULT_BUCKET: axismundi-test
     volumes:
-      - ./resources/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - minio
-    restart: unless-stopped
-
-  createbuckets:
-    image: minio/mc:latest
-    container_name: axismundi-createbuckets-test
-    environment:
-      MINIO_ROOT_USER: minioadmin_test
-      MINIO_ROOT_PASSWORD: minioadmin123_test
-      S3_BUCKET_NAME: axismundi-test
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      sleep 5;
-      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
-      mc mb local/$$S3_BUCKET_NAME;
-      mc anonymous set download local/$$S3_BUCKET_NAME;
-      "
-    restart: on-failure
+      - ./resources/garage.toml:/etc/garage.toml:ro,z
+    ports:
+      - "7000:3900"
+      # admin api; `just test` polls /health on it
+      - "7001:3903"
 
   lexurgy:
     image: ghcr.io/auctumnus/lexurgy-services:latest
@@ -85,25 +54,24 @@ services:
       IMAGOR_SECRET: change-me-in-production
       IMAGOR_UNSAFE: 1
 
-      # s3/minio credentials
-      AWS_ACCESS_KEY_ID: minioadmin_test
-      AWS_SECRET_ACCESS_KEY: minioadmin123_test
+      # s3 credentials
+      AWS_ACCESS_KEY_ID: GK000000000000000000000000
+      AWS_SECRET_ACCESS_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
       AWS_REGION: us-east-1
-      S3_ENDPOINT: http://minio:9000
+      S3_ENDPOINT: http://garage:3900
       S3_FORCE_PATH_STYLE: 1
 
-      # loader (read source images from minio)
+      # loader (read source images from garage)
       S3_LOADER_BUCKET: axismundi-test
 
-      # result storage (cache processed images in minio)
+      # result storage (cache processed images in garage)
       S3_RESULT_STORAGE_BUCKET: axismundi-test
       S3_RESULT_STORAGE_BASE_DIR: results
 
       # quality
       IMAGOR_AUTO_WEBP: 1
     depends_on:
-      - minio
-      - createbuckets
+      - garage
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthcheck"]
       interval: 10s

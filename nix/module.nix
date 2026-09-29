@@ -21,6 +21,24 @@ let
 in
 {
   imports = [
+    # minio's images were deleted from docker hub (2026-09-11); storage is
+    # garage now. keep old configs evaluating, with a warning.
+    (lib.mkRenamedOptionModule
+      [ "services" "axismundi" "minio" "enable" ]
+      [ "services" "axismundi" "garage" "enable" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "axismundi" "minio" "bucket" ]
+      [ "services" "axismundi" "garage" "bucket" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "axismundi" "minio" "hostPort" ]
+      [ "services" "axismundi" "garage" "hostPort" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "axismundi" "metrics" "minioToken" ]
+      [ "services" "axismundi" "metrics" "garageToken" ]
+    )
     ./config.nix
     ./containers.nix
     ./app.nix
@@ -48,7 +66,7 @@ in
 
         - `{ package = <derivation>; }`: nix-built binary, run as a
           regular systemd service on the host (no app container). the
-          supporting services (postgres, minio, lexurgy) still run as
+          supporting services (postgres, garage, lexurgy) still run as
           podman containers, but their ports get published on 127.0.0.1
           so the host-side app can reach them. usually fed
           `self.packages.''${system}.axismundi` from the system flake.
@@ -94,7 +112,7 @@ in
     stateDir = mkOption {
       type = types.path;
       default = "/var/lib/axismundi";
-      description = "where postgres + minio volumes live";
+      description = "where postgres + garage volumes live";
     };
 
     backupDir = mkOption {
@@ -138,8 +156,8 @@ in
         };
         endpoint = mkOption {
           type = types.str;
-          default = "http://axismundi-minio:9000";
-          description = "s3 endpoint URL the app uses to talk to minio (internal podman address by default)";
+          default = "http://axismundi-garage:3900";
+          description = "s3 endpoint URL the app uses to talk to garage (internal podman address by default)";
         };
         publicUrlBase = mkOption {
           type = types.nullOr types.str;
@@ -152,13 +170,17 @@ in
           '';
         };
         accessKey = secretSubmodule ''
-          s3 access key. used by the app's s3 client, AND by minio as
-          MINIO_ROOT_USER, AND by imagor as AWS_ACCESS_KEY_ID. one source
+          s3 access key. used by the app's s3 client, AND by garage as its
+          default access key, AND by imagor as AWS_ACCESS_KEY_ID. one source
           of truth — the module wires it through to all three.
+
+          garage only accepts its own key format: `GK` + 24 hex chars
+          (`echo GK$(openssl rand -hex 12)`). axismundi-config refuses to
+          start with anything else.
         '';
         secretKey = secretSubmodule ''
           s3 secret key. counterpart to accessKey across the same three
-          components.
+          components. must be 64 hex chars (`openssl rand -hex 32`).
         '';
         imagorSecret = secretSubmodule ''
           HMAC key for signing imagor URLs (set in production). shared
@@ -272,10 +294,16 @@ in
       };
     };
 
-    minio = {
+    garage = {
       enable = mkOption {
         type = types.bool;
         default = true;
+        description = "run garage (s3-compatible object storage) as a sibling container.";
+      };
+      image = mkOption {
+        type = types.str;
+        default = "dxflrs/garage:v2.4.1";
+        description = "garage image. pinned: `--single-node`/`--default-bucket` need >= v2.3.0.";
       };
       bucket = mkOption {
         type = types.str;
@@ -285,9 +313,9 @@ in
         type = types.nullOr types.port;
         default = null;
         description = ''
-          host port (bound to 127.0.0.1) where the minio container
-          publishes 9000. null means don't publish. defaults to 9000
-          when source is a package.
+          host port (bound to 127.0.0.1) where the garage container
+          publishes its s3 api (3900). null means don't publish. defaults
+          to 3900 when source is a package.
         '';
       };
     };

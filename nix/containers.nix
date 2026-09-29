@@ -14,10 +14,32 @@ let
     isPackageSource
     appImage
     postgresHostPort
-    minioHostPort
+    garageHostPort
     lexurgyHostPort
     ;
   inherit (lib) mkIf optional optionalAttrs;
+
+  # no secrets in here (it lands in the nix store): rpc_secret and
+  # metrics_token come in through garage.env as GARAGE_RPC_SECRET /
+  # GARAGE_METRICS_TOKEN, which override the file.
+  garageConfig = pkgs.writeText "axismundi-garage.toml" ''
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+    db_engine = "sqlite"
+    replication_factor = 1
+
+    rpc_bind_addr = "[::]:3901"
+    rpc_public_addr = "127.0.0.1:3901"
+
+    [s3_api]
+    # must match the region the app and imagor sign requests with
+    s3_region = "${cfg.config.s3.region}"
+    api_bind_addr = "[::]:3900"
+    root_domain = ".s3.localhost"
+
+    [admin]
+    api_bind_addr = "[::]:3903"
+  '';
 in
 {
   config = mkIf cfg.enable {
@@ -29,7 +51,7 @@ in
     systemd.tmpfiles.rules = [
       "d ${cfg.stateDir} 0750 root root - -"
       "d ${cfg.stateDir}/postgres 0700 999 999 - -"
-      "d ${cfg.stateDir}/minio 0750 root root - -"
+      "d ${cfg.stateDir}/garage 0750 root root - -"
       "d ${cfg.backupDir} 0750 root root - -"
     ];
 
@@ -133,23 +155,27 @@ in
             ];
           };
         }
-        // optionalAttrs cfg.minio.enable {
-          axismundi-minio = {
-            image = "minio/minio:latest";
+        // optionalAttrs cfg.garage.enable {
+          axismundi-garage = {
+            image = cfg.garage.image;
             autoStart = true;
+            # --single-node lays out a one-node cluster on first boot;
+            # --default-bucket creates the key (GARAGE_DEFAULT_ACCESS_KEY /
+            # _SECRET_KEY) and bucket (GARAGE_DEFAULT_BUCKET) from garage.env
+            # and grants the key rwo on it. both are no-ops once done.
             cmd = [
+              "/garage"
               "server"
-              "/data"
-              "--console-address"
-              ":9001"
+              "--single-node"
+              "--default-bucket"
             ];
-            environmentFiles = [ "${runtimeDir}/minio.env" ];
-            volumes = [ "${cfg.stateDir}/minio:/data" ];
-            ports = optional (minioHostPort != null) "127.0.0.1:${toString minioHostPort}:9000";
-            extraOptions = common ++ [
-              "--health-cmd=curl -f http://localhost:9000/minio/health/live"
-              "--health-interval=30s"
+            environmentFiles = [ "${runtimeDir}/garage.env" ];
+            volumes = [
+              "${garageConfig}:/etc/garage.toml:ro"
+              "${cfg.stateDir}/garage:/var/lib/garage"
             ];
+            ports = optional (garageHostPort != null) "127.0.0.1:${toString garageHostPort}:3900";
+            extraOptions = common;
           };
         }
         // optionalAttrs cfg.imagor.enable {
@@ -158,21 +184,21 @@ in
             autoStart = true;
             environment = {
               PORT = "8000";
-              S3_ENDPOINT = "http://axismundi-minio:9000";
+              S3_ENDPOINT = "http://axismundi-garage:3900";
               S3_FORCE_PATH_STYLE = "1";
               # imagor's s3 loader uses aws-sdk-go-v2, which refuses to
               # initialize without a region. when that init fails imagor
               # silently falls through to the http loader, which tries to
               # fetch `originals/...` as `https://originals/...` and 404s.
               AWS_REGION = cfg.config.s3.region;
-              S3_LOADER_BUCKET = cfg.minio.bucket;
-              S3_RESULT_STORAGE_BUCKET = cfg.minio.bucket;
+              S3_LOADER_BUCKET = cfg.garage.bucket;
+              S3_RESULT_STORAGE_BUCKET = cfg.garage.bucket;
               S3_RESULT_STORAGE_BASE_DIR = "results";
               IMAGOR_AUTO_WEBP = "1";
             };
             environmentFiles = [ "${runtimeDir}/imagor.env" ];
             ports = [ "127.0.0.1:${toString cfg.imagor.port}:8000" ];
-            dependsOn = optional cfg.minio.enable "axismundi-minio";
+            dependsOn = optional cfg.garage.enable "axismundi-garage";
             extraOptions = common;
           };
         }
@@ -190,45 +216,6 @@ in
             extraOptions = common;
           };
         };
-    };
-
-    systemd.services.axismundi-minio-init = mkIf cfg.minio.enable {
-      description = "create axismundi minio bucket if it doesn't exist";
-      after = [
-        "podman-axismundi-minio.service"
-        "axismundi-config.service"
-      ];
-      wants = [ "podman-axismundi-minio.service" ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-      };
-      script = ''
-        for i in $(seq 1 30); do
-          if ${pkgs.podman}/bin/podman run --rm --network=${networkName} \
-              --env-file=${runtimeDir}/minio.env \
-              minio/mc:latest \
-              alias set local http://axismundi-minio:9000 \
-                "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; then
-            break
-          fi
-          sleep 2
-        done
-
-        # the minio/mc:latest image has `mc` as its entrypoint, so passing
-        # `sh -c …` after the image ref ends up running `mc sh -c …` and
-        # dying with "sh is not a recognized command". clear the entrypoint
-        # so the cmd is interpreted as a literal shell invocation.
-        ${pkgs.podman}/bin/podman run --rm --network=${networkName} \
-          --entrypoint="" \
-          --env-file=${runtimeDir}/minio.env \
-          minio/mc:latest sh -c '
-            mc alias set local http://axismundi-minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
-            mc mb local/${cfg.minio.bucket} --ignore-existing &&
-            mc anonymous set download local/${cfg.minio.bucket}
-          '
-      '';
     };
   };
 }

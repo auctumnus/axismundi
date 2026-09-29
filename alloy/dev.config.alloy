@@ -10,10 +10,10 @@ prometheus.scrape "axismundi_app" {
   scrape_interval = "30s"
 }
 
-prometheus.scrape "minio" {
-  targets    = [{ "__address__" = "minio:9000" }]
-  metrics_path = "/minio/v2/metrics/cluster"
-  bearer_token = sys.env("MINIO_PROM_TOKEN")
+// dev garage has no metrics_token, so /metrics is open on the admin port
+prometheus.scrape "garage" {
+  targets    = [{ "__address__" = "garage:3903" }]
+  metrics_path = "/metrics"
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
   scrape_interval = "60s"
 }

@@ -38,10 +38,10 @@ let
       scrape_interval = "30s"
     }
 
-    prometheus.scrape "minio" {
-      targets    = [{ "__address__" = "axismundi-minio:9000" }]
-      metrics_path = "/minio/v2/metrics/cluster"
-      bearer_token = sys.env("MINIO_PROM_TOKEN")
+    prometheus.scrape "garage" {
+      targets    = [{ "__address__" = "axismundi-garage:3903" }]
+      metrics_path = "/metrics"
+      bearer_token = sys.env("GARAGE_METRICS_TOKEN")
       forward_to = [prometheus.remote_write.grafana_cloud.receiver]
       scrape_interval = "60s"
     }
@@ -65,7 +65,7 @@ let
 
   metricsTokens = {
     grafanaCloudToken = resolveSecret "grafana-cloud-token" mcfg.grafanaCloud.token;
-    minioToken = resolveSecret "minio-prom-token" mcfg.minioToken;
+    garageToken = resolveSecret "garage-metrics-token" mcfg.garageToken;
   };
 
   generateAlloyEnvScript = pkgs.writeShellApplication {
@@ -75,12 +75,12 @@ let
       set -euo pipefail
       umask 0077
       gc_token=$(cat ${metricsTokens.grafanaCloudToken})
-      minio_token=$(cat ${metricsTokens.minioToken})
+      garage_token=$(cat ${metricsTokens.garageToken})
       {
         printf 'GRAFANA_CLOUD_PROM_URL=%s\n' "${mcfg.grafanaCloud.url}"
         printf 'GRAFANA_CLOUD_PROM_USER=%s\n' "${mcfg.grafanaCloud.username}"
         printf 'GRAFANA_CLOUD_PROM_TOKEN=%s\n' "$gc_token"
-        printf 'MINIO_PROM_TOKEN=%s\n' "$minio_token"
+        printf 'GARAGE_METRICS_TOKEN=%s\n' "$garage_token"
       } > ${runtimeDir}/alloy.env
     '';
   };
@@ -106,10 +106,10 @@ in
         '';
       };
 
-      minioToken = secretSubmodule ''
-        bearer token for minio /v2/metrics. generate once with
-        `mc admin prometheus generate <alias>` and store the resulting
-        JWT in a file readable by root.
+      garageToken = secretSubmodule ''
+        bearer token for garage's /metrics. any random string works
+        (`openssl rand -base64 32`); the module hands the same value to
+        garage as its metrics_token and to alloy as the scrape bearer.
       '';
     };
 
@@ -128,10 +128,10 @@ in
   config = mkIf (cfg.enable && mcfg.enable) {
     assertions = [
       (mkSecretAssert "metrics.grafanaCloud.token" true mcfg.grafanaCloud.token)
-      (mkSecretAssert "metrics.minioToken" true mcfg.minioToken)
+      (mkSecretAssert "metrics.garageToken" true mcfg.garageToken)
       {
-        assertion = cfg.minio.enable;
-        message = "services.axismundi.metrics requires minio.enable = true (nothing to scrape otherwise)";
+        assertion = cfg.garage.enable;
+        message = "services.axismundi.metrics requires garage.enable = true (nothing to scrape otherwise)";
       }
     ];
 
@@ -167,7 +167,7 @@ in
         environmentFiles = [ "${runtimeDir}/alloy.env" ];
         dependsOn =
           [ "axismundi-cadvisor" ]
-          ++ optional cfg.minio.enable "axismundi-minio";
+          ++ optional cfg.garage.enable "axismundi-garage";
         extraOptions = [
           "--network=${networkName}"
           "--log-driver=journald"

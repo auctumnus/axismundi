@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Keep one durable Cargo job per checkout, so agents can poll its state instead
+# of starting competing builds or inventing one-off target directories.
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+usage:
+  scripts/cargo-agent start <cargo arguments...>
+  scripts/cargo-agent status
+  scripts/cargo-agent logs
+  scripts/cargo-agent stop
+
+`start` uses this checkout's normal target directory (or CARGO_TARGET_DIR when
+set), so it shares Cargo's incremental cache and lock with a running dev server.
+Only one wrapper-managed Cargo command runs per checkout at a time.
+EOF
+}
+
+repo_root=$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)
+state_key=$(printf '%s' "$repo_root" | sha256sum | awk '{print $1}')
+state_base="${XDG_RUNTIME_DIR:-/tmp}"
+state_dir="$state_base/cargo-agent-${state_key}"
+if ! mkdir -p "$state_dir" 2>/dev/null; then
+    state_base=/tmp
+    state_dir="$state_base/cargo-agent-${state_key}"
+    mkdir -p "$state_dir"
+fi
+pid_file="$state_dir/pid"
+log_file="$state_dir/cargo.log"
+exit_file="$state_dir/exit-code"
+command_file="$state_dir/command"
+target_dir="${CARGO_TARGET_DIR:-$repo_root/target}"
+
+is_running() {
+    [[ -f "$pid_file" ]] && kill -0 "$(<"$pid_file")" 2>/dev/null
+}
+
+print_status() {
+    if is_running; then
+        printf 'cargo-agent: running (pid %s)\n' "$(<"$pid_file")"
+        printf 'target: %s\n' "$target_dir"
+        [[ -f "$command_file" ]] && printf 'command: %s\n' "$(<"$command_file")"
+        if [[ -f "$log_file" ]] && tail -n 20 "$log_file" | grep -Fq 'Blocking waiting for file lock'; then
+            printf "state: waiting for Cargo's shared target lock\n"
+        fi
+        return
+    fi
+
+    if [[ -f "$exit_file" ]]; then
+        printf 'cargo-agent: finished (exit %s)\n' "$(<"$exit_file")"
+        [[ -f "$command_file" ]] && printf 'command: %s\n' "$(<"$command_file")"
+    else
+        printf 'cargo-agent: idle\n'
+    fi
+}
+
+start() {
+    shift
+    if (( $# == 0 )); then
+        usage >&2
+        exit 2
+    fi
+
+    if is_running; then
+        print_status
+        printf 'Use `scripts/cargo-agent logs` to follow the existing command.\n' >&2
+        exit 1
+    fi
+
+    rm -f "$pid_file" "$exit_file"
+    : > "$log_file"
+    {
+        printf 'cargo'
+        printf ' %q' "$@"
+        printf '\n'
+    } > "$command_file"
+
+    # A new session lets the build outlive a short agent tool-call window.
+    # Cargo itself still coordinates with the developer's foreground process
+    # through the shared target directory lock.
+    setsid bash -c '
+        repo_root=$1
+        target_dir=$2
+        log_file=$3
+        exit_file=$4
+        shift 4
+
+        {
+            printf "started: %s\\n" "$(date -Is)"
+            cd "$repo_root"
+            CARGO_TARGET_DIR="$target_dir" cargo "$@"
+            exit_code=$?
+            printf "%s\\n" "$exit_code" > "$exit_file"
+            printf "finished: %s (exit %s)\\n" "$(date -Is)" "$exit_code"
+            exit "$exit_code"
+        } >> "$log_file" 2>&1
+    ' cargo-agent "$repo_root" "$target_dir" "$log_file" "$exit_file" "$@" < /dev/null &
+    printf '%s\n' "$!" > "$pid_file"
+
+    printf 'cargo-agent: started (pid %s)\n' "$(<"$pid_file")"
+    printf 'target: %s\n' "$target_dir"
+    printf 'log: scripts/cargo-agent logs\n'
+}
+
+stop() {
+    if is_running; then
+        kill "$(<"$pid_file")"
+        printf 'cargo-agent: sent stop signal to pid %s\n' "$(<"$pid_file")"
+    else
+        print_status
+    fi
+}
+
+case "${1:-status}" in
+    start) start "$@" ;;
+    status) print_status ;;
+    logs) [[ -f "$log_file" ]] && tail -n 80 "$log_file" || print_status ;;
+    stop) stop ;;
+    -h|--help|help) usage ;;
+    *) usage >&2; exit 2 ;;
+esac

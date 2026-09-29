@@ -100,7 +100,7 @@ to use a configuration file at another path.
 
 We use:
 - a PostgreSQL database
-- an S3 compatible storage service (MinIO, or Cloudflare R2, etc ...)
+- an S3 compatible storage service ([Garage](https://garagehq.deuxfleurs.fr/), or Cloudflare R2, etc ...)
 - [Resend](https://resend.com/) for email sending (though it should be easy to swap out for another service)
 
 #### Layout
@@ -116,7 +116,7 @@ and processes the CSS files with LightningCSS.
 
 ### Testing
 
-We use integration testing with real Postgres and real MinIO, and a mocked email module. The justfile
+We use integration testing with real Postgres and real Garage, and a mocked email module. The justfile
 will just set this up for you so long as you have Docker (or some compatible runtime).
 
 ## License

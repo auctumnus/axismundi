@@ -1,0 +1,27 @@
+# garage config for the dev + test compose stacks. prod renders its own from
+# nix/containers.nix.
+#
+# the bucket and access key are created on boot by
+# `garage server --single-node --default-bucket` from the GARAGE_DEFAULT_*
+# env vars (idempotent across restarts). garage only accepts keys in its own
+# format: GK + 24 hex for the id, 64 hex for the secret.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# single node, never exposed; this only has to be 32 bytes of hex
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[s3_api]
+# must match the region the app (config.s3.region) and imagor (AWS_REGION)
+# sign requests with, otherwise garage rejects every request
+s3_region = "us-east-1"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.localhost"
+
+[admin]
+api_bind_addr = "[::]:3903"

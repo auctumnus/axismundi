@@ -187,16 +187,15 @@ impl AppConfig {
 pub static CONFIG: LazyLock<AppConfig> = LazyLock::new(|| {
     #[cfg(test)]
     {
-        // should match docker-compose.db.test.yml,
-        // docker-compose.minio.test.yml,
-        // and the justfile
+        // should match docker-compose.test.yml and the justfile
         AppConfig {
             database_url: "postgres://user_test:password@localhost:2435/axismundi_test".to_string(),
             s3: S3Config {
                 bucket: "axismundi-test".to_string(),
                 region: "us-east-1".to_string(),
-                access_key: "minioadmin_test".to_string(),
-                secret_key: "minioadmin123_test".to_string(),
+                access_key: "GK000000000000000000000000".to_string(),
+                secret_key: "0000000000000000000000000000000000000000000000000000000000000000"
+                    .to_string(),
                 endpoint: "http://localhost:7000".to_string(),
                 public_url_base: Some("http://localhost:7888".to_string()),
                 imagor_secret: Some("change-me-in-production".to_string()),
