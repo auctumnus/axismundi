@@ -1,12 +1,8 @@
 use axum::Router;
-#[cfg(not(test))]
-use governor::middleware::NoOpMiddleware;
 
 use crate::util::AppState;
 #[cfg(not(test))]
 use std::sync::Arc;
-#[cfg(not(test))]
-use tower_governor::governor::GovernorConfig;
 
 mod audit_logs;
 mod bookmarks;
@@ -24,6 +20,7 @@ mod news;
 mod phonology_tables;
 mod quotation_suggestions;
 mod quotations;
+mod rate_limit;
 mod reports;
 mod sessions;
 mod sound_change_sets;
@@ -87,8 +84,8 @@ pub fn create_api_controller() -> Router<AppState> {
     // Only apply rate limiting in non-test builds
     #[cfg(not(test))]
     {
-        let secure_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::secure());
-        let normal_governor = Arc::new(GovernorConfig::<_, NoOpMiddleware>::default());
+        let secure_governor = Arc::new(rate_limit::secure_config());
+        let normal_governor = Arc::new(rate_limit::normal_config());
         let secure_limiter = secure_governor.limiter().clone();
         let normal_limiter = normal_governor.limiter().clone();
         let interval = std::time::Duration::from_secs(60);
