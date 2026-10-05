@@ -371,7 +371,9 @@ const setupSubmitButtons = (): boolean => {
     const runButtonContainer = document.createElement("div");
     runButton.replaceWith(runButtonContainer);
 
-    mountRunButton(runButtonContainer, getRequest, onResponse, onError);
+    mountRunButton(runButtonContainer, getRequest, onResponse, onError, () => {
+        errorContainer.replaceChildren();
+    });
 
     return true;
 }

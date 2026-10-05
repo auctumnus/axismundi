@@ -131,10 +131,12 @@ export const mountSaveButton = (
 
 const RunButton = ({
   getRequest,
+  onRun,
   onResponse,
   onError,
 }: {
   getRequest: () => Request;
+  onRun: () => void;
   onResponse: (request: Request, response: Response) => any;
   onError: (error: LexurgyError | string) => any;
 }) => {
@@ -143,6 +145,7 @@ const RunButton = ({
   const handleClick = async () => {
     setRunning(true);
     try {
+      onRun();
       const request = getRequest();
       console.log(request);
       await Promise.all([
@@ -211,11 +214,13 @@ export const mountRunButton = (
   getRequest: () => Request,
   onResponse: (request: Request, response: Response) => any,
   onError: (error: LexurgyError | string) => any,
+  onRun: () => void,
 ) => {
   const root = createRoot(container);
   root.render(
     <RunButton
       getRequest={getRequest}
+      onRun={onRun}
       onResponse={onResponse}
       onError={onError}
     />,
