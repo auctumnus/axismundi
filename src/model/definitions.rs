@@ -425,6 +425,30 @@ impl DefinitionRepository {
         Ok(result)
     }
 
+    pub async fn best_matching_text_by_word(
+        &self,
+        word_id: &Uuid,
+        query: &str,
+    ) -> AppResult<Option<String>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+                SELECT definition
+                FROM definitions
+                WHERE word = $1
+                  AND (definition ILIKE '%' || $2 || '%'
+                       OR similarity(definition, $2) > 0.3)
+                ORDER BY (definition ILIKE '%' || $2 || '%') DESC,
+                         similarity(definition, $2) DESC,
+                         position ASC
+                LIMIT 1
+            "#,
+            word_id,
+            query
+        )
+        .fetch_optional(&self.state.pool)
+        .await?)
+    }
+
     /// Load up to `limit_per_word` definitions for each word, retaining the input order.
     pub async fn list_first_n_texts_by_words(
         &self,

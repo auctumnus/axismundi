@@ -29,7 +29,17 @@ Axismundi is written in Rust, with a simple frontend using Typescript (and some 
 If you want a full dev environment, run `just dev`; this will run all the required Docker containers
 and start the app, auto-reloading on changes.
 
-You will need to fill out a `config.json`; an example one is provided in [`./resources/config.json`](./resources/config.json).
+If a service's usual host port is busy, `just dev` reports what's using it,
+picks a free port, and prints the chosen addresses, including Axismundi's app
+URL. It writes the matching backend settings to `.dev/config.json`;
+`just dev-backend` and `just run` use that file automatically. Run `just dev-full`
+to start only the supporting services and refresh those settings.
+Refreshing keeps the app's URL when this checkout's backend is still running.
+The run/build commands, `just db-migrate`, and the pre-commit SQLx hook also
+use the generated database URL, including its selected port.
+
+For backend runs outside the dev setup, fill out `config.json`; an example is
+provided in [`./resources/config.json`](./resources/config.json).
 
 ### Backend
 
@@ -115,6 +125,48 @@ The frontend should be built with `just build`, which uses SWC to compile the Ty
 and processes the CSS files with LightningCSS.
 
 ### Testing
+
+Check dev port selection and command configuration without starting services:
+
+```bash
+python3 -B -m unittest discover -s scripts -p 'test_dev_services.py'
+```
+
+Run the frontend checks from `frontend` with Bun 1.3.14 (the version used in CI):
+
+```bash
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+bun run test:extra-editor:install
+EXTRA_EDITOR_BROWSERS=chromium,firefox bun run test:extra-editor:browser
+```
+
+The browser tests build their own form fixture and do not require the backend,
+Docker, or an account. Playwright's browser binaries are separate from the JS
+dependencies: run the install command on a fresh machine and after updating
+Playwright. On supported Linux systems, add `--with-deps` to that command to
+install the system libraries as well. The frontend CI job does this explicitly
+and uses the committed Bun lockfile to keep the package and browser versions
+matched. The browser suite defaults to Chromium; the command above runs both
+Chromium and Firefox in separate processes, including a Chromium touch check
+at 320px. Each engine has a two-minute timeout.
+
+To check for intermittent failures, run
+`EXTRA_EDITOR_REPEATS=3 EXTRA_EDITOR_BROWSERS=chromium,firefox bun run test:extra-editor:browser`.
+Each repetition uses fresh processes and stops on the first failure. A failed
+scenario saves a Playwright trace, screenshot, and error details under
+`frontend/test-results/extra-editor/`; CI uploads that directory. From
+`frontend`, inspect a trace with
+`bunx --no-install playwright show-trace test-results/extra-editor/firefox-desktop/trace.zip`
+(substitute the failed scenario's name).
+
+When using a Nix dev shell on another Linux distribution, Playwright's library
+check can pick up Nix's `ldd` and falsely report missing host libraries. Run the
+install command outside that shell, or put the host tools first in `PATH`:
+`PATH=/usr/bin:/bin:$PATH bun run test:extra-editor:install`.
+For an existing browser installation, the runner also accepts
+`EXTRA_EDITOR_CHROMIUM_EXECUTABLE` and `EXTRA_EDITOR_FIREFOX_EXECUTABLE` paths.
 
 We use integration testing with real Postgres and real Garage, and a mocked email module. The justfile
 will just set this up for you so long as you have Docker (or some compatible runtime).

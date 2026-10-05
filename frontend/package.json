@@ -7,11 +7,13 @@
     "build": "bun build.ts",
     "build:annotation": "parcel build",
     "build:lexurgy-grammar": "lezer-generator ./lexurgy.grammar -o src/page/sound-changes/runner/lexurgy-parser.js",
-    "dev": "bun build.ts -- --watch",
+    "dev": "watchexec -q -n -w src -r -- bun build.ts",
     "format": "prettier --write src/**/*.ts src/**/*.tsx src/**/*.css",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test:extra-editor:browser": "bun tests/extra-editor.browser.ts",
+    "test:extra-editor:install": "playwright install chromium firefox"
   },
   "targets": {
     "annotation": {
@@ -33,6 +35,7 @@
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
     "parcel": "^2.13.3",
+    "playwright": "^1.63.0",
     "prettier": "^3.8.1"
   },
   "peerDependencies": {

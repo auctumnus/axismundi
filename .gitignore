@@ -43,6 +43,7 @@ backups/
 
 config.json
 !resources/config.json
+/.dev/
 session.json
 
 .letta

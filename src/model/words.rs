@@ -196,6 +196,26 @@ impl WordRepository {
         })
     }
 
+    pub async fn materialize_for_search(
+        &self,
+        word: Word,
+        requestor: Option<&User>,
+        query: Option<&str>,
+    ) -> AppResult<WordWithMeta> {
+        let mut result = self.materialize(word, requestor).await?;
+        if let Some(query) = query.filter(|query| !query.is_empty()) {
+            if let Some(matched) = DefinitionRepository::new(self.state.clone())
+                .best_matching_text_by_word(&result.word.id, query)
+                .await?
+            {
+                result.preview_definitions.retain(|text| text != &matched);
+                result.preview_definitions.insert(0, matched);
+                result.preview_definitions.truncate(5);
+            }
+        }
+        Ok(result)
+    }
+
     pub async fn count_by_slug(&self, language: Uuid, slug: &str) -> AppResult<i64> {
         let count = sqlx::query_scalar!(
             r#"
@@ -915,6 +935,14 @@ impl WordRepository {
                     OR words.notes ILIKE '%' || $6 || '%'
                     OR similarity(words.word, $6) > 0.3
                     OR COALESCE(similarity(words.notes, $6), 0.0) > 0.3
+                    OR EXISTS (
+                        SELECT 1 FROM definitions
+                        WHERE definitions.word = words.id
+                        AND (
+                            definitions.definition ILIKE '%' || $6 || '%'
+                            OR similarity(definitions.definition, $6) > 0.3
+                        )
+                    )
                 )
                 AND ($9::UUID[] IS NULL OR (
                     SELECT COUNT(DISTINCT category)
@@ -924,11 +952,20 @@ impl WordRepository {
                 ORDER BY (
                     CASE
                         WHEN $6::TEXT IS NOT NULL AND words.word ILIKE '%' || $6 || '%' THEN 100.0
+                        WHEN $6::TEXT IS NOT NULL AND EXISTS (
+                            SELECT 1 FROM definitions
+                            WHERE definitions.word = words.id
+                            AND definitions.definition ILIKE '%' || $6 || '%'
+                        ) THEN 90.0
                         WHEN $6::TEXT IS NOT NULL AND words.notes ILIKE '%' || $6 || '%' THEN 80.0
                         ELSE 0.0
                     END +
                     CASE WHEN $6::TEXT IS NOT NULL THEN
                         similarity(words.word, $6) * 3.0 +
+                        COALESCE((
+                            SELECT MAX(similarity(definitions.definition, $6))
+                            FROM definitions WHERE definitions.word = words.id
+                        ), 0.0) * 2.0 +
                         COALESCE(similarity(words.notes, $6), 0.0) * 1.0
                     ELSE 0.0
                     END
@@ -965,6 +1002,14 @@ impl WordRepository {
                     OR words.notes ILIKE '%' || $6 || '%'
                     OR similarity(words.word, $6) > 0.3
                     OR COALESCE(similarity(words.notes, $6), 0.0) > 0.3
+                    OR EXISTS (
+                        SELECT 1 FROM definitions
+                        WHERE definitions.word = words.id
+                        AND (
+                            definitions.definition ILIKE '%' || $6 || '%'
+                            OR similarity(definitions.definition, $6) > 0.3
+                        )
+                    )
                 )
                 AND ($7::UUID[] IS NULL OR (
                     SELECT COUNT(DISTINCT category)
@@ -1516,11 +1561,117 @@ mod tests {
     use crate::model::audit_log::{
         AuditActionType, AuditLogFilter, AuditLogRepository, AuditableResource,
     };
+    use crate::model::definitions::CreateDefinition;
     use crate::model::languages::{CreateLanguage, LanguageRepository};
     use crate::model::users::UserRepository;
     use crate::pagination::PaginatedRequest;
     use crate::{config::CONFIG, create_router, email};
     use sqlx::PgPool;
+
+    #[tokio::test]
+    async fn search_includes_definitions_once_and_ranks_them_before_notes() {
+        let pool = PgPool::connect(&CONFIG.database_url).await.unwrap();
+        let email_service = std::sync::Arc::new(email::MockEmailService::new());
+        let app_state = crate::util::AppState {
+            pool: pool.clone(),
+            email_service: email_service.clone(),
+        };
+        let app = create_router(app_state.clone()).into_service();
+        let username = crate::tests::random_name();
+        crate::tests::make_authed_user(&username, &app, email_service).await;
+        let user_id = sqlx::query_scalar!("select id from users where username = $1", username)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let user = UserRepository::new(app_state.clone())
+            .find_by_id(user_id)
+            .await
+            .unwrap();
+        let language = LanguageRepository::new(app_state.clone())
+            .create(
+                &user,
+                CreateLanguage {
+                    name: "Search Definitions Test".to_string(),
+                    code: crate::tests::random_code(),
+                    description: String::new(),
+                    private: false,
+                },
+            )
+            .await
+            .unwrap();
+        let words = WordRepository::new(app_state);
+
+        let mut created = Vec::new();
+        for (word, notes, definitions) in [
+            ("amberglow", None, vec![]),
+            (
+                "flame",
+                None,
+                vec![
+                    "small",
+                    "quiet",
+                    "distant",
+                    "clear",
+                    "pale",
+                    "amberglow light",
+                    "warm amberglow",
+                ],
+            ),
+            ("margin", Some("amberglow"), vec![]),
+        ] {
+            created.push(
+                words
+                    .create(
+                        &user,
+                        language.id,
+                        CreateWord {
+                            word: word.to_string(),
+                            word_class: "n".to_string(),
+                            ipa: None,
+                            notes: notes.map(str::to_string),
+                            extra: None,
+                            categories: None,
+                            definitions: Some(
+                                definitions
+                                    .into_iter()
+                                    .map(|definition| CreateDefinition {
+                                        definition: definition.to_string(),
+                                        context: None,
+                                    })
+                                    .collect(),
+                            ),
+                        },
+                    )
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        let results = words
+            .search(
+                &language.id,
+                PaginatedRequest::default(),
+                WordSearch {
+                    q: Some("amberglow".to_string()),
+                    ..WordSearch::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(results.total, 3);
+        assert_eq!(results.items.len(), 3);
+        assert_eq!(
+            results.items.iter().map(|word| word.id).collect::<Vec<_>>(),
+            created.iter().map(|word| word.id).collect::<Vec<_>>()
+        );
+        let preview = words
+            .materialize_for_search(created[1].clone(), None, Some("amberglow"))
+            .await
+            .unwrap();
+        assert_eq!(preview.preview_definitions.len(), 5);
+        assert!(preview.preview_definitions[0].contains("amberglow"));
+    }
 
     #[tokio::test]
     async fn test_create_word_as_admin_creates_audit_log() {

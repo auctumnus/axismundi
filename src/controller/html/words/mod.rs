@@ -25,16 +25,46 @@ use axum::routing::{get, post};
 
 pub const MAX_DEFINITIONS: usize = 10;
 
-/// `values` is the word data the estimator's own `%%{...}` directives can
-/// reach.  A word form knows less than a saved word does, so an estimator that
-/// reaches for something the form cannot supply fails loudly here.
+/// A present blank field means "clear"; an omitted field means "keep".
+/// Deserialize the string directly so the form parser doesn't collapse blank
+/// optional strings into None.
+fn deserialize_present_extra<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    <String as serde::Deserialize>::deserialize(deserializer).map(Some)
+}
+
+fn parse_extra(raw: &str) -> AppResult<Option<serde_json::Value>> {
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str(raw)
+        .map(Some)
+        .map_err(|error| bad_request(format!("Extra must be valid JSON: {error}")))
+}
+
+fn format_extra(extra: Option<&serde_json::Value>) -> String {
+    match extra {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(value) => serde_json::to_string_pretty(value).unwrap_or_default(),
+    }
+}
+
+/// Use the current form fields for the estimator's `%%{...}` directives.
+/// Parsing here also keeps invalid Extra visible on the returned form.
 async fn estimate_ipa(
     sets: SoundChangeSetRepository,
     ipa_estimator: &Uuid,
     word: &str,
-    values: &crate::placeholders::Placeholders<'_>,
+    ipa: Option<&str>,
+    extra: &str,
 ) -> AppResult<String> {
-    sets.run_estimator(ipa_estimator, vec![word.to_string()], values)
+    let extra = parse_extra(extra)?;
+    let values = crate::placeholders::Placeholders::default()
+        .with_ipa(ipa)
+        .with_extra(extra.as_ref());
+    sets.run_estimator(ipa_estimator, vec![word.to_string()], &values)
         .await
         .and_then(|results| {
             if let Some(errors) = results.errors {

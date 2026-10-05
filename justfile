@@ -81,26 +81,31 @@ dev: _nix-check _unstale
 # devshell's, so the rebuild silently uses the wrong toolchain and links nix's
 # libgvc with no rpath. sh is fine; fish is not. keep the -n.
 dev-backend: _nix-check _unstale
-  CARGO_TERM_COLOR=always watchexec -n -w templates -w src -r -- cargo run
+  #!/usr/bin/env sh
+  config=.dev/config.json
+  [ -f "$config" ] || config=config.json
+  DATABASE_URL=$(python3 scripts/dev-services.py database-url) || exit 1
+  export DATABASE_URL
+  CARGO_TERM_COLOR=always exec watchexec -n -w templates -w src -r -- cargo run -- "$config"
 
 dev-frontend:
-  cd frontend && bun run dev
+  @cd frontend && bun run --silent dev
 
 make-test-user:
     @echo "Creating test user ..."
-    curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"aaa@aaa.com","password":"kitty paw fuzzy socks","username":"autumn"}'
+    curl -X POST "$(python3 scripts/dev-services.py url)/api/users" -H "Content-Type: application/json" -d '{"email":"aaa@aaa.com","password":"kitty paw fuzzy socks","username":"autumn"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'aaa@aaa.com'"
 
     sleep 3
 
     @echo "Creating second test user..."
-    curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"bbb@bbb.com","password":"kitty paw fuzzy socks","username":"winter"}'
+    curl -X POST "$(python3 scripts/dev-services.py url)/api/users" -H "Content-Type: application/json" -d '{"email":"bbb@bbb.com","password":"kitty paw fuzzy socks","username":"winter"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'bbb@bbb.com'"
 
     sleep 3
 
     @echo "Creating admin user..."
-    curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"kitty paw fuzzy socks","username":"admin"}'
+    curl -X POST "$(python3 scripts/dev-services.py url)/api/users" -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"kitty paw fuzzy socks","username":"admin"}'
     docker exec axismundi-db psql -U user -d axismundi -c "UPDATE users SET verified_at = NOW() WHERE email = 'admin@admin.com'"
 
     just make-admin admin@admin.com
@@ -230,7 +235,12 @@ test-lcov:
     just test "--lcov --output-path lcov.info" cov="1"
 
 db-migrate:
-    sqlx migrate run
+    #!/usr/bin/env sh
+    if [ -f .dev/config.json ]; then
+        DATABASE_URL=$(python3 scripts/dev-services.py database-url) || exit 1
+        export DATABASE_URL
+    fi
+    exec sqlx migrate run
 
 # Stop the database
 db-stop:
@@ -246,35 +256,20 @@ down:
 
 # Run the application locally (requires database to be running)
 run: _nix-check _unstale
-    cargo run
+    #!/usr/bin/env sh
+    config=.dev/config.json
+    [ -f "$config" ] || config=config.json
+    DATABASE_URL=$(python3 scripts/dev-services.py database-url) || exit 1
+    export DATABASE_URL
+    exec cargo run -- "$config"
 
 # Watch frontend for changes during development
 watch-frontend:
-    cd frontend && bun run dev
+    @cd frontend && bun run --silent dev
 
 # Start all services except the app (db, garage, imagor, lexurgy)
 dev-full:
-    @echo "Starting all development services..."
-    docker compose up -d postgres garage seedbucket imagor lexurgy
-    @echo "Waiting for services to be ready..."
-    @until docker exec axismundi-db pg_isready -U user -d axismundi >/dev/null 2>&1; do \
-        echo "Database is unavailable - sleeping"; \
-        sleep 1; \
-    done
-    @until curl -sf http://localhost:9003/health >/dev/null 2>&1; do \
-        echo "Garage is unavailable - sleeping"; \
-        sleep 1; \
-    done
-    @until curl -f http://localhost:8888 >/dev/null 2>&1; do \
-        echo "Imagor is unavailable - sleeping"; \
-        sleep 1; \
-    done
-    @echo "All services ready!"
-    @echo "PostgreSQL: postgres://user:password@localhost:5432/axismundi"
-    @echo "Garage S3 API: http://localhost:9000 (keys in resources/config.json)"
-    @echo "Imagor: http://localhost:8888"
-    @echo ""
-    @echo "Now you can run: just run"
+    python3 scripts/dev-services.py up
 
 dev-down:
     @echo "Stopping all development services..."
@@ -282,11 +277,16 @@ dev-down:
 
 # Build the application
 build: _nix-check _unstale
-    cargo build
+    #!/usr/bin/env sh
+    if [ -f .dev/config.json ]; then
+        DATABASE_URL=$(python3 scripts/dev-services.py database-url) || exit 1
+        export DATABASE_URL
+    fi
+    exec cargo build
 
 # Build frontend assets
 build-frontend:
-    cd frontend && bun run build
+    @cd frontend && bun run --silent build
 
 # Build everything (backend + frontend)
 build-all:

@@ -57,6 +57,7 @@
           sqlx-cli
           minio-client
           just
+          python3
           cargo-llvm-cov
           pstree
           watchexec
@@ -67,7 +68,7 @@
           jq
           age
           rclone
-        ];
+        ] ++ lib.optionals stdenv.isLinux [ iproute2 ];
 
         buildInputs =
           with pkgs;

@@ -62,26 +62,6 @@ form.default,
       box-shadow:
         -0.5rem 0 0 0 var(--background-page),
         -1rem 0 0 0 var(--error-border);
-
-      input[type="text"],
-      input[type="search"],
-      input[type="email"],
-      input[type="password"],
-      textarea {
-        border: 1px solid var(--error-border);
-        background-color: var(--input-background-error);
-
-        &:focus-visible {
-          outline: 2px solid var(--focus-ring-error);
-          border: 1px solid var(--input-border-error-focus);
-          background-color: var(--input-background-error-focus);
-        }
-
-        &:active {
-          background-color: var(--input-background-error-focus);
-          border: 1px solid var(--input-border-error-focus);
-        }
-      }
     }
   }
 
@@ -144,6 +124,29 @@ form.default,
     &:active {
       background-color: var(--input-background-focus);
       border: 1px solid var(--input-border-focus);
+    }
+  }
+
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    &.error,
+    &:is(section:has(.field-errors) *) {
+      border: 1px solid var(--error-border);
+      background-color: var(--input-background-error);
+
+      &:focus-visible {
+        outline: 2px solid var(--focus-ring-error);
+        border: 1px solid var(--input-border-error-focus);
+        background-color: var(--input-background-error-focus);
+      }
+
+      &:active {
+        background-color: var(--input-background-error-focus);
+        border: 1px solid var(--input-border-error-focus);
+      }
     }
   }
 

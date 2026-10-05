@@ -48,6 +48,7 @@ struct EditWordTemplate {
     definitions_json: String,
     previous_ipa: String,
     previous_notes: String,
+    previous_extra: String,
     user_has_permission: bool,
     will_create_audit_log: bool,
     ipa_estimator: Option<SoundChangeSet>,
@@ -104,6 +105,8 @@ pub(super) struct EditWordFormData {
     pub(super) ipa: String,
     #[serde(default)]
     pub(super) notes: String,
+    #[serde(default, deserialize_with = "super::deserialize_present_extra")]
+    pub(super) extra: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -224,6 +227,7 @@ pub(super) async fn edit_word(
     );
 
     let word_categories_json = build_categories_json(&word_categories_list);
+    let previous_extra = super::format_extra(word.extra.as_ref());
 
     let template = EditWordTemplate {
         current_user: Some(current_user),
@@ -242,6 +246,7 @@ pub(super) async fn edit_word(
         definitions_json,
         previous_ipa: word.ipa,
         previous_notes: word.notes,
+        previous_extra,
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
@@ -297,6 +302,10 @@ pub(super) async fn edit_word_submit(
             definitions_json,
             previous_ipa: form.ipa.clone(),
             previous_notes: form.notes.clone(),
+            previous_extra: form
+                .extra
+                .clone()
+                .unwrap_or_else(|| super::format_extra(word.extra.as_ref())),
             user_has_permission,
             will_create_audit_log,
             ipa_estimator,
@@ -344,13 +353,21 @@ pub(super) async fn edit_word_submit(
         ));
     }
 
+    let extra = match form.extra.as_deref() {
+        Some(raw) => match super::parse_extra(raw) {
+            Ok(extra) => Some(extra.unwrap_or(serde_json::Value::Null)),
+            Err(error) => return render_err(error),
+        },
+        None => None,
+    };
+
     // Update the word
     let update_word = crate::model::words::UpdateWord {
         word: Some(form.word.clone()),
         word_class: Some(form.word_class.clone()),
         ipa: Some(form.ipa.clone()),
         notes: Some(form.notes.clone()),
-        extra: None,
+        extra,
         categories: Some(form.categories.clone()),
     };
 
@@ -474,48 +491,46 @@ pub(super) async fn estimate_ipa_submit(
         build_definitions_json(&form.definitions, &form.contexts, &form.definition_ids);
     let nojs_slots = nojs_slots_edit(&form.definitions, &form.contexts, &form.definition_ids);
     let word_categories_json = build_categories_json(&word_categories_list);
+    let previous_extra = form
+        .extra
+        .clone()
+        .unwrap_or_else(|| super::format_extra(word.extra.as_ref()));
 
     let estimated_ipa = match &ipa_estimator {
-        Some(scs) => match estimate_ipa(
-            sets,
-            &scs.id,
-            &form.word,
-            &crate::placeholders::Placeholders::default()
-                .with_ipa(Some(&form.ipa))
-                .with_extra(word.extra.as_ref()),
-        )
-        .await
-        {
-            Ok(response) => response,
-            Err(error) => {
-                let status = error.status_code;
-                let template = EditWordTemplate {
-                    current_user: Some(user),
-                    error: Some(error),
-                    language,
-                    word,
-                    word_classes: word_classes_list,
-                    word_categories: word_categories_list,
-                    selected_category_abbrevs: form.categories.clone(),
-                    word_categories_json,
-                    previous_word: form.word.clone(),
-                    previous_word_class: Some(form.word_class.clone()),
-                    previous_definitions: form.definitions.clone(),
-                    previous_contexts: form.contexts.clone(),
-                    previous_definition_ids: form.definition_ids.clone(),
-                    definitions_json,
-                    previous_ipa: form.ipa.clone(),
-                    previous_notes: form.notes.clone(),
-                    user_has_permission,
-                    will_create_audit_log,
-                    ipa_estimator,
-                    nojs_slots,
-                };
+        Some(scs) => {
+            match estimate_ipa(sets, &scs.id, &form.word, Some(&form.ipa), &previous_extra).await {
+                Ok(response) => response,
+                Err(error) => {
+                    let status = error.status_code;
+                    let template = EditWordTemplate {
+                        current_user: Some(user),
+                        error: Some(error),
+                        language,
+                        word,
+                        word_classes: word_classes_list,
+                        word_categories: word_categories_list,
+                        selected_category_abbrevs: form.categories.clone(),
+                        word_categories_json,
+                        previous_word: form.word.clone(),
+                        previous_word_class: Some(form.word_class.clone()),
+                        previous_definitions: form.definitions.clone(),
+                        previous_contexts: form.contexts.clone(),
+                        previous_definition_ids: form.definition_ids.clone(),
+                        definitions_json,
+                        previous_ipa: form.ipa.clone(),
+                        previous_notes: form.notes.clone(),
+                        previous_extra,
+                        user_has_permission,
+                        will_create_audit_log,
+                        ipa_estimator,
+                        nojs_slots,
+                    };
 
-                let body = render_template(template);
-                return (status, body);
+                    let body = render_template(template);
+                    return (status, body);
+                }
             }
-        },
+        }
         None => form.ipa.clone(),
     };
 
@@ -536,6 +551,7 @@ pub(super) async fn estimate_ipa_submit(
         definitions_json,
         previous_ipa: estimated_ipa,
         previous_notes: form.notes.clone(),
+        previous_extra,
         user_has_permission,
         will_create_audit_log,
         ipa_estimator,
@@ -562,6 +578,205 @@ mod tests {
         },
         email::MockEmailService,
     };
+
+    #[test]
+    fn extra_form_distinguishes_omitted_and_blank_fields() {
+        for (suffix, expected) in [
+            ("", None),
+            ("&extra=", Some("")),
+            ("&extra=null", Some("null")),
+        ] {
+            let form: super::EditWordFormData =
+                serde_html_form::from_str(&format!("word=cat&word_class=n{suffix}")).unwrap();
+            assert_eq!(form.extra.as_deref(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn ipa_estimation_uses_submitted_extra_without_saving_it() {
+        let email_service = Arc::new(MockEmailService::new());
+        let email_service_trait: Arc<dyn crate::email::EmailService> = email_service.clone();
+        let mut app = crate::tests::test_app_with_email_service(&email_service_trait)
+            .await
+            .unwrap();
+        let token = make_authed_user(&crate::tests::random_name(), &app, email_service).await;
+        let language = create_test_language(&token, &mut app).await;
+        let code = language["code"].as_str().unwrap();
+        let response = app
+            .call(
+                post(
+                    &token,
+                    &format!("languages/{code}/sound-change-sets"),
+                    json!({
+                        "name": "Submitted Extra Estimator",
+                        "changes": "rule:\n  %%{extra.stem} => x",
+                    }),
+                )
+                .await,
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let set = crate::tests::response_to_value(response.into_body()).await;
+        let id = set["id"].as_str().unwrap();
+        let response = app
+            .call(
+                Request::builder()
+                    .uri(format!(
+                        "/languages/{code}/sound-change-sets/{id}/set-ipa-estimator"
+                    ))
+                    .method("POST")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+
+        let response = app
+            .call(
+                post(
+                    &token,
+                    &format!("languages/{code}/words"),
+                    json!({
+                        "word": "cat",
+                        "word_class": "n",
+                        "ipa": "original",
+                        "extra": { "stem": "c" },
+                    }),
+                )
+                .await,
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let word = crate::tests::response_to_value(response.into_body()).await;
+        let slug = word["slug"].as_str().unwrap();
+        let lemma = word["lemma"].as_i64().unwrap();
+        let new_path = format!("/languages/{code}/new-word/estimate-ipa");
+        let edit_path = format!("/languages/{code}/words/{slug}/{lemma}/estimate-ipa");
+
+        for (path, word_class, extra, status, expected_ipa) in [
+            (
+                &new_path,
+                None,
+                Some(r#"{"stem":"a"}"#),
+                StatusCode::OK,
+                "cxt",
+            ),
+            (
+                &new_path,
+                Some("n"),
+                Some(r#"{"stem":"a"}"#),
+                StatusCode::OK,
+                "cxt",
+            ),
+            (
+                &edit_path,
+                Some("n"),
+                Some(r#"{"stem":"a"}"#),
+                StatusCode::OK,
+                "cxt",
+            ),
+            (&edit_path, Some("n"), None, StatusCode::OK, "xat"),
+            (
+                &new_path,
+                Some("n"),
+                Some(""),
+                StatusCode::BAD_REQUEST,
+                "original",
+            ),
+            (
+                &edit_path,
+                Some("n"),
+                Some(""),
+                StatusCode::BAD_REQUEST,
+                "original",
+            ),
+            (
+                &new_path,
+                Some("n"),
+                Some("unfinished"),
+                StatusCode::BAD_REQUEST,
+                "original",
+            ),
+            (
+                &edit_path,
+                Some("n"),
+                Some("unfinished"),
+                StatusCode::BAD_REQUEST,
+                "original",
+            ),
+        ] {
+            let mut form = url::form_urlencoded::Serializer::new(String::new());
+            form.append_pair("word", "cat");
+            if let Some(word_class) = word_class {
+                form.append_pair("word_class", word_class);
+            }
+            form.append_pair("ipa", "original");
+            form.append_pair("definitions[]", "a test definition");
+            if let Some(extra) = extra {
+                form.append_pair("extra", extra);
+            }
+            let response = app
+                .call(
+                    Request::builder()
+                        .uri(path)
+                        .method("POST")
+                        .header("authorization", format!("Bearer {token}"))
+                        .header("content-type", "application/x-www-form-urlencoded")
+                        .body(Body::from(form.finish()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let actual_status = response.status();
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let html = std::str::from_utf8(&body).unwrap();
+            assert_eq!(actual_status, status, "{path}: {html}");
+            assert!(
+                html.contains(&format!("id=\"ipa\" name=\"ipa\" value=\"{expected_ipa}\"")),
+                "{path}: {html}"
+            );
+            if extra == Some("unfinished") {
+                assert!(html.contains("Extra must be valid JSON"));
+                assert!(html.contains(">unfinished</textarea>"));
+            }
+        }
+
+        // Accepting an unfinished form for estimation must not allow saving a
+        // word without its required class.
+        let response = app
+            .call(
+                Request::builder()
+                    .uri(format!("/languages/{code}/new-word"))
+                    .method("POST")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("word=cat&definitions%5B%5D=a+test+definition"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let html = std::str::from_utf8(&body).unwrap();
+        assert!(html.contains("length must be between 1 and 10"), "{html}");
+
+        let response = app
+            .call(get(&format!("languages/{code}/words/{slug}/{lemma}")).await)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let saved = crate::tests::response_to_value(response.into_body()).await;
+        assert_eq!(saved["extra"], json!({ "stem": "c" }));
+        assert_eq!(saved["ipa"], "original");
+    }
 
     #[tokio::test]
     async fn new_definition_keeps_its_position_when_reordered_before_saving() {

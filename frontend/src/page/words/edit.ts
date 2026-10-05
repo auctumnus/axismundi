@@ -1,24 +1,22 @@
 const estimate = async (
-  word: string,
-  soundChangeSetId: string,
+  url: string,
+  fields: FormData,
   signal?: AbortSignal,
 ) => {
-  const response = await fetch(
-    `/api/sound-change-sets/${soundChangeSetId}/run`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ input_words: [word] }),
-      signal,
-    },
+  const body = new URLSearchParams();
+  for (const [name, value] of fields) {
+    if (typeof value === "string") body.append(name, value);
+  }
+  const response = await fetch(url, { method: "POST", body, signal });
+  const document = new DOMParser().parseFromString(
+    await response.text(),
+    "text/html",
   );
   if (response.ok) {
-    const data = await response.json();
-    return data.outputWords[0];
+    const ipa = document.querySelector<HTMLInputElement>('input[name="ipa"]');
+    if (ipa) return ipa.value;
   }
-  const errorText = await response.text();
+  const errorText = document.querySelector("p.error")?.textContent?.trim();
   throw new Error(errorText || "Failed to estimate IPA");
 };
 
@@ -99,15 +97,18 @@ document.addEventListener("DOMContentLoaded", () => {
       estimatorHint.classList.remove("hidden");
     }
 
-    const soundChangeSetId = estimateButton.getAttribute(
-      "data-sound-change-set",
-    );
-    if (!soundChangeSetId) return;
+    const form = estimateButton.form;
+    const estimateUrl = estimateButton.getAttribute("formaction");
+    if (!form || !estimateUrl) return;
 
     let controller: AbortController | null = null;
 
-    const e = async (event: Event) => {
-      const word = wordInput.value;
+    const e = async () => {
+      const extraInputs = form.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement
+      >('.extra-editor input, .extra-editor textarea, textarea[name="extra"]');
+      if ([...extraInputs].some((input) => !input.validity.valid)) return;
+      const fields = new FormData(form);
       if (controller) {
         controller.abort();
       }
@@ -116,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const [estimatedIpa] = await Promise.all([
           (async () => {
             controller = new AbortController();
-            const r = await estimate(word, soundChangeSetId, controller.signal);
+            const r = await estimate(estimateUrl, fields, controller.signal);
             return r;
           })(),
           new Promise((resolve) => setTimeout(resolve, 500)), // ensure the saving state is visible for at least 500ms
@@ -135,14 +136,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    estimateButton.addEventListener("click", (event) => {
+    // The Extra editor flushes drafts in the form's capture listener before
+    // this listener reads FormData. Ordinary Save submissions stay native.
+    form.addEventListener("submit", (event) => {
+      if (event.submitter !== estimateButton || event.defaultPrevented) return;
       event.preventDefault();
-      e(event);
+      e();
     });
 
-    const wordEvent = (event: Event) => {
-      debounce(() => e(event), 500)();
-    };
+    const wordEvent = debounce(e, 500);
 
     wordInput.addEventListener("input", wordEvent);
 

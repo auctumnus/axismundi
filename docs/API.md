@@ -133,7 +133,7 @@ pagination.
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
 | GET | `/words/search` | Auth | Cross-language search: required `q`, optional `exclude_id`, `limit`. |
-| GET / POST | `/languages/{code}/words` | No / language editor | Search: `q`, `exact_slug`, `word_class`, `created_before`, `created_after`, `categories[]`; create accepts categories and definitions. |
+| GET / POST | `/languages/{code}/words` | No / language editor | Search: `q` matches word text, definitions, and notes; filters: `exact_slug`, `word_class`, `created_before`, `created_after`, `categories[]`; create accepts categories and definitions. |
 | GET / PUT / DELETE | `/languages/{code}/words/{slug}/{lemma}` | No / language editor / language editor | Gets, updates, or deletes a word. |
 | POST | `/languages/{code}/words/{slug}/{lemma}/like` | Auth | Returns updated `like_count`. |
 | POST | `/languages/{code}/words/{slug}/{lemma}/unlike` | Auth | Returns updated `like_count`. |

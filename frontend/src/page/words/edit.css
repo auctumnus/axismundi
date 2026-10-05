@@ -289,14 +289,16 @@ button.with-icon.add-definition {
 }
 
 @media (min-width: 800px) {
-  #new-word-form, #edit-word-form {
+  #new-word-form,
+  #edit-word-form {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "word-section ipa-section"
       "select-word-class-section select-word-categories-section"
       "definitions-section definitions-section"
-      "notes-section notes-section";
+      "notes-section notes-section"
+      "extra-section extra-section";
     gap: 1rem;
 
     .word-section {
@@ -316,6 +318,9 @@ button.with-icon.add-definition {
     }
     .notes-section {
       grid-area: notes-section;
+    }
+    .extra-section {
+      grid-area: extra-section;
     }
   }
 }

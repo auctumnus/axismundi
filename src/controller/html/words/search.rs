@@ -104,7 +104,11 @@ pub(super) async fn word_search(
 
     let results = words
         .search(&language.id, pagination.clone(), query.clone())
-        .and_then(|results| results.try_map_async(|word| words.materialize(word, s.user())))
+        .and_then(|results| {
+            results.try_map_async(|word| {
+                words.materialize_for_search(word, s.user(), query.q.as_deref())
+            })
+        })
         .await;
 
     let render_item = |word_with_meta: &WordWithMeta| words::PreviewCard {

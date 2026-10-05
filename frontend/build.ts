@@ -90,7 +90,6 @@ async function processCSS(inputPath: string, outputPath: string) {
   }
 
   await writeFile(outputPath, result.code);
-  console.log(`Bundled CSS: ${relative(process.cwd(), inputPath)} → ${relative(process.cwd(), outputPath)}`);
 }
 
 async function processJS(inputPath: string, outputPath: string) {
@@ -113,7 +112,6 @@ async function processJS(inputPath: string, outputPath: string) {
 
   await writeFile(outputPath, result.code);
   await writeFile(outputPath + '.map', result.map || '');
-  console.log(`Processed JS: ${relative(process.cwd(), inputPath)} → ${relative(process.cwd(), outputPath)}`);
 }
 
 // Entry points that need bundling (React components and main entry)
@@ -131,6 +129,7 @@ const BUNDLE_ENTRY_POINTS = [
   'src/page/sound-changes/view.ts',
   'src/page/translations/quotations-editor.tsx',
   'src/page/words/definitions-editor.tsx',
+  'src/page/words/extra-editor.tsx',
   'src/page/words/grammar-tables.ts',
   'src/main.ts'
 ];
@@ -161,12 +160,6 @@ async function bundleReactFiles() {
       console.error(message);
     }
     throw new Error('Bundle failed');
-  }
-
-  for (const entry of existingEntrypoints) {
-    const relativePath = relative(import.meta.dir, entry);
-    const outRelative = relative(srcDir, entry).replace(/\.tsx?$/, '.js');
-    console.log(`Bundled: ${relativePath} → dist/${outRelative}`);
   }
 }
 
@@ -207,8 +200,6 @@ async function processFile(filePath: string) {
     } else if (ext === '.ts' || ext === '.js') {
       const outputPath = join(outputDir, `${baseName}.js`);
       await processJS(filePath, outputPath);
-    } else {
-      console.log(`Skipping ${relativePath} (will be bundled or not needed)`);
     }
   } catch (err: any) {
     console.error(`Error processing ${relativePath}:`, err.message);
@@ -216,8 +207,6 @@ async function processFile(filePath: string) {
 }
 
 async function build() {
-  console.log('Starting build...');
-
   // Ensure dist directory exists
   await ensureDir(distDir);
 
@@ -231,17 +220,11 @@ async function build() {
   for (const file of files) {
     await processFile(file);
   }
-
-  console.log('Build complete!');
 }
 
 async function watchFiles() {
-  console.log('Starting watch mode...');
-
   // Initial build
   await build();
-
-  console.log(`Watching ${srcDir} for changes...`);
 
   try {
     const watcher = watch(srcDir, { recursive: true });
@@ -252,8 +235,6 @@ async function watchFiles() {
 
         // Only process if file exists (not deleted)
         if (existsSync(filePath)) {
-          console.log(`\nFile changed: ${event.filename}`);
-
           // If a bundled file changed, rebuild all bundles
           const isBundledFile = BUNDLE_ENTRY_POINTS.some(entry =>
             filePath.endsWith(entry.replace('src/', ''))

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT definition\n                FROM definitions\n                WHERE word = $1\n                  AND (definition ILIKE '%' || $2 || '%'\n                       OR similarity(definition, $2) > 0.3)\n                ORDER BY (definition ILIKE '%' || $2 || '%') DESC,\n                         similarity(definition, $2) DESC,\n                         position ASC\n                LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "definition",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "075e0183205ab74f2fa38afdd6be75ca8fd3c1f35ea5a8129a76d2b4b6651d8a"
+}

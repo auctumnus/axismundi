@@ -47,6 +47,7 @@ struct NewWordTemplate {
     previous_definitions_json: String,
     previous_ipa: String,
     previous_notes: String,
+    previous_extra: String,
     can_edit_language: bool,
     can_delete_language: bool,
     will_create_audit_log: bool,
@@ -101,6 +102,9 @@ pub(super) struct NewWordSubmitQuery {
 #[derive(Deserialize)]
 pub(super) struct NewWordFormData {
     pub(super) word: String,
+    // The disabled placeholder is omitted while estimating an unfinished form.
+    // CreateWord validation still requires a nonempty class when saving.
+    #[serde(default)]
     pub(super) word_class: String,
     #[serde(default, rename = "definitions[]")]
     pub(super) definitions: Vec<String>,
@@ -110,6 +114,7 @@ pub(super) struct NewWordFormData {
     pub(super) categories: Vec<String>,
     pub(super) ipa: Option<String>,
     pub(super) notes: Option<String>,
+    pub(super) extra: Option<String>,
     pub(super) antecedent_bookmark: Option<String>,
     pub(super) relation_kind: Option<WordRelationType>,
 }
@@ -270,6 +275,7 @@ pub(super) async fn new_word(
         previous_contexts,
         previous_definitions_json,
         previous_notes: String::new(),
+        previous_extra: String::new(),
 
         can_edit_language,
         can_delete_language,
@@ -395,6 +401,7 @@ pub(super) async fn new_word_submit(
             previous_definitions_json,
             previous_ipa: form.ipa.clone().unwrap_or_default(),
             previous_notes: form.notes.clone().unwrap_or_default(),
+            previous_extra: form.extra.clone().unwrap_or_default(),
             can_edit_language,
             can_delete_language,
             will_create_audit_log,
@@ -453,12 +460,17 @@ pub(super) async fn new_word_submit(
         return render_err(bad_request("At least one definition is required"));
     }
 
+    let extra = match super::parse_extra(form.extra.as_deref().unwrap_or("")) {
+        Ok(extra) => extra,
+        Err(error) => return render_err(error),
+    };
+
     let create_word = CreateWord {
         word: form.word.clone(),
         word_class: form.word_class.clone(),
         ipa: form.ipa.clone(),
         notes: form.notes.clone(),
-        extra: None,
+        extra,
         categories: Some(form.categories.clone()),
         definitions: None,
     };
@@ -542,8 +554,15 @@ pub(super) async fn estimate_ipa_new_word(
     let word_categories_json = build_categories_json(&word_categories_list);
 
     let estimated_ipa = if let Some(estimator) = &ipa_estimator {
-        let values = crate::placeholders::Placeholders::default().with_ipa(form.ipa.as_deref());
-        match estimate_ipa(sets, &estimator.id, &form.word, &values).await {
+        match estimate_ipa(
+            sets,
+            &estimator.id,
+            &form.word,
+            form.ipa.as_deref(),
+            form.extra.as_deref().unwrap_or(""),
+        )
+        .await
+        {
             Ok(ipa) => Some(ipa),
             Err(error) => {
                 let template = NewWordTemplate {
@@ -565,6 +584,7 @@ pub(super) async fn estimate_ipa_new_word(
                     previous_contexts,
                     previous_definitions_json: previous_definitions_json.clone(),
                     previous_notes: form.notes.unwrap_or_default(),
+                    previous_extra: form.extra.unwrap_or_default(),
 
                     can_edit_language,
                     can_delete_language,
@@ -601,6 +621,7 @@ pub(super) async fn estimate_ipa_new_word(
         previous_contexts,
         previous_definitions_json,
         previous_notes: form.notes.unwrap_or_default(),
+        previous_extra: form.extra.unwrap_or_default(),
 
         can_edit_language,
         can_delete_language,

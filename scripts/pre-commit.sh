@@ -10,6 +10,12 @@ if ! git diff --cached --name-only --diff-filter=ACMR \
     exit 0
 fi
 
+# The dev launcher may have moved PostgreSQL off the port in .env.
+if [[ -f .dev/config.json ]]; then
+    DATABASE_URL=$(python3 scripts/dev-services.py database-url)
+    export DATABASE_URL
+fi
+
 # load DATABASE_URL from .env if direnv hasn't populated it (e.g. when git
 # is invoked from an editor without the project shell loaded)
 if [[ -z "${DATABASE_URL:-}" ]] && [[ -f .env ]]; then

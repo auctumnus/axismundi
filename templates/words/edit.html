@@ -8,10 +8,12 @@
 <link rel="stylesheet" href="/static/components/modal/modal.css">
 <link rel="stylesheet" href="/static/components/async-select/async-select.css">
 <link rel="stylesheet" href="/static/page/words/edit.css">
+<link rel="stylesheet" href="/static/page/words/extra-editor.css">
 <script defer src="/static/page/words/edit.js"></script>
 <link rel="stylesheet" href="/static/components/markdown-editor/markdown-editor.css">
 <script type="module" defer src="/static/components/markdown-editor/markdown-editor.js"></script>
 <script type="module" src="/static/page/words/definitions-editor.js"></script>
+<script type="module" src="/static/page/words/extra-editor.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -120,6 +122,14 @@
         <textarea id="notes" name="notes" rows="4">{{previous_notes}}</textarea>
     </section>
 
+    <section class="extra-section">
+        <div id="extra-editor-mount">
+            <label for="extra">Extra JSON (optional)</label>
+            <textarea id="extra" name="extra" rows="8" spellcheck="false">{{ previous_extra }}</textarea>
+            <span class="hint">Any JSON value is allowed. Leave blank to clear extra data.</span>
+        </div>
+    </section>
+
     <button style="grid-column: 1 / span 2;" type="submit">Save changes</button>
 </form>
 {% endblock %}
@@ -146,6 +156,7 @@
         isEdit: true,
       });
     }
+    window.mountExtraEditor?.('extra-editor-mount');
     if (window.mountMarkdownEditor) {
       window.mountMarkdownEditor('#notes', 'notes-label');
     }

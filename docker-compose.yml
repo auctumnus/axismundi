@@ -22,7 +22,7 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "${DEV_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -43,9 +43,9 @@ services:
       - ./resources/garage.toml:/etc/garage.toml:ro,z
       - garage_data:/var/lib/garage
     ports:
-      - "9000:3900"
+      - "${DEV_GARAGE_PORT:-9000}:3900"
       # admin api (/health, /metrics)
-      - "9003:3903"
+      - "${DEV_GARAGE_ADMIN_PORT:-9003}:3903"
     restart: unless-stopped
 
   # seeds the default profile pictures into the bucket. garage creates the
@@ -71,7 +71,7 @@ services:
     image: ghcr.io/auctumnus/lauturgie:latest
     container_name: axismundi-lexurgy
     ports:
-      - "8080:8080"
+      - "${DEV_LEXURGY_PORT:-8080}:8080"
     environment:
       # security - set this to a random string in production
       API_KEY: change-me-in-production
@@ -86,7 +86,7 @@ services:
     image: shumc/imagor:latest
     container_name: axismundi-imagor
     ports:
-      - "8888:8000"
+      - "${DEV_IMAGOR_PORT:-8888}:8000"
     environment:
       PORT: 8000
 
