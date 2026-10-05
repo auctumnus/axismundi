@@ -23,6 +23,8 @@ import {
   type SteppedModalStep,
 } from "../../../components/modal/stepped-modal";
 import { useEffect, useState } from "react";
+import { useJsonFiles } from "./json-files";
+import { JsonFileFeedback, JsonFileIcon } from "../table-json-files";
 
 interface ControlState {
   selectTarget: TableElement | typeof TOP_LEFT_CELL | null;
@@ -1369,7 +1371,11 @@ const AnnotationControls = ({ isCellSelected, selectTarget }: ControlState) => {
   );
 };
 
-const EditorControls = () => {
+const EditorControls = ({
+  jsonFiles,
+}: {
+  jsonFiles: ReturnType<typeof useJsonFiles>;
+}) => {
   const [state, dispatch] = useEditor();
 
   const undo = () => dispatch({ type: "Undo" });
@@ -1413,6 +1419,20 @@ const EditorControls = () => {
             d="M9.9 19q-2.425 0-4.163-1.575T4 13.5t1.738-3.925T9.9 8h6.3l-2.6-2.6L15 4l5 5l-5 5l-1.4-1.4l2.6-2.6H9.9q-1.575 0-2.738 1T6 13.5T7.163 16T9.9 17H17v2z"
           />
         </svg>
+      </ControlButton>
+      <ControlButton
+        onClick={() => jsonFiles.inputRef.current?.click()}
+        title={jsonFiles.reading ? "Importing…" : "Import JSON"}
+        enabled={!jsonFiles.reading}
+      >
+        <JsonFileIcon direction="import" />
+      </ControlButton>
+      <ControlButton
+        onClick={jsonFiles.exportFile}
+        title="Export JSON"
+        enabled={true}
+      >
+        <JsonFileIcon direction="export" />
       </ControlButton>
     </div>
   );
@@ -1509,6 +1529,7 @@ const PresetControls = () => {
 
 export const Controls = () => {
   const [state] = useEditor();
+  const jsonFiles = useJsonFiles();
 
   const selectTarget = state.select
     ? getByPath(state.body, state.select)
@@ -1525,14 +1546,17 @@ export const Controls = () => {
   };
 
   return (
-    <div className="controls-container">
-      <EditorControls />
-      <RowControls {...controlState} />
-      <ColumnControls {...controlState} />
-      <CellControls {...controlState} />
-      <PhonemeControls {...controlState} />
-      <AnnotationControls {...controlState} />
-      <PresetControls />
-    </div>
+    <>
+      <div className="controls-container">
+        <EditorControls jsonFiles={jsonFiles} />
+        <RowControls {...controlState} />
+        <ColumnControls {...controlState} />
+        <CellControls {...controlState} />
+        <PhonemeControls {...controlState} />
+        <AnnotationControls {...controlState} />
+        <PresetControls />
+      </div>
+      <JsonFileFeedback files={jsonFiles} />
+    </>
   );
 };

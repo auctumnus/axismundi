@@ -523,6 +523,7 @@ export type Action =
     }
   | { type: "DeleteAnnotationEntirely"; annotationIndex: number }
   | { type: "LoadPreset"; presetName: string }
+  | { type: "ImportBody"; body: Body }
   // for rows, before means above, after means below; for columns, before means left, after means right
   | {
       type: "AddHeading";
@@ -710,7 +711,7 @@ const CANNOT_UNDO = [
 export const apply = (state: EditorState, action: Action): EditorState => {
   console.log("Applying action", action);
 
-  const applyInner = () => {
+  const applyInner = (): EditorState => {
     switch (action.type) {
       case "FocusEnter":
         return { ...state, focusInsideTable: true };
@@ -916,6 +917,17 @@ export const apply = (state: EditorState, action: Action): EditorState => {
           body: { ...state.body, annotations: newAnnotations, rows: newRows },
         };
       }
+      case "ImportBody":
+        return {
+          ...state,
+          body: action.body,
+          focus: { type: "TopLeft" },
+          select: null,
+          focusInsideTable: false,
+          keybindState: "Idle",
+          pendingModal: null,
+          pendingPhonemeIndex: null,
+        };
       case "LoadPreset": {
         const preset = PRESETS[action.presetName];
         if (!preset) {

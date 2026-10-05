@@ -35,35 +35,42 @@ import {
 import { ControlButton } from "./phonology-editor/controls";
 import { Help } from "./phonology-editor/help";
 import {
+  parseGrammarFile,
+  serializeGrammarFile,
+  type GrammarBody,
+  type GrammarCell as Cell,
+} from "./grammar-table-json";
+import { applyGrammar, initialGrammarState } from "./grammar-table-state";
+import {
+  JsonFileFeedback,
+  JsonFileIcon,
+  useTableJsonFiles,
+  type JsonFiles,
+} from "./table-json-files";
+import {
   declaredLexurgyNames,
   lexurgy,
 } from "../sound-changes/runner/lexurgy-language";
 import { theme } from "../sound-changes/runner/editor-theme";
 import {
-  apply,
   cellColspan,
   cellRowspan,
   coveredCells,
   flatRows,
   headingAt,
   headingDepth,
-  initialState,
   leafCount,
   movementFromKey,
   moveFocus,
   serializeFocus,
   type Action,
-  type Body,
   type Column,
   type Focus,
-  type GridCell,
   type HeadingPath,
   type Row,
   type State,
 } from "./table-editor-core";
 
-type Cell = GridCell & { changes: string };
-type GrammarBody = Body<Cell>;
 type Preview =
   | { kind: "empty" }
   | { kind: "running" }
@@ -76,10 +83,6 @@ type PreviewRunner = (
   preamble: string,
   changes: string,
 ) => Promise<Preview>;
-const options = {
-  createCell: (): Cell => ({ changes: "" }),
-  mergeCells: (anchor: Cell): Cell => ({ ...anchor }),
-};
 const completeWithTab = { key: "Tab", run: acceptCompletion };
 const noExternalDeclarations: string[] = [];
 
@@ -95,6 +98,7 @@ function SoundChangeEditor({
   externalDeclarations?: string[];
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
   const callback = useRef(onChange);
   callback.current = onChange;
   useEffect(() => {
@@ -127,13 +131,24 @@ function SoundChangeEditor({
         ],
       }),
     });
+    viewRef.current = view;
     view.contentDOM.setAttribute("aria-label", label);
     view.contentDOM.setAttribute("role", "textbox");
     view.contentDOM.setAttribute("aria-multiline", "true");
-    return () => view.destroy();
+    return () => {
+      viewRef.current = null;
+      view.destroy();
+    };
     // Deliberately switch documents when the selected cell changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label, externalDeclarations]);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view && view.state.doc.toString() !== value)
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: value },
+      });
+  }, [value]);
   return (
     <div className="changes-editor-container grammar-code-editor" ref={host} />
   );
@@ -627,11 +642,13 @@ function Controls({
   dispatch,
   openCell,
   openHeading,
+  jsonFiles,
 }: {
   state: State<Cell>;
   dispatch: (action: Action<Cell>) => void;
   openCell: () => void;
   openHeading: () => void;
+  jsonFiles: JsonFiles;
 }) {
   const selected = state.select;
   const kind =
@@ -681,7 +698,7 @@ function Controls({
   return (
     <div className="controls-container grammar-editor-controls">
       <div className="controls">
-        <span className="controls-header">History</span>
+        <span className="controls-header">Editor</span>
         <Button
           title="Undo"
           enabled={state.undoStack.length > 0}
@@ -695,6 +712,20 @@ function Controls({
           action={() => dispatch({ type: "Redo" })}
         >
           <Icon name="redo" />
+        </Button>
+        <Button
+          title={jsonFiles.reading ? "Importing…" : "Import JSON"}
+          enabled={!jsonFiles.reading}
+          action={() => jsonFiles.inputRef.current?.click()}
+        >
+          <JsonFileIcon direction="import" />
+        </Button>
+        <Button
+          title="Export JSON"
+          enabled={true}
+          action={jsonFiles.exportFile}
+        >
+          <JsonFileIcon direction="export" />
         </Button>
       </div>
       <div className="controls">
@@ -881,8 +912,11 @@ function GrammarEditor({
   languageCode: string;
   name: string;
 }) {
-  const [state, setState] = useState(() => initialState(body));
-  const [preamble, setPreamble] = useState(initialPreamble);
+  const [state, dispatch] = React.useReducer(
+    applyGrammar,
+    initialGrammarState(body, initialPreamble),
+  );
+  const preamble = state.preamble;
   const [example, setExample] = useState<PreviewExample | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [cellModal, setCellModal] = useState<Extract<
@@ -902,8 +936,18 @@ function GrammarEditor({
     () => declaredLexurgyNames(preamble),
     [preamble],
   );
-  const dispatch = (action: Action<Cell>) =>
-    setState((old) => apply(old, action, options));
+  const jsonFiles = useTableJsonFiles({
+    name,
+    fallbackName: "grammar-table",
+    parse: (source) => parseGrammarFile(source, preamble),
+    serialize: () => serializeGrammarFile(state),
+    onImport: (file) => {
+      dispatch({ type: "Import", file });
+      setCellModal(null);
+      setHeadingModal(null);
+      setCellPreviewErrors(new Map());
+    },
+  });
   const updatePreviewError = useCallback(
     (focus: Extract<Focus, { type: "Cell" }>, preview: Preview) => {
       const key = `${focus.row},${focus.column}`;
@@ -986,6 +1030,7 @@ function GrammarEditor({
       <Controls
         state={state}
         dispatch={dispatch}
+        jsonFiles={jsonFiles}
         openCell={() =>
           state.select?.type === "Cell" && setCellModal(state.select)
         }
@@ -996,6 +1041,7 @@ function GrammarEditor({
               setHeadingModal({ kind: "column", path: state.select.path })
         }
       />
+      <JsonFileFeedback files={jsonFiles} />
       <div className="grammar-table-scroll">
         <div className="header-with-actions">
           <h2>{name}</h2>
@@ -1050,7 +1096,7 @@ function GrammarEditor({
         <label>Shared sound changes (preamble)</label>
         <SoundChangeEditor
           value={preamble}
-          onChange={setPreamble}
+          onChange={(preamble) => dispatch({ type: "SetPreamble", preamble })}
           label="Shared sound changes"
         />
       </section>

@@ -183,6 +183,14 @@ ol.annotations {
 .phonology-editor {
   user-select: none;
 
+  .table-json-feedback {
+    user-select: text;
+
+    .hint:not(:empty) {
+      margin-top: 0.5rem;
+    }
+  }
+
   .controls,
   .controls-container {
     display: flex;

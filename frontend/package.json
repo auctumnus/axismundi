@@ -13,6 +13,8 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "typecheck": "tsc",
     "test:extra-editor:browser": "bun tests/extra-editor.browser.ts",
+    "test:phonology-json:browser": "bun tests/phonology-json.browser.ts",
+    "test:table-json:browser": "bun tests/phonology-json.browser.ts",
     "test:extra-editor:install": "playwright install chromium firefox"
   },
   "targets": {
