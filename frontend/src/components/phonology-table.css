@@ -58,7 +58,7 @@ table.grammar-table {
 
   .grammar-cell-ipa {
     margin-top: 0.15rem;
-    color: var(--foreground-tertiary);
+    color: var(--foreground-secondary);
     font-size: 0.875rem;
   }
 
