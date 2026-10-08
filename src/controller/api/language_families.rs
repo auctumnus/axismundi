@@ -368,6 +368,79 @@ mod tests {
         let search_result = crate::tests::response_to_value(response.into_body()).await;
         let items = search_result["items"].as_array().unwrap();
         assert!(items.iter().any(|item| item["code"] == code));
+
+        // GET forms submit unused advanced filters as empty strings.
+        for filters in [
+            "owner=",
+            "has_language=",
+            "owner=&has_language=",
+            "owner=%20%20&has_language=%09",
+        ] {
+            let request = get(&format!(
+                "language-families?q={code}&{filters}&limit=10&offset=0"
+            ))
+            .await;
+            let response = context.app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let result = crate::tests::response_to_value(response.into_body()).await;
+            let items = result["items"].as_array().unwrap();
+            assert!(
+                items.iter().any(|item| item["code"] == code),
+                "blank filters: {filters}"
+            );
+            let total = result["total"].as_u64().unwrap();
+            assert!(total > 0, "blank filters must also preserve the count");
+        }
+
+        let request = axum::http::Request::builder()
+            .uri(format!("/language-families?q={code}&owner=&has_language="))
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = context.app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let html = String::from_utf8(body.to_vec()).unwrap();
+        assert!(html.contains(&format!("href=\"/language-families/{code}?")));
+
+        let language_code = &context.languages[0].code;
+        let request = post(
+            &context.admin_user_token,
+            &format!("language-family/{code}/members"),
+            json!({
+                "language_code": language_code,
+                "relation_type": "descendant",
+            }),
+        )
+        .await;
+        let response = context.app.call(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Populated filters must still restrict both items and totals.
+        for (filters, expected_total) in [
+            (
+                format!("owner={}&has_language=", context.admin_user.username),
+                1,
+            ),
+            (format!("owner=&has_language={language_code}"), 1),
+            (
+                format!(
+                    "owner=%20{}%20&has_language=%20{language_code}%20",
+                    context.admin_user.username
+                ),
+                1,
+            ),
+            (format!("owner={}&has_language=", random_name()), 0),
+            (format!("owner=&has_language={}", random_code()), 0),
+        ] {
+            let request = get(&format!("language-families?q={code}&{filters}")).await;
+            let response = context.app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let result = crate::tests::response_to_value(response.into_body()).await;
+            assert_eq!(result["total"], expected_total);
+            assert_eq!(result["items"].as_array().unwrap().len(), expected_total);
+        }
     }
 
     #[tokio::test]

@@ -117,7 +117,15 @@ pub struct UpdateLanguageFamily {
 #[template(path = "language_families/fragments/query.html")]
 pub struct SearchLanguageFamilies {
     pub q: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_string"
+    )]
     pub owner: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::util::deserialize_optional_form_string"
+    )]
     pub has_language: Option<String>,
 }
 
