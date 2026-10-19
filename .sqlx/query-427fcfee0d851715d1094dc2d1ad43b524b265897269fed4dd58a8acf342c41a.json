@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT DISTINCT words.word\n                FROM definitions\n                JOIN words ON words.id = definitions.word\n                JOIN language_permissions ON language_permissions.language = words.language\n                WHERE definitions.is_home_greeting\n                    AND language_permissions.\"user\" = $1\n                    AND language_permissions.permission IN ('editor', 'admin', 'owner')\n                ORDER BY words.word\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "427fcfee0d851715d1094dc2d1ad43b524b265897269fed4dd58a8acf342c41a"
+}

@@ -164,6 +164,28 @@ impl WordRepository {
         Self { state }
     }
 
+    /// Personalized greetings, using the same Editor+ memberships as the home
+    /// language list. Multiple matching definitions give a word only one entry.
+    pub async fn home_greetings(&self, user_id: Uuid) -> AppResult<Vec<String>> {
+        let greetings = sqlx::query_scalar!(
+            r#"
+                SELECT DISTINCT words.word
+                FROM definitions
+                JOIN words ON words.id = definitions.word
+                JOIN language_permissions ON language_permissions.language = words.language
+                WHERE definitions.is_home_greeting
+                    AND language_permissions."user" = $1
+                    AND language_permissions.permission IN ('editor', 'admin', 'owner')
+                ORDER BY words.word
+            "#,
+            user_id
+        )
+        .fetch_all(&self.state.pool)
+        .await?;
+
+        Ok(greetings)
+    }
+
     #[allow(dead_code)]
     pub fn make_slug(word: &str) -> AppResult<String> {
         let slug = nfkc(word);
@@ -1567,6 +1589,137 @@ mod tests {
     use crate::pagination::PaginatedRequest;
     use crate::{config::CONFIG, create_router, email};
     use sqlx::PgPool;
+
+    #[sqlx::test]
+    async fn home_greetings_follow_definitions_and_permissions(pool: PgPool) {
+        let words = WordRepository::new(crate::util::AppState {
+            pool: pool.clone(),
+            email_service: std::sync::Arc::new(email::MockEmailService::new()),
+        });
+        let user: Uuid = sqlx::query_scalar(
+            "INSERT INTO users (username, email, password_hash) VALUES ('greetings', 'greetings@example.com', '') RETURNING id",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let language: Uuid = sqlx::query_scalar(
+            "INSERT INTO languages (code, name, description, private, created_by, updated_by) VALUES ('greetings', 'Greetings', '', true, $1, $1) RETURNING id",
+        )
+        .bind(user)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let word: Uuid = sqlx::query_scalar(
+            "INSERT INTO words (language, word, slug) VALUES ($1, 'salutation', 'salutation') RETURNING id",
+        )
+        .bind(language)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let definition: Uuid = sqlx::query_scalar(
+            "INSERT INTO definitions (word, definition, created_by, updated_by) VALUES ($1, 'hello', $2, $2) RETURNING id",
+        )
+        .bind(word)
+        .bind(user)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert!(words.home_greetings(user).await.unwrap().is_empty());
+        sqlx::query(
+            "INSERT INTO language_permissions (language, \"user\", permission, invited_by) VALUES ($1, $2, 'viewer', $2)",
+        )
+        .bind(language)
+        .bind(user)
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(words.home_greetings(user).await.unwrap().is_empty());
+
+        for permission in [
+            PermissionLevel::Editor,
+            PermissionLevel::Admin,
+            PermissionLevel::Owner,
+        ] {
+            sqlx::query("UPDATE language_permissions SET permission = $1 WHERE language = $2")
+                .bind(permission)
+                .bind(language)
+                .execute(&pool)
+                .await
+                .unwrap();
+            assert_eq!(words.home_greetings(user).await.unwrap(), ["salutation"]);
+        }
+
+        for (text, matches) in [
+            (" \t\r\nhello\u{000b}\u{000c}", true),
+            (
+                "\u{0085}\u{00a0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200a}hello\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}",
+                true,
+            ),
+            ("Hello", false),
+            ("hello there", false),
+            ("say hello", false),
+            ("**hello**", false),
+            ("\u{200b}hello", false),
+            ("goodbye", false),
+            ("hello", true),
+        ] {
+            sqlx::query("UPDATE definitions SET definition = $1 WHERE id = $2")
+                .bind(text)
+                .bind(definition)
+                .execute(&pool)
+                .await
+                .unwrap();
+            assert_eq!(
+                words.home_greetings(user).await.unwrap().len(),
+                usize::from(matches),
+                "{text:?}"
+            );
+        }
+
+        // Imports and duplicate definitions use the same generated eligibility.
+        sqlx::query("INSERT INTO definitions (word, definition, created_by, updated_by) VALUES ($1, 'hello', $2, $2)")
+            .bind(word)
+            .bind(user)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(words.home_greetings(user).await.unwrap(), ["salutation"]);
+        sqlx::query("DELETE FROM definitions WHERE id = $1")
+            .bind(definition)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(words.home_greetings(user).await.unwrap(), ["salutation"]);
+
+        sqlx::query("UPDATE words SET word = '<hello> & \"hi\"' WHERE id = $1")
+            .bind(word)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            words.home_greetings(user).await.unwrap(),
+            ["<hello> & \"hi\""]
+        );
+
+        sqlx::query("UPDATE language_permissions SET permission = 'viewer' WHERE language = $1")
+            .bind(language)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(words.home_greetings(user).await.unwrap().is_empty());
+        sqlx::query("UPDATE language_permissions SET permission = 'editor' WHERE language = $1")
+            .bind(language)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM definitions WHERE word = $1")
+            .bind(word)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(words.home_greetings(user).await.unwrap().is_empty());
+    }
 
     #[tokio::test]
     async fn search_includes_definitions_once_and_ranks_them_before_notes() {

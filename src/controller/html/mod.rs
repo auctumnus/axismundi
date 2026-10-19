@@ -243,6 +243,7 @@ struct HomeTemplate {
     #[allow(dead_code)]
     error: Option<AppError>,
     current_user: Option<User>,
+    greetings: Vec<String>,
     languages: Vec<LanguagesWithContributors>,
     families: Vec<FamilyWithContributors>,
     activities: Vec<UserActivity>,
@@ -261,6 +262,7 @@ async fn home(
     totd_repo: TranslatableOfTheDayRepository,
     news_repo: NewsRepository,
     language_pins: crate::model::language_pins::LanguagePinRepository,
+    words: crate::model::words::WordRepository,
     s: Session,
 ) -> (StatusCode, Response) {
     let Some(user) = s.user().cloned() else {
@@ -338,8 +340,10 @@ async fn home(
         news.push(attempt!(s, news_repo.materialize(article).await));
     }
 
+    let greetings = attempt!(s, words.home_greetings(user.id).await);
     let template = HomeTemplate {
         current_user: Some(user),
+        greetings,
         languages,
         families,
         activities,

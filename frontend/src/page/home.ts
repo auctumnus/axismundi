@@ -17,8 +17,13 @@ const greetings = [
 
 const welcome = document.getElementById("welcome");
 
-if (welcome)
-  welcome.innerText = greetings[Math.floor(Math.random() * greetings.length)]!;
+if (welcome) {
+  const customGreetings: string[] = JSON.parse(
+    welcome.dataset.greetings || "[]",
+  );
+  const choices = [...new Set([...greetings, ...customGreetings])];
+  welcome.innerText = choices[Math.floor(Math.random() * choices.length)]!;
+}
 
 const updatePinButton = (form: HTMLFormElement, isPinned: boolean) => {
   const button = form.querySelector("button");

@@ -26,7 +26,7 @@
 
 {% let user = current_user.as_ref().unwrap() %}
 
-<h1><span id="welcome">welcome</span>, {% call u::name(user) %}</h1>
+<h1><span id="welcome" data-greetings="{{ greetings|json|escape }}">welcome</span>, {% call u::name(user) %}</h1>
 
 {% if let Some(entry) = totd %}
     {% call totd_card::render(entry) %}
